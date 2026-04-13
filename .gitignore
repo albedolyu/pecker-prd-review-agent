@@ -1,0 +1,34 @@
+# 敏感文件
+.env
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+.pytest_cache/
+
+# 运行时产物
+output/
+logs/
+
+# 会话数据（含用户交互记录）
+.sessions/
+*.jsonl
+
+# eval 原始结果（不提交）
+eval/results/
+eval/__pycache__/
+
+# 测试缓存
+tests/__pycache__/
+
+# pecker-release 旧版缓存
+pecker-release/__pycache__/
+
+# workspace 产物中的会话和输出
+workspace*/output/
+workspace*/.sessions/
+
+# 嵌入的 git 子仓库（wiki 独立管理）
+workspace/wiki/

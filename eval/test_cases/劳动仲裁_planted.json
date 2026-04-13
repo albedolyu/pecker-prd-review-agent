@@ -1,0 +1,98 @@
+{
+  "name": "劳动仲裁 PRD 预埋 bug 端到端测试",
+  "prd_file": "workspace/prd/劳动仲裁需求文档-v4.11.md",
+  "generated_at": "2026-04-12 15:00",
+  "description": "基于真实 PRD 内容，预埋 10 个已知 bug + 2 个 non_issues，验证啄木鸟的召回率/精确率/依据可靠度",
+  "planted_bugs": [
+    {
+      "id": "BUG-001",
+      "location": "3.7",
+      "type": "笔误",
+      "severity": "must",
+      "description": "开庭公告排序规则写'支持切换到按照开庭时间从晚到早排序'，与默认方向相同，实为笔误",
+      "keywords": ["排序", "从晚到早", "开庭时间", "切换", "方向"]
+    },
+    {
+      "id": "BUG-002",
+      "location": "4.2",
+      "type": "不一致",
+      "severity": "must",
+      "description": "§4.2 开庭公告筛选项写'仲裁机构'，但 §3.6 和 §4.3 都写'发布机构'，三处不一致",
+      "keywords": ["仲裁机构", "发布机构", "筛选", "矛盾", "不一致"]
+    },
+    {
+      "id": "BUG-003",
+      "location": "2.2",
+      "type": "歧义",
+      "severity": "must",
+      "description": "字段映射表多处写'A或B'（如 ent表.arbitration_org 或 主表.arbitration_org），无优先级和空值降级说明",
+      "keywords": ["或", "优先级", "空值", "降级", "字段映射", "arbitration_org"]
+    },
+    {
+      "id": "BUG-004",
+      "location": "4",
+      "type": "缺失",
+      "severity": "must",
+      "description": "全文未定义 UI 四态（加载中/请求失败/筛选无结果/空数据）",
+      "keywords": ["四态", "加载中", "请求失败", "空数据", "UI状态"]
+    },
+    {
+      "id": "BUG-005",
+      "location": "5.2",
+      "type": "缺失",
+      "severity": "must",
+      "description": "数据导出仅一句话，缺导出上限、格式、权限、字段明细",
+      "keywords": ["导出", "上限", "格式", "权限", "TBD"]
+    },
+    {
+      "id": "BUG-006",
+      "location": "3.3",
+      "type": "歧义",
+      "severity": "must",
+      "description": "公告内容人名脱敏方式未说明（内容是非结构化文本，用什么方式识别人名？）",
+      "keywords": ["脱敏", "公告内容", "人名", "识别", "NLP"]
+    },
+    {
+      "id": "BUG-007",
+      "location": "3.6",
+      "type": "不一致",
+      "severity": "must",
+      "description": "§3.6 筛选项按 area_code 从小到大排序，§4.3 按数量降序排列，直接矛盾",
+      "keywords": ["area_code", "排序", "降序", "矛盾", "筛选"]
+    },
+    {
+      "id": "BUG-008",
+      "location": "4.4",
+      "type": "缺失",
+      "severity": "must",
+      "description": "详情弹窗字段布局写'具体见 figma'，PRD 无法独立支撑开发",
+      "keywords": ["figma", "详情", "弹窗", "布局", "字段"]
+    },
+    {
+      "id": "BUG-009",
+      "location": "2.1",
+      "type": "字段类型",
+      "severity": "should",
+      "description": "主表 open_time 是 datetime，ent 表 open_time 是 date，类型不一致会导致前端时间格式处理歧义",
+      "keywords": ["open_time", "datetime", "date", "类型", "不一致"]
+    },
+    {
+      "id": "BUG-010",
+      "location": "3.1.1",
+      "type": "缺失",
+      "severity": "should",
+      "description": "主表与 ent 表 data_status 不一致时的处理逻辑未定义（是 OR 还是 AND？）",
+      "keywords": ["data_status", "主表", "ent表", "一致", "过滤"]
+    }
+  ],
+  "non_issues": [
+    {
+      "location": "3.3",
+      "reason": "脱敏规则表格本身（姓+**）完整覆盖了所有字段类型，不应被报为缺失"
+    },
+    {
+      "location": "3.4",
+      "reason": "时间格式规则明确定义了两种字段的展示格式，不应被报为歧义"
+    }
+  ]
+}

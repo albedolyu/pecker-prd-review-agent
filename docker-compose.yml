@@ -1,0 +1,45 @@
+# 啄木鸟 PRD 评审 Agent — Docker Compose
+#
+# 用法:
+#   docker compose run pecker 搜索优化 --workspace /workspace
+#   docker compose run feedback --code-dir /code --report /workspace/output/report.md
+#   docker compose run gate --workspace /workspace
+
+services:
+  pecker:
+    build: .
+    env_file: .env
+    volumes:
+      - ./workspace:/workspace
+      - ./shared-wiki:/wiki
+    environment:
+      - WIKI_PATH=/wiki
+    stdin_open: true
+    tty: true
+
+  feedback:
+    build: .
+    env_file: .env
+    entrypoint: ["python", "feedback.py"]
+    volumes:
+      - ./workspace:/workspace
+    command: ["--help"]
+
+  gate:
+    build: .
+    entrypoint: ["python", "shrike_review.py"]
+    volumes:
+      - ./workspace:/workspace
+    command: ["--workspace", "/workspace"]
+
+  web:
+    build: .
+    env_file: .env
+    entrypoint: ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./workspace:/workspace
+      - ./shared-wiki:/wiki
+    environment:
+      - WIKI_PATH=/wiki

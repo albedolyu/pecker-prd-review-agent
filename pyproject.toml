@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "pecker"
+version = "1.0.0"
+description = "啄木鸟 PRD 评审 Agent — 基于 Claude 的结构化 PRD 评审工具"
+requires-python = ">=3.10"
+dependencies = [
+    "anthropic>=0.94.0",
+    "python-dotenv>=1.0.0",
+    "streamlit>=1.35.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+pecker = "run_session:main"
+pecker-feedback = "feedback:main"
+pecker-eval = "cuckoo_eval:main"
+pecker-dream = "kakapo_dream:main"
+pecker-advisor = "goshawk_advisor:main"
+pecker-gate = "shrike_review:main"
+
+[tool.setuptools]
+py-modules = [
+    "run_session", "api_adapter", "agent_config", "tools", "security",
+    "context_manager", "parallel_review", "feedback", "easter_eggs",
+    "goshawk_advisor", "kakapo_dream", "cuckoo_eval", "shrike_review",
+    "post_review", "wiki_lock", "models", "logger",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
