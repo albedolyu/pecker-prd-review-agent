@@ -861,8 +861,14 @@ def _run_worker_sync(client, dim_key, prd_content, wiki_pages, model_tiers, rule
 # 并行评审主函数
 # ============================================================
 
-async def _single_round_async(client, prd_content, wiki_pages, model_tiers, wiki_path=None, diff_context=None):
-    """单轮并行评审（内部函数），返回 workers, merged_items, usage"""
+async def _single_round_async(client, prd_content, wiki_pages, model_tiers, wiki_path=None, diff_context=None, on_worker_done=None):
+    """单轮并行评审（内部函数），返回 workers, merged_items, usage
+
+    Args:
+        on_worker_done: 可选 callback,签名为 (dim_key: str, result: dict) -> None
+            每个 worker 完成时(成功或失败)都会调用,让上层(FastAPI SSE)感知进度。
+            默认 None,保持向后兼容,CLI 现有流程零影响。
+    """
     dimensions = get_review_dimensions()
 
     # 读一次 rule performance history，传给所有 worker（避免 4 次 I/O）
@@ -877,9 +883,25 @@ async def _single_round_async(client, prd_content, wiki_pages, model_tiers, wiki
     # (UV_HANDLE_CLOSING / 0xC0000409 STATUS_STACK_BUFFER_OVERRUN),给每个 worker 加 stagger
     async def _staggered(idx, dim_key):
         await asyncio.sleep(idx * 0.5)
-        return await _run_worker_async(
-            client, dim_key, prd_content, wiki_pages, model_tiers, rule_perf_history, wiki_path, diff_context
-        )
+        try:
+            result = await _run_worker_async(
+                client, dim_key, prd_content, wiki_pages, model_tiers, rule_perf_history, wiki_path, diff_context
+            )
+            # 新增: worker 完成后通知外层(FastAPI SSE 用,CLI 模式下 callback 为 None 就跳过)
+            if on_worker_done is not None:
+                try:
+                    on_worker_done(dim_key, result)
+                except Exception:
+                    pass  # callback 异常绝不影响主流程
+            return result
+        except Exception as e:
+            # 失败也要通知,这样 UI 能显示 worker 失败状态而不是永远挂 pending
+            if on_worker_done is not None:
+                try:
+                    on_worker_done(dim_key, {"error": str(e)[:200]})
+                except Exception:
+                    pass
+            raise
 
     tasks = [
         _staggered(idx, dim_key)
@@ -949,7 +971,7 @@ async def _single_round_async(client, prd_content, wiki_pages, model_tiers, wiki
     return workers, merged, total_input, total_output
 
 
-async def parallel_review(client, prd_content, wiki_pages, model_tiers, voting_rounds=1, wiki_path=None, diff_context=None):
+async def parallel_review(client, prd_content, wiki_pages, model_tiers, voting_rounds=1, wiki_path=None, diff_context=None, on_worker_done=None):
     """
     并行执行 4 个评审维度的 worker，合并结果
     - client: anthropic.Anthropic 实例
@@ -957,12 +979,15 @@ async def parallel_review(client, prd_content, wiki_pages, model_tiers, voting_r
     - wiki_pages: dict {页面标题: 页面内容}，可为空 dict
     - model_tiers: {"opus": "claude-opus-4-6", "sonnet": "claude-sonnet-4-6", "haiku": "claude-haiku-4-5"}
     - voting_rounds: 评审轮次，1=单次（默认），>=2 时启用多数投票
+    - on_worker_done: 可选 callback (dim_key, result_dict) -> None,
+      每个 worker 完成时调用,给 FastAPI SSE 层推进度。默认 None 保持 CLI 兼容。
     返回: {"workers": [...], "merged_items": [...], "total_usage": {...}}
     """
     if voting_rounds <= 1:
         # 单轮评审，保持原有行为
         workers, merged, total_input, total_output = await _single_round_async(
-            client, prd_content, wiki_pages, model_tiers, wiki_path, diff_context
+            client, prd_content, wiki_pages, model_tiers, wiki_path, diff_context,
+            on_worker_done=on_worker_done,
         )
         return {
             "workers": workers,
@@ -986,7 +1011,8 @@ async def parallel_review(client, prd_content, wiki_pages, model_tiers, voting_r
 
         log.info(f"[majority_vote] 开始第 {round_idx + 1}/{voting_rounds} 轮评审")
         workers, merged, inp, out = await _single_round_async(
-            client, prd_content, wiki_pages, model_tiers, wiki_path, diff_context
+            client, prd_content, wiki_pages, model_tiers, wiki_path, diff_context,
+            on_worker_done=on_worker_done,
         )
         all_rounds_merged.append(merged)
         last_workers = workers
