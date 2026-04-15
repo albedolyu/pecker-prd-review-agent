@@ -82,9 +82,124 @@ def _list_workspaces():
     return out
 
 
+# ============================================================
+# Step 2: 多用户稳定化辅助 — 并发限制 / 审计日志 / 飞书分发 / query params 记忆
+# ============================================================
+
+@st.cache_resource
+def _review_semaphore():
+    """全局进程级信号量,限制同时跑的评审数量 <= PECKER_MAX_CONCURRENT(默认 2)。
+
+    用 @st.cache_resource 保证在一个 Streamlit 进程内所有 session 共享同一实例。
+    公共账号 rate limit 是团队共用的,同时跑 5 个评审会直接撞墙,限到 2 个
+    比较安全。队列外的 session 会阻塞在 acquire(),UI 会转圈。
+    """
+    import threading
+    max_concurrent = int(os.environ.get("PECKER_MAX_CONCURRENT", "2"))
+    return threading.Semaphore(max_concurrent)
+
+
+def _audit_log(event: str, reviewer: str, **kwargs):
+    """追加审计事件到 logs/user_actions.jsonl。
+
+    用于追踪"谁什么时候跑了什么",出故障时按 reviewer 回放,防公共账号背锅。
+    格式: {ts, event, reviewer, workspace, prd_name, ...extra}
+    """
+    try:
+        log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        log_path = os.path.join(log_dir, "user_actions.jsonl")
+        entry = {
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "event": event,
+            "reviewer": reviewer or "unknown",
+            "workspace": st.session_state.get("workspace", ""),
+            "prd_name": st.session_state.get("prd_name", ""),
+            **kwargs,
+        }
+        # append 模式,单次 write JSON 行 < 4KB 是原子的,无需文件锁
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:
+        pass  # 审计日志失败绝不能阻塞主流程
+
+
+def _count_today_reviews(reviewer: str) -> int:
+    """数某个 reviewer 今天的 review_started 次数,用于顶部 banner。"""
+    try:
+        log_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "logs", "user_actions.jsonl",
+        )
+        if not os.path.isfile(log_path):
+            return 0
+        today = time.strftime("%Y-%m-%d")
+        count = 0
+        with open(log_path, "r", encoding="utf-8") as f:
+            for line in f:
+                try:
+                    rec = json.loads(line)
+                    if (rec.get("event") == "review_started"
+                            and rec.get("reviewer") == reviewer
+                            and rec.get("ts", "").startswith(today)):
+                        count += 1
+                except json.JSONDecodeError:
+                    continue
+        return count
+    except Exception:
+        return 0
+
+
+def _send_report_to_feishu(report_md: str, prd_name: str, reviewer: str) -> tuple[bool, str]:
+    """把评审报告推送到飞书群。需要 env var: FEISHU_APP_ID/SECRET 和 FEISHU_REPORT_CHAT_ID。
+
+    返回 (成功?, 错误或成功信息)。
+    """
+    chat_id = os.environ.get("FEISHU_REPORT_CHAT_ID", "")
+    app_id = os.environ.get("FEISHU_APP_ID", "")
+    app_secret = os.environ.get("FEISHU_APP_SECRET", "")
+    if not (chat_id and app_id and app_secret):
+        return False, "未配置 FEISHU_APP_ID / FEISHU_APP_SECRET / FEISHU_REPORT_CHAT_ID"
+    try:
+        from feishu_client import FeishuClient
+        client = FeishuClient(app_id=app_id, app_secret=app_secret)
+        # 截断到 3500 字符(飞书卡片 plaintext 上限)
+        snippet = report_md[:3500]
+        if len(report_md) > 3500:
+            snippet += "\n\n...(报告已截断,完整报告见附件或 wiki)"
+        card = {
+            "config": {"wide_screen_mode": True},
+            "header": {
+                "title": {"tag": "plain_text", "content": f"🪶 PRD 评审报告 - {prd_name}"},
+                "template": "blue",
+            },
+            "elements": [
+                {"tag": "div", "text": {"tag": "lark_md", "content": f"**评审人**: {reviewer}"}},
+                {"tag": "hr"},
+                {"tag": "div", "text": {"tag": "lark_md", "content": snippet}},
+            ],
+        }
+        msg_id = client.send_card(chat_id, card)
+        if msg_id:
+            return True, f"已推送到飞书群 (msg_id={msg_id[:12]}...)"
+        return False, "飞书 send_card 返回空"
+    except Exception as e:
+        return False, f"推送失败: {str(e)[:100]}"
+
+
 def init_state():
     ws_list = _list_workspaces()
     default_ws = ws_list[0] if ws_list else ""
+
+    # 从 URL query params 读上次的 reviewer(浏览器刷新/书签不丢身份)
+    try:
+        qp = st.query_params
+        qp_reviewer = qp.get("reviewer", "") or ""
+        qp_workspace = qp.get("workspace", "") or ""
+    except Exception:
+        qp_reviewer = ""
+        qp_workspace = ""
+
     defaults = {
         "phase": 0,           # 0=上传, 1=预检, 2=评审中, 3=确认, 4=报告
         "prd_content": "",
@@ -96,8 +211,8 @@ def init_state():
         "final_report": "",
         "wiki_path": os.environ.get("WIKI_PATH", "") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "shared-wiki"),
         "wiki_pages": {},      # 从 wiki 扫描得到的相关页面内容
-        "reviewer_name": "",   # 评审人必填,初始为空
-        "workspace": default_ws,
+        "reviewer_name": qp_reviewer,   # 从 URL 恢复
+        "workspace": qp_workspace if qp_workspace in ws_list else default_ws,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -378,6 +493,14 @@ def render_phase0_upload():
         st.warning("⚠️ 请先在右上方填写评审人姓名(必填,用于追溯和报告命名)")
         return  # block Phase 0 下一步按钮
 
+    # 同步 reviewer 和 workspace 到 URL query params,下次刷新/分享链接能恢复
+    try:
+        st.query_params["reviewer"] = st.session_state["reviewer_name"].strip()
+        if st.session_state.get("workspace"):
+            st.query_params["workspace"] = st.session_state["workspace"]
+    except Exception:
+        pass
+
     if st.session_state["prd_content"]:
         if st.button("🪶 开始预检", type="primary", use_container_width=True):
             st.session_state["phase"] = 1
@@ -527,6 +650,11 @@ def render_phase2_review():
         return
 
     mode = st.session_state.get("review_mode", "standard")
+    reviewer = st.session_state.get("reviewer_name", "unknown")
+
+    # Step 2.3 全局并发 semaphore — 限制同时跑的评审数量
+    _sem = _review_semaphore()
+    _max_concurrent = int(os.environ.get("PECKER_MAX_CONCURRENT", "2"))
 
     with st.status("啄木鸟评审团出击...", expanded=True) as status:
         st.write("📋 读取 PRD 内容...")
@@ -543,11 +671,23 @@ def render_phase2_review():
         else:
             st.write("⚡ 快速模式: 4 维度 checklist（全 Sonnet）")
 
-        result = run_review(
-            client, st.session_state["prd_content"],
-            st.session_state["raw_materials"],
-            st.session_state["user_notes"], mode,
-        )
+        # 先尝试非阻塞拿锁,看当前是否有其他评审在跑
+        if not _sem.acquire(blocking=False):
+            st.write(f"⏳ 当前已有 {_max_concurrent} 个评审在跑(公共账号 rate limit 保护),正在排队...")
+            _sem.acquire(blocking=True)  # 阻塞等待
+            st.write("✅ 排队完成,开始评审")
+
+        try:
+            _audit_log("review_started", reviewer,
+                       mode=mode, prd_length=len(st.session_state["prd_content"]))
+
+            result = run_review(
+                client, st.session_state["prd_content"],
+                st.session_state["raw_materials"],
+                st.session_state["user_notes"], mode,
+            )
+        finally:
+            _sem.release()
 
         items = result.get("items", [])
         st.write(f"✅ 评审完成，发现 {len(items)} 条改进项")
@@ -581,6 +721,11 @@ def render_phase2_review():
                 st.write(f"🦅 苍鹰跳过: {str(e)[:50]}")
 
         status.update(label=f"评审完成 — {len(items)} 条改进项", state="complete")
+
+    _audit_log("review_finished", reviewer,
+               items_count=len(items),
+               mode=mode,
+               usage=result.get("usage", {}))
 
     st.session_state["review_result"] = result
     st.session_state["phase"] = 3
@@ -857,19 +1002,44 @@ def render_phase4_report():
     interaction_log = generate_interaction_log(items, decisions)
     diff_report = generate_diff_report(items, decisions)
 
+    _rev = st.session_state.get("reviewer_name", "unknown").strip() or "unknown"
+    _rev_safe = re.sub(r'[\\/:*?"<>|\s]+', '_', _rev)[:20]
+
     col1, col2, col3 = st.columns(3)
     with col1:
         st.download_button("📥 改动报告", data=report,
-            file_name=f"PRD_改动报告_{time.strftime('%Y%m%d')}.md", mime="text/markdown",
+            file_name=f"PRD_改动报告_{_rev_safe}_{time.strftime('%Y%m%d')}.md", mime="text/markdown",
             use_container_width=True)
     with col2:
         st.download_button("📥 交互记录", data=interaction_log,
-            file_name=f"PRD_交互记录_{time.strftime('%Y%m%d')}.md", mime="text/markdown",
+            file_name=f"PRD_交互记录_{_rev_safe}_{time.strftime('%Y%m%d')}.md", mime="text/markdown",
             use_container_width=True)
     with col3:
         st.download_button("📥 差异报告", data=diff_report,
-            file_name=f"PRD_差异报告_{time.strftime('%Y%m%d')}.md", mime="text/markdown",
+            file_name=f"PRD_差异报告_{_rev_safe}_{time.strftime('%Y%m%d')}.md", mime="text/markdown",
             use_container_width=True)
+
+    # Step 2.4 飞书分发按钮
+    feishu_configured = bool(
+        os.environ.get("FEISHU_APP_ID") and
+        os.environ.get("FEISHU_APP_SECRET") and
+        os.environ.get("FEISHU_REPORT_CHAT_ID")
+    )
+    if feishu_configured:
+        if st.button("📨 推送报告到飞书群", use_container_width=True):
+            with st.spinner("推送中..."):
+                ok, msg = _send_report_to_feishu(
+                    report_md=report,
+                    prd_name=st.session_state.get("prd_name", "PRD"),
+                    reviewer=_rev,
+                )
+            if ok:
+                st.success(msg)
+                _audit_log("feishu_pushed", _rev, msg=msg[:80])
+            else:
+                st.error(msg)
+    else:
+        st.caption("💡 配置 `FEISHU_APP_ID` / `FEISHU_APP_SECRET` / `FEISHU_REPORT_CHAT_ID` 后可一键推送报告到飞书群")
 
     # 保存到知识库
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
@@ -920,9 +1090,13 @@ def render_phase4_report():
 
                 st.success(f"已保存到: {wiki_path}/{report_filename}")
                 st.caption("log.md 已更新，索引已重建")
+                _audit_log("wiki_saved", _rev,
+                           wiki_path=wiki_path,
+                           report_filename=report_filename)
 
             except Exception as e:
                 st.error(f"保存失败: {str(e)[:80]}")
+                _audit_log("wiki_save_failed", _rev, error=str(e)[:200])
     else:
         st.caption(f"Wiki 路径不可用 ({wiki_path})，跳过知识库保存")
 
@@ -1007,6 +1181,25 @@ def main():
             st.markdown("### 👤 当前评审人\n_未填写_")
 
     render_header()
+
+    # 顶部多用户 banner(Step 2.1): 当前评审人 / workspace / 今日跑了几次 / 并发窗口
+    _reviewer = st.session_state.get("reviewer_name", "").strip()
+    _workspace = st.session_state.get("workspace", "")
+    if _reviewer:
+        _today_count = _count_today_reviews(_reviewer)
+        _max = int(os.environ.get("PECKER_MAX_CONCURRENT", "2"))
+        banner = (
+            f"<div style='background:#f0f7ff;padding:8px 16px;border-radius:6px;"
+            f"margin-bottom:12px;font-size:13px;color:#333'>"
+            f"👤 <b>{_reviewer}</b> &nbsp;·&nbsp; 📁 <code>{_workspace or '(未选)'}</code> "
+            f"&nbsp;·&nbsp; 今日已跑 <b>{_today_count}</b> 次 "
+            f"&nbsp;·&nbsp; 全局并发上限 {_max}"
+            f"</div>"
+        )
+        st.markdown(banner, unsafe_allow_html=True)
+    else:
+        st.info("🔰 首次使用请在 Phase 0 填写你的名字(会自动写入 URL,下次刷新自动恢复)")
+
     render_phase_bar(st.session_state["phase"])
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 
