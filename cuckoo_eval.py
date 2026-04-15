@@ -23,11 +23,17 @@ import sys
 from datetime import datetime
 
 from cuckoo_parser import parse_review_report
-from cuckoo_scorer import match_items_to_bugs, verify_evidence, calculate_scores
+from cuckoo_scorer import (
+    match_items_to_bugs,
+    verify_evidence,
+    calculate_scores,
+    aggregate_rule_metrics,
+    update_rule_performance_history,
+    calculate_rule_coverage_matrix,
+)
 
 # 向后兼容：其他模块可能直接从 cuckoo_eval 导入
 from cuckoo_parser import parse_review_report, _parse_markdown_items, _parse_loose_items, _extract_fields_from_block
-from cuckoo_scorer import match_items_to_bugs, verify_evidence, calculate_scores
 
 
 # ── ASCII Art ──
@@ -304,6 +310,99 @@ def _infer_bug_type(text):
     return "歧义"  # 默认
 
 
+# ── Eval History 跨次对比 ──
+
+EVAL_HISTORY_FILE = "eval_history.json"
+
+
+def _get_eval_history_path(workspace):
+    """eval_history.json 路径"""
+    return os.path.join(workspace, "output", EVAL_HISTORY_FILE)
+
+
+def append_eval_history(workspace, test_case_name, scores, model=None):
+    """每次评测追加一条记录到 eval_history.json"""
+    history_path = _get_eval_history_path(workspace)
+
+    history = []
+    if os.path.isfile(history_path):
+        try:
+            with open(history_path, "r", encoding="utf-8") as f:
+                history = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            history = []
+
+    entry = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "test_case": test_case_name,
+        "model": model or "unknown",
+        "overall_score": round(scores["overall_score"], 4),
+        "overall_verdict": scores["overall_verdict"],
+        "recall": round(scores["recall"], 4),
+        "precision": round(scores["precision"], 4),
+        "location_accuracy": round(scores["location_accuracy"], 4),
+        "evidence_reliability": round(scores["evidence_reliability"], 4),
+        "severity_accuracy": round(scores["severity_accuracy"], 4),
+        "format_completeness": round(scores["format_completeness"], 4),
+        "detail": {
+            "total_bugs": scores["detail"]["total_bugs"],
+            "total_items": scores["detail"]["total_items"],
+            "hit_count": scores["detail"]["hit_count"],
+        },
+    }
+
+    history.append(entry)
+
+    os.makedirs(os.path.dirname(history_path), exist_ok=True)
+    with open(history_path, "w", encoding="utf-8") as f:
+        json.dump(history, f, ensure_ascii=False, indent=2)
+
+    return entry
+
+
+def print_eval_trend(workspace, test_case_name=None, last_n=5):
+    """打印最近 N 次评测的趋势对比"""
+    history_path = _get_eval_history_path(workspace)
+    if not os.path.isfile(history_path):
+        return
+
+    with open(history_path, "r", encoding="utf-8") as f:
+        history = json.load(f)
+
+    if test_case_name:
+        history = [h for h in history if h.get("test_case") == test_case_name]
+
+    if len(history) < 2:
+        return  # 不够对比
+
+    recent = history[-last_n:]
+    print("\n" + "=" * 60)
+    print("评测趋势对比")
+    print("=" * 60)
+    print(f"{'时间':<18} {'得分':>6} {'判定':<8} {'召回':>6} {'精确':>6} {'依据':>6} {'bug':>4} {'项':>4} {'命中':>4}")
+    print("-" * 78)
+    for h in recent:
+        print(
+            f"{h['timestamp']:<18} "
+            f"{h['overall_score']:>5.1%} "
+            f"{h['overall_verdict']:<8} "
+            f"{h['recall']:>5.1%} "
+            f"{h['precision']:>5.1%} "
+            f"{h['evidence_reliability']:>5.1%} "
+            f"{h['detail']['total_bugs']:>4} "
+            f"{h['detail']['total_items']:>4} "
+            f"{h['detail']['hit_count']:>4}"
+        )
+
+    # 趋势箭头
+    if len(recent) >= 2:
+        prev = recent[-2]["overall_score"]
+        curr = recent[-1]["overall_score"]
+        diff = curr - prev
+        arrow = "+" if diff > 0 else ""
+        print(f"\n  vs 上次: {arrow}{diff:.1%}")
+
+
 # ── CLI 入口 ──
 
 def main():
@@ -406,8 +505,46 @@ def main():
         print(f"\n综合得分: {scores['overall_score']:.1%}")
         print(f"VERDICT: {scores['overall_verdict']} -- {VERDICT_QUIPS[scores['overall_verdict']]}\n")
 
+        # F2: 规则级指标聚合 + 写回 rule_performance_history.json
+        print("正在聚合规则级指标...")
+        rule_metrics = aggregate_rule_metrics(matches, review_items)
+        if rule_metrics:
+            prd_label = test_case.get("name", "未命名")
+            updated = update_rule_performance_history(workspace, rule_metrics, prd_name=prd_label)
+            print(f"规则级指标: 覆盖 {len(rule_metrics)} 条规则, 已回写 {updated} 条到 rule_performance_history.json")
+
+            # 单独输出 rule_level_metrics.json 便于观测
+            metrics_path = os.path.join(workspace, "output", "rule_level_metrics.json")
+            os.makedirs(os.path.dirname(metrics_path), exist_ok=True)
+            with open(metrics_path, "w", encoding="utf-8") as f:
+                json.dump({
+                    "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "test_case": prd_label,
+                    "rules": rule_metrics,
+                }, f, ensure_ascii=False, indent=2)
+            print(f"规则级指标报告: {metrics_path}")
+
+        # 规则覆盖矩阵 (借鉴百灵 scenario_coverage)
+        coverage = calculate_rule_coverage_matrix(review_items, workspace)
+        coverage_path = os.path.join(workspace, "output", "rule_coverage_matrix.json")
+        with open(coverage_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "test_case": test_case.get("name", "未命名"),
+                **coverage,
+            }, f, ensure_ascii=False, indent=2)
+        print(
+            f"规则覆盖率: {coverage['covered_rules']}/{coverage['total_rules']} "
+            f"({coverage['coverage_rate']:.1%}),未覆盖 {len(coverage['uncovered_rule_ids'])} 条 "
+            f"-> {coverage_path}"
+        )
+
         # 生成报告
         report = generate_eval_report(test_case, scores, matches, evidence_results)
+
+        # 追加 eval history 并打印趋势
+        append_eval_history(workspace, test_case.get("name", "未命名"), scores)
+        print_eval_trend(workspace, test_case.get("name"))
 
     # 模式3：仅依据验证（无测试用例）
     else:

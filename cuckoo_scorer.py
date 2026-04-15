@@ -5,10 +5,13 @@
 - 改进项与预埋 bug 匹配
 - 依据真实性验证（A/B/C 三类）
 - 各维度评分计算
+- 规则级指标聚合（F2：per-rule precision/recall/fp_rate）
 """
 
+import json
 import os
 import re
+from datetime import datetime
 
 
 # ── 匹配引擎 ──
@@ -399,4 +402,254 @@ def calculate_scores(matches, evidence_results, review_items):
             "verified_evidence": verified_count,
             "failed_evidence": failed_count,
         },
+    }
+
+
+# ── 规则级指标聚合 (F2) ──
+
+def aggregate_rule_metrics(matches, review_items):
+    """按 rule_id 聚合每条规则的 precision / recall / fp_rate
+
+    TP：命中的改进项(在 hits 中)且 item.rule_id 匹配
+    FP：未命中的改进项(在 false_positives 中)且 item.rule_id 匹配
+    FN：漏报的预埋 bug(在 misses 中)—— 由于 planted_bugs 没有 rule_id，
+        FN 按位置/关键词回退到最可能的 rule_id 命名空间(未归属则记到 UNKNOWN)
+
+    返回：
+    {
+        "V-08": {"tp": 3, "fp": 1, "fn": 0,
+                 "precision": 0.75, "recall": 1.0, "fp_rate": 0.25},
+        ...
+    }
+    """
+    from collections import defaultdict
+
+    rule_stats = defaultdict(lambda: {"tp": 0, "fp": 0, "fn": 0})
+
+    # 1) TP：命中项的 rule_id
+    for hit in matches.get("hits", []):
+        item = hit.get("item", {})
+        rule_id = _extract_rule_id_from_item(item)
+        if rule_id:
+            rule_stats[rule_id]["tp"] += 1
+
+    # 2) FP：未命中任何 bug 的改进项 rule_id
+    for item in matches.get("false_positives", []):
+        rule_id = _extract_rule_id_from_item(item)
+        if rule_id:
+            rule_stats[rule_id]["fp"] += 1
+
+    # 3) FN：漏报的 bug —— 没有直接 rule_id，
+    #    按 review_items 中与该 bug 最可能相关的 rule_id 回退
+    for bug in matches.get("misses", []):
+        rule_id = _guess_rule_id_for_bug(bug, review_items)
+        rule_stats[rule_id]["fn"] += 1
+
+    # 4) 计算 precision/recall/fp_rate
+    result = {}
+    for rid, s in rule_stats.items():
+        tp, fp, fn = s["tp"], s["fp"], s["fn"]
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        fp_rate = fp / (tp + fp) if (tp + fp) > 0 else 0.0
+        result[rid] = {
+            "tp": tp,
+            "fp": fp,
+            "fn": fn,
+            "precision": round(precision, 3),
+            "recall": round(recall, 3),
+            "fp_rate": round(fp_rate, 3),
+        }
+
+    return result
+
+
+def _extract_rule_id_from_item(item):
+    """从改进项中提取规则编号(RC-xxx / V-xx)"""
+    # 直接字段
+    rid = item.get("rule_id") or item.get("rule")
+    if rid:
+        m = re.search(r'(RC-\d+|V-\d+)', str(rid))
+        if m:
+            return m.group(1)
+
+    # evidence_content / raw_text 中的规则编号
+    text = " ".join([
+        str(item.get("evidence_content", "")),
+        str(item.get("raw_text", "")),
+        str(item.get("related_rule", "")),
+    ])
+    m = re.search(r'(RC-\d+|V-\d+)', text)
+    return m.group(1) if m else "UNKNOWN"
+
+
+def _guess_rule_id_for_bug(bug, review_items):
+    """对漏报的 bug 猜测最可能归属的 rule_id
+
+    策略：找 review_items 里同一章节 (location 相似) 且类型关键词重叠
+    最多的改进项,取其 rule_id。都没命中就归到 UNKNOWN。
+    """
+    best_rule = None
+    best_score = 0
+    for item in review_items:
+        score = _calc_match_score(item, bug)
+        if score > best_score:
+            best_score = score
+            best_rule = _extract_rule_id_from_item(item)
+    return best_rule if (best_rule and best_score >= 1) else "UNKNOWN"
+
+
+def update_rule_performance_history(workspace, rule_metrics, prd_name=None):
+    """把 aggregate_rule_metrics 的结果写入 rule_performance_history.json
+
+    兼容 feedback.py 使用的 schema:
+    {
+      "V-08": {
+        "history": [{"date": "2026-04-15", "outcome": "eval_tp=3/fp=1/fn=0", "prd": "劳动仲裁"}],
+        "stats": {"confirmed": 3, "rejected": 1, "missed": 0, "total": 4},
+        "rejection_rate": 0.25,
+        "is_noisy": false,
+        "eval_metrics": {"precision": 0.75, "recall": 1.0, "fp_rate": 0.25},  # F2 新增
+        "last_eval": "2026-04-15"
+      }
+    }
+
+    Returns: 已更新的规则数
+    """
+    if not rule_metrics:
+        return 0
+
+    history_path = os.path.join(workspace, "output", "rule_performance_history.json")
+    today = datetime.now().strftime("%Y-%m-%d")
+    prd_label = prd_name or "unknown"
+
+    # 读取已有历史
+    history_data = {}
+    if os.path.isfile(history_path):
+        try:
+            with open(history_path, "r", encoding="utf-8") as f:
+                history_data = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            history_data = {}
+
+    updated = 0
+    for rid, m in rule_metrics.items():
+        if rid == "UNKNOWN":
+            continue
+
+        if rid not in history_data:
+            history_data[rid] = {
+                "history": [],
+                "stats": {"confirmed": 0, "rejected": 0, "missed": 0, "total": 0},
+                "rejection_rate": 0.0,
+                "is_noisy": False,
+            }
+
+        entry = history_data[rid]
+
+        # 把 TP/FP/FN 追加为历史记录
+        entry["history"].append({
+            "date": today,
+            "outcome": f"eval_tp={m['tp']}/fp={m['fp']}/fn={m['fn']}",
+            "prd": prd_label,
+            "source": "cuckoo_eval",
+        })
+
+        # 同步 stats(用 eval 结果做累加)
+        entry["stats"]["confirmed"] += m["tp"]
+        entry["stats"]["rejected"] += m["fp"]
+        entry["stats"]["missed"] += m["fn"]
+        entry["stats"]["total"] += m["tp"] + m["fp"] + m["fn"]
+
+        total = entry["stats"]["total"]
+        rejected = entry["stats"]["rejected"]
+        entry["rejection_rate"] = round(rejected / total, 3) if total > 0 else 0.0
+        entry["is_noisy"] = entry["rejection_rate"] > 0.4
+
+        # F2 新增:保存最近一次的 eval 指标,供 _build_feedback_section 消费
+        entry["eval_metrics"] = {
+            "precision": m["precision"],
+            "recall": m["recall"],
+            "fp_rate": m["fp_rate"],
+            "tp": m["tp"],
+            "fp": m["fp"],
+            "fn": m["fn"],
+        }
+        entry["last_eval"] = today
+
+        updated += 1
+
+    if updated == 0:
+        return 0
+
+    os.makedirs(os.path.dirname(history_path), exist_ok=True)
+    with open(history_path, "w", encoding="utf-8") as f:
+        json.dump(history_data, f, ensure_ascii=False, indent=2)
+
+    return updated
+
+
+# ── 规则覆盖矩阵 (借鉴百灵 scenario_coverage) ──
+
+def calculate_rule_coverage_matrix(review_items, workspace):
+    """计算 Worker × rule 的覆盖矩阵
+
+    借鉴百灵 (riskbird_test_eval.scenario_coverage) 的思路:
+    每条可用规则是否至少被一个 Worker 在 review_items 中命中过?
+    没被命中的 rule 要么是死规则(可删除), 要么是 Worker 分工漏了(需扩展维度覆盖).
+
+    Args:
+        review_items: parsed review items list
+        workspace: workspace 目录路径
+
+    Returns:
+        {
+            "total_rules": int,
+            "covered_rules": int,
+            "coverage_rate": float (0-1),
+            "covered_rule_ids": [str],
+            "uncovered_rule_ids": [str],
+            "by_dimension": {dim_name: [rule_ids]},
+        }
+    """
+    # 1. 扫 workspace/review-rules 抽所有可用 rule_id
+    all_rules = set()
+    rules_dir = os.path.join(workspace, "review-rules")
+    if os.path.isdir(rules_dir):
+        for root, _, files in os.walk(rules_dir):
+            for f in files:
+                if f.endswith((".md", ".yaml", ".yml", ".txt")):
+                    try:
+                        fpath = os.path.join(root, f)
+                        with open(fpath, "r", encoding="utf-8") as fp:
+                            content = fp.read()
+                        all_rules.update(re.findall(r"(RC-\d+|V-\d+)", content))
+                    except (OSError, UnicodeDecodeError):
+                        continue
+
+    # 2. 从 review_items 提取被命中的 rule_id (rule_id 字段优先, evidence_content 兜底)
+    hit_rules = set()
+    dim_hits = {}  # {dimension: set of rule_ids}
+    for item in review_items or []:
+        rid = (item.get("rule_id") or "").strip()
+        if not rid:
+            content = item.get("evidence_content") or ""
+            m = re.search(r"(RC-\d+|V-\d+)", content)
+            if m:
+                rid = m.group(1)
+        if rid and rid in all_rules:
+            hit_rules.add(rid)
+            dim = item.get("dimension") or "未知"
+            dim_hits.setdefault(dim, set()).add(rid)
+
+    covered = hit_rules & all_rules
+    uncovered = all_rules - hit_rules
+
+    return {
+        "total_rules": len(all_rules),
+        "covered_rules": len(covered),
+        "coverage_rate": round(len(covered) / len(all_rules), 4) if all_rules else 0.0,
+        "covered_rule_ids": sorted(covered),
+        "uncovered_rule_ids": sorted(uncovered),
+        "by_dimension": {dim: sorted(rids) for dim, rids in dim_hits.items()},
     }
