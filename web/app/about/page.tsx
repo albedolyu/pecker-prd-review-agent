@@ -22,6 +22,7 @@ import { ArrowLeft } from "lucide-react";
 import { ROLES, type RoleKey, type Role } from "@/lib/roles";
 import { buttonVariants } from "@/components/ui/button";
 import { PeckerClaw, PeckerClawDivider } from "@/components/PeckerClaw";
+import { BIRD_ART } from "@/components/birds/BirdArt";
 import { cn } from "@/lib/utils";
 
 export const metadata = {
@@ -79,6 +80,13 @@ const BIRD_HIGHLIGHTS: Readonly<Record<RoleKey, string>> = {
   "sample-reader": "让流水线红一下",
   archivist: "分门别类放好",
   "qa-gatekeeper": "挡在了门外",
+};
+
+// 栏位 span → Tailwind class lookup(避免动态模板字符串被 JIT 漏掉)
+const COL_SPAN_MD: Readonly<Record<number, string>> = {
+  5: "md:col-span-5",
+  6: "md:col-span-6",
+  7: "md:col-span-7",
 };
 
 // 把 description 里的 highlight 短语包成 <span class="ink-mark">,只划第一次出现。
@@ -279,7 +287,8 @@ export default function AboutPage() {
                 role={ROLES[key]}
                 index={idx + 1}
                 className={cn(
-                  `col-span-12 md:col-span-${cat.spans[idx]}`,
+                  "col-span-12",
+                  COL_SPAN_MD[cat.spans[idx]] ?? "md:col-span-6",
                   cat.offsets[idx] ?? "",
                 )}
               />
@@ -420,55 +429,65 @@ function BirdCard({ role, index, className = "" }: BirdCardProps) {
           ? "后台"
           : "隐藏";
 
-  // 每张卡的 tilt 微旋不同,靠 index 的奇偶决定 emoji 朝向,避免整页
-  // 10 只鸟全都一个方向
-  const emojiTilt = index % 2 === 0 ? "-rotate-[4deg]" : "rotate-[3deg]";
+  // 每张卡档案头像的微旋:index 奇偶决定左右,让 10 只鸟不全朝一个方向
+  const artTilt = index % 2 === 0 ? "-rotate-[3deg]" : "rotate-[2.5deg]";
   const highlight = BIRD_HIGHLIGHTS[role.key];
+  // 取对应的 SVG 组件(10 选 1)
+  const Art = BIRD_ART[role.key];
 
   return (
     <article
       className={cn(
-        "group relative bg-pecker-kraft pt-7 pb-6 pr-5 pl-[6.2rem] shadow-print transition-[box-shadow,transform] duration-500 hover:shadow-print-lift",
+        "group relative min-h-[11.5rem] bg-pecker-kraft pt-6 pb-6 pr-5 pl-[9.2rem] shadow-print transition-[box-shadow,transform] duration-500 hover:shadow-print-lift",
         "before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-foreground",
         className,
       )}
     >
       {/* 左上角打孔(保留工作证元素) */}
       <span
-        className="absolute left-[9px] top-[9px] h-[7px] w-[7px] rounded-full bg-background shadow-[inset_0_0_0_1px_oklch(0.18_0.008_60/0.5)]"
+        className="pointer-events-none absolute left-[9px] top-[9px] h-[7px] w-[7px] rounded-full bg-background shadow-[inset_0_0_0_1px_oklch(0.18_0.008_60/0.5)]"
         aria-hidden
       />
 
       {/* 左侧纵向编号 */}
       <span
-        className="absolute bottom-2 left-[6px] rotate-180 font-mono text-[9px] tracking-[0.22em] text-foreground/40"
+        className="pointer-events-none absolute bottom-2 left-[6px] rotate-180 font-mono text-[9px] tracking-[0.22em] text-foreground/40"
         style={{ writingMode: "vertical-rl" }}
         aria-hidden
       >
         NO · {String(index).padStart(2, "0")}
       </span>
 
-      {/* ============ 巨型 emoji —— 主视觉,浮在左侧 ============ */}
-      {/* 全部 pointer-events-none:装饰元素不能吸收点击,避免 emoji 选中
-          / 浏览器 emoji 搜索 / HMR 误处理导致的白屏。 */}
-      {/* 印章底:美纹胶带色模糊 blob,给 emoji 加一点"贴上去"的底 */}
-      <span
+      {/* ============ 角色档案头像 —— 大号 SVG + dashed 档案框 ============ */}
+      <div
+        className="pointer-events-none absolute left-[0.95rem] top-[0.95rem] flex h-[7.6rem] w-[7.6rem] items-center justify-center"
         aria-hidden
-        className="pointer-events-none absolute left-[0.95rem] top-[0.95rem] h-[4.4rem] w-[4.4rem] rounded-full bg-pecker-tape/55 blur-[8px]"
-      />
-      {/* emoji 本体:绝对定位 + tilt + drop-shadow + hover 略放大 + select-none */}
-      <span
-        aria-hidden
-        className={cn(
-          "pointer-events-none select-none absolute left-[1.05rem] top-[0.7rem] text-[4.25rem] leading-none",
-          "drop-shadow-[1px_2px_0_oklch(0.18_0.008_60/0.18)]",
-          "transition-transform duration-500 ease-[cubic-bezier(0.22,0.61,0.36,1)]",
-          "group-hover:scale-[1.08]",
-          emojiTilt,
-        )}
       >
-        {role.birdEmoji}
-      </span>
+        {/* 档案底:柔和的胶带色光晕 */}
+        <span className="absolute inset-[6%] rounded-full bg-pecker-tape/55 blur-[10px]" />
+        {/* 档案外框:dashed 虚线圆,像身份证照片的相框 */}
+        <span className="absolute inset-0 rounded-full border border-dashed border-foreground/35" />
+        {/* 档案内框:淡一点的实线,让画像更立体 */}
+        <span className="absolute inset-[8%] rounded-full border border-foreground/15 bg-background/55" />
+        {/* SVG 本体 —— 112 px, 微旋 + drop-shadow,hover 稍微放大 */}
+        <div
+          className={cn(
+            "relative z-10 transition-transform duration-500 ease-[cubic-bezier(0.22,0.61,0.36,1)]",
+            "group-hover:scale-[1.06]",
+            artTilt,
+          )}
+          style={{
+            filter:
+              "drop-shadow(1px 2px 0 oklch(0.18 0.008 60 / 0.22))",
+          }}
+        >
+          <Art size={110} />
+        </div>
+        {/* 左上"姓名章"小角,像档案照片右下的红章 */}
+        <span className="absolute bottom-[3px] right-[3px] rotate-[8deg] rounded-[1px] border border-dashed border-pecker-red/70 bg-background/60 px-[3px] py-[1px] font-mono text-[8px] uppercase tracking-wider text-pecker-red/85">
+          {String(index).padStart(2, "0")}
+        </span>
+      </div>
 
       {/* ============ 顶行:role.key mono + 频率 pill ============ */}
       <div className="flex items-start justify-between gap-3">

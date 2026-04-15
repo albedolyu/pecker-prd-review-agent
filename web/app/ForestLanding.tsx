@@ -16,6 +16,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { WoodpeckerArt } from "@/components/birds/BirdArt";
+
 // 数字雨候选字符集:0/1 + 中文数字 + hex + 简单符号。
 // 要让它像"数字组成的森林",关键是 0/1 和 hex 占大头,中文数字点缀。
 const RAIN_GLYPHS =
@@ -214,19 +216,28 @@ export function ForestLanding() {
           aria-hidden
         />
         <div className="relative flex flex-col items-center gap-6">
-          {/* 大 emoji 啄木鸟 —— 从数字森林里探出头 */}
+          {/* 大号啄木鸟 —— 从数字森林里探出头,SVG 手绘组件,自己的灵魂 */}
           <div className="relative">
+            {/* 呼吸光晕 */}
             <span
-              className="pointer-events-none absolute left-1/2 top-1/2 h-28 w-28 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-400/15 blur-2xl"
+              className="pointer-events-none absolute left-1/2 top-1/2 h-44 w-44 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-400/15 blur-2xl"
               aria-hidden
             />
+            {/* 轮廓圈 —— 像树洞里透出的光 */}
             <span
+              className="pointer-events-none absolute left-1/2 top-1/2 h-52 w-52 -translate-x-1/2 -translate-y-1/2 rounded-full border border-emerald-300/35"
               aria-hidden
-              className="pointer-events-none select-none block text-[7.2rem] leading-none drop-shadow-[0_0_18px_rgba(52,211,153,0.45)] animate-[peckBreath_5.2s_ease-in-out_infinite]"
-              style={{ filter: "drop-shadow(0 3px 0 rgba(0,0,0,0.4))" }}
+            />
+            <div
+              className="pointer-events-none relative animate-[peckBreath_5.2s_ease-in-out_infinite]"
+              style={{
+                filter:
+                  "drop-shadow(0 0 22px rgba(52,211,153,0.45)) drop-shadow(0 3px 0 rgba(0,0,0,0.35))",
+              }}
+              aria-hidden
             >
-              🪵
-            </span>
+              <WoodpeckerArt size={186} />
+            </div>
           </div>
 
           {/* 刊名:衬线大字,微光效果 */}
