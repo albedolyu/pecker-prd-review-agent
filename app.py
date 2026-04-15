@@ -71,7 +71,20 @@ st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 # Session State 初始化
 # ============================================================
 
+def _list_workspaces():
+    """扫项目根目录下的 workspace-* 目录,返回名字列表。"""
+    base = os.path.dirname(os.path.abspath(__file__))
+    out = []
+    for name in sorted(os.listdir(base)):
+        full = os.path.join(base, name)
+        if name.startswith("workspace-") and os.path.isdir(full):
+            out.append(name)
+    return out
+
+
 def init_state():
+    ws_list = _list_workspaces()
+    default_ws = ws_list[0] if ws_list else ""
     defaults = {
         "phase": 0,           # 0=上传, 1=预检, 2=评审中, 3=确认, 4=报告
         "prd_content": "",
@@ -83,10 +96,18 @@ def init_state():
         "final_report": "",
         "wiki_path": os.environ.get("WIKI_PATH", "") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "shared-wiki"),
         "wiki_pages": {},      # 从 wiki 扫描得到的相关页面内容
+        "reviewer_name": "",   # 评审人必填,初始为空
+        "workspace": default_ws,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
+    # 运行时把 WORKSPACE 注入 env var,后端 parallel_review 用延迟解析读
+    if st.session_state.get("workspace"):
+        os.environ["WORKSPACE"] = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            st.session_state["workspace"],
+        )
 
 init_state()
 
@@ -96,13 +117,19 @@ init_state()
 # ============================================================
 
 def get_client():
+    """创建 API client。
+
+    api_adapter.create_client 实际只走本地 Claude Code CLI,不需要 api_key。
+    这里只需要验证 claude CLI 存在 + 已登录即可(公共账号场景下,在共享机器上
+    登录一次,所有 PM 通过浏览器共用同一个 CC 认证)。
+    """
     from api_adapter import create_client
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    base_url = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
-    if not api_key:
-        st.error("未配置 ANTHROPIC_API_KEY，请在 .env 中设置")
+    import shutil
+    if not shutil.which("claude"):
+        st.error("❌ 本机找不到 claude CLI。请先安装 Claude Code 并执行 `claude login`。")
+        st.caption("安装指引: https://docs.anthropic.com/claude/docs/claude-code")
         return None
-    return create_client(api_key=api_key, base_url=base_url)
+    return create_client()
 
 
 def run_precheck(client, prd_content, raw_texts):
@@ -339,7 +366,17 @@ def render_phase0_upload():
             format_func=lambda x: {"quick": "⚡ 快速（~30s）", "standard": "🔍 标准 · 4 鸟并行（~2min）"}[x],
             horizontal=True, key="review_mode")
     with col2:
-        st.text_input("评审人", value="default", key="reviewer_name")
+        reviewer = st.text_input(
+            "评审人 *",
+            value=st.session_state.get("reviewer_name", ""),
+            key="reviewer_name",
+            placeholder="填你的名字",
+            help="必填,用于报告署名、审计追溯和防止同事评审结果互相覆盖",
+        )
+
+    if not st.session_state.get("reviewer_name", "").strip():
+        st.warning("⚠️ 请先在右上方填写评审人姓名(必填,用于追溯和报告命名)")
+        return  # block Phase 0 下一步按钮
 
     if st.session_state["prd_content"]:
         if st.button("🪶 开始预检", type="primary", use_container_width=True):
@@ -847,8 +884,10 @@ def render_phase4_report():
                 from wiki_lock import wiki_write_lock
 
                 with wiki_write_lock(wiki_path):
-                    # 1. 保存改动报告
-                    report_filename = f"评审记录-{st.session_state.get('prd_name','PRD')}-{time.strftime('%Y%m%d')}.md"
+                    # 1. 保存改动报告 — 文件名带 reviewer 防止多人同天评同名 PRD 互相覆盖
+                    _rev = st.session_state.get("reviewer_name", "unknown").strip() or "unknown"
+                    _rev_safe = re.sub(r'[\\/:*?"<>|\s]+', '_', _rev)[:20]
+                    report_filename = f"评审记录-{st.session_state.get('prd_name','PRD')}-{_rev_safe}-{time.strftime('%Y%m%d')}.md"
                     report_path = os.path.join(wiki_path, report_filename)
                     with open(report_path, "w", encoding="utf-8") as f:
                         f.write(f"---\nsource: Web评审-{time.strftime('%Y-%m-%d')}\ncreated: {time.strftime('%Y-%m-%d')}\nupdated: {time.strftime('%Y-%m-%d')}\ntags: [domain/评审记录, status/已验证]\n---\n\n")
@@ -915,8 +954,42 @@ def render_phase4_report():
 def main():
     with st.sidebar:
         st.markdown("### ⚙️ 配置")
-        wiki_path = st.text_input("Wiki 知识库路径", value=st.session_state["wiki_path"],
-                                   help="Obsidian 知识库目录路径")
+
+        # Workspace 切换器 — 所有已存在的 workspace-* 目录
+        ws_list = _list_workspaces()
+        if ws_list:
+            current_ws = st.session_state.get("workspace", ws_list[0])
+            if current_ws not in ws_list:
+                current_ws = ws_list[0]
+            selected_ws = st.selectbox(
+                "Workspace",
+                options=ws_list,
+                index=ws_list.index(current_ws),
+                help="切换评审项目。每个 workspace 有独立的 prd/ wiki/ output/ 目录",
+            )
+            if selected_ws != st.session_state.get("workspace"):
+                st.session_state["workspace"] = selected_ws
+                # 同步到 env var,后端 parallel_review 延迟解析会读
+                os.environ["WORKSPACE"] = os.path.join(
+                    os.path.dirname(os.path.abspath(__file__)),
+                    selected_ws,
+                )
+                # 自动切换到对应 workspace 的 wiki 路径
+                ws_wiki = os.path.join(
+                    os.path.dirname(os.path.abspath(__file__)),
+                    selected_ws, "wiki",
+                )
+                if os.path.isdir(ws_wiki):
+                    st.session_state["wiki_path"] = ws_wiki
+                st.rerun()
+        else:
+            st.warning("未发现任何 workspace-* 目录")
+
+        wiki_path = st.text_input(
+            "Wiki 知识库路径",
+            value=st.session_state["wiki_path"],
+            help="默认跟随 workspace 切换,也可手动覆盖",
+        )
         if wiki_path != st.session_state["wiki_path"]:
             st.session_state["wiki_path"] = wiki_path
 
@@ -925,6 +998,13 @@ def main():
             st.caption(f"📚 知识库: {len(wiki_files)} 个页面")
         else:
             st.warning("Wiki 路径不存在")
+
+        # 当前评审人显示
+        current_reviewer = st.session_state.get("reviewer_name", "")
+        if current_reviewer:
+            st.markdown(f"### 👤 当前评审人\n**{current_reviewer}**")
+        else:
+            st.markdown("### 👤 当前评审人\n_未填写_")
 
     render_header()
     render_phase_bar(st.session_state["phase"])

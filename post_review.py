@@ -245,8 +245,12 @@ def run_post_review(workspace, wiki_path, prd_name, reviewer, model_tier, parall
             if report:
                 from datetime import datetime as _dt
                 import json as _json
+                import re as _re
                 date_tag = _dt.now().strftime('%Y%m%d')
-                report_path = os.path.join(workspace, "output", f"PRD_开发任务_{date_tag}.md")
+                # 文件名带 reviewer 后缀,防止多人同天评同名 PRD 互相覆盖
+                _rev = (reviewer or "unknown").strip() or "unknown"
+                _rev_safe = _re.sub(r'[\\/:*?"<>|\s]+', '_', _rev)[:20]
+                report_path = os.path.join(workspace, "output", f"PRD_开发任务_{date_tag}_{_rev_safe}.md")
                 # 生成一键信鸽命令块,追加到报告末尾(Plan 5)
                 try:
                     from feedback_cmd import build_feedback_command_block
@@ -260,7 +264,7 @@ def run_post_review(workspace, wiki_path, prd_name, reviewer, model_tier, parall
                         f.write(feedback_block)
                 print(f"  [报告] 开发任务清单已生成: {report_path}")
                 # 结构化 items JSON 持久化,让 cuckoo_eval/dashboard/diff 可回放
-                items_json_path = os.path.join(workspace, "output", f"review_items_{date_tag}.json")
+                items_json_path = os.path.join(workspace, "output", f"review_items_{date_tag}_{_rev_safe}.json")
                 with open(items_json_path, "w", encoding="utf-8") as f:
                     _json.dump(items_for_report, f, ensure_ascii=False, indent=2)
                 print(f"  [报告] 结构化 items 已落盘: {items_json_path}")
