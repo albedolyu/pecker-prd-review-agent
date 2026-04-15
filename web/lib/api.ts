@@ -211,28 +211,34 @@ export interface ReviewResult {
 export interface PrecheckRequest {
   workspace: string;
   prd_content: string;
-  prd_name: string;
-  reviewer: string;
+  raw_materials?: string[];
 }
 
+/**
+ * 预检返回 — 对齐 api/routes/review.py::PrecheckResponse
+ * - strong/weak: 格式化后的字符串列表,每条形如 `[[page_name]] — 命中 N 个关键词`
+ * - gaps: Claude 分析的知识盲区描述
+ * - wiki_pages: 页面标题 → 完整 md 内容,Phase 2 调 /api/review/run 时必须原样带回去
+ */
 export interface PrecheckResponse {
-  wiki_hits: ReadonlyArray<{
-    title: string;
-    path: string;
-    snippet: string;
-    score?: number;
-  }>;
-  suggested_notes: string;
-  detected_mode: string;
+  strong: ReadonlyArray<string>;
+  weak: ReadonlyArray<string>;
+  gaps: ReadonlyArray<string>;
+  wiki_pages: Readonly<Record<string, string>>;
 }
+
+export type ReviewMode = "standard" | "quick";
 
 export interface ReviewRunRequest {
-  workspace: string;
   prd_content: string;
+  raw_materials?: string[];
+  user_notes?: string;
+  workspace: string;
   prd_name: string;
   reviewer: string;
-  mode: "fast" | "strict" | string;
-  user_notes?: string;
+  mode: ReviewMode;
+  /** Phase 1 precheck 返回的 wiki_pages,原样透传 */
+  wiki_pages: Record<string, string>;
 }
 
 /**
@@ -250,12 +256,18 @@ export interface ConfirmRequest {
   decisions: Record<string, ItemDecision>;
 }
 
+/**
+ * 对齐后端 /api/review/confirm — 只验证 signature + 返回统计,
+ * 不生成文件。真正的 markdown 由前端 lib/generateReport.ts 合成。
+ */
 export interface ConfirmResponse {
   status: string;
-  report_files: ReadonlyArray<{
-    kind: "full" | "summary" | "json" | string;
-    filename: string;
-  }>;
+  review_id: string;
+  accepted: number;
+  rejected: number;
+  edited: number;
+  pending: number;
+  total: number;
 }
 
 export const reviewApi = {
@@ -280,22 +292,31 @@ export interface ReportFile {
   filename: string;
   size: number;
   mtime: number;
-  kind: string;
+}
+
+export interface SaveToWikiRequest {
+  prd_name: string;
+  report_markdown: string;
+  items_count: number;
+  accepted_count: number;
+  rejected_count: number;
+  edited_count: number;
+  peck_score: number;
+  peck_label: string;
 }
 
 export const reportsApi = {
   list: (workspace: string) =>
-    apiFetch<ReadonlyArray<ReportFile>>(
+    apiFetch<{ reports: ReadonlyArray<ReportFile> }>(
       `/api/reports/${encodeURIComponent(workspace)}`,
     ),
-  download: (workspace: string, filename: string) => {
-    const url = `/api/reports/${encodeURIComponent(workspace)}/download?filename=${encodeURIComponent(filename)}`;
-    return url; // 直接给 <a href> 用,不走 fetch
-  },
-  saveToWiki: (workspace: string, filename: string) =>
-    apiFetch<{ status: string; wiki_path?: string }>(
+  /** 直接给 <a href> 用,不走 fetch — 浏览器原生下载 */
+  downloadUrl: (workspace: string, filename: string) =>
+    `/api/reports/${encodeURIComponent(workspace)}/download?filename=${encodeURIComponent(filename)}`,
+  saveToWiki: (workspace: string, payload: SaveToWikiRequest) =>
+    apiFetch<{ status: string; filename?: string; wiki_path?: string }>(
       `/api/reports/${encodeURIComponent(workspace)}/save-to-wiki`,
-      { method: "POST", body: { filename } },
+      { method: "POST", body: payload },
     ),
 } as const;
 
@@ -327,15 +348,14 @@ export const auditApi = {
 // ============================================================
 
 export interface FeishuSendRequest {
-  workspace: string;
-  report_filename: string;
-  reviewer?: string;
-  prd_name?: string;
+  prd_name: string;
+  report_markdown: string;
+  chat_id?: string;
 }
 
 export const feishuApi = {
   send: (req: FeishuSendRequest) =>
-    apiFetch<{ status: string; chat_id?: string }>("/api/feishu/send", {
+    apiFetch<{ status: string; msg_id?: string }>("/api/feishu/send", {
       method: "POST",
       body: req,
     }),

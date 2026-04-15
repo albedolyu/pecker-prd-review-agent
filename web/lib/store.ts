@@ -21,12 +21,13 @@ import type {
   DraftPayload,
   ItemDecision,
   PrecheckResponse,
+  ReviewMode,
   ReviewResult,
 } from "./api";
 
-export type ReviewPhase = 0 | 1 | 2 | 3 | 4;
+export type { ReviewMode };
 
-export type ReviewMode = "fast" | "strict";
+export type ReviewPhase = 0 | 1 | 2 | 3 | 4;
 
 // ============================================================
 // State shape
@@ -45,8 +46,13 @@ interface UserInputState {
 interface ReviewStore extends UserInputState {
   phase: ReviewPhase;
 
-  /** Phase 1 预检结果 */
+  /** Phase 1 预检结果(不含 wiki_pages,那部分单独存) */
   precheckResult: PrecheckResponse | null;
+  /**
+   * Phase 1 返回的 wiki_pages 完整内容映射,Phase 2 调 /api/review/run
+   * 时必须原样带回去。不写入 draft(太大),evict 时 Phase 2 重跑预检。
+   */
+  wikiPages: Record<string, string>;
   /** Phase 2 评审完成后的 Opaque Handle */
   reviewResult: ReviewResult | null;
   /** Phase 3 用户对每个 item 的决定 */
@@ -58,6 +64,7 @@ interface ReviewStore extends UserInputState {
   setPhase: (phase: ReviewPhase) => void;
   setUserInput: (partial: Partial<UserInputState>) => void;
   setPrecheckResult: (r: PrecheckResponse | null) => void;
+  setWikiPages: (pages: Record<string, string>) => void;
   setReviewResult: (r: ReviewResult | null) => void;
   setDecision: (itemId: string, decision: ItemDecision) => void;
   removeDecision: (itemId: string) => void;
@@ -81,7 +88,7 @@ const INITIAL_USER_INPUT: UserInputState = {
   workspace: "",
   prdName: "",
   prdContent: "",
-  mode: "strict",
+  mode: "standard",
   userNotes: "",
   rawMaterials: [],
 };
@@ -90,6 +97,7 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
   ...INITIAL_USER_INPUT,
   phase: 0,
   precheckResult: null,
+  wikiPages: {},
   reviewResult: null,
   decisions: {},
   reportFilenames: [],
@@ -99,6 +107,8 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
   setUserInput: (partial) => set(partial),
 
   setPrecheckResult: (r) => set({ precheckResult: r }),
+
+  setWikiPages: (pages) => set({ wikiPages: pages }),
 
   setReviewResult: (r) => set({ reviewResult: r }),
 
@@ -150,6 +160,7 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
       reviewer: state.reviewer, // 保留登录态
       phase: 0,
       precheckResult: null,
+      wikiPages: {},
       reviewResult: null,
       decisions: {},
       reportFilenames: [],
