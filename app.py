@@ -150,6 +150,143 @@ def _count_today_reviews(reviewer: str) -> int:
         return 0
 
 
+# ============================================================
+# Step 3: 生产级 — 崩溃恢复 / Basic auth / READONLY / 草稿管理
+# ============================================================
+
+_DRAFT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".pecker_drafts")
+_DRAFT_TTL_DAYS = 3  # 草稿保留 3 天
+
+
+def _draft_path(reviewer: str) -> str:
+    """每个 reviewer 一个 draft 文件,防止互相覆盖。"""
+    safe = re.sub(r'[\\/:*?"<>|\s]+', '_', (reviewer or "unknown").strip())[:20]
+    return os.path.join(_DRAFT_DIR, f"{safe}_draft.json")
+
+
+def _save_draft(reviewer: str):
+    """把当前 session_state 的关键字段快照到 draft 文件。
+
+    只存 JSON 可序列化的小字段。失败静默(不能阻塞评审)。
+    """
+    if not reviewer:
+        return
+    try:
+        os.makedirs(_DRAFT_DIR, exist_ok=True)
+        draft = {
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "reviewer": reviewer,
+            "phase": st.session_state.get("phase", 0),
+            "prd_name": st.session_state.get("prd_name", ""),
+            "prd_content": st.session_state.get("prd_content", ""),
+            "raw_materials": st.session_state.get("raw_materials", []),
+            "user_notes": st.session_state.get("user_notes", ""),
+            "review_result": st.session_state.get("review_result"),
+            "item_decisions": st.session_state.get("item_decisions", {}),
+            "workspace": st.session_state.get("workspace", ""),
+        }
+        # 原子写
+        path = _draft_path(reviewer)
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(draft, f, ensure_ascii=False)
+        os.replace(tmp, path)
+    except Exception:
+        pass
+
+
+def _load_draft(reviewer: str):
+    """加载 reviewer 的 draft,不存在或过期返回 None。"""
+    if not reviewer:
+        return None
+    path = _draft_path(reviewer)
+    if not os.path.isfile(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            draft = json.load(f)
+        # 过期检查: 3 天前的 draft 视作过期,自动删除
+        ts = draft.get("ts", "")
+        if ts:
+            from datetime import datetime as _dt
+            age = (_dt.now() - _dt.strptime(ts, "%Y-%m-%dT%H:%M:%S")).total_seconds()
+            if age > _DRAFT_TTL_DAYS * 86400:
+                try:
+                    os.unlink(path)
+                except OSError:
+                    pass
+                return None
+        return draft
+    except Exception:
+        return None
+
+
+def _clear_draft(reviewer: str):
+    """评审完成后清理 draft。"""
+    path = _draft_path(reviewer)
+    if os.path.isfile(path):
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+
+def _cleanup_expired_drafts():
+    """启动时扫一次,清掉过期的 draft。"""
+    if not os.path.isdir(_DRAFT_DIR):
+        return
+    cutoff = time.time() - _DRAFT_TTL_DAYS * 86400
+    for name in os.listdir(_DRAFT_DIR):
+        if not name.endswith("_draft.json"):
+            continue
+        path = os.path.join(_DRAFT_DIR, name)
+        try:
+            if os.path.getmtime(path) < cutoff:
+                os.unlink(path)
+        except OSError:
+            pass
+
+
+def _check_web_auth() -> bool:
+    """Basic auth: 如果 PECKER_WEB_PASSWORD 设置了,要求用户先输密码才能用。
+
+    密码以明文存在 env var(内网部署,简单够用)。通过后写入 session_state,
+    同 tab 内不重复要求。
+    """
+    expected = os.environ.get("PECKER_WEB_PASSWORD", "")
+    if not expected:
+        return True  # 未配置密码,直接通过
+
+    if st.session_state.get("_auth_passed"):
+        return True
+
+    st.markdown("## 🔒 啄木鸟 Web 需要访问口令")
+    st.caption("部署在共享机器上,仅限团队内部使用。口令找管理员获取。")
+    pw = st.text_input("访问口令", type="password", key="_auth_pw_input")
+    if st.button("进入", type="primary"):
+        if pw == expected:
+            st.session_state["_auth_passed"] = True
+            st.rerun()
+        else:
+            st.error("口令错误")
+    return False
+
+
+def _is_readonly(reviewer: str) -> bool:
+    """PECKER_READONLY_USERS 逗号分隔的 reviewer 列表,命中即为只读。
+
+    只读模式: 可以评审和下载,但不能保存到 wiki / 推送飞书 / 写审计日志。
+    适合: 允许轮岗 PM 或外部顾问查看评审但不污染团队知识库。
+    """
+    if not reviewer:
+        return False
+    readonly_list = os.environ.get("PECKER_READONLY_USERS", "")
+    if not readonly_list:
+        return False
+    users = {u.strip() for u in readonly_list.split(",") if u.strip()}
+    return reviewer.strip() in users
+
+
 def _send_report_to_feishu(report_md: str, prd_name: str, reviewer: str) -> tuple[bool, str]:
     """把评审报告推送到飞书群。需要 env var: FEISHU_APP_ID/SECRET 和 FEISHU_REPORT_CHAT_ID。
 
@@ -442,6 +579,38 @@ def render_phase0_upload():
             st.caption(f"*{line}*")
     except:
         pass
+
+    # Step 3.1 崩溃恢复 UI: 如果当前 reviewer 有未完成 draft,提示恢复
+    _rev_for_draft = st.session_state.get("reviewer_name", "").strip()
+    if _rev_for_draft and not st.session_state.get("_draft_checked"):
+        _draft = _load_draft(_rev_for_draft)
+        if _draft and _draft.get("phase", 0) > 0:
+            st.info(
+                f"🔄 检测到 **{_rev_for_draft}** 有一份未完成的评审草稿"
+                f"(阶段 {_draft['phase']}, PRD: {_draft.get('prd_name','?')}, "
+                f"保存于 {_draft.get('ts','?')})"
+            )
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                if st.button("🔄 恢复评审", type="primary", use_container_width=True):
+                    for k in ("phase", "prd_content", "prd_name", "raw_materials",
+                              "user_notes", "review_result", "item_decisions", "workspace"):
+                        if k in _draft:
+                            st.session_state[k] = _draft[k]
+                    st.session_state["_draft_checked"] = True
+                    _audit_log("draft_resumed", _rev_for_draft, phase=_draft.get("phase"))
+                    st.rerun()
+            with c2:
+                if st.button("🗑️ 丢弃草稿", use_container_width=True):
+                    _clear_draft(_rev_for_draft)
+                    st.session_state["_draft_checked"] = True
+                    st.rerun()
+            with c3:
+                if st.button("⏭️ 暂不处理", use_container_width=True):
+                    st.session_state["_draft_checked"] = True
+                    st.rerun()
+            return  # 等 PM 决策
+
     st.subheader("📄 上传 PRD 文档")
 
     tab1, tab2 = st.tabs(["上传文件", "粘贴内容"])
@@ -680,6 +849,7 @@ def render_phase2_review():
         try:
             _audit_log("review_started", reviewer,
                        mode=mode, prd_length=len(st.session_state["prd_content"]))
+            _save_draft(reviewer)  # 评审开始前快照,万一崩溃能恢复
 
             result = run_review(
                 client, st.session_state["prd_content"],
@@ -729,6 +899,7 @@ def render_phase2_review():
 
     st.session_state["review_result"] = result
     st.session_state["phase"] = 3
+    _save_draft(reviewer)  # 进入确认阶段前再快照一次,防 phase3 中途崩溃
     st.rerun()
 
 
@@ -1004,6 +1175,7 @@ def render_phase4_report():
 
     _rev = st.session_state.get("reviewer_name", "unknown").strip() or "unknown"
     _rev_safe = re.sub(r'[\\/:*?"<>|\s]+', '_', _rev)[:20]
+    _readonly = _is_readonly(_rev)
 
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -1019,14 +1191,15 @@ def render_phase4_report():
             file_name=f"PRD_差异报告_{_rev_safe}_{time.strftime('%Y%m%d')}.md", mime="text/markdown",
             use_container_width=True)
 
-    # Step 2.4 飞书分发按钮
+    # Step 2.4 飞书分发按钮 (readonly 模式下禁用)
     feishu_configured = bool(
         os.environ.get("FEISHU_APP_ID") and
         os.environ.get("FEISHU_APP_SECRET") and
         os.environ.get("FEISHU_REPORT_CHAT_ID")
     )
     if feishu_configured:
-        if st.button("📨 推送报告到飞书群", use_container_width=True):
+        if st.button("📨 推送报告到飞书群", use_container_width=True, disabled=_readonly,
+                     help="🔒 只读模式禁用" if _readonly else "一键推送到飞书群"):
             with st.spinner("推送中..."):
                 ok, msg = _send_report_to_feishu(
                     report_md=report,
@@ -1049,7 +1222,13 @@ def render_phase4_report():
         st.markdown("**📚 保存到知识库**")
         peck = calculate_peck(items)
 
-        if st.button("💾 保存评审记录到 Wiki", type="primary", use_container_width=True):
+        if st.button(
+            "💾 保存评审记录到 Wiki",
+            type="primary",
+            use_container_width=True,
+            disabled=_readonly,
+            help="🔒 只读模式禁用 — PECKER_READONLY_USERS 已包含你的名字" if _readonly else None,
+        ):
             try:
                 from wiki_lock import wiki_write_lock
 
@@ -1108,9 +1287,22 @@ def render_phase4_report():
             st.rerun()
     with col_b:
         if st.button("🔄 开始新评审", use_container_width=True):
+            # 清 draft + 保留 reviewer / workspace (省得重填)
+            _keep_reviewer = st.session_state.get("reviewer_name", "")
+            _keep_workspace = st.session_state.get("workspace", "")
+            _keep_wiki = st.session_state.get("wiki_path", "")
+            _clear_draft(_keep_reviewer)
+            _audit_log("review_reset", _keep_reviewer)
             for k in list(st.session_state.keys()):
                 del st.session_state[k]
             init_state()
+            # 恢复 reviewer 和 workspace
+            if _keep_reviewer:
+                st.session_state["reviewer_name"] = _keep_reviewer
+            if _keep_workspace:
+                st.session_state["workspace"] = _keep_workspace
+            if _keep_wiki:
+                st.session_state["wiki_path"] = _keep_wiki
             st.rerun()
 
     # Token 用量
@@ -1126,6 +1318,13 @@ def render_phase4_report():
 # ============================================================
 
 def main():
+    # Step 3.2 Basic auth 前置检查
+    if not _check_web_auth():
+        return
+
+    # Step 3.1 启动时清理过期 draft
+    _cleanup_expired_drafts()
+
     with st.sidebar:
         st.markdown("### ⚙️ 配置")
 
@@ -1176,7 +1375,11 @@ def main():
         # 当前评审人显示
         current_reviewer = st.session_state.get("reviewer_name", "")
         if current_reviewer:
-            st.markdown(f"### 👤 当前评审人\n**{current_reviewer}**")
+            readonly = _is_readonly(current_reviewer)
+            ro_tag = " 🔒 READONLY" if readonly else ""
+            st.markdown(f"### 👤 当前评审人\n**{current_reviewer}**{ro_tag}")
+            if readonly:
+                st.caption("只读模式: 可评审和下载,不能写 wiki / 推飞书")
         else:
             st.markdown("### 👤 当前评审人\n_未填写_")
 
