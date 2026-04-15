@@ -43,15 +43,17 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} h-full antialiased`}
     >
       <body
-        className="min-h-full flex flex-col bg-background text-foreground"
+        className="relative min-h-full flex flex-col bg-background text-foreground before:content-[''] before:fixed before:inset-0 before:pointer-events-none before:z-0 before:opacity-[0.45] before:mix-blend-multiply before:pecker-grain-bg"
         style={{
           fontFamily:
             "var(--font-geist-sans), 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', sans-serif",
         }}
       >
         <Providers>
-          <TopBanner />
-          <main className="flex-1">{children}</main>
+          <div className="relative z-10 flex flex-1 flex-col">
+            <TopBanner />
+            <main className="flex-1">{children}</main>
+          </div>
         </Providers>
       </body>
     </html>

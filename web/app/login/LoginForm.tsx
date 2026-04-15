@@ -10,26 +10,20 @@
  * - TopBanner 显示 + 今日次数统计
  * - 审计日志归因
  * - readonly 拦截(如果 reviewer 在 PECKER_READONLY_USERS 列表里)
+ *
+ * Phase F 视觉:
+ * - 非对称 split(左 kraft + 巨型引语 + 爪印,右 form 去 Card 壳)
+ * - 下划线 input 取代 shadcn Input
+ * - 按钮 hover 右上角冒红笔勾
  */
 
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, User, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { authApi, ApiError } from "@/lib/api";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { PeckerClaw } from "@/components/PeckerClaw";
 
 export function LoginForm() {
   const router = useRouter();
@@ -100,78 +94,130 @@ export function LoginForm() {
   };
 
   return (
-    <div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center px-6 py-12">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="space-y-1">
-          <CardTitle className="flex items-center gap-2">
-            <span className="text-xl">🪵</span>
-            啄木鸟登录
-          </CardTitle>
-          <CardDescription>
-            使用团队共享密码进入 PRD 评审系统。
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="reviewer">评审人姓名</Label>
-              <div className="relative">
-                <User className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="reviewer"
-                  className="pl-8"
-                  placeholder="张三"
-                  value={reviewer}
-                  onChange={(e) => setReviewer(e.target.value)}
-                  maxLength={40}
-                  required
-                />
-              </div>
-              <p className="text-[11px] text-muted-foreground">
-                用于报告署名 + 审计 + readonly 判定
-              </p>
-            </div>
+    <main className="relative grid min-h-[calc(100vh-3.5rem)] grid-cols-1 md:grid-cols-[1.45fr_1fr]">
+      {/* ========== 左:空白 + 引语 + 脚印 ========== */}
+      <aside
+        className="relative hidden flex-col justify-between overflow-hidden bg-pecker-kraft px-[var(--spacing-gutter)] py-12 md:flex
+          before:pointer-events-none before:absolute before:inset-0 before:mix-blend-multiply before:opacity-60 before:content-[''] before:pecker-grain-bg"
+      >
+        {/* 顶部刊眉 */}
+        <div className="relative flex items-baseline gap-3 font-mono text-[10px] uppercase tracking-[0.18em] text-foreground/60">
+          <span>啄木鸟内刊</span>
+          <span className="h-px flex-1 bg-foreground/60" />
+          <span>卷一</span>
+        </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="password">团队密码</Label>
-              <div className="relative">
-                <KeyRound className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="password"
-                  type="password"
-                  className="pl-8"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </div>
-            </div>
+        {/* 中部:巨大衬线引语,故意断行 */}
+        <blockquote className="relative max-w-[22ch]">
+          <span
+            aria-hidden
+            className="absolute -left-6 -top-10 font-serif text-[9rem] leading-[0.6] text-pecker-red/20"
+          >
+            &ldquo;
+          </span>
+          <p className="font-serif text-[2.35rem] leading-[1.18] tracking-tight text-foreground/90">
+            评审不是
+            <br />
+            <span className="ink-mark">挑刺</span>,
+            <br />
+            是把没说清楚的事
+            <br />
+            <span className="font-light italic">逼出来</span>。
+          </p>
+          <footer className="mt-5 font-mono text-[10px] uppercase tracking-[0.2em] text-foreground/50">
+            —— 苍鹰 · 终审纪要 001
+          </footer>
+        </blockquote>
 
-            <Button
+        {/* 底部:3 个爪印 + 版次 */}
+        <div className="relative flex items-end justify-between font-mono text-[10px] uppercase tracking-[0.16em] text-foreground/50">
+          <div className="tilt-c flex items-center gap-[6px] text-foreground/65">
+            <PeckerClaw className="opacity-55" />
+            <PeckerClaw className="-translate-y-[3px] opacity-70" />
+            <PeckerClaw className="opacity-85" />
+          </div>
+          <span>第 壹 期 · 春</span>
+        </div>
+      </aside>
+
+      {/* ========== 右:form(去 Card 壳) ========== */}
+      <section className="relative flex items-center px-[var(--spacing-gutter)] py-12">
+        <div className="relative w-full max-w-[22rem]">
+          {/* 小刊眉 */}
+          <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-foreground/55">
+            登 · 录 · 口
+          </div>
+
+          {/* 标题,非卡片 */}
+          <h1 className="font-serif text-[2.1rem] leading-[1.05] tracking-tight">
+            今日
+            <br />
+            <span className="ink-mark">签 到</span>
+          </h1>
+          <p className="mt-3 max-w-[18rem] text-[13px] leading-[1.7] text-foreground/65">
+            输入你的名字和团队密码,进入今天的评审桌。
+            名字会记在报告署名和审计日志里。
+          </p>
+
+          {/* form:不用 card,直接贴着 */}
+          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+            <label className="block">
+              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-foreground/55">
+                01 · 评审人
+              </span>
+              <input
+                type="text"
+                value={reviewer}
+                onChange={(e) => setReviewer(e.target.value)}
+                maxLength={40}
+                required
+                placeholder="你的名字"
+                className="mt-1 w-full border-0 border-b border-foreground/35 bg-transparent px-0 py-2 font-serif text-[1.1rem] text-foreground placeholder:italic placeholder:text-foreground/30 focus:border-b-2 focus:border-pecker-red focus:outline-none"
+              />
+            </label>
+            <label className="block">
+              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-foreground/55">
+                02 · 团队密码
+              </span>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                placeholder="••••••••"
+                className="mt-1 w-full border-0 border-b border-foreground/35 bg-transparent px-0 py-2 font-serif text-[1.1rem] text-foreground placeholder:italic placeholder:text-foreground/30 focus:border-b-2 focus:border-pecker-red focus:outline-none"
+              />
+            </label>
+
+            <button
               type="submit"
-              className="w-full"
               disabled={loginMutation.isPending}
+              className="group relative mt-4 inline-flex items-center gap-3 bg-foreground px-5 py-2 font-serif text-[1.05rem] text-background shadow-print transition-all duration-300 hover:shadow-print-lift disabled:opacity-60 hover:[transform:rotate(0.6deg)]"
             >
-              {loginMutation.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  登录中...
-                </>
-              ) : (
-                "登录"
-              )}
-            </Button>
-
-            <Alert className="bg-muted/40 text-[11px]">
-              <AlertDescription>
-                密码由管理员通过 env var <code>PECKER_WEB_PASSWORD</code> 配置。
-                登录态为 HttpOnly JWT cookie,8 小时后自动失效。
-              </AlertDescription>
-            </Alert>
+              {loginMutation.isPending ? "登录中..." : "进入编辑部"}
+              <span className="font-mono text-[11px] opacity-70 transition-transform group-hover:translate-x-1">
+                →
+              </span>
+              {/* hover 时右上角冒出红笔勾 */}
+              <span
+                aria-hidden
+                className="absolute -right-2 -top-3 rotate-[8deg] font-serif text-[1.3rem] text-pecker-red opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+              >
+                ✓
+              </span>
+            </button>
           </form>
-        </CardContent>
-      </Card>
-    </div>
+
+          {/* 底部说明,手写批注气息 */}
+          <div className="mt-10 flex items-start gap-2 border-t border-dashed border-foreground/20 pt-4 font-mono text-[10px] uppercase tracking-[0.12em] text-foreground/50">
+            <span className="text-pecker-red">✱</span>
+            <span className="normal-case leading-[1.7] tracking-normal">
+              密码由管理员通过 env var <code>PECKER_WEB_PASSWORD</code> 配置。
+              登录态为 HttpOnly JWT cookie,8 小时后自动失效。
+            </span>
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }

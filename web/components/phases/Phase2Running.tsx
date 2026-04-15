@@ -240,7 +240,7 @@ export function Phase2Running() {
         />
       </section>
 
-      {/* ========== 4 位编辑 ========== */}
+      {/* ========== 4 位编辑(12-col 不规则网格,Phase F 报纸化) ========== */}
       <section className="space-y-3">
         <div className="flex items-center gap-3">
           <span
@@ -257,38 +257,105 @@ export function Phase2Running() {
             4 Workers
           </span>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {WORKER_ROLE_KEYS.map((k) => (
-            <RoleCard
-              key={k}
-              role={ROLES[k]}
-              state={workerStates.get(k) ?? "idle"}
-              itemsCount={workerItemCounts.get(k)}
-              errorText={workerErrors.get(k)}
-            />
-          ))}
+        {/* 12-col 错位网格:头版头条占 7,其余 5/5/7,md:mt-8 / md:-mt-4 打破对齐 */}
+        <div className="grid grid-cols-12 gap-[var(--spacing-col)] gap-y-6">
+          {/* 第 1 张 — 头版头条 col-span-7 */}
+          <RoleCard
+            role={ROLES[WORKER_ROLE_KEYS[0]]}
+            state={workerStates.get(WORKER_ROLE_KEYS[0]) ?? "idle"}
+            itemsCount={workerItemCounts.get(WORKER_ROLE_KEYS[0])}
+            errorText={workerErrors.get(WORKER_ROLE_KEYS[0])}
+            weight="heavy"
+            className="col-span-12 md:col-span-7"
+            peckDelay={0}
+          />
+          {/* 第 2 张 — col-span-5 + 向下错位 */}
+          <RoleCard
+            role={ROLES[WORKER_ROLE_KEYS[1]]}
+            state={workerStates.get(WORKER_ROLE_KEYS[1]) ?? "idle"}
+            itemsCount={workerItemCounts.get(WORKER_ROLE_KEYS[1])}
+            errorText={workerErrors.get(WORKER_ROLE_KEYS[1])}
+            className="col-span-12 md:col-span-5 md:mt-8"
+            peckDelay={0.7}
+          />
+          {/* 第 3 张 — col-span-5 + 向上错位 */}
+          <RoleCard
+            role={ROLES[WORKER_ROLE_KEYS[2]]}
+            state={workerStates.get(WORKER_ROLE_KEYS[2]) ?? "idle"}
+            itemsCount={workerItemCounts.get(WORKER_ROLE_KEYS[2])}
+            errorText={workerErrors.get(WORKER_ROLE_KEYS[2])}
+            className="col-span-12 md:col-span-5 md:-mt-4"
+            peckDelay={1.3}
+          />
+          {/* 第 4 张 — col-span-7 */}
+          <RoleCard
+            role={ROLES[WORKER_ROLE_KEYS[3]]}
+            state={workerStates.get(WORKER_ROLE_KEYS[3]) ?? "idle"}
+            itemsCount={workerItemCounts.get(WORKER_ROLE_KEYS[3])}
+            errorText={workerErrors.get(WORKER_ROLE_KEYS[3])}
+            className="col-span-12 md:col-span-7"
+            peckDelay={1.9}
+          />
         </div>
       </section>
 
-      {/* ========== 终审 ========== */}
+      {/* ========== 终审 · 社论版块(Phase F 报纸化) ========== */}
       {mode === "standard" && (
-        <section className="space-y-3">
-          <div className="flex items-center gap-3">
-            <span
-              aria-hidden
-              className="font-mono text-[10px] font-medium uppercase tracking-wider text-pecker-running"
-            >
-              §
-            </span>
-            <h3 className="font-serif text-sm font-medium tracking-tight text-foreground">
-              终审
-            </h3>
-            <span className="h-px flex-1 bg-border/70" />
-            <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-              Meta Reviewer
-            </span>
+        <section className="relative mt-14 mb-4">
+          {/* 顶部双线 */}
+          <div className="h-[3px] bg-foreground/85" />
+          <div className="mt-[3px] h-px bg-foreground/35" />
+
+          <div className="grid grid-cols-[auto_1fr] gap-[var(--spacing-gutter)] bg-pecker-kraft-deep px-[var(--spacing-col)] pt-8 pb-10 shadow-print">
+            {/* 左:垂直巨大编号 */}
+            <div className="flex flex-col items-center pt-2">
+              <span className="font-serif text-[4.5rem] leading-[0.85] text-pecker-red/80">
+                05
+              </span>
+              <span
+                className="mt-2 rotate-180 font-mono text-[9px] uppercase tracking-[0.22em] text-foreground/55"
+                style={{ writingMode: "vertical-rl" }}
+              >
+                社 论 · 终 审
+              </span>
+            </div>
+
+            {/* 右:内容 */}
+            <div className="min-w-0">
+              <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-foreground/55">
+                FINAL REVIEW · {ROLES["final-reviewer"].birdName}
+              </div>
+              <h2 className="mt-1 font-serif text-[1.95rem] leading-[1.15] tracking-tight">
+                终审意见 <span className="ink-mark">本期定稿</span>
+              </h2>
+
+              {/* 状态展示 —— 替换原终审 RoleCard 的 state 显示 */}
+              <div className="mt-4">
+                {finalState === "idle" && (
+                  <p className="text-sm text-muted-foreground">
+                    等待前序编辑完成,{ROLES["final-reviewer"].birdName}还没落桌……
+                  </p>
+                )}
+                {finalState === "running" && (
+                  <p className="text-sm text-pecker-running">
+                    {ROLES["final-reviewer"].birdName}正在交叉校验 4 位编辑的结论,只挑一处矛盾……
+                  </p>
+                )}
+                {finalState === "done" && (
+                  <p className="text-sm text-pecker-success">
+                    终审完成,4 位编辑的结论已交叉校验,定稿出版。
+                  </p>
+                )}
+                {finalState === "error" && (
+                  <p className="text-sm text-destructive">终审失败</p>
+                )}
+              </div>
+            </div>
           </div>
-          <RoleCard role={ROLES["final-reviewer"]} state={finalState} />
+
+          {/* 底部双线 */}
+          <div className="h-px bg-foreground/35" />
+          <div className="mt-[3px] h-[3px] bg-foreground/85" />
         </section>
       )}
 

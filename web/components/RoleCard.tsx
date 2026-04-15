@@ -5,15 +5,18 @@
  *
  * Phase 2 的 4 个并行 worker 卡 + 1 个终审卡复用这个组件。
  *
- * 视觉(Phase D 编辑部主题):
+ * 视觉(Phase F 编辑部主题 · 去 AI 味):
  * - 纸质卡片 shadow-paper,hover 时极微 lift(-0.5px + shadow-lift)
  * - 左侧 3px 状态竖条(before 伪元素)—— 像纸质文档的"状态书签"
  * - Badge 用 Mono + tabular-nums,数字像印刷的版次号
- * - running 态 breathe 动画(替换原来的 pulse)
+ * - running 态 peck 震颤动画(每张卡 --peck-delay 不同,4 只鸟不同步)
+ * - weight=heavy 变体:头版头条,字号 +1 档 + 顶部"本期·头版"红笔小标
+ * - 支持外层 className pass-through(col-span / 错位 mt)
  *
  * 彩蛋: hover 显示 tooltip,里面写原鸟名和一句职责描述。
  */
 
+import type { CSSProperties } from "react";
 import { Loader2, CheckCircle2, XCircle, Circle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -32,6 +35,12 @@ export interface RoleCardProps {
   state: RoleCardState;
   itemsCount?: number;
   errorText?: string;
+  /** 头版头条变体:字号 +1 档 + 顶部"本期 · 头版"小标 */
+  weight?: "normal" | "heavy";
+  /** peck 动画的 delay(秒),4 张卡各不同,防止同步 */
+  peckDelay?: number;
+  /** pass-through 外层 className(用于 col-span / 错位 mt-X 等) */
+  className?: string;
 }
 
 export function RoleCard({
@@ -39,12 +48,21 @@ export function RoleCard({
   state,
   itemsCount,
   errorText,
+  weight = "normal",
+  peckDelay = 0,
+  className,
 }: RoleCardProps) {
+  const isHeavy = weight === "heavy";
   return (
     <Tooltip>
       <TooltipTrigger
         render={
-          <div className="block rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50" />
+          <div
+            className={cn(
+              "block rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+              className,
+            )}
+          />
         }
       >
         <Card
@@ -56,9 +74,9 @@ export function RoleCard({
             // idle:虚线浅边,像未启用的工位
             state === "idle" &&
               "border-dashed border-pecker-idle-border bg-card/60 text-pecker-idle-fg hover:border-border",
-            // running:浅墨青底 + 实线边 + 左侧 3px 竖条 + breathe
+            // running:浅墨青底 + 实线边 + 左侧 3px 竖条 + peck 动画(取代 breathe)
             state === "running" &&
-              "border-pecker-running/40 bg-pecker-running-bg before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-pecker-running animate-pecker-breathe",
+              "border-pecker-running/40 bg-pecker-running-bg animate-pecker-peck before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-pecker-running",
             // done:暖绿边 + 极淡底 + 左侧竖条
             state === "done" &&
               "border-pecker-success-border bg-pecker-success-bg before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-pecker-success",
@@ -66,12 +84,35 @@ export function RoleCard({
             state === "error" &&
               "border-destructive/50 bg-destructive/[0.04] before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-destructive",
           )}
+          style={
+            state === "running"
+              ? ({ "--peck-delay": `${peckDelay}s` } as CSSProperties)
+              : undefined
+          }
         >
-          <CardContent className="flex items-start gap-3 p-5">
+          <CardContent
+            className={cn(
+              "flex items-start gap-3",
+              isHeavy ? "p-6" : "p-5",
+            )}
+          >
             <StateIcon state={state} />
             <div className="min-w-0 flex-1">
+              {isHeavy && (
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-pecker-red/90">
+                    本期 · 头版
+                  </span>
+                  <span className="h-px flex-1 bg-pecker-red/40" />
+                </div>
+              )}
               <div className="flex items-center gap-2">
-                <span className="font-serif text-[15px] font-medium leading-tight tracking-tight text-foreground">
+                <span
+                  className={cn(
+                    "font-serif font-medium leading-tight tracking-tight text-foreground",
+                    isHeavy ? "text-[17px]" : "text-[15px]",
+                  )}
+                >
                   {role.label}
                 </span>
                 {state === "done" && typeof itemsCount === "number" && (
