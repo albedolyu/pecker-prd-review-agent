@@ -71,6 +71,73 @@ def _read_input(prompt, fallback=""):
         return fallback
 
 
+def check_pending_feedback(non_interactive: bool):
+    """启动自检 (Plan 4 Layer 3): 扫描 .pecker_registry.json 里的下游仓库,
+    看是否有 HEAD 已前进但还没让信鸽扫过。
+
+    交互模式: 弹 [y/N/s] 提示
+        y — 立即跑 feedback.py --scan-registered-repos
+        N — 跳过(默认),下次启动再提醒
+        s — silently 标记为已扫(用于 PM 不想被不相关 WIP 仓骚扰时)
+
+    非交互模式: 只打印警告,不阻塞评审流程。
+    """
+    try:
+        from registry import load_registry, list_pending, mark_scanned
+    except ImportError:
+        return  # registry 模块不存在也不阻塞
+
+    registry_path = ".pecker_registry.json"
+    if not os.path.isfile(registry_path):
+        return  # 未注册任何仓库,静默跳过
+
+    try:
+        reg = load_registry(registry_path)
+        pending = list_pending(reg)
+    except Exception as e:
+        print(f"[警告] 读取信鸽 registry 失败(不阻断): {str(e)[:80]}")
+        return
+
+    if not pending:
+        return  # 无未扫信号,静默通过
+
+    print()
+    print(f"[信鸽] 发现 {len(pending)} 个已注册仓库有新 commit:")
+    for p in pending:
+        print(f"  - {p['repo_path']} (scope={p.get('scope','')}, 新 HEAD={p['current_sha'][:8]})")
+
+    if non_interactive:
+        print("[信鸽] 非交互模式,跳过自检。请后续手工执行:")
+        print("       python feedback.py --scan-registered-repos --triggered-by session_start")
+        return
+
+    answer = _read_input(
+        "[信鸽] 现在跑一次信号采集? [y/N/s] (s=标记已扫不运行): ",
+        fallback="N",
+    ).strip().lower()
+    if answer == "y":
+        print("[信鸽] 开始采集...")
+        try:
+            result = subprocess.run(
+                [sys.executable, "feedback.py", "--scan-registered-repos",
+                 "--triggered-by", "session_start"],
+                cwd=os.path.dirname(os.path.abspath(__file__)) or ".",
+            )
+            if result.returncode != 0:
+                print("[信鸽] 采集出现错误(不阻断评审),详情见 pigeon_runs/ 日志")
+        except Exception as e:
+            print(f"[信鸽] 调用 feedback.py 失败(不阻断): {str(e)[:80]}")
+    elif answer == "s":
+        print("[信鸽] 标记所有 pending 仓库为已扫(不采集信号)")
+        for p in pending:
+            try:
+                mark_scanned(registry_path, p["repo_path"], p["current_sha"])
+            except Exception as e:
+                print(f"  [错误] 标记 {p['repo_path']} 失败: {str(e)[:60]}")
+    else:
+        print("[信鸽] 已跳过,下次启动会再次提醒")
+
+
 def validate_config():
     """启动时校验所有必需配置，给人话报错"""
     errors = []
@@ -633,6 +700,9 @@ def main():
 
     # 同步知识库
     wiki_pull(wiki_path)
+
+    # Plan 4 Layer 3: 信鸽反馈自检 — 注册的下游仓有新 commit 就提醒 PM
+    check_pending_feedback(non_interactive=_is_noninteractive())
 
     # 系统提示词
     system_prompt = load_system_prompt()
