@@ -2,10 +2,46 @@
 杜鹃 (Cuckoo) — 评审报告解析模块
 
 负责将啄木鸟输出的 Markdown/YAML 格式报告解析为结构化改进项列表。
+
+B4 (Phase 5): 解析时根据 evidence_type 附加 confidence_score 字段,
+供伯劳门禁分档和 merge_reviews 合并共识项加权使用。
 """
 
 import os
 import re
+
+
+# B4: 依据类型到置信度的映射
+#
+# A = wiki 引用 / 原文直引(最可靠)
+# B = 规则编号(RC-*/V-*)引用(较可靠但依赖规则本身质量)
+# C = 经验/竞品/推断(最低可靠度,杜鹃最容易质疑)
+EVIDENCE_CONFIDENCE_BASE = {
+    "A": 0.9,
+    "B": 0.8,
+    "C": 0.5,
+    "":  0.4,  # 未标注依据类型的保守扣分
+}
+
+# 苍鹰补充漏报项的置信度衰减系数
+# 理由:补充项没经过 Worker 主评审,置信度要打折
+GOSHAWK_SUPPLEMENT_DECAY = 0.8
+
+
+def compute_confidence(evidence_type, is_supplement=False):
+    """B4: 计算 item 的 confidence_score
+
+    Args:
+        evidence_type: "A" / "B" / "C" / "" (未知)
+        is_supplement: 是否苍鹰补充的漏报项(会乘 0.8 衰减)
+
+    Returns:
+        float in [0.0, 1.0]
+    """
+    base = EVIDENCE_CONFIDENCE_BASE.get((evidence_type or "").upper(), 0.4)
+    if is_supplement:
+        base *= GOSHAWK_SUPPLEMENT_DECAY
+    return round(base, 2)
 
 
 def parse_review_report(report_path):
@@ -33,14 +69,16 @@ def parse_review_report(report_path):
     )
 
     for m in yaml_pattern.finditer(content):
+        evi_type = (m.group(6) or "").strip()
         items.append({
             "id": m.group(1),
             "location": (m.group(2) or "").strip(),
             "problem": (m.group(3) or "").strip(),
             "suggestion": (m.group(4) or "").strip(),
             "severity": (m.group(5) or "").strip(),
-            "evidence_type": (m.group(6) or "").strip(),
+            "evidence_type": evi_type,
             "evidence_content": (m.group(7) or "").strip(),
+            "confidence_score": compute_confidence(evi_type),  # B4
             "raw_text": m.group(0),
         })
 
@@ -161,5 +199,6 @@ def _extract_fields_from_block(item_id, block_text):
         "severity": severity,
         "evidence_type": evidence_type,
         "evidence_content": evidence_content,
+        "confidence_score": compute_confidence(evidence_type),  # B4
         "raw_text": block_text[:500],
     }

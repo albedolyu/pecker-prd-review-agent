@@ -1,0 +1,66 @@
+{
+  "name": "纳税人资质 PRD 预埋 bug 端到端测试",
+  "prd_file": "workspace-纳税人资质/prd/纳税人资质需求文档-v1.0.md",
+  "generated_at": "2026-04-15 10:00",
+  "description": "基于纳税人资质真实 PRD 章节预埋 6 个已知 bug + 2 个 non_issues,覆盖不一致/缺失/字段类型/笔误 4 类,用于啄木鸟召回率/精确率/依据可靠度回归测试",
+  "planted_bugs": [
+    {
+      "id": "BUG-001",
+      "location": "2.1",
+      "type": "字段类型",
+      "severity": "must",
+      "description": "§1.3.1 提到'小规模纳税人'等多种资格类型,§2.1 建表中 stype 字段类型为 varchar(10) 并在注释中列出 0/1/... 枚举值,但 §2.2 字段映射表仅说'根据 stype 映射'却没有枚举值到中文名的映射表,开发无法完成映射",
+      "keywords": ["stype", "纳税人资格", "枚举", "varchar", "映射"]
+    },
+    {
+      "id": "BUG-002",
+      "location": "3.1.1",
+      "type": "缺失",
+      "severity": "must",
+      "description": "§1.3.3 数据质量探查中指出 sdate(有效期起)空值率 53.24%、edate(有效期止)空值率 54.98%,但 §3.1.1 查询规则和 §3.4 格式规则均未规定空值的展示或过滤处理",
+      "keywords": ["sdate", "edate", "空值", "查询", "展示", "过滤"]
+    },
+    {
+      "id": "BUG-003",
+      "location": "3.1.2",
+      "type": "不一致",
+      "severity": "should",
+      "description": "§3.1.2 个性化规则将默认排序定义为'按 sdate 从晚到早,再按 id 从大到小',但列表核心字段包含 edate(有效期止),业务语义上按 edate 更能反映'最新失效资质',为何不按 edate 无任何说明",
+      "keywords": ["sdate", "edate", "排序", "默认", "有效期"]
+    },
+    {
+      "id": "BUG-004",
+      "location": "2.1",
+      "type": "笔误",
+      "severity": "should",
+      "description": "§2.1 建表 DDL 中 tax_manager 字段一行写成 'COMMENT税务负责人',缺少空格和引号,实为 \"COMMENT '税务负责人'\",属明显笔误",
+      "keywords": ["COMMENT", "tax_manager", "税务负责人", "DDL", "引号"]
+    },
+    {
+      "id": "BUG-005",
+      "location": "3.1.1",
+      "type": "不一致",
+      "severity": "must",
+      "description": "§3.1.1 '风鸟端过滤规则'整栏写'无',表示无特殊规则,但 §4.2 实际存在两条风鸟端交互规则(导出 + 空值展示),两处矛盾",
+      "keywords": ["风鸟端", "过滤", "无", "交互", "规则"]
+    },
+    {
+      "id": "BUG-006",
+      "location": "1.3.3",
+      "type": "不一致",
+      "severity": "must",
+      "description": "§1.3.3 数据质量探查中声明'一家企业只有一条纳税人资质数据',但 §4.2 列表页允许分页展示多条,同一企业在什么场景下会有多条记录未说明",
+      "keywords": ["一条", "多条", "分页", "企业", "资质", "唯一"]
+    }
+  ],
+  "non_issues": [
+    {
+      "location": "3.4",
+      "reason": "§3.4 脱敏规则章节存在即便为空,表示'本数据无需脱敏',不是缺失"
+    },
+    {
+      "location": "1.3.3",
+      "reason": "'数据更新时效性 D+1' 已明确定义,不应被报为更新频率歧义"
+    }
+  ]
+}

@@ -506,7 +506,8 @@ class TestMatchSignalToItem:
             problem="金额计算精度未说明，开发需自行假设",
         )
 
-        assert _match_signal_to_item(signal, item) is True
+        matched, _ = _match_signal_to_item(signal, item)
+        assert matched is True
 
     def test_unrelated_signal_does_not_match(self):
         """
@@ -524,7 +525,8 @@ class TestMatchSignalToItem:
             problem="导出字段映射缺失，需与后端对齐",
         )
 
-        assert _match_signal_to_item(signal, item) is False
+        matched, _ = _match_signal_to_item(signal, item)
+        assert matched is False
 
     def test_file_path_match_contributes(self):
         """
@@ -543,7 +545,8 @@ class TestMatchSignalToItem:
             problem="金额精度未说明",
         )
 
-        assert _match_signal_to_item(signal, item) is True
+        matched, _ = _match_signal_to_item(signal, item)
+        assert matched is True
 
     def test_empty_item_location_and_problem_returns_false(self):
         """
@@ -554,7 +557,8 @@ class TestMatchSignalToItem:
         signal = self._signal("TODO: something")
         item = {"id": "R-001", "location": "", "problem": "", "severity": "should", "status": "confirmed"}
 
-        assert _match_signal_to_item(signal, item) is False
+        matched, _ = _match_signal_to_item(signal, item)
+        assert matched is False
 
 
 # ============================================================

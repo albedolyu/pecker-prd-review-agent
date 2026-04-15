@@ -1,0 +1,66 @@
+{
+  "name": "对外投资 PRD 预埋 bug 端到端测试",
+  "prd_file": "workspace-对外投资/prd/数据维度-对外投资增加间接投资_原始版本.md",
+  "generated_at": "2026-04-15 10:00",
+  "description": "基于对外投资真实 PRD 章节预埋 6 个已知 bug + 2 个 non_issues,覆盖不一致/字段类型/歧义/缺失 4 类,用于啄木鸟召回率/精确率/依据可靠度回归测试",
+  "planted_bugs": [
+    {
+      "id": "BUG-001",
+      "location": "1.3",
+      "type": "不一致",
+      "severity": "must",
+      "description": "§1.3 名词解释把'持股合计'定义为'直接持股比例与间接持股比例的总和',但 §2.2.1 字段映射表中对应字段映射为 nvl(ds_invest_alpha.invest_ratio, ds_company_discover_invest.conprop),两源都为空时的取值逻辑未说明",
+      "keywords": ["持股合计", "nvl", "invest_ratio", "conprop", "空值", "定义"]
+    },
+    {
+      "id": "BUG-002",
+      "location": "2.2.1",
+      "type": "字段类型",
+      "severity": "must",
+      "description": "§2.2.1 conprop 字段备注写'出资比例 (0-100)',但 §3.4 格式规则写'持股比例保留 4 位小数的百分比',数值范围与格式两处矛盾",
+      "keywords": ["conprop", "出资比例", "0-100", "4位小数", "百分比", "格式"]
+    },
+    {
+      "id": "BUG-003",
+      "location": "3.7",
+      "type": "不一致",
+      "severity": "must",
+      "description": "§3.7 排序规则声明'默认按持股合计倒序',但 §4.2 列表布局中'持股合计'字段未标注排序 icon 位置和交互,开发无法实现可点击切换",
+      "keywords": ["持股合计", "排序", "倒序", "icon", "列表布局"]
+    },
+    {
+      "id": "BUG-004",
+      "location": "2.2.3",
+      "type": "缺失",
+      "severity": "must",
+      "description": "§2.2.3 字段映射表含 invest_paths(路径明细)字段,但 §3.4 全局格式规则完全未提及该字段的展示格式(分隔符/截断/Hover 行为)",
+      "keywords": ["invest_paths", "路径明细", "格式", "截断", "展示"]
+    },
+    {
+      "id": "BUG-005",
+      "location": "4.3",
+      "type": "歧义",
+      "severity": "should",
+      "description": "§4.3 投资详情表格行'股权链'只说'最多展示 10 条股权链',§4.5 移动端说'股权链路有 icon:最多展示 10 条股权链',两处措辞略有不同,Web/App 端是否展示 icon 的差异不明",
+      "keywords": ["股权链", "icon", "10条", "移动端", "Web端"]
+    },
+    {
+      "id": "BUG-006",
+      "location": "3.1",
+      "type": "缺失",
+      "severity": "must",
+      "description": "§3.1 数据查询规则完全未规定'间接投资如何剔除直接投资部分'的具体过滤逻辑,仅在 §1.3 执行摘要提到'剔除直接投资部分',无可执行 SQL/伪代码",
+      "keywords": ["间接投资", "剔除", "直接投资", "过滤", "SQL", "伪代码"]
+    }
+  ],
+  "non_issues": [
+    {
+      "location": "2.2.1",
+      "reason": "投资详情字段已明确'默认按持股降序',不应被报为排序规则缺失"
+    },
+    {
+      "location": "4.5",
+      "reason": "移动端明确说'最多展示 10 条股权链',是有界展示定义,不应被报为列表长度缺失"
+    }
+  ]
+}
