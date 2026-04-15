@@ -209,17 +209,20 @@ def _collect_commit_message_signals(code_dir, scope_keywords=None, since_days=30
         return signals
 
     try:
+        # 注意: 不能用 text=True — Windows 默认 locale 是 gbk,遇到中文 commit 会 UnicodeDecodeError
+        # 导致 subprocess.run 返回的 stdout 为 None,下游 .split 炸
         result = subprocess.run(
             ["git", "log", f"--since={since_days} days ago",
              "--pretty=format:%H|%s|%b---END---"],
-            cwd=code_dir, capture_output=True, text=True, timeout=30,
+            cwd=code_dir, capture_output=True, timeout=30,
         )
         if result.returncode != 0:
             return signals
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return signals
 
-    raw = result.stdout
+    # 手动 utf-8 decode,遇到异常字节用 replace 兜底
+    raw = (result.stdout or b"").decode("utf-8", errors="replace")
     commits = [c.strip() for c in raw.split("---END---") if c.strip()]
 
     # 抓 R-001 / R-XXX / Closes #N / Fixes #N
@@ -300,16 +303,17 @@ def _collect_rework_signals(code_dir, scope_keywords=None):
         return signals
 
     try:
-        # 统计每个文件被修改的 commit 次数
+        # 同上: 手动 utf-8 decode,不用 text=True
         result = subprocess.run(
             ["git", "log", "--pretty=format:", "--name-only"],
-            cwd=code_dir, capture_output=True, text=True, timeout=30,
+            cwd=code_dir, capture_output=True, timeout=30,
         )
         if result.returncode != 0:
             return signals
 
+        raw_stdout = (result.stdout or b"").decode("utf-8", errors="replace")
         file_counts = {}
-        for line in result.stdout.splitlines():
+        for line in raw_stdout.splitlines():
             line = line.strip()
             if line:
                 file_counts[line] = file_counts.get(line, 0) + 1
@@ -708,12 +712,26 @@ def _append_rule_history(outcomes, workspace, prd_name=None):
 
         entry = history_data[rule_id]
 
-        # 追加本次记录
-        entry["history"].append({
+        # 追加本次记录 (按 (date, outcome, prd, commit_sha) 去重,
+        # 避免 scan 模式 + 手工 feedback 同时跑产生重复 history 条目)
+        new_rec = {
             "date": today,
             "outcome": o["outcome"],
             "prd": prd_label,
-        })
+        }
+        if "commit_sha" in o:
+            new_rec["commit_sha"] = o["commit_sha"]
+        dedup_key = (
+            new_rec["date"], new_rec["outcome"], new_rec["prd"],
+            new_rec.get("commit_sha", ""),
+        )
+        existing_keys = {
+            (h.get("date"), h.get("outcome"), h.get("prd"), h.get("commit_sha", ""))
+            for h in entry["history"]
+        }
+        if dedup_key in existing_keys:
+            continue  # 重复条目,跳过 history 追加 (stats 也跳过以保持一致)
+        entry["history"].append(new_rec)
 
         # 更新累计统计
         oc = o["outcome"]
@@ -739,8 +757,23 @@ def _append_rule_history(outcomes, workspace, prd_name=None):
     # 确保输出目录存在
     os.makedirs(os.path.dirname(history_path), exist_ok=True)
 
-    with open(history_path, "w", encoding="utf-8") as f:
-        json.dump(history_data, f, ensure_ascii=False, indent=2)
+    # 原子写: 先写 .tmp 再 os.replace,跨平台且零依赖
+    import tempfile as _tempfile
+    _fd, _tmp = _tempfile.mkstemp(
+        prefix=".rule_history_", suffix=".tmp",
+        dir=os.path.dirname(history_path),
+    )
+    try:
+        with os.fdopen(_fd, "w", encoding="utf-8") as f:
+            json.dump(history_data, f, ensure_ascii=False, indent=2)
+        os.replace(_tmp, history_path)
+    except Exception:
+        if os.path.exists(_tmp):
+            try:
+                os.unlink(_tmp)
+            except OSError:
+                pass
+        raise
 
     # 打印高噪声规则警告
     noisy_rules = [rid for rid in updated_rules if history_data[rid]["is_noisy"]]
@@ -749,6 +782,146 @@ def _append_rule_history(outcomes, workspace, prd_name=None):
         for rid in sorted(noisy_rules):
             rate = history_data[rid]["rejection_rate"]
             print(f"  ⚠️ {rid} 驳回率 {rate:.0%}（高噪规则，建议审查）")
+
+
+def _write_pigeon_run_log(
+    workspace,
+    run_id,
+    triggered_by,
+    repos_scanned,
+    signals_collected,
+    signal_types_count,
+    rule_perf_updated,
+    errors,
+):
+    """信鸽每次运行落一份日志到 workspace/output/pigeon_runs/pigeon_run_<ts>.json
+
+    参数:
+        workspace: 日志落地目录前缀
+        run_id: 本次运行的唯一 ID
+        triggered_by: 触发来源 (manual / scheduled / session_start / stop_hook)
+        repos_scanned: 成功扫过的仓库路径列表
+        signals_collected: 总信号数
+        signal_types_count: {type: count} 分类计数
+        rule_perf_updated: 被更新的规则 ID 列表
+        errors: [{repo, error_type, message}, ...]
+
+    返回:
+        日志文件绝对路径
+    """
+    runs_dir = os.path.join(workspace, "output", "pigeon_runs")
+    os.makedirs(runs_dir, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_path = os.path.join(runs_dir, f"pigeon_run_{ts}.json")
+    data = {
+        "run_id": run_id,
+        "triggered_by": triggered_by,
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "repos_scanned": repos_scanned,
+        "signals_collected": signals_collected,
+        "signal_types_count": signal_types_count,
+        "rule_perf_updated": rule_perf_updated,
+        "errors": errors,
+    }
+    with open(log_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    return log_path
+
+
+def _cleanup_old_pigeon_runs(workspace, keep_days=30):
+    """只在 scan 模式调用: 清理 pigeon_runs 下 keep_days 天前的日志。
+
+    手工 feedback 模式不调用此函数,避免一次性运行就清掉仍有价值的历史。
+    """
+    runs_dir = os.path.join(workspace, "output", "pigeon_runs")
+    if not os.path.isdir(runs_dir):
+        return
+    cutoff = datetime.now().timestamp() - keep_days * 86400
+    for name in os.listdir(runs_dir):
+        if not name.startswith("pigeon_run_") or not name.endswith(".json"):
+            continue
+        p = os.path.join(runs_dir, name)
+        try:
+            if os.path.getmtime(p) < cutoff:
+                os.unlink(p)
+        except OSError:
+            pass
+
+
+def _run_scan_mode(args):
+    """--scan-registered-repos 入口: 遍历 registry,对每个 pending 仓库跑信号采集。
+
+    与手工 --code-dir 模式的区别:
+    - 循环处理多个仓库
+    - 只采集信号,不重新评估 outcomes (scan 模式频繁跑,避免噪声污染 rule_perf_history)
+    - 成功扫完就 mark_scanned,防止下次重复处理
+    - 结束时落 pigeon_run 日志 + cleanup 30 天前老日志
+    """
+    from registry import load_registry, list_pending, mark_scanned
+    import uuid as _uuid
+
+    reg = load_registry(args.registry_path)
+    pending = list_pending(reg)
+    if not pending:
+        print("[scan] 没有待扫描的仓库(所有 HEAD 都已跟进)")
+        return 0
+
+    print(f"[scan] 发现 {len(pending)} 个仓库有新 commit,开始逐一采集")
+    run_id = f"pigeon_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{_uuid.uuid4().hex[:6]}"
+    repos_scanned = []
+    signals_collected = 0
+    signal_types_count = {}
+    errors = []
+
+    for entry in pending:
+        repo_path = entry["repo_path"]
+        workspace = entry["workspace"]
+        scope = entry.get("scope", "")
+        current_sha = entry["current_sha"]
+        scope_kw = [s.strip().lower() for s in scope.split(",") if s.strip()] if scope else None
+
+        print(f"[scan] → {repo_path} (scope={scope}, HEAD={current_sha[:8]})")
+        try:
+            # 复用现有信号采集函数
+            commit_signals = _collect_commit_message_signals(repo_path, scope_kw)
+            test_signals = _collect_test_failure_signals(repo_path, scope_kw)
+            total_new = len(commit_signals) + len(test_signals)
+            signals_collected += total_new
+            for sig in commit_signals + test_signals:
+                t = sig.get("type", "unknown")
+                signal_types_count[t] = signal_types_count.get(t, 0) + 1
+
+            # scan 模式只采集信号,不 propose 新规则 + 不重新评估 outcomes
+            # (下次手工 feedback.py --report ... 跑时会看到所有信号)
+
+            # 标记 HEAD 已扫,防止下次重复处理
+            mark_scanned(args.registry_path, repo_path, current_sha)
+            repos_scanned.append(repo_path)
+            print(f"[scan]   采集 {total_new} 条信号,已标记 HEAD 为已扫")
+        except Exception as e:
+            errors.append({
+                "repo": repo_path,
+                "error_type": type(e).__name__,
+                "message": str(e)[:200],
+            })
+            print(f"[scan]   [错误] {type(e).__name__}: {str(e)[:100]}")
+
+    # 落日志: 用第一个 workspace 作为日志落地目录 (scan 可能跨 workspace,取首个)
+    log_workspace = pending[0]["workspace"] if pending else "."
+    _write_pigeon_run_log(
+        workspace=log_workspace,
+        run_id=run_id,
+        triggered_by=args.triggered_by,
+        repos_scanned=repos_scanned,
+        signals_collected=signals_collected,
+        signal_types_count=signal_types_count,
+        rule_perf_updated=[],  # scan 模式不更新 rule_perf
+        errors=errors,
+    )
+    _cleanup_old_pigeon_runs(log_workspace)
+
+    print(f"[scan] 完成: {len(repos_scanned)}/{len(pending)} 仓库,{signals_collected} 信号,{len(errors)} 错误")
+    return 0 if not errors else 1
 
 
 def _extract_rule_id(outcome):
@@ -1010,8 +1183,8 @@ def main():
         description="啄木鸟 PRD 评审反馈闭环 — 从 AI Coding 结果采集反馈信号"
     )
     parser.add_argument(
-        "--code-dir", required=True,
-        help="AI Coding 产出的代码目录",
+        "--code-dir", required=False,
+        help="AI Coding 产出的代码目录 (scan 模式下不需要)",
     )
     parser.add_argument(
         "--report",
@@ -1041,8 +1214,30 @@ def main():
         default=None,
         help="PRD 名称标识（用于规则历史记录中标注来源，如 '劳动仲裁'）",
     )
+    # Plan 6: scan 模式 — 从 registry 读下游仓库批量跑
+    parser.add_argument(
+        "--scan-registered-repos", action="store_true",
+        help="从 .pecker_registry.json 读取已注册仓库,对 HEAD 前进的跑信号采集",
+    )
+    parser.add_argument(
+        "--registry-path", default=".pecker_registry.json",
+        help="registry 文件路径(默认项目根下 .pecker_registry.json)",
+    )
+    parser.add_argument(
+        "--triggered-by", default="manual",
+        choices=["manual", "scheduled", "session_start", "stop_hook"],
+        help="触发来源,写入 pigeon_run 日志,便于后续分析",
+    )
 
     args = parser.parse_args()
+
+    # Plan 6: scan 模式早退
+    if args.scan_registered_repos:
+        return _run_scan_mode(args)
+
+    # 常规模式下 --code-dir 必须
+    if not args.code_dir:
+        parser.error("--code-dir 在非 scan 模式下必填")
 
     # 确定基础目录（脚本所在目录）
     base_dir = os.path.dirname(os.path.abspath(__file__))
