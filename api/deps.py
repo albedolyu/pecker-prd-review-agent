@@ -74,27 +74,41 @@ def get_workspace_dir(workspace_name: str) -> Path:
 
 
 # ============================================================
-# 当前登录用户 helper(占位,A12 auth 中间件实现后填充)
+# 当前登录用户 helper(A12: 从 pecker_session JWT cookie 解析)
 # ============================================================
 
 def get_current_user(request: Request) -> dict:
-    """从 JWT cookie 解析当前 reviewer + readonly 状态。
+    """从 pecker_session JWT cookie 解析当前 reviewer + readonly 状态。
 
-    A12 之前的占位实现:直接从请求 header `X-Reviewer` 读(开发用)。
+    认证契约:
+    - 缺失 cookie → 401 未登录(不再静默 fallback 到 anonymous)
+    - HMAC 签名不对或过期 → 401 登录已失效
+    - 解析成功 → 返回 JWT payload 里的 reviewer 和 readonly 字段
+      readonly 由 auth.login 在签发时根据 PECKER_READONLY_USERS 决定,
+      服务端签发后客户端无法篡改(HS256 HMAC 保护)。
     """
-    # 占位:A12 里替换为 JWT cookie 解析
-    reviewer = request.headers.get("x-reviewer", "")
-    if not reviewer:
-        # 开发模式允许未登录访问,生产模式 A12 会改成 401
-        reviewer = "anonymous"
+    from jose import JWTError, jwt
 
-    readonly_list = os.environ.get("PECKER_READONLY_USERS", "")
-    readonly_users = {u.strip() for u in readonly_list.split(",") if u.strip()}
-    is_readonly = reviewer in readonly_users
+    token = request.cookies.get("pecker_session", "")
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="未登录")
+
+    secret = os.environ.get("PECKER_JWT_SECRET", "")
+    if not secret or len(secret) < 16:
+        # 理论上 main.lifespan 已经拦住了,这里是双保险
+        raise HTTPException(status_code=500, detail="PECKER_JWT_SECRET 未配置或过短")
+
+    try:
+        payload = jwt.decode(token, secret, algorithms=["HS256"])
+    except JWTError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"登录已失效: {str(e)[:60]}",
+        )
 
     return {
-        "reviewer": reviewer,
-        "readonly": is_readonly,
+        "reviewer": payload.get("reviewer", ""),
+        "readonly": payload.get("readonly", False),
     }
 
 
