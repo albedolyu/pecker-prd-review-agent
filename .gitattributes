@@ -1,0 +1,40 @@
+# 啄木鸟项目 git attribute 配置
+#
+# 目的: 解决 Windows + Linux 同仓库协作时的 CRLF/LF 混乱。
+# 策略: 对文本源码强制 LF(Next.js 生态默认,Python 也兼容),
+#       对二进制文件不转换。
+
+# 默认: 自动判断是否是文本,文本按 LF 存储到 git 对象
+* text=auto eol=lf
+
+# 确保 web/ 前端源码永远是 LF(plan Phase B 风险项)
+web/** text=auto eol=lf
+
+# Python 源码和配置文件 LF
+*.py text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.toml text eol=lf
+
+# Shell 脚本必须 LF(bash 不接受 CRLF)
+*.sh text eol=lf
+
+# Windows 批处理文件 CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 二进制文件不做转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.xlsx binary
+*.docx binary
+*.pptx binary
+*.woff binary
+*.woff2 binary
