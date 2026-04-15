@@ -39,7 +39,6 @@ import { ProgressRail } from "@/components/ProgressRail";
 import { RoleCard, type RoleCardState } from "@/components/RoleCard";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 export function Phase2Running() {
   // ========== store ==========
@@ -210,37 +209,54 @@ export function Phase2Running() {
 
   // ========== UI ==========
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>评审进行中</span>
-            <span className="flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
-              <Clock className="h-3.5 w-3.5" />
-              {formatElapsed(elapsed)}
-            </span>
-          </CardTitle>
-          <CardDescription>
-            {mode === "standard"
-              ? "严格模式 — 4 位编辑并行 + 终审,预计 90-150 秒"
-              : "快速模式 — 轻量版,预计 40-60 秒"}
-          </CardDescription>
-        </CardHeader>
-      </Card>
-
-      {/* ========== 进度条 ========== */}
-      <Card>
-        <div className="p-6">
-          <ProgressRail
-            progress={stream.progress}
-            error={stream.state === "error"}
-          />
+    <div className="space-y-10">
+      {/* ========== Header:去 Card 壳,内刊章节感 ========== */}
+      <header className="border-b border-border pb-6">
+        <div className="flex items-center gap-3">
+          <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            Phase 02 / 05
+          </span>
+          <span className="h-px flex-1 bg-border" />
+          <span className="flex items-center gap-1.5 font-mono text-[11px] tabular-nums text-muted-foreground">
+            <Clock className="h-3 w-3" />
+            {formatElapsed(elapsed)}
+          </span>
         </div>
-      </Card>
+        <h2 className="mt-3 font-serif text-2xl font-medium tracking-tight text-foreground">
+          评审进行中
+        </h2>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          {mode === "standard"
+            ? "严格模式 —— 4 位编辑并行审稿,终审合议后输出可确认条目。预计 90–150 秒。"
+            : "快速模式 —— 轻量走一遍,跳过终审。预计 40–60 秒。"}
+        </p>
+      </header>
+
+      {/* ========== 进度条面板(嵌入式,不用 Card) ========== */}
+      <section className="rounded-md border border-border bg-card px-6 py-6 shadow-paper">
+        <ProgressRail
+          progress={stream.progress}
+          error={stream.state === "error"}
+        />
+      </section>
 
       {/* ========== 4 位编辑 ========== */}
-      <div>
-        <h3 className="mb-2 text-sm font-medium">并行编辑</h3>
+      <section className="space-y-3">
+        <div className="flex items-center gap-3">
+          <span
+            aria-hidden
+            className="font-mono text-[10px] font-medium uppercase tracking-wider text-pecker-running"
+          >
+            §
+          </span>
+          <h3 className="font-serif text-sm font-medium tracking-tight text-foreground">
+            并行编辑
+          </h3>
+          <span className="h-px flex-1 bg-border/70" />
+          <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            4 Workers
+          </span>
+        </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {WORKER_ROLE_KEYS.map((k) => (
             <RoleCard
@@ -252,14 +268,28 @@ export function Phase2Running() {
             />
           ))}
         </div>
-      </div>
+      </section>
 
-      {/* ========== 终审(苍鹰) ========== */}
+      {/* ========== 终审 ========== */}
       {mode === "standard" && (
-        <div>
-          <h3 className="mb-2 text-sm font-medium">终审</h3>
+        <section className="space-y-3">
+          <div className="flex items-center gap-3">
+            <span
+              aria-hidden
+              className="font-mono text-[10px] font-medium uppercase tracking-wider text-pecker-running"
+            >
+              §
+            </span>
+            <h3 className="font-serif text-sm font-medium tracking-tight text-foreground">
+              终审
+            </h3>
+            <span className="h-px flex-1 bg-border/70" />
+            <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+              Meta Reviewer
+            </span>
+          </div>
           <RoleCard role={ROLES["final-reviewer"]} state={finalState} />
-        </div>
+        </section>
       )}
 
       {/* ========== 错误态 ========== */}

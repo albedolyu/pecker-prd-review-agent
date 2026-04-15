@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Fraunces } from "next/font/google";
 import "./globals.css";
 
 import { Providers } from "@/components/providers";
@@ -13,6 +13,17 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+// Fraunces — 现代 transitional serif,带 optical size 变化,
+// 给标题一种"刻金属印刷"的严肃感。中文字符会自动 fallback 到
+// 系统 PingFang SC / 微软雅黑,形成 latin serif + 中文黑体的
+// 编辑部混排气质。
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  style: ["normal", "italic"],
 });
 
 export const metadata: Metadata = {
@@ -29,10 +40,10 @@ export default function RootLayout({
   return (
     <html
       lang="zh-CN"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} h-full antialiased`}
     >
       <body
-        className="min-h-full flex flex-col bg-muted/30 text-foreground"
+        className="min-h-full flex flex-col bg-background text-foreground"
         style={{
           fontFamily:
             "var(--font-geist-sans), 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', sans-serif",

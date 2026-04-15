@@ -50,40 +50,57 @@ const CATEGORIES: ReadonlyArray<{
 
 export default function AboutPage() {
   return (
-    <div className="mx-auto max-w-5xl px-6 py-10 space-y-8">
-      {/* ========== 标题 ========== */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Sparkles className="h-3.5 w-3.5" />
-          品牌彩蛋
+    <div className="mx-auto max-w-[64rem] px-6 py-12 sm:px-10 sm:py-16 space-y-12">
+      {/* ========== Header ========== */}
+      <header className="border-b border-border pb-8">
+        <div className="flex items-center gap-3">
+          <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            About · Colophon
+          </span>
+          <span className="h-px flex-1 bg-border" />
+          <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
         </div>
-        <h1 className="text-3xl font-bold tracking-tight">
+        <h1 className="mt-4 font-serif text-3xl font-medium tracking-tight text-foreground sm:text-[2.5rem]">
           啄木鸟编辑部 · 10 只鸟的故事
         </h1>
-        <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
-          啄木鸟(Pecker)是一个 10 个 agent 协作的 PRD 评审系统。
-          我们偷懒地把它形容成&ldquo;PM 的编辑部&rdquo;——因为它真的就像一间编辑部:
-          有人盯结构,有人盯逻辑,有人盯数据,
-          还有人在你看不见的角落,默默把每一篇稿子的口径对齐。
-        </p>
-        <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
-          代码里我们给每个 agent 起了鸟名,这是设计这套系统时的一点私心。
-          但 UI 上它们都换上了&ldquo;主编 / 责编 / 审校&rdquo;这样的工牌,
-          因为&ldquo;鸬鹚&rdquo;、&ldquo;鸮鹦&rdquo;、&ldquo;伯劳&rdquo;这几个字,
-          确实不太适合出现在按钮上。这一页是唯一让两套名字并排站着的地方:
-          鸟是它&ldquo;是什么&rdquo;,职能词是它&ldquo;在做什么&rdquo;。
-        </p>
-      </div>
-
-      <Separator />
+        <div className="mt-6 max-w-3xl space-y-4 text-base leading-relaxed text-foreground/80">
+          <p>
+            啄木鸟(Pecker)是一个 10 个 agent 协作的 PRD 评审系统。
+            我们偷懒地把它形容成&ldquo;PM 的编辑部&rdquo;——因为它真的就像一间编辑部:
+            有人盯结构,有人盯逻辑,有人盯数据,
+            还有人在你看不见的角落,默默把每一篇稿子的口径对齐。
+          </p>
+          <p>
+            代码里我们给每个 agent 起了鸟名,这是设计这套系统时的一点私心。
+            但 UI 上它们都换上了&ldquo;主编 / 责编 / 审校&rdquo;这样的工牌,
+            因为&ldquo;鸬鹚&rdquo;、&ldquo;鸮鹦&rdquo;、&ldquo;伯劳&rdquo;这几个字,
+            确实不太适合出现在按钮上。这一页是唯一让两套名字并排站着的地方:
+            鸟是它&ldquo;是什么&rdquo;,职能词是它&ldquo;在做什么&rdquo;。
+          </p>
+        </div>
+      </header>
 
       {/* ========== 10 鸟分类卡片 ========== */}
       {CATEGORIES.map((cat) => (
         <section key={cat.title} className="space-y-4">
-          <div>
-            <h2 className="text-xl font-semibold">{cat.title}</h2>
-            <p className="mt-1 text-xs text-muted-foreground">{cat.hint}</p>
+          <div className="flex items-center gap-3">
+            <span
+              aria-hidden
+              className="font-mono text-[10px] font-medium uppercase tracking-wider text-pecker-running"
+            >
+              §
+            </span>
+            <h2 className="font-serif text-lg font-medium tracking-tight text-foreground">
+              {cat.title}
+            </h2>
+            <span className="h-px flex-1 bg-border/70" />
+            <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+              {cat.keys.length} birds
+            </span>
           </div>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            {cat.hint}
+          </p>
           <div className="grid gap-3 sm:grid-cols-2">
             {cat.keys.map((k) => (
               <BirdCard key={k} role={ROLES[k]} />
@@ -95,7 +112,7 @@ export default function AboutPage() {
       <Separator />
 
       {/* ========== 返回 ========== */}
-      <div className="flex justify-center pt-4">
+      <div className="flex justify-center pt-2">
         <Link
           href="/review"
           className={cn(buttonVariants({ variant: "outline" }))}

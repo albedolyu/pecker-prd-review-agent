@@ -5,40 +5,79 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* ============ 颜色映射(旧 shadcn 变量继续生效) ============ */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* ============ Pecker 专属 token(暴露给 Tailwind) ============ */
+  --color-pecker-success: var(--pecker-success);
+  --color-pecker-success-bg: var(--pecker-success-bg);
+  --color-pecker-success-border: var(--pecker-success-border);
+  --color-pecker-running: var(--pecker-running);
+  --color-pecker-running-bg: var(--pecker-running-bg);
+  --color-pecker-idle-fg: var(--pecker-idle-fg);
+  --color-pecker-idle-border: var(--pecker-idle-border);
+  --shadow-paper: var(--pecker-shadow-paper);
+  --shadow-lift: var(--pecker-shadow-lift);
+
+  /* ============ 字体栈 ============ */
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-fraunces);
+  --font-heading: var(--font-fraunces);
+
+  /* ============ 字号 scale(略偏离 Tailwind 默认,拉开等级) ============ */
+  --text-xs: 0.75rem; /* 12px · meta / station label */
+  --text-xs--line-height: 1.5;
+  --text-sm: 0.8125rem; /* 13px · 卡片副标、描述 */
+  --text-sm--line-height: 1.55;
+  --text-base: 0.9375rem; /* 15px · 正文 */
+  --text-base--line-height: 1.7;
+  --text-lg: 1.0625rem; /* 17px */
+  --text-lg--line-height: 1.6;
+  --text-xl: 1.3125rem; /* 21px · 卡片 title */
+  --text-xl--line-height: 1.4;
+  --text-2xl: 1.75rem; /* 28px · section heading */
+  --text-2xl--line-height: 1.3;
+  --text-3xl: 2.375rem; /* 38px · page title(内刊目录页感) */
+  --text-3xl--line-height: 1.2;
+  --text-4xl: 3rem; /* 48px · 极少用,封面 */
+  --text-4xl--line-height: 1.15;
+
+  --tracking-tight: -0.015em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.04em;
+
+  /* ============ 圆角:编辑部切边感,比默认更锐 ============ */
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -49,72 +88,142 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* ============ Pecker 编辑部色板 · Light ============ */
+
+  /* 背景:暖米白,像未漂白的内刊纸 */
+  --background: oklch(0.985 0.004 85);
+  /* 前景:炭墨色,带极微温 —— 油墨在米白纸上的感觉 */
+  --foreground: oklch(0.18 0.008 60);
+
+  --card: oklch(0.995 0.003 85);
+  --card-foreground: oklch(0.18 0.008 60);
+  --popover: oklch(0.995 0.003 85);
+  --popover-foreground: oklch(0.18 0.008 60);
+
+  /* Primary:深墨青 —— 编辑部钢笔墨水,比海军蓝独特 */
+  --primary: oklch(0.32 0.045 195);
+  --primary-foreground: oklch(0.985 0.004 85);
+
+  --secondary: oklch(0.955 0.006 85);
+  --secondary-foreground: oklch(0.28 0.01 60);
+  --muted: oklch(0.955 0.006 85);
+  --muted-foreground: oklch(0.48 0.012 60);
+
+  --accent: oklch(0.94 0.015 195);
+  --accent-foreground: oklch(0.32 0.045 195);
+
+  /* Destructive:降饱和,像校稿红笔 */
+  --destructive: oklch(0.48 0.16 25);
+  --destructive-foreground: oklch(0.985 0.004 85);
+
+  /* Border:纸上铅笔线的低对比 */
+  --border: oklch(0.895 0.008 75);
+  --input: oklch(0.895 0.008 75);
+  --ring: oklch(0.52 0.055 195);
+
+  /* Charts:沿用中性灰阶 + primary 墨青点缀 */
+  --chart-1: oklch(0.32 0.045 195);
+  --chart-2: oklch(0.52 0.04 195);
+  --chart-3: oklch(0.65 0.03 195);
+  --chart-4: oklch(0.48 0.012 60);
+  --chart-5: oklch(0.68 0.01 60);
+
+  /* Sidebar:沿用 background 家族 */
+  --sidebar: oklch(0.975 0.005 85);
+  --sidebar-foreground: oklch(0.18 0.008 60);
+  --sidebar-primary: oklch(0.32 0.045 195);
+  --sidebar-primary-foreground: oklch(0.985 0.004 85);
+  --sidebar-accent: oklch(0.94 0.015 195);
+  --sidebar-accent-foreground: oklch(0.32 0.045 195);
+  --sidebar-border: oklch(0.895 0.008 75);
+  --sidebar-ring: oklch(0.52 0.055 195);
+
+  /* ============ Pecker 扩展 token ============ */
+
+  /* 完成态暖绿 —— 校对印章的绿 */
+  --pecker-success: oklch(0.55 0.08 155);
+  --pecker-success-bg: oklch(0.965 0.018 155);
+  --pecker-success-border: oklch(0.78 0.05 155);
+
+  /* 进行态浅墨青 */
+  --pecker-running: oklch(0.45 0.055 195);
+  --pecker-running-bg: oklch(0.96 0.012 195);
+
+  /* 待机态灰(不带暖色) */
+  --pecker-idle-fg: oklch(0.62 0.006 75);
+  --pecker-idle-border: oklch(0.88 0.005 75);
+
+  /* 纸张投影:sharp,低模糊,卡片压纸感 */
+  --pecker-shadow-paper: 0 1px 0 oklch(0.85 0.01 75 / 0.6),
+    0 1px 2px oklch(0.3 0.01 60 / 0.04);
+  --pecker-shadow-lift: 0 1px 0 oklch(0.85 0.01 75 / 0.8),
+    0 2px 0 oklch(0.88 0.01 75 / 0.5),
+    0 4px 8px oklch(0.3 0.01 60 / 0.06);
+
+  --radius: 0.375rem;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* ============ Pecker 编辑部色板 · Dark ============ */
+
+  --background: oklch(0.16 0.008 210);
+  --foreground: oklch(0.94 0.005 85);
+
+  --card: oklch(0.19 0.01 210);
+  --card-foreground: oklch(0.94 0.005 85);
+  --popover: oklch(0.19 0.01 210);
+  --popover-foreground: oklch(0.94 0.005 85);
+
+  /* Primary 反向:浅墨青 */
+  --primary: oklch(0.78 0.06 195);
+  --primary-foreground: oklch(0.16 0.008 210);
+
+  --secondary: oklch(0.23 0.01 210);
+  --secondary-foreground: oklch(0.88 0.005 85);
+  --muted: oklch(0.23 0.01 210);
+  --muted-foreground: oklch(0.64 0.012 75);
+
+  --accent: oklch(0.28 0.025 195);
+  --accent-foreground: oklch(0.85 0.05 195);
+
+  --destructive: oklch(0.62 0.16 25);
+  --destructive-foreground: oklch(0.98 0.004 85);
+
+  --border: oklch(0.28 0.012 210);
+  --input: oklch(0.28 0.012 210);
+  --ring: oklch(0.65 0.06 195);
+
+  --chart-1: oklch(0.78 0.06 195);
+  --chart-2: oklch(0.62 0.05 195);
+  --chart-3: oklch(0.5 0.04 195);
+  --chart-4: oklch(0.64 0.012 75);
+  --chart-5: oklch(0.48 0.008 60);
+
+  --sidebar: oklch(0.19 0.01 210);
+  --sidebar-foreground: oklch(0.94 0.005 85);
+  --sidebar-primary: oklch(0.78 0.06 195);
+  --sidebar-primary-foreground: oklch(0.16 0.008 210);
+  --sidebar-accent: oklch(0.28 0.025 195);
+  --sidebar-accent-foreground: oklch(0.85 0.05 195);
+  --sidebar-border: oklch(0.28 0.012 210);
+  --sidebar-ring: oklch(0.65 0.06 195);
+
+  /* Pecker 扩展 · dark */
+  --pecker-success: oklch(0.72 0.09 155);
+  --pecker-success-bg: oklch(0.22 0.025 155);
+  --pecker-success-border: oklch(0.38 0.045 155);
+
+  --pecker-running: oklch(0.78 0.06 195);
+  --pecker-running-bg: oklch(0.22 0.02 195);
+
+  --pecker-idle-fg: oklch(0.52 0.008 75);
+  --pecker-idle-border: oklch(0.3 0.008 210);
+
+  --pecker-shadow-paper: 0 1px 0 oklch(0.1 0.005 210 / 0.8),
+    0 1px 2px oklch(0 0 0 / 0.3);
+  --pecker-shadow-lift: 0 1px 0 oklch(0.1 0.005 210 / 0.9),
+    0 2px 0 oklch(0.12 0.005 210 / 0.6),
+    0 4px 8px oklch(0 0 0 / 0.4);
 }
 
 @layer base {
@@ -123,8 +232,62 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings:
+      "ss01",
+      "cv11";
   }
   html {
     @apply font-sans;
+  }
+  /* 标题统一走 serif(中文自然 fallback 到系统 PingFang SC / 微软雅黑) */
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-fraunces), "PingFang SC", "Microsoft YaHei",
+      "Hiragino Sans GB", serif;
+    letter-spacing: var(--tracking-tight);
+  }
+}
+
+@layer utilities {
+  /* ============ Pecker 微动效 ============ */
+
+  /* Breathe:running 卡片呼吸 —— 只动 opacity,克制 */
+  @keyframes pecker-breathe {
+    0%,
+    100% {
+      opacity: 1;
+      box-shadow: var(--pecker-shadow-paper);
+    }
+    50% {
+      opacity: 0.94;
+    }
+  }
+  .animate-pecker-breathe {
+    animation: pecker-breathe 2.8s ease-in-out infinite;
+  }
+
+  /* Fade-in:状态切换时新元素淡入 + 2px 上浮 */
+  @keyframes pecker-fade-in {
+    0% {
+      opacity: 0;
+      transform: translateY(2px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .animate-pecker-fade-in {
+    animation: pecker-fade-in 0.4s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  }
+
+  /* 尊重 reduced motion 系统偏好 */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-pecker-breathe,
+    .animate-pecker-fade-in {
+      animation: none;
+    }
   }
 }

@@ -5,14 +5,13 @@
  *
  * Phase 2 的 4 个并行 worker 卡 + 1 个终审卡复用这个组件。
  *
- * 状态:
- * - idle: 还没启动(灰)
- * - running: 正在跑(primary + 转圈)
- * - done: 完成 + items_count(绿 + check)
- * - error: 失败(红 + X,显示 error 摘要)
+ * 视觉(Phase D 编辑部主题):
+ * - 纸质卡片 shadow-paper,hover 时极微 lift(-0.5px + shadow-lift)
+ * - 左侧 3px 状态竖条(before 伪元素)—— 像纸质文档的"状态书签"
+ * - Badge 用 Mono + tabular-nums,数字像印刷的版次号
+ * - running 态 breathe 动画(替换原来的 pulse)
  *
- * 品牌彩蛋: hover 显示 tooltip,里面写原鸟名和一句职责描述。
- * 视觉当前是 "功能版",Phase D 会用 UI Designer agent 做美化。
+ * 彩蛋: hover 显示 tooltip,里面写原鸟名和一句职责描述。
  */
 
 import { Loader2, CheckCircle2, XCircle, Circle } from "lucide-react";
@@ -41,55 +40,58 @@ export function RoleCard({
   itemsCount,
   errorText,
 }: RoleCardProps) {
-  // base-ui 的 TooltipTrigger 默认渲染为 button,而 button 里不能嵌 Card(div)。
-  // 方案: 把 Card 包在 TooltipTrigger 之前的一个 div 里,用 div 做 trigger。
   return (
     <Tooltip>
       <TooltipTrigger
         render={
-          <div
-            className={cn(
-              "block rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-            )}
-          />
+          <div className="block rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50" />
         }
       >
         <Card
           className={cn(
-            "relative overflow-hidden transition-all",
+            // 基础:纸质卡片
+            "group relative overflow-hidden rounded-md border bg-card",
+            "shadow-paper transition-[transform,box-shadow,border-color,background-color] duration-300 ease-[cubic-bezier(0.22,0.61,0.36,1)]",
+            "hover:-translate-y-0.5 hover:shadow-lift",
+            // idle:虚线浅边,像未启用的工位
             state === "idle" &&
-              "border-dashed border-border/60 bg-card/40 text-muted-foreground",
-            state === "running" && "border-primary/60 bg-primary/5 shadow-sm",
+              "border-dashed border-pecker-idle-border bg-card/60 text-pecker-idle-fg hover:border-border",
+            // running:浅墨青底 + 实线边 + 左侧 3px 竖条 + breathe
+            state === "running" &&
+              "border-pecker-running/40 bg-pecker-running-bg before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-pecker-running animate-pecker-breathe",
+            // done:暖绿边 + 极淡底 + 左侧竖条
             state === "done" &&
-              "border-emerald-500/60 bg-emerald-50/60 dark:bg-emerald-950/20",
-            state === "error" && "border-destructive/60 bg-destructive/5",
+              "border-pecker-success-border bg-pecker-success-bg before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-pecker-success",
+            // error:深校稿红 + 左侧竖条
+            state === "error" &&
+              "border-destructive/50 bg-destructive/[0.04] before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-destructive",
           )}
         >
-          <CardContent className="flex items-start gap-3 p-4">
+          <CardContent className="flex items-start gap-3 p-5">
             <StateIcon state={state} />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold leading-tight">
+                <span className="font-serif text-[15px] font-medium leading-tight tracking-tight text-foreground">
                   {role.label}
                 </span>
                 {state === "done" && typeof itemsCount === "number" && (
                   <Badge
-                    variant="secondary"
-                    className="h-5 bg-emerald-100 px-1.5 text-[10px] text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                    variant="outline"
+                    className="h-5 rounded-sm border-pecker-success-border bg-transparent px-1.5 font-mono text-[10px] font-medium tabular-nums text-pecker-success animate-pecker-fade-in"
                   >
                     {itemsCount} 条
                   </Badge>
                 )}
                 {state === "running" && (
                   <Badge
-                    variant="secondary"
-                    className="h-5 animate-pulse bg-primary/10 px-1.5 text-[10px] text-primary"
+                    variant="outline"
+                    className="h-5 rounded-sm border-pecker-running/40 bg-transparent px-1.5 font-mono text-[10px] font-medium uppercase tracking-wide text-pecker-running"
                   >
-                    进行中
+                    Running
                   </Badge>
                 )}
               </div>
-              <p className="mt-1 truncate text-xs text-muted-foreground">
+              <p className="mt-1.5 truncate text-xs leading-relaxed text-muted-foreground">
                 {role.responsibility}
               </p>
               {state === "error" && errorText && (
@@ -121,8 +123,8 @@ function StateIcon({ state }: { state: RoleCardState }) {
   if (state === "idle")
     return <Circle className={cn(base, "text-muted-foreground/40")} />;
   if (state === "running")
-    return <Loader2 className={cn(base, "animate-spin text-primary")} />;
+    return <Loader2 className={cn(base, "animate-spin text-pecker-running")} />;
   if (state === "done")
-    return <CheckCircle2 className={cn(base, "text-emerald-600")} />;
+    return <CheckCircle2 className={cn(base, "text-pecker-success")} />;
   return <XCircle className={cn(base, "text-destructive")} />;
 }

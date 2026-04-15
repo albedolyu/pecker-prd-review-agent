@@ -70,9 +70,9 @@ export default function ReviewPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-8">
+    <div className="mx-auto max-w-[64rem] px-6 py-10 sm:px-10 sm:py-14 space-y-10">
       <PhaseStepper current={phase} />
-      <div className="mt-6">
+      <div>
         {phase === 0 && <Phase0Upload />}
         {phase === 1 && <Phase1Precheck />}
         {phase === 2 && <Phase2Running />}
