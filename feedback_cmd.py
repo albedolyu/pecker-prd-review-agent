@@ -56,6 +56,10 @@ def build_feedback_command_block(
         report_rel = report_path
         prd_rel = prd_file
 
+    # Windows 反斜杠在 bash 里是转义字符,统一转正斜杠保证 copy-paste 能用
+    report_rel = report_rel.replace("\\", "/")
+    prd_rel = prd_rel.replace("\\", "/")
+
     scope_arg = f" \\\n      --scope {scope}" if scope else ""
     scope_display = scope if scope else "(无)"
 

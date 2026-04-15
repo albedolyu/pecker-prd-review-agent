@@ -247,8 +247,17 @@ def run_post_review(workspace, wiki_path, prd_name, reviewer, model_tier, parall
                 import json as _json
                 date_tag = _dt.now().strftime('%Y%m%d')
                 report_path = os.path.join(workspace, "output", f"PRD_开发任务_{date_tag}.md")
+                # 生成一键信鸽命令块,追加到报告末尾(Plan 5)
+                try:
+                    from feedback_cmd import build_feedback_command_block
+                    feedback_block = build_feedback_command_block(workspace, prd_name, report_path)
+                except Exception as _e:
+                    feedback_block = ""
+                    print(f"  [警告] 生成信鸽命令块失败(不阻断): {str(_e)[:60]}")
                 with open(report_path, "w", encoding="utf-8") as f:
                     f.write(report)
+                    if feedback_block:
+                        f.write(feedback_block)
                 print(f"  [报告] 开发任务清单已生成: {report_path}")
                 # 结构化 items JSON 持久化,让 cuckoo_eval/dashboard/diff 可回放
                 items_json_path = os.path.join(workspace, "output", f"review_items_{date_tag}.json")
