@@ -235,7 +235,7 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
             if attempt == max_retries:
                 raise
             delay = 2 ** (attempt + 1) + random.uniform(0, 1)
-            print(f"  苍鹰 API 异常 (第{attempt + 1}次)，{delay:.1f}s 后重试: {str(e)[:60]}")
+            print(f"  终审 API 异常 (第{attempt + 1}次)，{delay:.1f}s 后重试: {str(e)[:60]}")
             time.sleep(delay)
 
     # Tool 调用检测：没有 tool_use 时催促重试
@@ -243,7 +243,7 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
     has_tool = any(block.type == "tool_use" for block in response.content)
 
     if not has_tool:
-        print("  苍鹰未调用 tool，催促重试...")
+        print("  终审未调用 tool，催促重试...")
         text_parts = "\n".join(block.text for block in response.content if block.type == "text")
         followup_msgs = messages + [
             {"role": "assistant", "content": text_parts},
@@ -334,13 +334,13 @@ def apply_advisor_result(review_items, advisor_result):
         if "移除" in rec:
             # 标记为移除（不物理删除，留审计痕迹）
             target["status"] = "REMOVED_BY_ADVISOR"
-            target["advisor_note"] = f"苍鹰认为过度解读了。{fp['reason']}"
-            print(f'  苍鹰：{item_id} 这条改进项...苍鹰认为过度解读了。')
+            target["advisor_note"] = f"终审认为过度解读了。{fp['reason']}"
+            print(f'  终审：{item_id} 这条改进项...终审认为过度解读了。')
         else:
             # 降级为 should
             target["severity"] = "should"
-            target["advisor_note"] = f"苍鹰建议降级。{fp['reason']}"
-            print(f'  苍鹰：{item_id} 降级为 should -- {fp["reason"]}')
+            target["advisor_note"] = f"终审建议降级。{fp['reason']}"
+            print(f'  终审：{item_id} 降级为 should -- {fp["reason"]}')
 
     # 2. 处理漏报补充
     # 计算新编号起点
@@ -373,7 +373,7 @@ def apply_advisor_result(review_items, advisor_result):
             "source": "苍鹰补充",
         }
         items.append(new_item)
-        print(f'  苍鹰:所有鸟都没看到这个?苍鹰补充 {new_id} (confidence={new_item["confidence_score"]}).')
+        print(f'  终审：所有编辑都没看到这个?补充 {new_id} (confidence={new_item["confidence_score"]}).')
 
     # 3. 处理冲突调解
     for resolution in advisor_result.get("conflict_resolutions", []):
@@ -553,10 +553,10 @@ def main():
     review_items, report_content = _parse_review_items_from_report(args.report)
 
     if not review_items:
-        print("苍鹰：报告中没有找到改进项（R-NNN），无需审核。")
+        print("终审：报告中没有找到改进项（R-NNN），无需审核。")
         return
 
-    print(f"苍鹰：发现 {len(review_items)} 条改进项，开始交叉校验...\n")
+    print(f"终审：发现 {len(review_items)} 条改进项，开始交叉校验...\n")
 
     # 读知识库（可选）
     wiki_pages = {}
@@ -585,7 +585,7 @@ def main():
         with open(args.output, "w", encoding="utf-8") as f:
             f.write(report_content)
             f.write(report)
-        print(f"\n苍鹰：审核报告已写入 {args.output}")
+        print(f"\n终审：审核报告已写入 {args.output}")
     else:
         print(report)
 
@@ -594,7 +594,7 @@ def main():
     add_count = len(result.get("additional_findings", []))
     conf_count = len(result.get("conflict_resolutions", []))
     print(
-        f"\n苍鹰审核完毕：误报 {fp_count} 条，补充 {add_count} 条，"
+        f"\n终审完毕：误报 {fp_count} 条，补充 {add_count} 条，"
         f"调解 {conf_count} 处冲突，信心度 {result.get('confidence', 0):.0%}"
     )
 

@@ -65,6 +65,27 @@ def _get_rule_perf_history_path():
 # 评审维度定义
 # ============================================================
 
+# 中文职能词映射 — 日志输出用,对齐 web/lib/roles.ts 的 UI 术语约定
+# (鸟名 codename 仍保留为数据字段,向后兼容 + 彩蛋品牌)
+_CN_LABEL = {
+    "structure": "责编",
+    "quality": "审校",
+    "ai_coding": "技术编辑",
+    "data_quality": "数据核对员",
+}
+
+
+def _cn_label(dim_or_key):
+    """从 dim dict 或 dim_key 字符串取中文职能词,找不到就回退到 codename。"""
+    if isinstance(dim_or_key, dict):
+        # 需要拿到 key:尝试 dim 里是否有 'key' 字段,否则回退 codename
+        key = dim_or_key.get("key", "")
+        if key in _CN_LABEL:
+            return _CN_LABEL[key]
+        return dim_or_key.get("codename", "unknown")
+    return _CN_LABEL.get(dim_or_key, dim_or_key)
+
+
 _DEFAULT_REVIEW_DIMENSIONS = {
     "structure": {
         "name": "结构层",
@@ -783,7 +804,7 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
 
     # Tool 调用检测 + 催促重试 + 文本兜底
     if not _has_tool_use(response):
-        log.warning(f"[{dim['codename']}] 未调用 tool，催促重试")
+        log.warning(f"[{_cn_label(dim_key)}] 未调用 tool，催促重试")
         text = _extract_text(response)
         followup_msgs = messages + [
             {"role": "assistant", "content": text},
@@ -801,7 +822,7 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
         if not items and text:
             items = _parse_items_from_text(text)
             if items:
-                log.info(f"[{dim['codename']}] 从文本中解析出 {len(items)} 条改进项")
+                log.info(f"[{_cn_label(dim_key)}] 从文本中解析出 {len(items)} 条改进项")
 
     # 过滤非 dict 元素（模型偶尔返回字符串数组而非对象数组）
     items = [item for item in items if isinstance(item, dict)]
@@ -839,7 +860,7 @@ async def _run_worker_async(client, dim_key, prd_content, wiki_pages, model_tier
     except asyncio.TimeoutError:
         # 超时 Worker 不抛出,返回错误结构,让 gather 正常汇总其他 Worker 结果
         dim_name = get_review_dimensions().get(dim_key, {}).get("name", dim_key)
-        log.warning(f"[{dim_name}] Worker 超时({WORKER_TIMEOUT}s),跳过")
+        log.warning(f"[{_cn_label(dim_key)}] Worker 超时({WORKER_TIMEOUT}s),跳过")
         return {
             "dimension": dim_key,
             "dimension_name": dim_name,
@@ -933,7 +954,7 @@ async def _single_round_async(client, prd_content, wiki_pages, model_tiers, wiki
     for dim_key, result in zip(dimensions, results):
         if isinstance(result, Exception):
             err_msg = str(result)
-            log.warning(f"[{dimensions[dim_key]['codename']}] Worker 失败: {err_msg[:80]}")
+            log.warning(f"[{_cn_label(dim_key)}] Worker 失败: {err_msg[:80]}")
             failed_dims.append(dim_key)
             workers.append({
                 "dimension": dim_key,
@@ -1061,7 +1082,7 @@ def _single_round_sync(client, prd_content, wiki_pages, model_tiers, wiki_path=N
             total_output += result["usage"]["output_tokens"]
         except Exception as e:
             err_msg = str(e)
-            log.warning(f"[{dimensions[dim_key]['codename']}] Worker 失败: {err_msg[:80]}")
+            log.warning(f"[{_cn_label(dim_key)}] Worker 失败: {err_msg[:80]}")
             failed_dims.append(dim_key)
             workers.append({
                 "dimension": dim_key,

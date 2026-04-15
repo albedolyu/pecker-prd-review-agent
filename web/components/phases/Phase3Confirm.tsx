@@ -25,7 +25,7 @@ import { toast } from "sonner";
 import { useMutation } from "@tanstack/react-query";
 
 import { useReviewStore } from "@/lib/store";
-import { ROLES, type RoleKey } from "@/lib/roles";
+import { ROLES, normalizeDimensionKey, type RoleKey } from "@/lib/roles";
 import {
   reviewApi,
   ApiError,
@@ -49,13 +49,15 @@ export function Phase3Confirm() {
   const setDecision = useReviewStore((s) => s.setDecision);
   const setPhase = useReviewStore((s) => s.setPhase);
 
+  // 归一化 item.dimension 到 RoleKey(后端可能写 "结构层" / "苍鹰补充" / "structure" 3 种)
   const itemsByDim = useMemo(() => {
-    const map = new Map<string, ReadonlyArray<ReviewItem>>();
+    const map = new Map<RoleKey, ReviewItem[]>();
     if (!reviewResult) return map;
     for (const item of reviewResult.items) {
-      const dim = item.dimension || "structure";
-      const arr = map.get(dim) ?? [];
-      map.set(dim, [...arr, item]);
+      const key = normalizeDimensionKey(item.dimension);
+      const arr = map.get(key) ?? [];
+      arr.push(item);
+      map.set(key, arr);
     }
     return map;
   }, [reviewResult]);
@@ -64,7 +66,7 @@ export function Phase3Confirm() {
     () => Array.from(itemsByDim.keys()),
     [itemsByDim],
   );
-  const [currentTab, setCurrentTab] = useState<string>(
+  const [currentTab, setCurrentTab] = useState<RoleKey>(
     activeDims[0] ?? "structure",
   );
 
@@ -149,10 +151,18 @@ export function Phase3Confirm() {
 
       {/* ========== 按职能分组的 Tabs ========== */}
       {reviewResult.items.length > 0 && (
-        <Tabs value={currentTab} onValueChange={setCurrentTab}>
-          <TabsList className="grid w-full grid-cols-4 gap-1">
+        <Tabs
+          value={currentTab}
+          onValueChange={(v) => setCurrentTab((v ?? "structure") as RoleKey)}
+        >
+          <TabsList
+            className="grid w-full gap-1"
+            style={{
+              gridTemplateColumns: `repeat(${Math.max(activeDims.length, 1)}, minmax(0, 1fr))`,
+            }}
+          >
             {activeDims.map((dim) => {
-              const role = ROLES[dim as RoleKey] ?? ROLES.structure;
+              const role = ROLES[dim];
               const count = itemsByDim.get(dim)?.length ?? 0;
               return (
                 <TabsTrigger
@@ -170,7 +180,7 @@ export function Phase3Confirm() {
           </TabsList>
 
           {activeDims.map((dim) => {
-            const role = ROLES[dim as RoleKey] ?? ROLES.structure;
+            const role = ROLES[dim];
             const items = itemsByDim.get(dim) ?? [];
             return (
               <TabsContent key={dim} value={dim} className="mt-4 space-y-3">

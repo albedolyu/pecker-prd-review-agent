@@ -31,7 +31,7 @@ const CATEGORIES: ReadonlyArray<{
 }> = [
   {
     title: "编辑部 · 上线评审",
-    hint: "评审发生时你会遇见他们 — UI 里以职能词出现",
+    hint: "评审进行时,你会在报告里看到这六个名字。",
     keys: [
       "editor-in-chief",
       "structure",
@@ -43,7 +43,7 @@ const CATEGORIES: ReadonlyArray<{
   },
   {
     title: "后台班组 · 看不见但一直在工作",
-    hint: "他们在 CI / 运维 / 反馈闭环里,平时你看不到",
+    hint: "他们藏在 CI、运维和反馈链路里,把日子过成日常。",
     keys: ["reader-feedback", "sample-reader", "archivist", "qa-gatekeeper"],
   },
 ] as const;
@@ -61,14 +61,17 @@ export default function AboutPage() {
           啄木鸟编辑部 · 10 只鸟的故事
         </h1>
         <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
-          啄木鸟(Pecker)本质是一个 10 个 agent 协作的 PRD 评审系统。
-          代码里每个 agent 都以鸟命名 —— 它们是设计思路的名字。
-          但 UI 上我们用"主编 / 责编 / 审校"这些编辑部职能词,
-          因为"鸬鹚"、"鸮鹦"、"伯劳"这些字对非技术同事太陌生。
+          啄木鸟(Pecker)是一个 10 个 agent 协作的 PRD 评审系统。
+          我们偷懒地把它形容成&ldquo;PM 的编辑部&rdquo;——因为它真的就像一间编辑部:
+          有人盯结构,有人盯逻辑,有人盯数据,
+          还有人在你看不见的角落,默默把每一篇稿子的口径对齐。
         </p>
         <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
-          这一页是唯一把两边摆在一起的地方。鸟是"是什么",
-          职能词是"在做什么"。
+          代码里我们给每个 agent 起了鸟名,这是设计这套系统时的一点私心。
+          但 UI 上它们都换上了&ldquo;主编 / 责编 / 审校&rdquo;这样的工牌,
+          因为&ldquo;鸬鹚&rdquo;、&ldquo;鸮鹦&rdquo;、&ldquo;伯劳&rdquo;这几个字,
+          确实不太适合出现在按钮上。这一页是唯一让两套名字并排站着的地方:
+          鸟是它&ldquo;是什么&rdquo;,职能词是它&ldquo;在做什么&rdquo;。
         </p>
       </div>
 

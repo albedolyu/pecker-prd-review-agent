@@ -18,7 +18,12 @@
  * 这只是一个粗糙启发式,实际业务语义可在 Phase D 细化。
  */
 
-import { ROLES, WORKER_ROLE_KEYS, type RoleKey } from "./roles";
+import {
+  ROLES,
+  WORKER_ROLE_KEYS,
+  normalizeDimensionKey,
+  type RoleKey,
+} from "./roles";
 import type { ItemDecision, ReviewItem, ReviewResult } from "./api";
 
 export interface ReportStats {
@@ -134,14 +139,20 @@ export function generateReportMarkdown(
   // ===== 按职能分组 =====
   const byDim = groupByDimension(result.items);
 
-  for (const dim of WORKER_ROLE_KEYS) {
+  // 展示顺序: 4 个 worker + final-reviewer(终审补充项)
+  const dimOrder: ReadonlyArray<RoleKey> = [
+    ...WORKER_ROLE_KEYS,
+    "final-reviewer",
+  ];
+
+  for (const dim of dimOrder) {
     const items = byDim.get(dim);
     if (!items || items.length === 0) continue;
 
     const role = ROLES[dim];
     lines.push(`## ${role.label}(${role.responsibility})`);
     lines.push("");
-    lines.push(`> 又名 ${role.birdEmoji} ${role.birdName} — ${role.description}`);
+    lines.push(`> 又名 ${role.birdEmoji} ${role.birdName} — ${role.description.split("。")[0]}。`);
     lines.push("");
 
     items.forEach((item, idx) => {
@@ -221,10 +232,10 @@ function groupByDimension(
 ): Map<RoleKey, ReviewItem[]> {
   const map = new Map<RoleKey, ReviewItem[]>();
   for (const item of items) {
-    const dim = (item.dimension as RoleKey) || "structure";
-    const arr = map.get(dim) ?? [];
+    const key = normalizeDimensionKey(item.dimension);
+    const arr = map.get(key) ?? [];
     arr.push(item);
-    map.set(dim, arr);
+    map.set(key, arr);
   }
   return map;
 }

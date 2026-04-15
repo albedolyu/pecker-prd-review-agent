@@ -222,7 +222,7 @@ export function Phase2Running() {
           </CardTitle>
           <CardDescription>
             {mode === "standard"
-              ? "严格模式 — 4 位编辑并行 + 苍鹰终审,预计 90-150 秒"
+              ? "严格模式 — 4 位编辑并行 + 终审,预计 90-150 秒"
               : "快速模式 — 轻量版,预计 40-60 秒"}
           </CardDescription>
         </CardHeader>

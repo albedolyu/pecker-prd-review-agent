@@ -64,7 +64,7 @@ export const ROLES: Readonly<Record<RoleKey, Role>> = Object.freeze({
     birdEmoji: "🪵",
     responsibility: "主控协调",
     description:
-      "啄木鸟本鸟,协调其他编辑。它是产品本身的名字,不在评审 UI 里作为单独卡片出现。",
+      "整个编辑部以它命名,但它从不亲自写稿。它的工作是分稿、催稿、把六位编辑的判断收拢成一份能交付的报告。你在 UI 里看不到它单独出现,因为它就是这个产品本身 — 所有编辑能开工,是因为有人在背后把节奏盯住。",
     frequency: "hidden",
     isWorker: false,
     accentColor: "neutral",
@@ -76,7 +76,7 @@ export const ROLES: Readonly<Record<RoleKey, Role>> = Object.freeze({
     birdEmoji: "🪡",
     responsibility: "结构 / 格式 / 信息密度",
     description:
-      "检查 PRD 模板遵循度、Brief 覆盖率、信息完整性、可追溯链。对应 BMAD V-02~V-06,模型 sonnet。",
+      "像织布一样,它在意每一根经线纬线是否对齐。它读 PRD 的方式很轴:章节是不是齐全、字段是不是密、Brief 里答应过的事有没有兑现、每条需求能不能往上追到源头。结构松一寸,它就要拉你回来重新缝一遍。",
     frequency: "high",
     isWorker: true,
     accentColor: "blue",
@@ -88,7 +88,7 @@ export const ROLES: Readonly<Record<RoleKey, Role>> = Object.freeze({
     birdEmoji: "🦉",
     responsibility: "质量 / 逻辑 / 合规",
     description:
-      "检查逻辑一致性、实现泄漏、SMART 验证、领域合规、完整性评估。对应 BMAD V-07~V-12,模型 sonnet。",
+      "它读得慢、读得细,擅长在你以为说圆了的地方挑出一个矛盾。它会问:这条需求 SMART 吗,逻辑闭环吗,是不是悄悄把实现方案写进了需求里,业务规则有没有踩到合规线。猫头鹰夜里看得清,它在文档里也是。",
     frequency: "high",
     isWorker: true,
     accentColor: "amber",
@@ -100,7 +100,7 @@ export const ROLES: Readonly<Record<RoleKey, Role>> = Object.freeze({
     birdEmoji: "🐦‍⬛",
     responsibility: "AI Coding 友好度 / 技术约定",
     description:
-      "检查技术约定节、四态 UI、图片相对路径、伪代码、筛选追溯、字段追溯。对应 RC-004~RC-015,模型 opus(需要深度推理)。",
+      "渡鸦聪明,会用工具,也偏执地讲究。它专门替下游写代码的同事把关:技术约定节有没有写、四态 UI 有没有覆盖、关键流程有没有伪代码、筛选条件能不能追到字段。这一类活儿费脑子,所以这位编辑用的是 Opus。",
     frequency: "high",
     isWorker: true,
     accentColor: "violet",
@@ -112,7 +112,7 @@ export const ROLES: Readonly<Record<RoleKey, Role>> = Object.freeze({
     birdEmoji: "🐟",
     responsibility: "字段映射 / 数值核对",
     description:
-      "检查字段映射与物理表 DDL 一致性、数值类字段来源标注、跨表 JOIN 追溯。对应 RC-009~RC-010,模型 sonnet。",
+      "鸬鹚下水捕鱼,从不空手。它的活儿是把 PRD 里的字段一条条拎进数据库对照:DDL 里有没有这一列、数值字段的口径来自哪张表、跨表 JOIN 有没有写漏关联键。它出手通常意味着 — 你以为对的字段,其实并不存在。",
     frequency: "high",
     isWorker: true,
     accentColor: "cyan",
@@ -124,7 +124,7 @@ export const ROLES: Readonly<Record<RoleKey, Role>> = Object.freeze({
     birdEmoji: "🦅",
     responsibility: "meta-review 交叉校验",
     description:
-      "4 个并行编辑完成后做交叉校验:撤回低置信度、补充漏报(最多 2 条)、解决冲突。对应后端 goshawk_advisor,不做重审只做审核。",
+      "苍鹰在四位编辑都出完稿之后才登场。它不重新审,只做一件事:把四份结论摆在一起交叉看,撤掉证据不足的判断,补上明显被漏掉的(最多两条,它克制),把冲突的部分判一判。它飞得高,是因为它要看全局。",
     frequency: "medium",
     isWorker: false,
     accentColor: "slate",
@@ -136,7 +136,7 @@ export const ROLES: Readonly<Record<RoleKey, Role>> = Object.freeze({
     birdEmoji: "🕊️",
     responsibility: "下游信号采集",
     description:
-      "从下游代码仓库读取 PRD 修订情况,反哺到规则权重(EMA 更新)。在评审 UI 不出现,只在后台运行。",
+      "信鸽永远在两头之间往返:它从下游代码仓库取回 PRD 实际被改成了什么样,再把这些信号用 EMA 算法慢慢喂回我们的规则库。哪些规则常常说中、哪些常常误伤,它都记着。你看不到它,但你下次评审的权重,是它一趟趟驮回来的。",
     frequency: "low",
     isWorker: false,
     accentColor: "green",
@@ -148,7 +148,7 @@ export const ROLES: Readonly<Record<RoleKey, Role>> = Object.freeze({
     birdEmoji: "🌿",
     responsibility: "评审质量 eval",
     description:
-      "对评审报告做 LLM-as-judge 评分,用于 CI 门禁和回归测试。在评审 UI 不出现,只在 CI 层运行。",
+      "杜鹃干一件有点冒犯的事:在报告交付之前,它先以读者的身份把这份评审本身打一遍分。哪条结论站得住、哪条像凑数,它都打。这份分会进 CI 门禁 — 评审写得太敷衍,它会让流水线红一下。",
     frequency: "low",
     isWorker: false,
     accentColor: "pink",
@@ -160,7 +160,7 @@ export const ROLES: Readonly<Record<RoleKey, Role>> = Object.freeze({
     birdEmoji: "🦜",
     responsibility: "wiki 知识库维护",
     description:
-      "扫描 wiki 目录的完整性、一致性、孤岛页面。在评审 UI 不出现,只在运维层运行。",
+      "鸮鹦不会飞,在地上慢悠悠地走,但它把整个 workspace 的资料室记得最清楚。它扫 wiki 找孤岛页面、断链、过期内容、彼此打架的说法。当编辑们需要查'我们之前是怎么定义这个的',它早就把答案分门别类放好了。",
     frequency: "low",
     isWorker: false,
     accentColor: "teal",
@@ -172,7 +172,7 @@ export const ROLES: Readonly<Record<RoleKey, Role>> = Object.freeze({
     birdEmoji: "🛡️",
     responsibility: "push 前门禁",
     description:
-      "push 前做安全红线(密钥/内网 IP/临时文件)和完整性门禁。在评审 UI 不出现,只在 CI 层运行。",
+      "伯劳有把东西串起来挂好的习惯,叫'伯劳挂虫'。它在 push 前最后扫一遍:有没有密钥泄出去、有没有内网 IP、有没有临时文件混进提交,顺便再确认一次完整性门禁。看着不起眼,但它一拦,就是把麻烦挡在了门外。",
     frequency: "low",
     isWorker: false,
     accentColor: "red",
@@ -201,6 +201,41 @@ export function getRoleByKey(key: string): Role | undefined {
     return ROLES[key as RoleKey];
   }
   return undefined;
+}
+
+/**
+ * 后端 `item.dimension` 在不同路径下可能有 3 种写法:
+ *
+ * 1. dim_key 原值:`"structure"` / `"quality"` / `"ai_coding"` / `"data_quality"`
+ * 2. `dim["name"]`(parallel_review.py line 831):`"结构层"` / `"质量层"` / `"AI Coding 友好度"` / `"数据质量"`
+ * 3. 终审补充(goshawk_advisor.py):`"苍鹰补充"`(兼容 legacy) / `"终审补充"`
+ *
+ * 这个表把任一写法一次性归一化到 RoleKey,让 Phase 3 Tabs 和 generateReport
+ * 都只需要处理 RoleKey,避免 UI 里泄漏出 `结构层` / `苍鹰补充` 这种原始字符串。
+ */
+const DIMENSION_ALIAS: Readonly<Record<string, RoleKey>> = {
+  // dim_key 原值(理论 API 契约)
+  structure: "structure",
+  quality: "quality",
+  ai_coding: "ai_coding",
+  data_quality: "data_quality",
+  // dim["name"] 中文长名(parallel_review 实际写入 item.dimension)
+  结构层: "structure",
+  质量层: "quality",
+  "AI Coding 友好度": "ai_coding",
+  数据质量: "data_quality",
+  // 终审补充项(goshawk_advisor)
+  苍鹰补充: "final-reviewer",
+  终审补充: "final-reviewer",
+} as const;
+
+/**
+ * 把任意 dimension 字符串归一化到 RoleKey。找不到就回退到 "structure"
+ * (而不是返回 undefined),避免 Phase 3 Tabs 出现空 key。
+ */
+export function normalizeDimensionKey(dim: string | undefined | null): RoleKey {
+  if (!dim) return "structure";
+  return DIMENSION_ALIAS[dim] ?? "structure";
 }
 
 /**

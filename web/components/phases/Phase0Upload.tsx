@@ -315,7 +315,7 @@ export function Phase0Upload() {
             <p className="text-xs text-muted-foreground">
               {mode === "quick"
                 ? "快速 = 全 sonnet 走一遍,~45 秒,跳过终审。适合初稿粗检。"
-                : "严格 = 4 位编辑并行 + 苍鹰终审交叉校验,~90-150 秒。默认推荐。"}
+                : "严格 = 4 位编辑并行 + 终审交叉校验,~90-150 秒。默认推荐。"}
             </p>
           </div>
 
