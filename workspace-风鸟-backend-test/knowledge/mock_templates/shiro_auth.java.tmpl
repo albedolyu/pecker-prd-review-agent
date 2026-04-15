@@ -1,0 +1,108 @@
+// ============================================================
+// Mock 模板: Shiro 认证 (风鸟 SecurityUtils.getSubject() 模式)
+// ============================================================
+// 适用场景: 被测方法调用 SecurityUtils.getSubject() / .getPrincipal() / .isAuthenticated()
+// 占位符:
+//   {{CUT_TYPE}}       — 被测类
+//   {{CUT_FIELD}}      — 被测类字段名
+//   {{USER_ENTITY}}    — 用户实体类型, 如 User / UserBase / ShiroUser
+//
+// 关键约束:
+//   1. 风鸟 Shiro realm 返回的 Principal 通常是 User 实体(非 String)
+//   2. SecurityUtils 是 static, 用 Mockito.mockStatic (Mockito 3.4+) 或 PowerMock
+//   3. 风鸟当前 Mockito 版本较低(Spring Boot 2.1.1 带 Mockito 2.23), 需要走 PowerMock 或重构被测代码
+//   4. 更推荐做法: 把 SecurityUtils.getSubject() 封装到 AuthUtils.currentUser() 然后 mock AuthUtils
+// ============================================================
+
+import org.apache.shiro.SecurityUtils;
+import org.apache.shiro.subject.Subject;
+import org.junit.Before;
+import org.junit.Test;
+
+import static org.junit.Assert.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+// 推荐方案 A: 重构 — 把 Shiro 调用封装到一个可注入的 AuthContext
+// 然后在测试中 mock AuthContext, 这样不需要 PowerMock
+/*
+public interface AuthContext {
+    Long currentUserId();
+    {{USER_ENTITY}} currentUser();
+    boolean isAuthenticated();
+    boolean hasRole(String role);
+}
+*/
+
+// 推荐方案 B: 如果无法重构, 用 ThreadLocal Subject 注入 + tearDown 清理
+public class {{CUT_TYPE}}ShiroTest {
+
+    private Subject mockSubject;
+    private {{USER_ENTITY}} testUser;
+
+    @Before
+    public void setUp() {
+        mockSubject = mock(Subject.class);
+        testUser = new {{USER_ENTITY}}();
+        // TODO: 填充 testUser 必填字段
+        // testUser.setId(1L);
+        // testUser.setUserName("test");
+
+        when(mockSubject.getPrincipal()).thenReturn(testUser);
+        when(mockSubject.isAuthenticated()).thenReturn(true);
+
+        // 注入 ThreadLocal Subject
+        org.apache.shiro.util.ThreadContext.bind(mockSubject);
+    }
+
+    @org.junit.After
+    public void tearDown() {
+        // 清理 ThreadLocal, 防止测试间污染
+        org.apache.shiro.util.ThreadContext.unbindSubject();
+        org.apache.shiro.util.ThreadContext.unbindSecurityManager();
+    }
+
+    // ------------------------------------------------------------
+    // 已登录用户正常访问
+    // ------------------------------------------------------------
+    @Test
+    public void should_succeed_when_user_authenticated() {
+        // Given: setUp 已绑定 mockSubject
+
+        // When
+        // Object result = {{CUT_FIELD}}.methodUnderTest(...);
+
+        // Then
+        // assertNotNull(result);
+        verify(mockSubject).getPrincipal();
+    }
+
+    // ------------------------------------------------------------
+    // 未登录用户被拒
+    // ------------------------------------------------------------
+    @Test(expected = org.apache.shiro.authz.UnauthenticatedException.class)
+    public void should_throw_when_user_not_authenticated() {
+        // Given
+        when(mockSubject.isAuthenticated()).thenReturn(false);
+        when(mockSubject.getPrincipal()).thenReturn(null);
+
+        // When
+        // {{CUT_FIELD}}.methodUnderTest(...);
+        // Then: 应抛 UnauthenticatedException
+    }
+
+    // ------------------------------------------------------------
+    // VIP 用户权限校验
+    // ------------------------------------------------------------
+    @Test
+    public void should_allow_vip_when_user_has_vip_role() {
+        // Given
+        when(mockSubject.hasRole("vip")).thenReturn(true);
+
+        // When
+        // boolean result = {{CUT_FIELD}}.vipOnlyMethod(...);
+
+        // Then
+        // assertTrue(result);
+    }
+}

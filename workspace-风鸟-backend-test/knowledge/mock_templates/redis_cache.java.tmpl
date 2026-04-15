@@ -1,0 +1,128 @@
+// ============================================================
+// Mock 模板: Redis 缓存 (风鸟 RedisTemplate / StringRedisTemplate)
+// ============================================================
+// 适用场景: 被测方法调用 redisTemplate.opsForValue() / opsForHash() / opsForList()
+// 占位符:
+//   {{CUT_TYPE}}       — 被测类
+//   {{CUT_FIELD}}      — 被测类字段名
+//   {{VALUE_TYPE}}     — 缓存值类型, 如 String / User / Map<String, Object>
+//
+// 关键约束:
+//   1. RedisTemplate 的 opsForXxx() 返回 ValueOperations / HashOperations 等子接口
+//      必须分两步 mock: when(redisTemplate.opsForValue()).thenReturn(valueOps);
+//                      when(valueOps.get(key)).thenReturn(cachedValue);
+//   2. 风鸟还用 @Cacheable / @CacheEvict 注解, Mock 测试会跳过这些
+//      (因为 AOP 代理不在 unit test 上下文生效)
+//   3. 如果要测 @Cacheable 的行为, 要走集成测试 (@SpringBootTest + EmbeddedRedis)
+//   4. 本模板只负责 "绕过 Redis" 的单元测试, 不做集成测试
+// ============================================================
+
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.HashOperations;
+import org.springframework.data.redis.core.ListOperations;
+
+import java.util.concurrent.TimeUnit;
+
+import static org.junit.Assert.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
+
+public class {{CUT_TYPE}}RedisTest {
+
+    @Mock
+    private RedisTemplate<String, {{VALUE_TYPE}}> redisTemplate;
+
+    @Mock
+    private ValueOperations<String, {{VALUE_TYPE}}> valueOperations;
+
+    @Mock
+    private HashOperations<String, Object, Object> hashOperations;
+
+    @InjectMocks
+    private {{CUT_TYPE}} {{CUT_FIELD}};
+
+    @Before
+    public void setUp() {
+        MockitoAnnotations.initMocks(this);
+        // 必须预先 stub opsForValue() 否则 NullPointerException
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(redisTemplate.opsForHash()).thenReturn(hashOperations);
+    }
+
+    // ------------------------------------------------------------
+    // 缓存命中 — happy path
+    // ------------------------------------------------------------
+    @Test
+    public void should_return_cached_value_when_key_exists() {
+        // Given
+        String cacheKey = "riskbird:test:key";
+        {{VALUE_TYPE}} cachedValue = null;  // TODO: 构造
+        when(valueOperations.get(cacheKey)).thenReturn(cachedValue);
+
+        // When
+        // {{VALUE_TYPE}} result = {{CUT_FIELD}}.getFromCache(cacheKey);
+
+        // Then
+        // assertEquals(cachedValue, result);
+        verify(valueOperations).get(cacheKey);
+        // 重要: 确保没有查库, 证明走了缓存
+        // verify(databaseRepo, never()).findById(any());
+    }
+
+    // ------------------------------------------------------------
+    // 缓存未命中 — 降级到数据库
+    // ------------------------------------------------------------
+    @Test
+    public void should_fallback_to_db_when_cache_miss() {
+        // Given
+        when(valueOperations.get(anyString())).thenReturn(null);
+        // 额外 stub 数据库调用(如果有)
+
+        // When
+        // {{CUT_FIELD}}.getFromCacheOrDb(...);
+
+        // Then
+        verify(valueOperations).get(anyString());
+        // verify(databaseRepo).findById(any());
+        // verify(valueOperations).set(anyString(), any({{VALUE_TYPE}}.class), anyLong(), any(TimeUnit.class));
+    }
+
+    // ------------------------------------------------------------
+    // 缓存写入 — 带 TTL
+    // ------------------------------------------------------------
+    @Test
+    public void should_set_cache_with_ttl() {
+        // Given
+        {{VALUE_TYPE}} value = null;  // TODO
+
+        // When
+        // {{CUT_FIELD}}.cacheValue("key", value);
+
+        // Then
+        verify(valueOperations).set(anyString(), any({{VALUE_TYPE}}.class), anyLong(), any(TimeUnit.class));
+    }
+
+    // ------------------------------------------------------------
+    // 缓存删除
+    // ------------------------------------------------------------
+    @Test
+    public void should_delete_cache_when_invalidate() {
+        // Given
+        String cacheKey = "riskbird:test:key";
+
+        // When
+        // {{CUT_FIELD}}.invalidate(cacheKey);
+
+        // Then
+        verify(redisTemplate).delete(cacheKey);
+    }
+}

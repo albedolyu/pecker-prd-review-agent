@@ -1,0 +1,101 @@
+// ============================================================
+// Mock 模板: JPA Repository (风鸟 BaseService<?,?,Repo> 模式)
+// ============================================================
+// 适用场景: 被测方法 mock_deps 包含 xxxRepository(继承 BaseRepository<T, ID>)
+// 占位符:
+//   {{REPO_TYPE}}      — Repository 类型, 如 AiRobotChatRepository
+//   {{REPO_FIELD}}     — Repository 字段名, 如 aiRobotChatRepository(首字母小写)
+//   {{ENTITY_TYPE}}    — 实体类型, 如 AiRobotChat
+//   {{ID_TYPE}}        — ID 类型, 如 Long
+//   {{CUT_TYPE}}       — 被测类类型, 如 AiRobotChatServiceImpl
+//   {{CUT_FIELD}}      — 被测类字段名, 如 aiRobotChatServiceImpl
+//
+// 关键约束:
+//   1. 风鸟 BaseService 用的是 @Autowired 注入 private R dao, 要通过 ReflectionTestUtils 注入
+//   2. Repository 自定义方法(如 findByUid/findMaxRoundBy...)要逐个 when(...).thenReturn
+//   3. JPA 内置方法(save/findById/delete) 直接 when(...).thenReturn 即可
+// ============================================================
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.util.Optional;
+import java.util.Collections;
+import java.util.Arrays;
+
+import static org.junit.Assert.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
+
+public class {{CUT_TYPE}}Test {
+
+    @Mock
+    private {{REPO_TYPE}} {{REPO_FIELD}};
+
+    @InjectMocks
+    private {{CUT_TYPE}} {{CUT_FIELD}};
+
+    @Before
+    public void setUp() {
+        MockitoAnnotations.initMocks(this);
+        // 风鸟 BaseService 的 dao 字段是 private, @InjectMocks 无法注入泛型父类字段
+        // 必须用反射手动注入
+        ReflectionTestUtils.setField({{CUT_FIELD}}, "dao", {{REPO_FIELD}});
+    }
+
+    // ------------------------------------------------------------
+    // 正常场景组 — happy path
+    // ------------------------------------------------------------
+
+    @Test
+    public void should_return_entity_when_{{METHOD_NAME}}_with_valid_id() {
+        // Given
+        {{ENTITY_TYPE}} entity = new {{ENTITY_TYPE}}();
+        // TODO: 填充实体必填字段
+        when({{REPO_FIELD}}.findById(any({{ID_TYPE}}.class))).thenReturn(Optional.of(entity));
+
+        // When
+        // {{CUT_FIELD}}.{{METHOD_NAME}}(...);
+
+        // Then
+        // assertXxx(...);
+        verify({{REPO_FIELD}}).findById(any({{ID_TYPE}}.class));
+    }
+
+    // ------------------------------------------------------------
+    // 边界场景组 — empty / null
+    // ------------------------------------------------------------
+
+    @Test
+    public void should_handle_empty_when_{{METHOD_NAME}}_with_not_exists() {
+        // Given
+        when({{REPO_FIELD}}.findById(any({{ID_TYPE}}.class))).thenReturn(Optional.empty());
+
+        // When
+        // ...
+
+        // Then
+        // assertNull(...) or assert fallback behavior
+    }
+
+    // ------------------------------------------------------------
+    // 异常场景组 — exception propagation
+    // ------------------------------------------------------------
+
+    @Test(expected = RuntimeException.class)
+    public void should_propagate_when_{{METHOD_NAME}}_repo_throws() {
+        // Given
+        when({{REPO_FIELD}}.findById(any({{ID_TYPE}}.class)))
+            .thenThrow(new RuntimeException("db error"));
+
+        // When
+        // ...
+    }
+}

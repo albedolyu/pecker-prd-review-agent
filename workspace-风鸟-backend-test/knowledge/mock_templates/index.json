@@ -1,0 +1,74 @@
+{
+  "generated_at": "2026-04-15",
+  "description": "风鸟后端测试 Mock 模板索引 - 百灵 Agent 按需检索",
+  "templates": [
+    {
+      "id": "jpa_repository",
+      "file": "jpa_repository.java.tmpl",
+      "match_rules": {
+        "description": "命中条件: 任一 true 即可",
+        "mock_deps_regex": ".*Repository$",
+        "extends_contains": ["BaseService", "CrudService"],
+        "calls_pattern": ["getDao\\(\\)", "this\\.getDao"]
+      },
+      "placeholders": [
+        {"name": "REPO_TYPE",    "from": "mock_deps[0]", "example": "AiRobotChatRepository"},
+        {"name": "REPO_FIELD",   "transform": "camelCase(REPO_TYPE)", "example": "aiRobotChatRepository"},
+        {"name": "ENTITY_TYPE",  "from": "extends_generic[0]", "example": "AiRobotChat"},
+        {"name": "ID_TYPE",      "from": "extends_generic[1]", "example": "Long"},
+        {"name": "CUT_TYPE",     "from": "class_name", "example": "AiRobotChatServiceImpl"},
+        {"name": "CUT_FIELD",    "transform": "camelCase(CUT_TYPE)", "example": "aiRobotChatServiceImpl"},
+        {"name": "METHOD_NAME",  "from": "target_method.name", "example": "save"}
+      ],
+      "notes": [
+        "风鸟 BaseService 的 dao 是 private 父类字段, @InjectMocks 无法注入泛型父类字段",
+        "必须用 ReflectionTestUtils.setField(cut, \"dao\", repoMock) 手动注入",
+        "Repository 自定义方法(非 CrudRepository 内置) 需要逐个 when(...).thenReturn"
+      ]
+    },
+    {
+      "id": "shiro_auth",
+      "file": "shiro_auth.java.tmpl",
+      "match_rules": {
+        "calls_pattern": ["SecurityUtils\\.getSubject", "ShiroKit", "AuthUtils\\."]
+      },
+      "placeholders": [
+        {"name": "CUT_TYPE",    "from": "class_name"},
+        {"name": "CUT_FIELD",   "transform": "camelCase(CUT_TYPE)"},
+        {"name": "USER_ENTITY", "default": "User", "note": "风鸟 Shiro realm 返回 User 实体"}
+      ],
+      "notes": [
+        "风鸟 Mockito 版本 2.23, 不支持 mockStatic, 走 ThreadContext.bind(subject) 方案",
+        "tearDown 必须 unbindSubject + unbindSecurityManager, 否则测试间污染",
+        "如果被测方法大量调 SecurityUtils.getSubject, 建议重构为 AuthContext 接口注入 (见模板内注释)"
+      ]
+    },
+    {
+      "id": "redis_cache",
+      "file": "redis_cache.java.tmpl",
+      "match_rules": {
+        "mock_deps_contains": ["RedisTemplate", "StringRedisTemplate"],
+        "calls_pattern": ["opsForValue", "opsForHash", "opsForList", "redisTemplate\\.", "@Cacheable", "@CacheEvict"]
+      },
+      "placeholders": [
+        {"name": "CUT_TYPE",   "from": "class_name"},
+        {"name": "CUT_FIELD",  "transform": "camelCase(CUT_TYPE)"},
+        {"name": "VALUE_TYPE", "default": "String", "note": "按被测方法缓存值类型推断"}
+      ],
+      "notes": [
+        "RedisTemplate.opsForXxx() 必须在 setUp() 先 stub, 否则 NPE",
+        "@Cacheable / @CacheEvict 在 unit test 上下文不生效(无 AOP 代理), 只能测绕过缓存的纯逻辑",
+        "要测 @Cacheable 行为必须用 @SpringBootTest + EmbeddedRedis, 不在本模板范围"
+      ]
+    }
+  ],
+  "retrieval_algorithm": {
+    "description": "Agent 按如下顺序检索模板",
+    "steps": [
+      "1. 遍历 mock_deps 和 calls, 命中 match_rules.mock_deps_regex/contains 或 calls_pattern 的模板入候选池",
+      "2. 按优先级排序: jpa_repository > shiro_auth > redis_cache (数据层优先于横切关注点)",
+      "3. 一个测试文件可以组合多个模板 (如 JPA + Redis)",
+      "4. 没命中任何模板时, 走 Sonnet 生成 + 编译反馈修复"
+    ]
+  }
+}
