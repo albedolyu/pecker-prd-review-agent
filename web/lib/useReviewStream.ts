@@ -187,7 +187,12 @@ export function useReviewStream(): UseReviewStreamResult {
       abortRef.current = controller;
 
       try {
-        const res = await fetch("/api/review/run", {
+        // SSE 必须直连后端,绕开 Next.js dev rewrite 对 streaming response
+        // 的 buffer 行为(rewrite 会等整个 stream 关闭才一次性 forward)。
+        // 生产模式由反代理处理,这个 base 在 prod 应该是 ""(同源)。
+        const apiBase =
+          process.env.NEXT_PUBLIC_SSE_BASE ?? "http://localhost:8000";
+        const res = await fetch(`${apiBase}/api/review/run`, {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },

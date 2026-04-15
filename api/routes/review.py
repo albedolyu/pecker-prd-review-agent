@@ -99,29 +99,40 @@ async def precheck(req: PrecheckRequest, project_root: Path = Depends(get_projec
 
     wiki_scan = _scan_wiki_for_prd(req.prd_content, wiki_path)
 
+    # PECKER_PRECHECK_SKIP_LLM=1 → 跳过 Claude 调用,只返回本地 wiki scan 结果。
+    # 用于 dev 环境避开 Next.js dev rewrite 的 30s timeout(Claude CLI 启动慢)。
+    skip_llm = os.environ.get("PECKER_PRECHECK_SKIP_LLM", "").strip().lower() in ("1", "true", "yes", "on")
+
     # 调 Claude 做 gap 分析
     try:
-        client = get_client()
-        context = f"PRD 内容:\n{req.prd_content[:3000]}"
-        if req.raw_materials:
-            context += "\n\n补充资料:\n" + "\n---\n".join(t[:1000] for t in req.raw_materials)
+        if skip_llm:
+            llm_result = {
+                "strong": [],
+                "weak": [],
+                "gaps": ["[dev] LLM 盲区分析已跳过 (PECKER_PRECHECK_SKIP_LLM=1)"],
+            }
+        else:
+            client = get_client()
+            context = f"PRD 内容:\n{req.prd_content[:3000]}"
+            if req.raw_materials:
+                context += "\n\n补充资料:\n" + "\n---\n".join(t[:1000] for t in req.raw_materials)
 
-        from agent_config import MODEL_TIERS
-        response = client.create(
-            model=MODEL_TIERS["sonnet"],
-            max_tokens=2048,
-            system='''你是啄木鸟知识盲区预检模块。分析 PRD 内容,输出以下 3 类信息(JSON 格式):
+            from agent_config import MODEL_TIERS
+            response = client.create(
+                model=MODEL_TIERS["sonnet"],
+                max_tokens=2048,
+                system='''你是啄木鸟知识盲区预检模块。分析 PRD 内容,输出以下 3 类信息(JSON 格式):
 {
   "strong": ["强相关的已知知识点"],
   "weak": ["弱相关的知识点"],
   "gaps": ["知识盲区——PRD 涉及但你没有足够信息判断的领域"]
 }
 每类最多 5 条。盲区要具体说明缺什么信息。''',
-            messages=[{"role": "user", "content": context}],
-        )
-        text = response.content[0].text if response.content else "{}"
-        m = re.search(r'\{[\s\S]*\}', text)
-        llm_result = json.loads(m.group()) if m else {"strong": [], "weak": [], "gaps": []}
+                messages=[{"role": "user", "content": context}],
+            )
+            text = response.content[0].text if response.content else "{}"
+            m = re.search(r'\{[\s\S]*\}', text)
+            llm_result = json.loads(m.group()) if m else {"strong": [], "weak": [], "gaps": []}
     except Exception as e:
         # 预检失败不阻塞流程,返回本地 wiki 扫描结果
         llm_result = {"strong": [], "weak": [], "gaps": [f"预检失败: {str(e)[:100]}"]}

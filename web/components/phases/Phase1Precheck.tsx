@@ -75,6 +75,9 @@ export function Phase1Precheck() {
       toast.success(
         `预检完成:强相关 ${data.strong.length} · 弱相关 ${data.weak.length} · 盲区 ${data.gaps.length}`,
       );
+      // 预检是非交互步骤,完成后自动推进到 Phase 2,和 Phase 2 → Phase 3
+      // 的自动推进保持一致。给 800ms 让用户看一眼 toast + 弱相关/盲区结果。
+      setTimeout(() => setPhase(2), 800);
     },
     onError: (e: ApiError) => {
       toast.error(`预检失败: ${e.detail ?? e.message}`);

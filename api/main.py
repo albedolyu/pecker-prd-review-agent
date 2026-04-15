@@ -81,6 +81,11 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        # 允许其它 dev 端口直连(主要给 SSE /api/review/run,绕开 Next.js
+        # dev rewrite 对 streaming response 的 buffer 行为)
+        "http://localhost:3300",
+        "http://localhost:3500",
+        "http://127.0.0.1:3500",
     ],
     allow_credentials=True,
     allow_methods=["*"],
