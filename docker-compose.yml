@@ -43,3 +43,15 @@ services:
       - ./shared-wiki:/wiki
     environment:
       - WIKI_PATH=/wiki
+
+  feishu-bot:
+    build: .
+    env_file: .env
+    entrypoint: ["uvicorn", "feishu_bot:app", "--host", "0.0.0.0", "--port", "9000"]
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./workspace:/workspace
+      - ./shared-wiki:/wiki
+    environment:
+      - WIKI_PATH=/wiki

@@ -95,6 +95,144 @@ def _count_turns(messages):
 
 
 # ============================================================
+# Autocompact（参考 CC autoCompact.ts:72-91 + compact.ts:450-491）
+# ============================================================
+
+# CC 常量
+AUTOCOMPACT_BUFFER_TOKENS = 13000   # context_window - buffer = 触发阈值
+MAX_COMPACT_FAILURES = 3             # 连续失败 3 次则熔断
+KEEP_RECENT_MESSAGES = 10            # 保留最近 5 轮（10 条 message）
+
+
+def estimate_tokens_rough(content):
+    """粗估 token 数（4 bytes/token，CC tokenEstimation.ts:203-208）"""
+    if isinstance(content, str):
+        return len(content.encode("utf-8")) // 4
+    if isinstance(content, list):
+        return sum(estimate_tokens_rough(c) for c in content)
+    if isinstance(content, dict):
+        import json
+        return estimate_tokens_rough(json.dumps(content, ensure_ascii=False))
+    return 0
+
+
+def estimate_messages_tokens(messages):
+    """估算 messages 列表的 token，含 4/3 安全系数"""
+    total = sum(estimate_tokens_rough(m.get("content", "")) for m in messages)
+    return int(total * 4 / 3)
+
+
+class AutocompactManager:
+    """自动压缩管理器，含熔断器（CC autoCompact.ts:257-265）"""
+
+    def __init__(self, max_context_tokens=200000):
+        self.max_context = max_context_tokens
+        self.compact_failures = 0
+        self.total_tokens_saved = 0
+
+    @property
+    def threshold(self):
+        return self.max_context - AUTOCOMPACT_BUFFER_TOKENS
+
+    @property
+    def is_circuit_broken(self):
+        return self.compact_failures >= MAX_COMPACT_FAILURES
+
+    def should_compact(self, messages):
+        """判断是否需要 autocompact"""
+        if self.is_circuit_broken:
+            return False
+        current = estimate_messages_tokens(messages)
+        return current >= self.threshold
+
+    def compact(self, client, messages, model_tiers):
+        """用 Haiku 做摘要压缩（CC compact.ts:400-491 的简化版）"""
+        if len(messages) <= KEEP_RECENT_MESSAGES:
+            return messages  # 消息太少，不压缩
+
+        old_msgs = messages[:-KEEP_RECENT_MESSAGES]
+        recent_msgs = messages[-KEEP_RECENT_MESSAGES:]
+
+        # 序列化旧消息为文本
+        old_text = _serialize_messages_for_summary(old_msgs)
+        old_tokens = estimate_tokens_rough(old_text)
+
+        try:
+            summary_response = client.create(
+                model=model_tiers.get("haiku", model_tiers.get("sonnet")),
+                max_tokens=2000,
+                system="你是对话历史压缩器。将以下 PRD 评审对话压缩为简洁摘要，保留：1) 所有已发现的改进项编号和状态；2) 关键决策和理由；3) 当前评审进度。去掉工具调用细节。",
+                messages=[{"role": "user", "content": old_text}],
+                retry_policy="router",  # 快速失败，不阻塞主流程
+            )
+            summary_text = ""
+            for block in summary_response.content:
+                if block.type == "text":
+                    summary_text += block.text
+
+            if not summary_text.strip():
+                raise ValueError("摘要为空")
+
+            compressed = [
+                {"role": "user", "content": f"[之前的评审对话摘要（约 {old_tokens} token 压缩而来）]\n\n{summary_text}"},
+                {"role": "assistant", "content": "好的，我已了解之前的评审进展，继续当前工作。"},
+            ] + recent_msgs
+
+            new_tokens = estimate_messages_tokens(compressed)
+            saved = estimate_messages_tokens(messages) - new_tokens
+            self.total_tokens_saved += saved
+            self.compact_failures = 0  # 重置熔断计数
+
+            return compressed
+
+        except Exception as e:
+            self.compact_failures += 1
+            from logger import get_logger
+            log = get_logger("compact")
+            log.warning(f"Autocompact 失败 ({self.compact_failures}/{MAX_COMPACT_FAILURES}): {str(e)[:60]}")
+            return messages  # 失败时返回原始消息
+
+    def status(self):
+        """返回压缩状态摘要"""
+        return (
+            f"autocompact: saved={self.total_tokens_saved:,} tokens, "
+            f"failures={self.compact_failures}/{MAX_COMPACT_FAILURES}, "
+            f"breaker={'OPEN' if self.is_circuit_broken else 'closed'}"
+        )
+
+
+def _serialize_messages_for_summary(messages):
+    """将 messages 序列化为可摘要的文本"""
+    parts = []
+    for msg in messages:
+        role = msg["role"]
+        content = msg.get("content", "")
+        if isinstance(content, str):
+            text = content
+        elif isinstance(content, list):
+            # 提取文本块，跳过 tool_result 细节
+            text_parts = []
+            for block in content:
+                if isinstance(block, dict):
+                    if block.get("type") == "text":
+                        text_parts.append(block.get("text", ""))
+                    elif block.get("type") == "tool_result":
+                        text_parts.append(f"[tool result: {block.get('content', '')[:100]}...]")
+                    elif block.get("type") == "tool_use":
+                        text_parts.append(f"[tool call: {block.get('name', '')}]")
+            text = "\n".join(text_parts)
+        else:
+            text = str(content)
+
+        # 截断单条消息到 500 字符（只是做摘要，不需要全文）
+        if len(text) > 500:
+            text = text[:500] + "..."
+        parts.append(f"[{role}] {text}")
+
+    return "\n\n".join(parts)
+
+
+# ============================================================
 # Scratchpad 状态板
 # ============================================================
 
@@ -240,6 +378,110 @@ def parse_scratchpad(workspace):
 
 
 # ============================================================
+# Tool Use Summary（参考 CC toolUseSummaryGenerator.ts:15-96）
+# ============================================================
+
+def generate_tool_summary(client, tool_calls_info, model_tiers):
+    """
+    用 Haiku 生成工具执行摘要（30 字内，过去时，像 git commit subject）
+    tool_calls_info: [{"name": "read_file", "input": {...}, "output": "..."}, ...]
+    """
+    if not tool_calls_info:
+        return ""
+
+    import json as _json
+    tool_descs = []
+    for tc in tool_calls_info[:5]:  # 最多 5 个
+        input_str = _json.dumps(tc.get("input", {}), ensure_ascii=False)[:300]
+        output_str = str(tc.get("output", ""))[:300]
+        tool_descs.append(f"Tool: {tc.get('name')}\nInput: {input_str}\nOutput: {output_str}")
+
+    try:
+        resp = client.create(
+            model=model_tiers.get("haiku", model_tiers.get("sonnet")),
+            max_tokens=50,
+            system="用过去时写一句话总结这些工具调用完成了什么。30字以内，像 git commit subject。中文回答。示例：读取了 3 个配置文件、搜索了认证模块代码、执行了单元测试",
+            messages=[{"role": "user", "content": "\n\n".join(tool_descs) + "\n\n摘要："}],
+            retry_policy="router",
+        )
+        for block in resp.content:
+            if block.type == "text":
+                return block.text.strip()
+    except Exception:
+        pass
+    return ""
+
+
+# ============================================================
+# Context Collapse（参考 CC collapseReadSearch.ts:762-950）
+# ============================================================
+
+# 可折叠的只读工具
+COLLAPSIBLE_TOOLS = {"read_file", "search_files", "list_directory"}
+
+
+def collapse_consecutive_reads(messages, min_consecutive=3):
+    """
+    合并连续只读工具结果为摘要行，减少上下文占用
+    只处理 4 条消息之前的旧内容（不动最近的）
+    """
+    if len(messages) < 8:
+        return  # 消息太少，不处理
+
+    # 找连续的只读 tool_use + tool_result 对
+    i = 0
+    safe_end = len(messages) - 4  # 不动最近 4 条
+
+    while i < safe_end:
+        msg = messages[i]
+        # 找 assistant 消息中连续的只读 tool_use
+        if msg.get("role") != "assistant":
+            i += 1
+            continue
+
+        content = msg.get("content", [])
+        if not isinstance(content, list):
+            i += 1
+            continue
+
+        # 统计这条 assistant 消息中的只读工具调用
+        read_tool_ids = []
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "tool_use":
+                if block.get("name") in COLLAPSIBLE_TOOLS:
+                    read_tool_ids.append(block["id"])
+
+        if len(read_tool_ids) < min_consecutive:
+            i += 1
+            continue
+
+        # 找对应的 tool_result 消息并折叠
+        if i + 1 < safe_end:
+            next_msg = messages[i + 1]
+            if next_msg.get("role") == "user" and isinstance(next_msg.get("content"), list):
+                collapsed_count = 0
+                tool_names = []
+                for block in next_msg["content"]:
+                    if isinstance(block, dict) and block.get("type") == "tool_result":
+                        if block.get("tool_use_id") in read_tool_ids:
+                            old_content = block.get("content", "")
+                            if isinstance(old_content, str) and len(old_content) > 200:
+                                block["content"] = f"[已折叠，原始 {len(old_content)} 字符]"
+                                collapsed_count += 1
+                                # 从 assistant 消息中找工具名
+                                for ab in content:
+                                    if isinstance(ab, dict) and ab.get("id") == block["tool_use_id"]:
+                                        tool_names.append(ab.get("name", "unknown"))
+
+                if collapsed_count > 0:
+                    from logger import get_logger
+                    log = get_logger("collapse")
+                    log.info(f"折叠 {collapsed_count} 个连续只读工具结果: {', '.join(tool_names[:5])}")
+
+        i += 1
+
+
+# ============================================================
 # 收敛保护
 # ============================================================
 
@@ -291,6 +533,18 @@ def _extract_text_length(assistant_msg):
 # Turn 回调
 # ============================================================
 
+# 全局 autocompact 管理器实例
+_autocompact_mgr = None
+
+
+def get_autocompact_manager(max_context_tokens=200000):
+    """获取或创建全局 autocompact 管理器"""
+    global _autocompact_mgr
+    if _autocompact_mgr is None:
+        _autocompact_mgr = AutocompactManager(max_context_tokens)
+    return _autocompact_mgr
+
+
 def create_turn_callback(workspace):
     """
     返回一个 callback 函数，签名 callback(messages, response)
@@ -298,10 +552,14 @@ def create_turn_callback(workspace):
     每轮结束后：
     1. 执行 microcompact 清理旧 tool_result
     2. 检查收敛，必要时注入 nudge 消息
+    （autocompact 由 run_session 主循环在 tool_loop 外触发）
     """
     def _callback(messages, response):
         # 微压缩
         microcompact(messages)
+
+        # 连续只读工具折叠（CC collapseReadSearch 模式）
+        collapse_consecutive_reads(messages)
 
         # 收敛保护
         nudge = check_convergence(messages)

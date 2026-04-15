@@ -36,3 +36,16 @@ py-modules = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# E5: 显式排除 pecker-release/ 历史快照和 workspace/,防止 collection 误扫
+norecursedirs = [
+    "pecker-release",
+    "workspace*",
+    ".git",
+    ".venv",
+    "__pycache__",
+    ".pytest_cache",
+    "eval/__pycache__",
+]
+markers = [
+    "eval: Phase 5 F4 - Eval CI gate,评审质量回归门禁(默认跳过,需 -m eval 触发)",
+]
