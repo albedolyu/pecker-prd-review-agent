@@ -1,9 +1,14 @@
 {
   "unlocked": {
-    "first_peck": "2026-04-12"
+    "first_peck": "2026-04-12",
+    "iron_beak": "2026-04-15",
+    "perfect_sync": "2026-04-15",
+    "full_flock": "2026-04-15",
+    "typo_hunter": "2026-04-15",
+    "eagle_eye": "2026-04-15"
   },
   "stats": {
-    "total_reviews": 2,
-    "total_items": 0
+    "total_reviews": 5,
+    "total_items": 43
   }
 }

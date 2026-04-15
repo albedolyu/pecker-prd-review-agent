@@ -1,8 +1,13 @@
 ---
+
 source: 数据维度-对外投资增加间接投资_原始版本.md
 created: 2026-04-12
 updated: 2026-04-12
 tags: [domain/对外投资, status/已验证]
+sources: 0
+title: ds_invest_alpha表结构
+scope: workspace
+category: constraint
 ---
 
 # 约束-ds_invest_alpha 表结构

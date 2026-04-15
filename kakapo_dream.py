@@ -41,11 +41,48 @@ LOCK_STALE_SECONDS = 3600  # 1小时后锁自动过期
 # wiki 页面命名前缀规范
 VALID_PREFIXES = ("概念-", "场景-", "竞品-", "约束-", "决策-", "实体-")
 
-# frontmatter 必需字段
-REQUIRED_FRONTMATTER = ["source", "created", "updated", "tags"]
+# 前缀到 category 的映射(D3)
+PREFIX_TO_CATEGORY = {
+    "概念-": "concept",
+    "场景-": "scenario",
+    "竞品-": "competitor",
+    "约束-": "constraint",
+    "决策-": "decision",
+    "实体-": "entity",
+}
 
-# 过时判定阈值（天）
+# frontmatter 必需字段 - 严格要求
+REQUIRED_FRONTMATTER = ["source", "created", "updated", "tags", "sources"]
+
+# frontmatter 扩展字段 - D3: title/scope/category,巡逻时顺手补齐,缺失不标红
+EXTENDED_FRONTMATTER = ["title", "scope", "category"]
+
+
+def _infer_extended_frontmatter(filename):
+    """D3: 根据文件名推断 title / scope / category
+
+    - title: 去掉 .md 扩展名,去掉前缀(如 "概念-")
+    - category: 通过前缀映射(概念/场景/竞品/约束/决策/实体 → concept/scenario/...),无前缀为 "misc"
+    - scope: 默认 "workspace",放到子目录的页面走 "shared"(未来可扩)
+    """
+    base = filename[:-3] if filename.endswith(".md") else filename
+    title = base
+    category = "misc"
+    for prefix, cat in PREFIX_TO_CATEGORY.items():
+        if base.startswith(prefix):
+            title = base[len(prefix):]
+            category = cat
+            break
+    scope = "shared" if "/" in filename else "workspace"
+    return {"title": title, "scope": scope, "category": category}
+
+# 过时判定阈值（天）— sources 越少越容易过时
 STALE_DAYS = 90
+STALE_DAYS_BY_SOURCES = {
+    0: 60,   # 无来源，60 天即过时
+    1: 75,   # 单来源，75 天
+    2: 90,   # 2 个来源，标准 90 天
+}  # >=3 个来源用 120 天
 
 # 重复页面相似度阈值
 SIMILARITY_THRESHOLD = 0.70
@@ -276,7 +313,7 @@ def scan_wiki_health(wiki_path):
                     "missing_fields": missing
                 })
 
-        # --- 过时内容 ---
+        # --- 过时内容（按 sources 数加权阈值） ---
         updated_str = fm.get("updated", "")
         last_updated = None
         if updated_str:
@@ -286,10 +323,22 @@ def scan_wiki_health(wiki_path):
                 pass
         if last_updated is None:
             last_updated = _get_file_mtime(wiki_path, p)
-        if last_updated and (now - last_updated).days > STALE_DAYS:
+
+        # sources 越多，过时阈值越宽松
+        sources_count = 0
+        sources_val = fm.get("sources", "0")
+        try:
+            sources_count = int(sources_val)
+        except (ValueError, TypeError):
+            pass
+        stale_threshold = STALE_DAYS_BY_SOURCES.get(sources_count, 120 if sources_count >= 3 else STALE_DAYS)
+
+        if last_updated and (now - last_updated).days > stale_threshold:
             report["stale_pages"].append({
                 "file": p,
-                "last_updated": last_updated.strftime("%Y-%m-%d")
+                "last_updated": last_updated.strftime("%Y-%m-%d"),
+                "sources": sources_count,
+                "threshold_days": stale_threshold,
             })
 
     # --- 重复页面检测 ---
@@ -460,36 +509,54 @@ def auto_fix(wiki_path, health_report, dry_run=True):
     """
     changes = []
 
-    # --- 断链修复：创建占位页面 ---
+    # --- 断链修复：创建占位页面（含入链列表） ---
     created_targets = set()
+
+    # 预聚合：每个 target 被哪些文件引用
+    target_referrers = {}  # target -> [引用方文件名]
     for item in health_report.get("broken_links", []):
         target = item["target"]
+        referrer = item["file"]
+        target_referrers.setdefault(target, []).append(referrer)
+
+    for target, referrers in target_referrers.items():
         target_file = _page_name_to_file(target)
         if target_file in created_targets:
             continue
         created_targets.add(target_file)
 
         now_str = datetime.date.today().isoformat()
+
+        # 构建入链列表
+        inlink_lines = []
+        for ref in sorted(set(referrers)):
+            ref_name = _file_to_page_name(ref)
+            inlink_lines.append(f"- [[{ref_name}]]")
+        inlink_section = "\n".join(inlink_lines)
+
         placeholder = (
             f"---\n"
             f"source: 自动修复\n"
             f"created: {now_str}\n"
             f"updated: {now_str}\n"
             f"tags: [status/待补充]\n"
+            f"sources: 0\n"
             f"---\n\n"
             f"# {target}\n\n"
             f"> 此页面由鸮鹦自动创建，因为有其他页面引用了 [[{target}]] 但该页面不存在。\n"
-            f"> 请补充具体内容。\n"
+            f"> 请补充具体内容。\n\n"
+            f"## 被引用于\n\n"
+            f"{inlink_section}\n"
         )
 
         path = _safe_path(wiki_path, target_file)
         if dry_run:
-            changes.append({"type": "create_placeholder", "file": target_file, "dry_run": True})
-            print(f"  [DRY RUN] 将创建占位页面: {target_file}")
+            changes.append({"type": "create_placeholder", "file": target_file, "referrers": len(referrers), "dry_run": True})
+            print(f"  [DRY RUN] 将创建占位页面: {target_file} (被 {len(referrers)} 个页面引用)")
         else:
             with open(path, "w", encoding="utf-8") as f:
                 f.write(placeholder)
-            changes.append({"type": "create_placeholder", "file": target_file, "dry_run": False})
+            changes.append({"type": "create_placeholder", "file": target_file, "referrers": len(referrers), "dry_run": False})
 
     # --- 缺少 frontmatter：自动补充 ---
     for item in health_report.get("missing_frontmatter", []):
@@ -504,14 +571,21 @@ def auto_fix(wiki_path, health_report, dry_run=True):
         mtime_str = mtime.strftime("%Y-%m-%d") if mtime else datetime.date.today().isoformat()
         now_str = datetime.date.today().isoformat()
 
+        # D3: 推断 extended 字段(title/scope/category)
+        ext = _infer_extended_frontmatter(filename)
+
         if not has_fm:
-            # 整个 frontmatter 都没有，加上完整的
+            # 整个 frontmatter 都没有，加上完整的(含 extended)
             new_fm = (
                 f"---\n"
+                f"title: {ext['title']}\n"
                 f"source: 自动修复\n"
                 f"created: {mtime_str}\n"
                 f"updated: {now_str}\n"
                 f"tags: [status/待验证]\n"
+                f"sources: 0\n"
+                f"scope: {ext['scope']}\n"
+                f"category: {ext['category']}\n"
                 f"---\n\n"
             )
             new_content = new_fm + content
@@ -528,6 +602,12 @@ def auto_fix(wiki_path, health_report, dry_run=True):
                     fm_section += f"updated: {now_str}\n"
                 elif field == "tags":
                     fm_section += "tags: [status/待验证]\n"
+                elif field == "sources":
+                    fm_section += "sources: 0\n"
+            # D3: 顺手补全 extended 字段(已存在则不动)
+            for ext_field in EXTENDED_FRONTMATTER:
+                if ext_field not in fm:
+                    fm_section += f"{ext_field}: {ext[ext_field]}\n"
             new_content = "---\n" + fm_section + "---" + content[end + 3:]
 
         if dry_run:
@@ -574,6 +654,20 @@ def auto_fix(wiki_path, health_report, dry_run=True):
                 with open(index_path, "w", encoding="utf-8") as f:
                     f.write(index_content.rstrip() + "\n" + append_lines)
 
+    # v1.2(D2): 追记到 wiki/log.md(风鸟方法论) — 只在 non-dry-run + 有变更时写
+    if not dry_run and changes:
+        try:
+            from wiki_log import append_log_entry
+            change_types = {}
+            for c in changes:
+                t = c.get("type", "unknown")
+                change_types[t] = change_types.get(t, 0) + 1
+            detail_parts = [f"{t}={n}" for t, n in sorted(change_types.items())]
+            append_log_entry(wiki_path, "auto_fix", " ".join(detail_parts))
+        except Exception as _e:
+            # log 追记失败不影响主流程
+            pass
+
     return changes
 
 
@@ -586,14 +680,14 @@ def rebuild_index(wiki_path):
     重建 index.md：
     - 扫描所有 .md 文件
     - 按命名前缀分类
-    - 每个条目一行: - [[页面名]] -- 一句话摘要
+    - 表格格式：页面 | 说明 | 来源数 | 最后更新
     - 末尾附加知识森林状态
     """
     pages = _list_wiki_pages(wiki_path)
     # 排除特殊页面
     pages = [p for p in pages if p not in EXCLUDED_FILES]
 
-    # 分类
+    # 分类，每个条目包含 (name, summary, sources, updated)
     categories = {
         "概念": [],
         "场景": [],
@@ -609,14 +703,22 @@ def rebuild_index(wiki_path):
         summary = _extract_summary(content)
         name = _file_to_page_name(p)
 
+        # 提取 frontmatter 中的 sources 和 updated
+        fm, has_fm = _parse_frontmatter(content)
+        sources_val = fm.get("sources", "0") if has_fm else "0"
+        updated_val = fm.get("updated", "") if has_fm else ""
+        if not updated_val:
+            mtime = _get_file_mtime(wiki_path, p)
+            updated_val = mtime.strftime("%Y-%m-%d") if mtime else "-"
+
         placed = False
         for prefix in ("概念", "场景", "竞品", "约束", "决策", "实体"):
             if p.startswith(f"{prefix}-"):
-                categories[prefix].append((name, summary))
+                categories[prefix].append((name, summary, sources_val, updated_val))
                 placed = True
                 break
         if not placed:
-            categories["其他"].append((name, summary))
+            categories["其他"].append((name, summary, sources_val, updated_val))
 
     # 构建 index 内容
     lines = ["# 知识库索引\n"]
@@ -637,8 +739,10 @@ def rebuild_index(wiki_path):
         if not items:
             continue
         lines.append(f"\n## {category_labels[cat_key]}（{len(items)}）\n")
-        for name, summary in items:
-            lines.append(f"- [[{name}]] -- {summary}")
+        lines.append("| 页面 | 说明 | 来源数 | 最后更新 |")
+        lines.append("|------|------|--------|----------|")
+        for name, summary, sources, updated in items:
+            lines.append(f"| [[{name}]] | {summary} | {sources} | {updated} |")
 
     # 知识森林状态
     try:
@@ -658,6 +762,13 @@ def rebuild_index(wiki_path):
     index_path = _safe_path(wiki_path, "index.md")
     with open(index_path, "w", encoding="utf-8") as f:
         f.write(content)
+
+    # v1.2(D2): 追记到 wiki/log.md
+    try:
+        from wiki_log import append_log_entry
+        append_log_entry(wiki_path, "rebuild_index", f"pages={len(pages)}")
+    except Exception:
+        pass
 
     return len(pages)
 
@@ -986,7 +1097,7 @@ def format_health_report(report):
         ("broken_links", "断链", lambda i: f"  - {i['file']} -> [[{i['target']}]]"),
         ("naming_issues", "命名不规范", lambda i: f"  - {i['file']}: {i['suggestion']}"),
         ("missing_frontmatter", "缺少 frontmatter", lambda i: f"  - {i['file']} (缺: {', '.join(i['missing_fields'])})"),
-        ("stale_pages", "过时内容 (>90天)", lambda i: f"  - {i['file']} (最后更新: {i['last_updated']})"),
+        ("stale_pages", "过时内容", lambda i: f"  - {i['file']} (最后更新: {i['last_updated']}, sources: {i.get('sources', '?')}, 阈值: {i.get('threshold_days', STALE_DAYS)}天)"),
         ("potential_duplicates", "疑似重复页面", lambda i: f"  - {i['file1']} <-> {i['file2']} (相似度: {i['similarity']})"),
         ("potential_contradictions", "疑似矛盾", lambda i: f"  - {i['file1']} vs {i['file2']} (关键词: {i['keyword']})"),
         ("missing_crossrefs", "交叉引用补全建议", lambda i: f"  - {i['file1']} <-> {i['file2']} (共享关键词{i['count']}个: {', '.join(i['shared_keywords'][:5])}{'...' if i['count'] > 5 else ''})"),
