@@ -1,20 +1,59 @@
 """
 工具定义和执行 -- 啄木鸟 PRD 评审 Agent 的工具层
+
+设计(v1.2):
+- 内部真源是 `_AGENT_TOOLS` 一个 AgentTool dataclass 列表,带完整契约:
+  input_schema / output_schema / is_read_only / is_concurrency_safe / permission
+- 对外 API 兼容: `TOOL_SCHEMAS` 仍是 list of dict,由 AgentTool 派生,直接传给 Messages API
+- 提供 `get_tool(name)` 供 security 层做权限决策、run_session 做并发调度
+
+借鉴 ClaudeCode Tool.ts:36-50 的 isReadOnly/isConcurrencySafe 设计。
 """
 
 import os
 import subprocess
 import glob as glob_module
+from dataclasses import dataclass, field
+from typing import Optional
 
 # ============================================================
-# 工具 Schema（供 Messages API 使用）
+# AgentTool dataclass(工具契约)
 # ============================================================
 
-TOOL_SCHEMAS = [
-    {
-        "name": "read_file",
-        "description": "读取文件内容。支持文本文件、Markdown 等。",
-        "input_schema": {
+@dataclass
+class AgentTool:
+    """工具契约——除 Messages API 所需的 name/description/input_schema 之外,
+    还声明 is_read_only(用于权限决策)、is_concurrency_safe(用于并发锁决策)。
+
+    output_schema 目前只做文档用途,暂不做运行时校验(B1 阶段由调用方自行约束)。
+    permission 字段预留给 C2 PermissionMode 使用。
+    """
+    name: str
+    description: str
+    input_schema: dict
+    is_read_only: bool
+    is_concurrency_safe: bool
+    output_schema: Optional[dict] = None
+    permission: str = "normal"  # normal / confirm / strict
+
+    def to_api_schema(self) -> dict:
+        """派生 Messages API 需要的 dict(只包含 name/description/input_schema)"""
+        return {
+            "name": self.name,
+            "description": self.description,
+            "input_schema": self.input_schema,
+        }
+
+
+# ============================================================
+# 工具定义(真源)
+# ============================================================
+
+_AGENT_TOOLS = [
+    AgentTool(
+        name="read_file",
+        description="读取文件内容。支持文本文件、Markdown 等。",
+        input_schema={
             "type": "object",
             "properties": {
                 "path": {"type": "string", "description": "文件路径（相对于工作目录）"},
@@ -23,11 +62,17 @@ TOOL_SCHEMAS = [
             },
             "required": ["path"],
         },
-    },
-    {
-        "name": "write_file",
-        "description": "写入文件内容。目录不存在会自动创建。",
-        "input_schema": {
+        output_schema={
+            "type": "string",
+            "description": "带行号的文件内容,或 [error] 前缀的错误信息",
+        },
+        is_read_only=True,
+        is_concurrency_safe=True,
+    ),
+    AgentTool(
+        name="write_file",
+        description="写入文件内容。目录不存在会自动创建。",
+        input_schema={
             "type": "object",
             "properties": {
                 "path": {"type": "string", "description": "文件路径（相对于工作目录）"},
@@ -35,11 +80,17 @@ TOOL_SCHEMAS = [
             },
             "required": ["path", "content"],
         },
-    },
-    {
-        "name": "list_directory",
-        "description": "列出目录内容，返回文件和子目录列表。",
-        "input_schema": {
+        output_schema={
+            "type": "string",
+            "description": "写入结果消息(已写入/已追加/已跳过/[error])",
+        },
+        is_read_only=False,
+        is_concurrency_safe=False,  # 写文件必须独占,尤其 wiki/ 下需要 wiki_lock
+    ),
+    AgentTool(
+        name="list_directory",
+        description="列出目录内容，返回文件和子目录列表。",
+        input_schema={
             "type": "object",
             "properties": {
                 "path": {"type": "string", "description": "目录路径，默认为工作目录"},
@@ -47,11 +98,17 @@ TOOL_SCHEMAS = [
                 "recursive": {"type": "boolean", "description": "是否递归，默认 false"},
             },
         },
-    },
-    {
-        "name": "search_files",
-        "description": "在文件中搜索文本内容（类似 grep），返回匹配的行。",
-        "input_schema": {
+        output_schema={
+            "type": "string",
+            "description": "相对路径列表,每行一条,目录以 / 结尾",
+        },
+        is_read_only=True,
+        is_concurrency_safe=True,
+    ),
+    AgentTool(
+        name="search_files",
+        description="在文件中搜索文本内容（类似 grep），返回匹配的行。",
+        input_schema={
             "type": "object",
             "properties": {
                 "pattern": {"type": "string", "description": "搜索的文本或正则表达式"},
@@ -61,19 +118,60 @@ TOOL_SCHEMAS = [
             },
             "required": ["pattern"],
         },
-    },
-    {
-        "name": "run_bash",
-        "description": "执行 bash 命令。仅限 git 相关操作。",
-        "input_schema": {
+        output_schema={
+            "type": "string",
+            "description": "匹配行列表,格式: path:line: content",
+        },
+        is_read_only=True,
+        is_concurrency_safe=True,
+    ),
+    AgentTool(
+        name="run_bash",
+        description="执行 bash 命令。仅限 git 相关操作。",
+        input_schema={
             "type": "object",
             "properties": {
                 "command": {"type": "string", "description": "要执行的命令"},
             },
             "required": ["command"],
         },
-    },
+        output_schema={
+            "type": "string",
+            "description": "命令 stdout + stderr 合并,含 exit code",
+        },
+        is_read_only=False,  # 可能跑 git commit/push 等写操作
+        is_concurrency_safe=False,  # Bash 可能改工作目录状态
+        permission="confirm",  # 部分命令需要用户确认(security.py check_bash_permission)
+    ),
 ]
+
+
+# ============================================================
+# 对外接口(API 兼容 + dataclass 查询)
+# ============================================================
+
+# 派生 Messages API 需要的 list of dict(保持与 v1.1 完全兼容)
+TOOL_SCHEMAS = [t.to_api_schema() for t in _AGENT_TOOLS]
+
+# 按 name 索引的 dict,方便 security / 并发调度层快速查询
+_TOOL_INDEX = {t.name: t for t in _AGENT_TOOLS}
+
+
+def get_tool(name: str) -> Optional[AgentTool]:
+    """按 name 返回 AgentTool 对象,未知工具返回 None"""
+    return _TOOL_INDEX.get(name)
+
+
+def is_read_only_tool(name: str) -> bool:
+    """查询工具是否为只读(供权限决策使用)。未知工具保守返回 False"""
+    t = _TOOL_INDEX.get(name)
+    return bool(t and t.is_read_only)
+
+
+def is_concurrency_safe_tool(name: str) -> bool:
+    """查询工具是否可并发(供并发调度使用)。未知工具保守返回 False"""
+    t = _TOOL_INDEX.get(name)
+    return bool(t and t.is_concurrency_safe)
 
 
 # ============================================================

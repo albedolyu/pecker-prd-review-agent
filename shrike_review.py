@@ -2,12 +2,13 @@
 伯劳 (Shrike) — 啄木鸟评审产出质量门禁
 纯静态分析，不调 API。在 git push 前拦截不合格的评审产出。
 
-五关检查：
+v1.2(B1): 六关检查(第 6 关可选)
 1. 报告完整性：改动报告必需章节是否齐全
 2. 编号一致性：改动报告/差异报告/交互记录的 R-xxx 编号交叉比对
 3. Wiki 质量：新增页面 frontmatter/命名前缀/双向链接
 4. 安全扫描：产出文件不含 API key/密码/内网 IP
 5. 格式规范：改进项必填字段完整度
+6. 依据可靠性(可选)：当 parallel_result 传入时,检查依据可靠率和撤回原因分布
 
 用法：
     python shrike_review.py --workspace ./workspace
@@ -327,33 +328,97 @@ def check_format_compliance(output_dir):
 # 主入口函数
 # ============================================================
 
-def shrike_review(workspace, wiki_path=None):
+#: 依据可靠率阈值(低于此值 → Gate 6 FAIL)
+EVIDENCE_RELIABILITY_THRESHOLD = 0.80
+
+
+def check_evidence_reliability(parallel_result):
+    """Gate 6: 依据可靠性 — 基于 parallel_review 的 verification_summary
+
+    v1.2(B1) 新增。只有当 parallel_result 传入时才检查,否则标记为 skipped。
+
+    判定规则:
+    - 可靠率 >= 0.80 → PASS
+    - 可靠率 < 0.80 → FAIL
+    - 额外关注: A/B 类依据缺失(wiki/rule 找不到)是"硬失败",要在 details 里高亮
     """
-    执行全部五关质量检查，返回结构化结果字典。
+    if parallel_result is None:
+        return {
+            "passed": True,  # 默认放行(未传数据,不阻断)
+            "skipped": True,
+            "details": ["parallel_result 未传入,依据可靠性检查跳过"],
+        }
+
+    summary = parallel_result.get("verification_summary")
+    if not summary:
+        return {
+            "passed": True,
+            "skipped": True,
+            "details": ["verification_summary 缺失(可能是旧版 parallel_result),跳过"],
+        }
+
+    reliability = summary.get("reliability", 1.0)
+    total = summary.get("total", 0)
+    retracted = summary.get("retracted", 0)
+    caveat = summary.get("caveat", 0)
+    by_code = summary.get("retracted_by_reason_code", {})
+
+    details = [
+        f"总 item: {total} | 通过: {summary.get('verified', 0)} | "
+        f"撤回: {retracted} | 待确认(C 类): {caveat}",
+        f"可靠率: {reliability:.0%} (阈值 {EVIDENCE_RELIABILITY_THRESHOLD:.0%})",
+    ]
+
+    # A/B 类硬失败的具体分布(苍鹰/Worker 编造依据的红灯)
+    hard_fail_keys = ["A_missing_wiki_page", "B_missing_rule"]
+    for code in hard_fail_keys:
+        count = by_code.get(code, 0)
+        if count > 0:
+            label = {
+                "A_missing_wiki_page": "A 类 wiki 页面未找到",
+                "B_missing_rule": "B 类 review-rule 未找到",
+            }.get(code, code)
+            details.append(f"  ⚠ {label}: {count} 条")
+
+    passed = reliability >= EVIDENCE_RELIABILITY_THRESHOLD
+    return {"passed": passed, "rate": reliability, "details": details}
+
+
+def shrike_review(workspace, wiki_path=None, parallel_result=None):
+    """
+    执行全部六关质量检查，返回结构化结果字典。
+
+    v1.2(B1): 新增 parallel_result 参数用于依据可靠性检查(Gate 6)
 
     Args:
         workspace: 工作目录路径（含 output/ 子目录）
         wiki_path: wiki 目录路径，默认为 workspace/wiki
+        parallel_result: 并行评审结果(含 verification_summary),可选
     """
     output_dir = os.path.join(workspace, "output")
     if wiki_path is None:
         wiki_path = os.path.join(workspace, "wiki")
 
     gates = {
-        "report_completeness": check_report_completeness(output_dir),
-        "id_consistency":      check_id_consistency(output_dir),
-        "wiki_quality":        check_wiki_quality(wiki_path),
-        "security_scan":       check_security(output_dir, wiki_path),
-        "format_compliance":   check_format_compliance(output_dir),
+        "report_completeness":  check_report_completeness(output_dir),
+        "id_consistency":       check_id_consistency(output_dir),
+        "wiki_quality":         check_wiki_quality(wiki_path),
+        "security_scan":        check_security(output_dir, wiki_path),
+        "format_compliance":    check_format_compliance(output_dir),
+        "evidence_reliability": check_evidence_reliability(parallel_result),
     }
 
+    # skipped 的关不计入总数,但 passed(skipped=True 的都 passed=True)仍加进去
     passed_count = sum(1 for g in gates.values() if g["passed"])
-    verdict = "PASS" if passed_count == 5 else "FAIL"
+    # verdict: 所有非 skipped 的关都 pass 才 PASS
+    non_skipped = [k for k, g in gates.items() if not g.get("skipped")]
+    all_non_skipped_passed = all(gates[k]["passed"] for k in non_skipped)
+    verdict = "PASS" if all_non_skipped_passed else "FAIL"
 
     return {
         "verdict": verdict,
         "passed": passed_count,
-        "total": 5,
+        "total": len(gates),
         "gates": gates,
     }
 
@@ -382,12 +447,18 @@ def format_shrike_report(result):
         "wiki_quality":        "Gate 3  Wiki 质量",
         "security_scan":       "Gate 4  安全扫描",
         "format_compliance":   "Gate 5  格式规范",
+        "evidence_reliability": "Gate 6  依据可靠性",
     }
 
     for gate_key, label in gate_labels.items():
-        gate = result["gates"][gate_key]
-        status = "PASS" if gate["passed"] else "FAIL"
-        lines.append(f"### {label}  [{status}]")
+        gate = result["gates"].get(gate_key)
+        if gate is None:
+            continue
+        if gate.get("skipped"):
+            lines.append(f"### {label}  [SKIPPED]")
+        else:
+            status = "PASS" if gate["passed"] else "FAIL"
+            lines.append(f"### {label}  [{status}]")
 
         details = gate.get("details", [])
 

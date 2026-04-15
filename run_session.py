@@ -22,16 +22,17 @@ if sys.stdout.encoding != "utf-8":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
-from logger import setup_logging
+from logger import setup_logging, log_agent_call
 setup_logging()
 
 from dotenv import load_dotenv
 
 from agent_config import (
     load_system_prompt, MODEL_TIERS, ROUTER_PROMPT, DEFAULT_WORKSPACE,
-    MAX_TOKENS, MAX_TOOL_TURNS,
+    MAX_TOKENS, MAX_TOOL_TURNS, TOOL_LOOP_TIMEOUT,
 )
-from tools import TOOL_SCHEMAS
+from exceptions import AgentTimeoutError
+from tools import TOOL_SCHEMAS, is_concurrency_safe_tool
 from security import safe_execute_tool, save_session_turn, resume_session, get_session_path
 from context_manager import create_turn_callback, read_scratchpad
 from api_adapter import create_client
@@ -45,20 +46,55 @@ API_KEY = ""
 BASE_URL = "https://api.anthropic.com"
 
 
+# --- 非交互模式 helper ---
+def _is_noninteractive():
+    """检测是否处于非交互模式(CI/CD 场景)
+
+    触发条件:
+    - 环境变量 PECKER_NONINTERACTIVE=1/true/yes
+    - 或 CLI 参数 --non-interactive 被设置(会在 main() 中设置环境变量)
+    """
+    return os.environ.get("PECKER_NONINTERACTIVE", "").lower() in ("1", "true", "yes")
+
+
+def _read_input(prompt, fallback=""):
+    """非交互模式下直接返回 fallback,不调用 input()
+
+    用法:
+        name = _read_input("PRD 名称: ", fallback="unnamed")
+    """
+    if _is_noninteractive():
+        return fallback
+    try:
+        return input(prompt).strip()
+    except (EOFError, KeyboardInterrupt):
+        return fallback
+
+
 def validate_config():
     """启动时校验所有必需配置，给人话报错"""
     errors = []
     warnings = []
 
-    if not API_KEY:
-        errors.append("ANTHROPIC_API_KEY 未设置。请在 .env 中配置 Claude API Key")
-    elif not API_KEY.startswith("sk-"):
-        warnings.append(f"ANTHROPIC_API_KEY 格式异常（不以 sk- 开头），可能无法使用: {API_KEY[:10]}...")
+    use_cc = os.environ.get("USE_CLAUDE_CODE", "").strip().lower() in ("1", "true", "yes", "on")
 
-    if not BASE_URL:
-        warnings.append("ANTHROPIC_BASE_URL 未设置，将使用默认 https://api.anthropic.com")
-    elif not BASE_URL.startswith("http"):
-        errors.append(f"ANTHROPIC_BASE_URL 格式错误（需以 http 开头）: {BASE_URL}")
+    if use_cc:
+        # 走本地 Claude Code CLI，只要 claude 可用即可，不需要 API key
+        import shutil
+        if not shutil.which("claude"):
+            errors.append("USE_CLAUDE_CODE=1 但本机找不到 claude CLI。请先安装 Claude Code 并执行 `claude login`")
+        else:
+            print("  [后端] 使用本地 Claude Code CLI（零 API key 模式）")
+    else:
+        if not API_KEY:
+            errors.append("ANTHROPIC_API_KEY 未设置。请在 .env 中配置，或改用 USE_CLAUDE_CODE=1 走本地 CC")
+        elif not API_KEY.startswith("sk-"):
+            warnings.append(f"ANTHROPIC_API_KEY 格式异常（不以 sk- 开头），可能无法使用: {API_KEY[:10]}...")
+
+        if not BASE_URL:
+            warnings.append("ANTHROPIC_BASE_URL 未设置，将使用默认 https://api.anthropic.com")
+        elif not BASE_URL.startswith("http"):
+            errors.append(f"ANTHROPIC_BASE_URL 格式错误（需以 http 开头）: {BASE_URL}")
 
     if warnings:
         for w in warnings:
@@ -111,11 +147,64 @@ def route_intent(client, prd_name, user_instruction="PRD 评审"):
 # Tool 执行循环（核心）
 # ============================================================
 
-def tool_loop(client, model, system_blocks, messages, workspace, turn_callback=None, max_turns=MAX_TOOL_TURNS):
+# 只读工具集合(保留常量供旧代码兼容;真源在 tools.py 的 AgentTool.is_concurrency_safe)
+# 改动时优先改 tools.py _AGENT_TOOLS 定义,这里由 is_concurrency_safe_tool(name) 查询。
+CONCURRENT_SAFE_TOOLS = {"read_file", "search_files", "list_directory"}
+
+# Tool result 落盘阈值（参考 CC toolResultStorage.ts:272-334）
+TOOL_RESULT_PERSIST_THRESHOLD = 10000
+
+
+def _process_tool_result(result, tool_name, workspace):
+    """CC 模式：大结果落盘+预览，空结果标记，错误不截断"""
+    if not result or not result.strip():
+        return f"({tool_name} 执行完成，无输出)"
+
+    if result.startswith("[blocked]") or result.startswith("[error]"):
+        return result
+
+    if len(result) <= TOOL_RESULT_PERSIST_THRESHOLD:
+        return result
+
+    # 大结果写磁盘，返回 2KB 预览
+    import time as _t
+    persist_dir = os.path.join(workspace, "output", ".tool_results")
+    os.makedirs(persist_dir, exist_ok=True)
+    fname = f"{tool_name}_{int(_t.time())}.txt"
+    fpath = os.path.join(persist_dir, fname)
+    with open(fpath, "w", encoding="utf-8", errors="replace") as f:
+        f.write(result)
+
+    # 在换行处截断预览（CC 用 2KB）
+    preview = result[:2000]
+    last_nl = preview.rfind("\n")
+    if last_nl > 500:
+        preview = preview[:last_nl]
+    return f"{preview}\n...\n[完整结果已保存至 .tool_results/{fname}，共 {len(result)} 字符]"
+
+
+def tool_loop(client, model, system_blocks, messages, workspace, turn_callback=None, max_turns=MAX_TOOL_TURNS, wall_clock_limit=None):
     """
     Messages API + tool use 循环
+
+    A4: 加 wall-clock 总时长上限(默认 TOOL_LOOP_TIMEOUT 秒),超时抛 AgentTimeoutError。
+    max_turns 保护的是"最多几轮工具调用",wall_clock_limit 保护的是"最长跑多少秒"。
+    两者是互补的:API 慢响应也会被 wall-clock 拦住。
     """
+    import time as _time
+    start_time = _time.time()
+    limit = wall_clock_limit if wall_clock_limit is not None else TOOL_LOOP_TIMEOUT
+
     for turn in range(max_turns):
+        # A4: 每轮前检查 wall-clock
+        elapsed = _time.time() - start_time
+        if elapsed > limit:
+            raise AgentTimeoutError(
+                f"tool_loop 超时:已运行 {elapsed:.0f}s,上限 {limit}s(轮次 {turn}/{max_turns})",
+                elapsed=elapsed,
+                limit=limit,
+            )
+
         response = client.create(
             model=model,
             max_tokens=MAX_TOKENS,
@@ -153,14 +242,41 @@ def tool_loop(client, model, system_blocks, messages, workspace, turn_callback=N
             messages.append({"role": "assistant", "content": assistant_content})
 
             tool_results = []
+            # CC 模式:只读工具可并发,写工具串行
+            # 真源是 tools.AgentTool.is_concurrency_safe(查询通过 is_concurrency_safe_tool)
+            safe_calls = [tc for tc in tool_calls if is_concurrency_safe_tool(tc.name)]
+            unsafe_calls = [tc for tc in tool_calls if not is_concurrency_safe_tool(tc.name)]
+            executed = {}
+
+            if len(safe_calls) > 1:
+                # 多个只读工具并发执行
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+                    futures = {
+                        pool.submit(safe_execute_tool, tc.name, tc.input, workspace): tc
+                        for tc in safe_calls
+                    }
+                    for future in concurrent.futures.as_completed(futures):
+                        tc = futures[future]
+                        try:
+                            executed[tc.id] = future.result()
+                        except Exception as e:
+                            executed[tc.id] = f"[error] {e}"
+            else:
+                for tc in safe_calls:
+                    executed[tc.id] = safe_execute_tool(tc.name, tc.input, workspace)
+
+            for tc in unsafe_calls:
+                executed[tc.id] = safe_execute_tool(tc.name, tc.input, workspace)
+
             for tc in tool_calls:
-                result = safe_execute_tool(tc.name, tc.input, workspace)
-                truncated = result[:5000] + ("[...内容截断]" if len(result) > 5000 else "")
+                result = executed[tc.id]
+                processed = _process_tool_result(result, tc.name, workspace)
                 print(f"  [done] {result[:60]}", flush=True)
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": tc.id,
-                    "content": truncated,
+                    "content": processed,
                 })
             messages.append({"role": "user", "content": tool_results})
         else:
@@ -189,32 +305,24 @@ def _brief_input(inputs):
 
 
 # ============================================================
-# 并行评审（Phase 2）
+# PRD / Wiki 共享读取
 # ============================================================
 
-def run_parallel_review(client, workspace, wiki_path):
-    """
-    调用并行 Workers 评审 PRD，返回结构化改进项列表
-    读取 prd/ 下的文件和 wiki/ 中的相关页面
-    """
-    from parallel_review import parallel_review, parallel_review_sync, verify_evidence, format_peck_score
-    from easter_eggs import calculate_peck_score, format_peck_score as format_peck
-
-    # 读取 PRD
+def load_prd_content(workspace):
+    """读取 workspace/prd/ 下所有 .md 文件，返回 (prd_content, prd_files) 或 (None, [])"""
     prd_dir = os.path.join(workspace, "prd")
     prd_files = [f for f in os.listdir(prd_dir) if f.endswith(".md")] if os.path.isdir(prd_dir) else []
     if not prd_files:
-        print("  [并行评审] prd/ 目录中没有 .md 文件，跳过")
-        return None
-
-    # 读取 prd/ 中所有 .md 文件
+        return None, []
     prd_parts = []
     for pf in sorted(prd_files):
         with open(os.path.join(prd_dir, pf), "r", encoding="utf-8") as f:
             prd_parts.append(f"## {pf}\n\n{f.read()}")
-    prd_content = "\n\n---\n\n".join(prd_parts)
+    return "\n\n---\n\n".join(prd_parts), prd_files
 
-    # 读取 wiki 相关页面
+
+def load_wiki_pages(wiki_path):
+    """读取 wiki 目录下所有 .md 页面（排除 index/log/scratchpad），返回 dict"""
     wiki_pages = {}
     if os.path.isdir(wiki_path):
         for wf in os.listdir(wiki_path):
@@ -222,6 +330,25 @@ def run_parallel_review(client, workspace, wiki_path):
                 wp = os.path.join(wiki_path, wf)
                 with open(wp, "r", encoding="utf-8", errors="replace") as f:
                     wiki_pages[wf.replace(".md", "")] = f.read()
+    return wiki_pages
+
+
+# ============================================================
+# 并行评审（Phase 2）
+# ============================================================
+
+@log_agent_call("啄木鸟并行评审")
+def run_parallel_review(client, workspace, wiki_path, prd_content, prd_files, wiki_pages, diff_context=None):
+    """
+    调用并行 Workers 评审 PRD，返回结构化改进项列表
+    prd_content / prd_files / wiki_pages 由 main() 预读传入
+    """
+    from parallel_review import parallel_review, parallel_review_sync, verify_evidence
+    from easter_eggs import calculate_peck_score, format_peck_score as format_peck
+
+    if not prd_content:
+        print("  [并行评审] prd/ 目录中没有 .md 文件，跳过")
+        return None
 
     print(f"\n  [并行评审] PRD: {', '.join(sorted(prd_files))} ({len(prd_content)} 字)")
     print(f"  [并行评审] Wiki: {len(wiki_pages)} 页")
@@ -235,7 +362,7 @@ def run_parallel_review(client, workspace, wiki_path):
 
     import time as _time
     t_start = _time.time()
-    result = asyncio.run(parallel_review(client, prd_content, wiki_pages, MODEL_TIERS))
+    result = asyncio.run(parallel_review(client, prd_content, wiki_pages, MODEL_TIERS, wiki_path=wiki_path, diff_context=diff_context))
     elapsed = _time.time() - t_start
     print(f"  [并行评审] 4 个 worker 并行完成，耗时 {elapsed:.1f}s")
 
@@ -247,10 +374,16 @@ def run_parallel_review(client, workspace, wiki_path):
             print(f"  [{w['dimension_name']}] 发现 {len(w['items'])} 条改进项")
 
     # 依据验证
+    from parallel_review import summarize_verification
     verified = verify_evidence(result["merged_items"], workspace)
     retracted = [i for i in verified if i.get("status") == "RETRACTED"]
+    verification_summary = summarize_verification(verified)
     if retracted:
         print(f"  [依据验证] {len(retracted)} 条因依据不足被撤回")
+    if verification_summary["caveat"] > 0:
+        print(f"  [依据验证] {verification_summary['caveat']} 条 C 类依据需人工确认")
+    print(f"  [依据验证] 可靠率 {verification_summary['reliability']:.0%} "
+          f"({verification_summary['verified']}/{verification_summary['total']})")
 
     valid_items = [i for i in verified if i.get("status") != "RETRACTED"]
 
@@ -264,6 +397,7 @@ def run_parallel_review(client, workspace, wiki_path):
     return {
         "items": valid_items,
         "retracted": retracted,
+        "verification_summary": verification_summary,
         "peck_score": peck,
         "usage": result["total_usage"],
     }
@@ -273,8 +407,9 @@ def run_parallel_review(client, workspace, wiki_path):
 # Phase 2.5: 苍鹰交叉校验
 # ============================================================
 
-def run_goshawk_review(client, workspace, wiki_path, parallel_result, model, system_blocks, messages, session_file, turn_cb):
-    """Phase 2.5: 苍鹰交叉校验"""
+@log_agent_call("苍鹰 meta 评审")
+def run_goshawk_review(client, workspace, wiki_path, parallel_result, model, system_blocks, messages, session_file, turn_cb, prd_content, wiki_pages):
+    """Phase 2.5: 苍鹰交叉校验。prd_content / wiki_pages 由 main() 预读传入。"""
     from goshawk_advisor import advisor_review, apply_advisor_result, format_advisor_report
     from easter_eggs import get_phase_line
 
@@ -286,34 +421,16 @@ def run_goshawk_review(client, workspace, wiki_path, parallel_result, model, sys
     print("Phase 2.5: 苍鹰交叉校验")
     print("=" * 60)
 
-    # 读取 PRD
-    prd_dir = os.path.join(workspace, "prd")
-    prd_files = [f for f in os.listdir(prd_dir) if f.endswith(".md")] if os.path.isdir(prd_dir) else []
-    if not prd_files:
+    if not prd_content:
         print("  苍鹰：找不到 PRD 文件，跳过交叉校验")
         return messages
-
-    # 读取 prd/ 中所有 .md 文件
-    prd_parts = []
-    for pf in sorted(prd_files):
-        with open(os.path.join(prd_dir, pf), "r", encoding="utf-8") as f:
-            prd_parts.append(f"## {pf}\n\n{f.read()}")
-    prd_content = "\n\n---\n\n".join(prd_parts)
-
-    # 读取 wiki
-    goshawk_wiki = {}
-    if os.path.isdir(wiki_path):
-        for wf in os.listdir(wiki_path):
-            if wf.endswith(".md") and wf not in ("index.md", "log.md", "_scratchpad.md"):
-                with open(os.path.join(wiki_path, wf), "r", encoding="utf-8", errors="replace") as f:
-                    goshawk_wiki[wf.replace(".md", "")] = f.read()
 
     import time as _time
     t_start = _time.time()
 
     try:
         goshawk_result = advisor_review(
-            client, prd_content, parallel_result["items"], goshawk_wiki,
+            client, prd_content, parallel_result["items"], wiki_pages,
         )
         elapsed = _time.time() - t_start
 
@@ -417,9 +534,42 @@ def main():
     parser.add_argument("--reviewer", default=os.environ.get("REVIEWER", "default"))
     parser.add_argument("--workspace", default=DEFAULT_WORKSPACE, help="工作目录路径")
     parser.add_argument("--no-parallel", action="store_true", help="关闭并行 Workers，用单 agent 评审")
+    parser.add_argument("--merge", nargs=2, metavar="REVIEWER", help="合并两个 reviewer 的评审结果")
+    parser.add_argument("--non-interactive", action="store_true",
+                        help="非交互模式(CI/CD),禁止 input() 阻塞,缺省值走 fallback")
+    parser.add_argument("--resume", choices=["prompt", "auto", "skip"], default="prompt",
+                        help="session 恢复策略: prompt=询问(默认), auto=自动恢复, skip=忽略旧 session")
     args = parser.parse_args()
 
-    prd_name = args.prd_name or input("PRD 名称: ").strip() or "unnamed"
+    # 非交互模式:设置环境变量,让 _read_input() 和下游模块(post_review 等)都生效
+    if args.non_interactive:
+        os.environ["PECKER_NONINTERACTIVE"] = "1"
+    # 非交互模式下 --resume 默认改为 skip(避免潜在 prompt)
+    if _is_noninteractive() and args.resume == "prompt":
+        args.resume = "skip"
+
+    # 合并模式（--merge）
+    if args.merge:
+        from merge_reviews import load_reviewer_items, merge_reviews, format_merged_report
+        prd_name = args.prd_name or _read_input("PRD 名称: ", fallback="unnamed") or "unnamed"
+        workspace = os.path.abspath(args.workspace)
+        reviewer_a, reviewer_b = args.merge
+        items_a = load_reviewer_items(workspace, prd_name, reviewer_a)
+        items_b = load_reviewer_items(workspace, prd_name, reviewer_b)
+        print(f"[合并] {reviewer_a}: {len(items_a)} 条, {reviewer_b}: {len(items_b)} 条")
+        result = merge_reviews(items_a, items_b, reviewer_a, reviewer_b)
+        report = format_merged_report(result)
+        output_path = os.path.join(workspace, "output", f"PRD_合并报告_{datetime.date.today().strftime('%Y%m%d')}.md")
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(report)
+        print(f"[合并] 共识 {result['agreement']['agreed']} 条，合并后 {result['agreement']['total']} 条")
+        print(f"[合并] 报告: {output_path}")
+        return
+
+    prd_name = args.prd_name or _read_input("PRD 名称: ", fallback="") or "unnamed"
+    if _is_noninteractive() and not args.prd_name:
+        print("[warn] 非交互模式未指定 PRD 名称,使用默认值 'unnamed'")
     workspace = os.path.abspath(args.workspace)
 
     if not os.path.isdir(workspace):
@@ -436,6 +586,9 @@ def main():
     prd_dir = os.path.join(workspace, "prd")
     if not os.path.isdir(prd_dir) or not any(f.endswith(".md") for f in os.listdir(prd_dir)):
         print(f"WARNING: {prd_dir} 中没有 .md 文件，评审可能无法正常进行")
+
+    # 导出 WORKSPACE 给下游（CC 模式下 ClaudeCodeCLIClient 会用它当 subprocess cwd）
+    os.environ["WORKSPACE"] = workspace
 
     # 创建 API 客户端
     client = create_client(api_key=API_KEY, base_url=BASE_URL)
@@ -469,6 +622,18 @@ def main():
     system_prompt = load_system_prompt()
     system_prompt = system_prompt.replace("{{folder_path}}", workspace)
     system_prompt = system_prompt.replace("{{wiki_path}}", wiki_path)
+
+    # 注入评审记忆(含 reviewer 偏好,CC memdir 模式,失败不阻断启动)
+    # P0: 合并 reviewer_memory 到 review_memory,不再单独调 inject_reviewer_context
+    # P1: 优先读 wiki/ 里的记忆页,降级读老 JSON(向后兼容)
+    try:
+        from review_memory import load_memories_for_context
+        mem_context = load_memories_for_context(workspace, reviewer=args.reviewer, wiki_path=wiki_path)
+        if mem_context:
+            system_prompt += "\n\n" + mem_context + "\n"
+    except Exception as e:
+        print(f"  [警告] 加载评审记忆失败（继续启动）: {str(e)[:60]}")
+
     system_blocks = build_system_blocks(system_prompt, workspace=workspace)
 
     # Turn 回调
@@ -477,17 +642,27 @@ def main():
     # Session
     session_file = get_session_path(os.path.join(workspace, "output"), prd_name, args.reviewer)
 
-    # 尝试恢复
+    # 尝试恢复 —— 根据 --resume 策略决定
     resumed = resume_session(os.path.join(workspace, "output"), prd_name)
     if resumed:
         prev_messages, prev_meta = resumed
         if prev_messages:
-            answer = input(f"发现未完成的评审 session，是否恢复？(y/n): ").strip().lower()
-            if answer == "y":
+            if args.resume == "auto":
                 messages = prev_messages
-                print(f"已恢复 {len(messages)} 条消息的会话。\n")
-            else:
+                print(f"[resume=auto] 自动恢复 {len(messages)} 条消息的会话。\n")
+            elif args.resume == "skip":
+                print(f"[resume=skip] 忽略已有 session,开始新评审。")
                 messages = None
+            else:  # prompt
+                answer = _read_input(
+                    f"发现未完成的评审 session,是否恢复？(y/n): ",
+                    fallback="n",
+                ).lower()
+                if answer == "y":
+                    messages = prev_messages
+                    print(f"已恢复 {len(messages)} 条消息的会话。\n")
+                else:
+                    messages = None
         else:
             messages = None
     else:
@@ -517,13 +692,37 @@ def main():
     messages = tool_loop(client, model, system_blocks, messages, workspace, turn_callback=turn_cb)
     save_session_turn(session_file, messages, {"model": model, "turn": "init"})
 
+    # 预读 PRD 和 Wiki（一次读取，Phase 2 / 2.5 共用）
+    prd_content, prd_files = load_prd_content(workspace)
+    wiki_pages = load_wiki_pages(wiki_path)
+
+    # PRD 迭代 Diff 检测（发现上次评审时注入 diff 上下文）
+    diff_context = None
+    try:
+        from prd_diff import detect_previous_review, compute_section_diff, load_previous_decisions, classify_previous_items, build_diff_context
+        prev = detect_previous_review(workspace, prd_name)
+        if prev and prd_content:
+            with open(prev["snapshot_path"], "r", encoding="utf-8", errors="replace") as f:
+                old_prd = f.read()
+            diffs = compute_section_diff(old_prd, prd_content)
+            modified_count = sum(1 for d in diffs if d["status"] in ("modified", "added"))
+            if modified_count > 0:
+                prev_items = load_previous_decisions(prev["report_path"])
+                classified = classify_previous_items(prev_items, diffs)
+                diff_context = build_diff_context(diffs, classified)
+                print(f"  [迭代] 检测到上次评审 ({prev['date']})，{modified_count} 节有变更，{len(prev_items)} 条历史 item")
+            else:
+                print(f"  [迭代] PRD 与上次评审 ({prev['date']}) 无实质变更")
+    except Exception as e:
+        print(f"  [迭代] Diff 检测失败（继续正常评审）: {str(e)[:60]}")
+
     # 并行评审（默认开启）
     parallel_result = None
     if not args.no_parallel:
         print("\n" + "=" * 60)
         print("Phase 2: 并行评审（织布鸟 + 猫头鹰 + 渡鸦 + 鸬鹚）")
         print("=" * 60)
-        parallel_result = run_parallel_review(client, workspace, wiki_path)
+        parallel_result = run_parallel_review(client, workspace, wiki_path, prd_content, prd_files, wiki_pages, diff_context)
 
         if parallel_result and parallel_result["items"]:
             # 把并行评审结果注入对话，让啄木鸟整合
@@ -545,10 +744,12 @@ def main():
 
     # Phase 2.5: 苍鹰交叉校验
     if parallel_result and parallel_result["items"]:
-        messages = run_goshawk_review(client, workspace, wiki_path, parallel_result, model, system_blocks, messages, session_file, turn_cb)
+        messages = run_goshawk_review(client, workspace, wiki_path, parallel_result, model, system_blocks, messages, session_file, turn_cb, prd_content, wiki_pages)
 
-    # 多轮交互
-    while True:
+    # 多轮交互 —— 非交互模式下跳过,直接进入后处理
+    if _is_noninteractive():
+        print("\n[non-interactive] 跳过多轮对话环节,直接进入后处理链。")
+    while not _is_noninteractive():
         try:
             user_input = input("\n你: ").strip()
         except (EOFError, KeyboardInterrupt):

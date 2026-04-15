@@ -1,0 +1,200 @@
+# 啄木鸟评审维度配置
+# PM 可在 Obsidian 中编辑此文件，修改规则、调整权重、禁用特定规则
+# workspace 本地副本（workspace/review-rules/review-dimensions.yaml）可覆盖全局配置
+
+dimensions:
+  structure:
+    name: "结构层"
+    codename: "织布鸟"
+    model: "sonnet"
+    wiki_keywords: ["模板", "格式", "规范", "brief", "结构", "追溯", "版本", "目录"]
+    rules: |
+      逐条检查以下 5 项，每条都必须给出 pass 或 fail 判定：
+
+      V-02 文档版本与变更追踪：
+        检查项：PRD 是否有版本历史表？每个版本是否标注了修订内容和修订人？
+        fail 条件：无版本历史表，或最新版本未标注修订内容。
+        severity: should
+
+      V-03 信息密度：
+        检查项：逐段扫描 PRD，标记以下反模式：
+        - 重复说明同一个功能（如"支持筛选"在多处重复描述但无新增信息）
+        - 堆砌背景/法规引用但与开发需求无关的段落
+        - "等"、"相关"、"类似"等模糊指代（开发无法据此实现）
+        fail 条件：≥5 处模糊指代或≥3 段纯背景堆砌。severity: should
+
+      V-04 功能需求列表（FR）完整性：
+        检查项：PRD 是否有 FR 列表（FR-01, FR-02...）？每个 FR 是否覆盖了文档中描述的所有核心功能？
+        方法：列出 PRD 中描述了但 FR 列表未覆盖的功能点。
+        fail 条件：有功能描述但无对应 FR 编号。severity: must
+
+      V-05 信息自洽性：
+        检查项：PRD 内部引用是否自洽？
+        具体检查：
+        - 字段名在不同章节是否一致（如 A 章叫"仲裁机构"，B 章叫"仲裁委员会"）
+        - 枚举值在不同位置是否一致（如筛选项和数据源定义的枚举值是否匹配）
+        - 规则描述是否矛盾（如 A 处说"默认按时间降序"，B 处说"按发布日期升序"）
+        fail 条件：发现任何不一致。severity: must
+
+      V-06 章节完整性：
+        检查项：对照以下必要章节清单，检查 PRD 是否缺少：
+        - [ ] 技术约定节（框架、鉴权、基础路径）
+        - [ ] 数据源定义（物理表/ES 索引/API）
+        - [ ] 字段映射表（前端展示字段 → 数据源字段）
+        - [ ] 功能需求列表（FR 编号）
+        - [ ] 排序规则
+        - [ ] 筛选规则
+        - [ ] 分页规格
+        - [ ] 异常/空态处理（四态 UI 或等价描述）
+        fail 条件：缺少上述任意一个章节且未注明"不适用"。severity: must
+    checklist:
+      - rule_id: "V-02"
+        name: "文档版本与变更追踪"
+        enabled: true
+      - rule_id: "V-03"
+        name: "信息密度"
+        enabled: true
+      - rule_id: "V-04"
+        name: "FR 列表完整性"
+        enabled: true
+      - rule_id: "V-05"
+        name: "信息自洽性"
+        enabled: true
+      - rule_id: "V-06"
+        name: "章节完整性"
+        enabled: true
+
+  quality:
+    name: "质量层"
+    codename: "猫头鹰"
+    model: "sonnet"
+    wiki_keywords: ["逻辑", "一致", "合规", "完整", "质量", "矛盾", "歧义", "边界"]
+    rules: |
+      逐条检查以下 6 项，每条都必须给出 pass 或 fail 判定：
+
+      V-07 逻辑一致性（交叉矛盾检测）：
+        检查项：在 PRD 内部寻找以下矛盾：
+        - 排序规则与字段映射矛盾（如"按发布日期排序"但字段映射表没有发布日期字段）
+        - 筛选项与数据源矛盾（如"按地区筛选"但 DDL 中没有地区字段）
+        - 不同章节对同一功能的描述矛盾（如 A 处说"默认 20 条"，B 处说"默认 10 条"）
+        - 移动端与 Web 端描述矛盾（除非标注为"有意的端差异"）
+        方法：提取 PRD 中所有规则/参数值，交叉比对。
+        fail 条件：发现任何矛盾。severity: must
+
+      V-08 歧义检测：
+        检查项：标记以下歧义表述：
+        - "等"（如"支持筛选仲裁机构、案由等"——"等"包含什么？）
+        - "相关"（如"展示相关字段"——哪些字段？）
+        - "类似"（如"类似企查查的展示方式"——具体哪个页面？）
+        - "适当"/"合理"（如"适当截断长文本"——多少字截断？）
+        - "参考"（如"参考现有模块"——哪个模块的哪个功能？）
+        每处歧义必须引用原文位置。
+        fail 条件：≥3 处影响开发实现的歧义。severity: must
+
+      V-09 边界条件覆盖：
+        检查项：对 PRD 中每个功能点，检查是否覆盖了以下边界场景：
+        - 数据为空时的展示（空态）
+        - 数据超长时的处理（截断/换行/省略号）
+        - 分页最后一页不足一页时的展示
+        - 筛选条件组合后无结果时的展示
+        - 数值字段为 NULL/0/负值时的展示
+        fail 条件：≥2 个功能点未覆盖边界条件。severity: should
+
+      V-10 数据源可验证性：
+        检查项：PRD 引用的每个数据表/字段/接口是否可验证？
+        - 表名是否与 DDL 一致
+        - 字段名是否与 DDL 一致
+        - 数据类型是否匹配（如 PRD 说"文本"但 DDL 是 int）
+        fail 条件：发现无法验证的数据引用。severity: must
+
+      V-11 功能优先级与依赖：
+        检查项：FR 列表中是否标注了优先级（P0/P1/P2）？
+        是否有依赖关系说明（如"FR-05 依赖 FR-02 的接口"）？
+        fail 条件：FR 数量≥5 但无优先级标注。severity: should
+
+      V-12 异常处理完整性：
+        检查项：对每个涉及外部数据/接口调用的功能，检查：
+        - 接口超时时的展示
+        - 数据加载失败时的展示
+        - 网络断开时的展示
+        是否有统一的异常处理规范（如"通用四态 UI"章节）？
+        fail 条件：有数据加载功能但无任何异常处理描述。severity: must
+    checklist:
+      - rule_id: "V-07"
+        name: "逻辑一致性"
+        enabled: true
+      - rule_id: "V-08"
+        name: "歧义检测"
+        enabled: true
+      - rule_id: "V-09"
+        name: "边界条件覆盖"
+        enabled: true
+      - rule_id: "V-10"
+        name: "数据源可验证性"
+        enabled: true
+      - rule_id: "V-11"
+        name: "功能优先级与依赖"
+        enabled: true
+      - rule_id: "V-12"
+        name: "异常处理完整性"
+        enabled: true
+
+  ai_coding:
+    name: "AI Coding 友好度"
+    codename: "渡鸦"
+    model: "opus"  # 需要深度推理
+    wiki_keywords: ["技术", "UI", "伪代码", "字段", "筛选", "DDL", "coding", "开发"]
+    rules: |
+      RC-004~RC-008, RC-013~RC-015，逐条检查：
+
+      RC-004 技术约定节存在（must）：PRD 必须包含技术约定节（框架/鉴权方式/基础路径），不能依赖外部文档独立支撑开发。
+      RC-005 四态 UI 规范已定义（must）：PRD 必须定义加载中/请求失败/筛选无结果/空数据四种 UI 状态的文案与样式。
+      RC-006 图片路径使用相对路径（should）：PRD 中引用的图片应使用相对路径，避免绝对路径导致协作问题。
+      RC-007 复杂联动逻辑有伪代码（should）：复杂联动逻辑、非结构化文本处理等必须有伪代码或流程描述。
+      RC-008 筛选追溯完整（must）：筛选/查询逻辑须从用户操作追溯到 WHERE 条件，中间无断点；非常规逻辑（继承/降级/空值）需有具体示例覆盖。
+      RC-013 伪代码字段可追溯（must）：伪代码中每个字段均可在 DDL 中找到；跨表字段标注 JOIN 来源。
+      RC-014 筛选逻辑追溯到 WHERE（must）：筛选/查询逻辑从用户操作追溯到 WHERE 条件，中间无断点。
+      RC-015 非常规逻辑有示例（should）：非常规逻辑（继承/降级/空值）须有具体示例覆盖。
+    checklist:
+      - rule_id: "RC-004"
+        name: "技术约定节存在"
+        enabled: true
+      - rule_id: "RC-005"
+        name: "四态 UI 规范已定义"
+        enabled: true
+      - rule_id: "RC-006"
+        name: "图片路径使用相对路径"
+        enabled: true
+      - rule_id: "RC-007"
+        name: "复杂联动逻辑有伪代码"
+        enabled: true
+      - rule_id: "RC-008"
+        name: "筛选追溯完整"
+        enabled: true
+      - rule_id: "RC-013"
+        name: "伪代码字段可追溯"
+        enabled: true
+      - rule_id: "RC-014"
+        name: "筛选逻辑追溯到 WHERE"
+        enabled: true
+      - rule_id: "RC-015"
+        name: "非常规逻辑有示例"
+        enabled: true
+
+  data_quality:
+    name: "数据质量"
+    codename: "鸬鹚"
+    model: "sonnet"  # haiku 对复杂字段映射判定不够稳定，升级到 sonnet
+    wiki_keywords: ["字段", "映射", "DDL", "数值", "数据", "JOIN"]
+    rules: |
+      RC-009~RC-010，逐条检查：
+
+      RC-009 字段映射一致性（must）：字段映射表中字段名与物理表 DDL 一致；跨表字段须标注 JOIN 来源和优先级。
+      RC-010 数值类字段标注来源（must）：数值类字段（分页数/导出上限/阈值）须标注来源或标注 TBD；跨表字段须说明空值降级处理。
+    checklist:
+      - rule_id: "RC-009"
+        name: "字段映射一致性"
+        enabled: true
+      - rule_id: "RC-010"
+        name: "数值类字段标注来源"
+        enabled: true

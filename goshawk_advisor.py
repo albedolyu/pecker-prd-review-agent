@@ -9,11 +9,15 @@
 
 import argparse
 import json
+import random
 import os
 import copy
 
 from dotenv import load_dotenv
 from agent_config import MODEL_TIERS
+from logger import get_logger
+
+log = get_logger("goshawk")
 
 # ============================================================
 # 苍鹰 ASCII Art
@@ -79,7 +83,8 @@ SUBMIT_ADVISOR_REVIEW_TOOL = {
             },
             "additional_findings": {
                 "type": "array",
-                "description": "被所有 Worker 遗漏但有明确规则依据的问题，最多 2 条",
+                "description": "被所有 Worker 遗漏但有明确规则依据的问题，最多 2 条(硬约束)",
+                "maxItems": 2,
                 "items": {
                     "type": "object",
                     "properties": {
@@ -197,12 +202,7 @@ def _build_advisor_user_message(prd_content, worker_results, wiki_pages=None):
 def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=DEFAULT_MODEL):
     """
     苍鹰交叉校验主函数
-    - client: anthropic.Anthropic 实例（可传入或 None 自动创建）
-    - prd_content: PRD 全文
-    - worker_results: 合并后的改进项列表（含 id/dimension/location/issue 等）
-    - wiki_pages: dict {页面标题: 页面内容}，可选
-    - model: 使用的模型，默认 claude-opus-4-6
-    返回: AdvisorResult dict
+    含指数退避重试 + tool_use 检测 + 催促重试 + 文本兜底
     """
     if client is None:
         client = _make_client()
@@ -210,22 +210,73 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
     print(GOSHAWK_ART)
 
     user_msg = _build_advisor_user_message(prd_content, worker_results, wiki_pages)
+    messages = [{"role": "user", "content": user_msg}]
 
-    response = client.create(
-        model=model,
-        max_tokens=4096,
-        system=GOSHAWK_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_msg}],
-        tools=[SUBMIT_ADVISOR_REVIEW_TOOL],
-        tool_choice={"type": "any"},  # 强制使用工具输出
-    )
+    import time
 
-    # 从 response 中提取 tool_use 结果
+    def _call(msgs):
+        return client.create(
+            model=model,
+            max_tokens=4096,
+            system=GOSHAWK_SYSTEM_PROMPT,
+            messages=msgs,
+            tools=[SUBMIT_ADVISOR_REVIEW_TOOL],
+            tool_choice={"type": "any"},
+        )
+
+    # 指数退避重试
+    max_retries = 2
+    response = None
+    for attempt in range(max_retries + 1):
+        try:
+            response = _call(messages)
+            break
+        except Exception as e:
+            if attempt == max_retries:
+                raise
+            delay = 2 ** (attempt + 1) + random.uniform(0, 1)
+            print(f"  苍鹰 API 异常 (第{attempt + 1}次)，{delay:.1f}s 后重试: {str(e)[:60]}")
+            time.sleep(delay)
+
+    # Tool 调用检测：没有 tool_use 时催促重试
     result = _extract_advisor_result(response)
+    has_tool = any(block.type == "tool_use" for block in response.content)
+
+    if not has_tool:
+        print("  苍鹰未调用 tool，催促重试...")
+        text_parts = "\n".join(block.text for block in response.content if block.type == "text")
+        followup_msgs = messages + [
+            {"role": "assistant", "content": text_parts},
+            {"role": "user", "content": "请使用 submit_advisor_review 工具提交你的审核结果。"},
+        ]
+        time.sleep(2 + random.uniform(0, 0.5))
+        try:
+            response2 = _call(followup_msgs)
+            result2 = _extract_advisor_result(response2)
+            has_tool2 = any(block.type == "tool_use" for block in response2.content)
+            if has_tool2:
+                result = result2
+                response = response2
+        except Exception:
+            pass
+
     result["verdict"] = "REVIEWED"
     result["model_used"] = model
 
     return result
+
+
+async def advisor_review_async(client, prd_content, worker_results, wiki_pages=None, model=DEFAULT_MODEL):
+    """苍鹰交叉校验异步版本（在线程池中执行同步逻辑）"""
+    import asyncio
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        None, lambda: advisor_review(client, prd_content, worker_results, wiki_pages, model)
+    )
+
+
+#: 漏报补充硬上限(schema + parser 双保险,防止模型绕过 schema)
+MAX_ADDITIONAL_FINDINGS = 2
 
 
 def _extract_advisor_result(response):
@@ -233,9 +284,16 @@ def _extract_advisor_result(response):
     for block in response.content:
         if block.type == "tool_use" and block.name == "submit_advisor_review":
             data = block.input
+            additional = data.get("additional_findings", []) or []
+            # 兜底截断:即使模型不遵守 schema maxItems,parser 层强制执行硬上限
+            if len(additional) > MAX_ADDITIONAL_FINDINGS:
+                log.warning(
+                    f"苍鹰返回 {len(additional)} 条漏报补充,超出硬上限 {MAX_ADDITIONAL_FINDINGS},截断"
+                )
+                additional = additional[:MAX_ADDITIONAL_FINDINGS]
             return {
                 "flagged_as_false_positive": data.get("flagged_as_false_positive", []),
-                "additional_findings": data.get("additional_findings", []),
+                "additional_findings": additional,
                 "conflict_resolutions": data.get("conflict_resolutions", []),
                 "confidence": data.get("confidence", 0.0),
             }
@@ -296,8 +354,11 @@ def apply_advisor_result(review_items, advisor_result):
             except (ValueError, IndexError):
                 pass
 
-    for i, finding in enumerate(advisor_result.get("additional_findings", [])[:2], start=1):
+    # B4: 苍鹰补充项的 confidence 需要衰减(is_supplement=True)
+    from cuckoo_parser import compute_confidence
+    for i, finding in enumerate(advisor_result.get("additional_findings", [])[:MAX_ADDITIONAL_FINDINGS], start=1):
         new_id = f"R-{max_num + i:03d}"
+        evi_type = finding.get("evidence_type", "A")
         new_item = {
             "id": new_id,
             "rule_id": finding.get("rule_id", ""),
@@ -305,13 +366,14 @@ def apply_advisor_result(review_items, advisor_result):
             "issue": finding.get("issue", ""),
             "suggestion": finding.get("suggestion", ""),
             "severity": finding.get("severity", "should"),
-            "evidence_type": finding.get("evidence_type", "A"),
+            "evidence_type": evi_type,
             "evidence_content": finding.get("evidence_content", finding.get("evidence", "")),
+            "confidence_score": compute_confidence(evi_type, is_supplement=True),  # B4
             "dimension": "苍鹰补充",
             "source": "苍鹰补充",
         }
         items.append(new_item)
-        print(f'  苍鹰：所有鸟都没看到这个？苍鹰补充 {new_id}。')
+        print(f'  苍鹰:所有鸟都没看到这个?苍鹰补充 {new_id} (confidence={new_item["confidence_score"]}).')
 
     # 3. 处理冲突调解
     for resolution in advisor_result.get("conflict_resolutions", []):

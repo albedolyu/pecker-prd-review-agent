@@ -378,11 +378,14 @@ def _match_signal_to_item(signal, item):
     1. 文件路径匹配：信号 file 字段含 location/problem 中的模块名 → +2
     2. 关键词匹配：location+problem 关键词出现在信号 content+file 中，每词 +1
     3. 信号类型亲和：signal_type 与 location/problem 语义对应 → +1
+
+    返回 (matched: bool, confidence: float)
+    confidence = score 归一化到 0~1（score/max_possible_score），匹配失败时为 0.0
     """
     location = item.get("location", "").lower()
     problem = item.get("problem", "").lower()
     if not location and not problem:
-        return False
+        return False, 0.0
 
     signal_content = signal.get("content", "").lower()
     signal_file = signal.get("file", "").lower()
@@ -390,16 +393,17 @@ def _match_signal_to_item(signal, item):
     item_text = location + " " + problem
 
     score = 0
+    # 理论最高分：路径(2) + 关键词(上限取5) + 类型亲和(1) = 8
+    max_score = 8
 
     # --- 1. 文件路径匹配 ---
-    # 取 signal file 的路径各段（目录名、文件名去扩展），看是否出现在 item 文本中
     if signal_file:
         import os as _os
         file_parts = re.split(r'[/\\.\-_]', signal_file)
         for part in file_parts:
             if len(part) >= 2 and part in item_text:
                 score += 2
-                break  # 只加一次
+                break
 
     # --- 2. 关键词匹配（双语，精炼停用词） ---
     stop_words = {
@@ -414,7 +418,7 @@ def _match_signal_to_item(signal, item):
             score += 1
 
     # --- 3. 信号类型亲和 ---
-    signal_type = signal.get("signal_type", "").lower()
+    signal_type = signal.get("type", signal.get("signal_type", "")).lower()
     type_affinity = {
         "assumption":        ["未说明", "待确认", "缺失", "assumption", "unclear"],
         "field_inconsistency": ["字段", "映射", "field", "ddl", "一致"],
@@ -425,9 +429,11 @@ def _match_signal_to_item(signal, item):
     for kw in keywords_for_type:
         if kw in item_text:
             score += 1
-            break  # 类型亲和每个 type 只加一次
+            break
 
-    return score >= 2
+    matched = score >= 2
+    confidence = min(score / max_score, 1.0) if matched else 0.0
+    return matched, confidence
 
 
 def evaluate_outcomes(review_report_path, signals):
@@ -448,10 +454,13 @@ def evaluate_outcomes(review_report_path, signals):
 
     for item in items:
         related_signals = []
+        max_confidence = 0.0
         for idx, sig in enumerate(signals):
-            if _match_signal_to_item(sig, item):
+            matched, confidence = _match_signal_to_item(sig, item)
+            if matched:
                 related_signals.append(sig)
                 matched_signal_indices.add(idx)
+                max_confidence = max(max_confidence, confidence)
 
         has_downstream_issue = len(related_signals) > 0
 
@@ -471,6 +480,7 @@ def evaluate_outcomes(review_report_path, signals):
             "severity": item["severity"],
             "status": item["status"],
             "outcome": outcome,
+            "confidence": max_confidence,  # 最强匹配的置信度
             "related_signals": related_signals,
         })
 
@@ -535,17 +545,19 @@ def update_rule_scores(outcomes, rules_file, workspace=None, prd_name=None):
     for outcome in outcomes:
         if outcome["outcome"] in ("missed", "no_signal"):
             continue
-        # 尝试匹配规则（通过 item_id 或 location 中的规则编号）
         rule_id = _extract_rule_id(outcome)
         if not rule_id:
             continue
+        # 匹配置信度：高置信度匹配全量更新，低置信度衰减
+        confidence = outcome.get("confidence", 1.0)
+        effective_alpha = alpha * confidence  # 低置信度时 alpha 缩小，减少误匹配的影响
         for rule in rules_list:
             rid = rule.get("id", rule.get("rule_id", ""))
             if rid and rid == rule_id:
                 old_score = rule.get("impact_score", 0.5)
                 delta = outcome_deltas.get(outcome["outcome"], 0.0)
-                # EMA 更新
-                new_score = alpha * delta + (1 - alpha) * old_score
+                # EMA 更新（按 confidence 加权）
+                new_score = effective_alpha * delta + (1 - effective_alpha) * old_score
                 new_score = max(0.0, min(1.0, new_score))
                 rule["impact_score"] = round(new_score, 3)
                 updated_count += 1
