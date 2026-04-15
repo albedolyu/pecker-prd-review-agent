@@ -195,6 +195,103 @@ def _collect_field_inconsistency_signals(code_dir, prd_file, scope_keywords=None
     return signals
 
 
+def _collect_commit_message_signals(code_dir, scope_keywords=None, since_days=30):
+    """e) commit message 关联信号 — 缺失 ① 闭环关键
+
+    扫 git commit message 抓 'Closes #N' / 'Fixes R-XXX' / 'PRD: ...' 等模式,
+    把代码 commit 反向关联到评审 item id (R-XXX) 或 PRD 议题。
+
+    这是把"啄木鸟评审"和"AI Coding 真实交付"接通的最后一公里。
+    """
+    signals = []
+    git_dir = os.path.join(code_dir, ".git")
+    if not os.path.isdir(git_dir):
+        return signals
+
+    try:
+        result = subprocess.run(
+            ["git", "log", f"--since={since_days} days ago",
+             "--pretty=format:%H|%s|%b---END---"],
+            cwd=code_dir, capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode != 0:
+            return signals
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return signals
+
+    raw = result.stdout
+    commits = [c.strip() for c in raw.split("---END---") if c.strip()]
+
+    # 抓 R-001 / R-XXX / Closes #N / Fixes #N
+    item_id_re = re.compile(r'\b(R-\d+)\b')
+    issue_re = re.compile(r'(?:Closes|Fixes|Refs)\s*#(\d+)', re.IGNORECASE)
+    prd_ref_re = re.compile(r'PRD\s*[:：]\s*(.+?)(?:\n|$)', re.IGNORECASE)
+
+    for c in commits:
+        parts = c.split("|", 2)
+        if len(parts) < 2:
+            continue
+        sha = parts[0]
+        subject = parts[1] if len(parts) > 1 else ""
+        body = parts[2] if len(parts) > 2 else ""
+        full_text = subject + "\n" + body
+
+        # 提取关联的 review item id
+        for m in item_id_re.finditer(full_text):
+            signals.append({
+                "type": "commit_review_link",
+                "sha": sha[:12],
+                "item_id": m.group(1),
+                "content": f"commit {sha[:12]} 关联 {m.group(1)}: {subject[:80]}",
+            })
+        # 提取关联的 GitHub issue
+        for m in issue_re.finditer(full_text):
+            signals.append({
+                "type": "commit_issue_link",
+                "sha": sha[:12],
+                "issue": f"#{m.group(1)}",
+                "content": f"commit {sha[:12]} closes #{m.group(1)}: {subject[:80]}",
+            })
+        # 提取 PRD 引用
+        for m in prd_ref_re.finditer(full_text):
+            signals.append({
+                "type": "commit_prd_link",
+                "sha": sha[:12],
+                "prd_ref": m.group(1).strip(),
+                "content": f"commit {sha[:12]} 引用 PRD '{m.group(1).strip()[:50]}': {subject[:50]}",
+            })
+
+    return signals
+
+
+def _collect_test_failure_signals(code_dir, scope_keywords=None):
+    """f) 测试失败信号 — 缺失 ① 闭环
+
+    跑 pytest --collect-only 找最近变更的 test 文件,grep `xfail` / `skip` /
+    `TODO: enable when PRD clarifies` 类标记,这些是开发认为 PRD 没说清楚但
+    用 test skip 兜底的迹象。
+    """
+    signals = []
+    test_skip_keywords = [
+        "TODO: enable", "skip until PRD", "PRD unclear",
+        "@pytest.mark.skip", "@pytest.mark.xfail",
+        "FIXME PRD", "等 PRD",
+    ]
+    for fp in _walk_code_files(code_dir, scope_keywords):
+        if "test" not in os.path.basename(fp).lower():
+            continue
+        hits = _grep_lines(fp, test_skip_keywords)
+        for line_no, content, keyword in hits:
+            signals.append({
+                "type": "test_skip_for_prd",
+                "file": _relative_path(fp, code_dir),
+                "line": line_no,
+                "content": content,
+                "keyword": keyword,
+            })
+    return signals
+
+
 def _collect_rework_signals(code_dir, scope_keywords=None):
     """c) 返工指标 — 分析 git commit 历史"""
     signals = []
@@ -284,6 +381,9 @@ def collect_signals(code_dir, prd_file=None, scope_keywords=None):
     signals.extend(_collect_field_inconsistency_signals(code_dir, prd_file, scope_keywords))
     signals.extend(_collect_rework_signals(code_dir, scope_keywords))
     signals.extend(_collect_ui_state_signals(code_dir, prd_file, scope_keywords))
+    # 缺失 ① 闭环新增: commit message 关联信号 + test skip 信号
+    signals.extend(_collect_commit_message_signals(code_dir, scope_keywords))
+    signals.extend(_collect_test_failure_signals(code_dir, scope_keywords))
     return signals
 
 

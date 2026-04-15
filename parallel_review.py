@@ -328,14 +328,21 @@ def get_wiki_keywords(workspace=None):
 
 SUBMIT_REVIEW_ITEMS_TOOL = {
     "name": "submit_review_items",
-    "description": "提交评审中发现的问题项。逐条检查 checklist 后，仅提交 fail 的规则。",
+    "description": (
+        "提交评审中发现的问题项。逐条检查 checklist 后,仅提交 fail 的规则。"
+        "全部 pass 时,items 必须为空数组,同时 null_finding_reason 必须填写说明你已逐条看过"
+        "(缺失 ④ Worker 拒答出口:允许承认 PRD 这一维度无问题,而不是硬找)。"
+    ),
     "input_schema": {
         "type": "object",
         "properties": {
             "dimension": {"type": "string", "description": "评审维度"},
             "items": {
                 "type": "array",
-                "description": "仅提交发现问题的规则项。同一规则在多处违反时可提交多条（rule_id 相同但 location 不同）。如果全部规则都通过则提交空数组。",
+                "description": (
+                    "仅提交发现问题的规则项。同一规则在多处违反时可提交多条"
+                    "(rule_id 相同但 location 不同)。如果全部规则都通过则提交空数组。"
+                ),
                 "items": {
                     "type": "object",
                     "properties": {
@@ -350,6 +357,25 @@ SUBMIT_REVIEW_ITEMS_TOOL = {
                     "required": ["rule_id", "location", "issue", "suggestion", "severity", "evidence_type", "evidence_content"],
                 },
             },
+            "confidence_in_findings": {
+                "type": "number",
+                "minimum": 0.0,
+                "maximum": 1.0,
+                "description": (
+                    "你对本次发现的整体置信度 0.0-1.0。如果 PRD 这一维度看完不确定有问题,"
+                    "降低置信度;不要为了凑数硬找。"
+                ),
+                "default": 1.0,
+            },
+            "null_finding_reason": {
+                "type": "string",
+                "description": (
+                    "items 为空时必填:简述你为什么认为本维度无 fail(逐条扫了哪些规则,"
+                    "为什么都 pass)。这是缺失 ④ 的 Worker 拒答出口,胡乱拒答会被苍鹰反驳。"
+                    "items 非空时此字段可为空。"
+                ),
+                "default": "",
+            },
         },
         "required": ["dimension", "items"],
     },
@@ -361,21 +387,28 @@ SUBMIT_REVIEW_ITEMS_TOOL = {
 
 _WORKER_SHARED_RULES = """## 评审要求
 1. 仔细阅读 PRD 内容和相关知识库页面
-2. 仅关注你负责的评审维度，不要越界评审其他维度
-3. 逐条对照检查清单，每条规则都要检查
-4. 同一条规则如果在多个位置违反，每个位置单独提交一条（rule_id 相同但 location 不同）
-5. 每条改进项必须有明确依据（A=内部知识, B=评审规则, C=外部参考）
+2. **严格只评审你 owner=自己 的规则** — 缺失 ② Worker 边界互斥:
+   review-dimensions.yaml 给每条规则标了 owner,你只输出 owner=本维度的 fail。
+   即使你看到其他维度的 owner 的规则违反,也禁止报告(那条规则会被对应 worker 处理)。
+   越界报告会被苍鹰交叉校验降权 + 杜鹃 verdict 扣分。
+3. 逐条对照检查清单,每条规则都要检查
+4. 同一条规则如果在多个位置违反,每个位置单独提交一条(rule_id 相同但 location 不同)
+5. 每条改进项必须有明确依据(A=内部知识, B=评审规则, C=外部参考)
 6. 找不到依据的改动不得提出
-7. 评审完成后，使用 submit_review_items 工具提交（全部通过则提交空数组）
+7. **允许承认无问题** — 缺失 ④ Worker 拒答出口:
+   如果本维度逐条看完没发现 fail,提交空 items 数组并填写 null_finding_reason 说明
+   你扫了哪些规则、为什么都 pass。**禁止为了凑数硬找问题**。
+8. 评审完成后,使用 submit_review_items 工具提交
 
 ## 依据分类
-- A（内部知识）：引用 wiki 页面，标注页面名
-- B（评审规则）：引用规则编号和原文
-- C（外部参考）：竞品/行业惯例，必须标记「待确定⚠️」
+- A(内部知识):引用 wiki 页面,**严格使用 [[页面名]] 双方括号格式**,页面名必须在
+  refs 清单中精确匹配(见后面的真实依据清单)。禁止使用《》书名号或其他括号。
+- B(评审规则):引用规则编号和原文(RC-XXX 或 V-XX,必须在 refs 清单中)
+- C(外部参考):竞品/行业惯例,**必须**标记「⚠️ 待确定」或「外部参考」字样
 
 ## 严重度
-- must：必须修改，不改会导致 PRD 无法正确指导开发
-- should：建议修改，改了会提升 PRD 质量"""
+- must:必须修改,不改会导致 PRD 无法正确指导开发
+- should:建议修改,改了会提升 PRD 质量"""
 
 _WORKER_SYSTEM_TEMPLATE = """你是「{codename}」，啄木鸟评审团的 {dimension_name} 评审员。
 
@@ -541,13 +574,22 @@ def _build_real_refs_section(workspace):
                     except (OSError, UnicodeDecodeError):
                         continue
 
-    # 2. 扫 wiki/ 抽所有页面名（去 .md 扩展名，排除隐藏文件）
-    wiki_pages = []
+    # 2. 扫 wiki/ 抽所有页面名(去 .md 扩展名,排除隐藏文件)
+    # 缺失 ⑤ A 类新鲜度: 同时记录 mtime,按 30/90/180 天分级标注,worker 自然会偏好新页面
+    import time as _time
+    now_ts = _time.time()
+    wiki_pages = []  # [(name, age_days)]
     wiki_dir = os.path.join(workspace, "wiki")
     if os.path.isdir(wiki_dir):
         for fn in sorted(os.listdir(wiki_dir)):
             if fn.endswith(".md") and not fn.startswith("."):
-                wiki_pages.append(fn[:-3])
+                fp = os.path.join(wiki_dir, fn)
+                try:
+                    mtime = os.path.getmtime(fp)
+                    age_days = int((now_ts - mtime) / 86400)
+                except OSError:
+                    age_days = 0
+                wiki_pages.append((fn[:-3], age_days))
 
     if not rule_ids and not wiki_pages:
         return ""
@@ -576,14 +618,25 @@ def _build_real_refs_section(workspace):
         lines.append("")
 
     if wiki_pages:
-        lines.append(f"### 可用 wiki 页面（{len(wiki_pages)} 条，仅用于 evidence_type=A）")
+        lines.append(f"### 可用 wiki 页面({len(wiki_pages)} 条,仅用于 evidence_type=A)")
         lines.append("")
-        lines.append("**正例**：`**依据**: [A] [[约束-接口命名规范]] 第 3 节约定所有 endpoint 必须 /api/v1 前缀`")
-        lines.append("**反例**：`**依据**: [A] 知识库《约束-接口命名规范》...`  ← 书名号会被判 failed")
-        lines.append("**反例**：`**依据**: [A] [[不存在的页面]]`  ← 页面不在下表会被判 failed")
+        lines.append("**正例**:`**依据**: [A] [[约束-接口命名规范]] 第 3 节约定所有 endpoint 必须 /api/v1 前缀`")
+        lines.append("**反例**:`**依据**: [A] 知识库《约束-接口命名规范》...`  <- 书名号会被判 failed")
+        lines.append("**反例**:`**依据**: [A] [[不存在的页面]]`  <- 页面不在下表会被判 failed")
         lines.append("")
-        for p in wiki_pages:
-            lines.append(f"- `[[{p}]]`")
+        lines.append("**新鲜度标注** (缺失 ⑤): `🟢 新鲜` <30天 / `🟡 一般` 30-90天 / `🟠 旧` 90-180天 / `🔴 过期` >180天")
+        lines.append("过期的 wiki 页面优先级低,如果新页面也能引用,优先用新的。")
+        lines.append("")
+        for p, age_days in wiki_pages:
+            if age_days < 30:
+                badge = "🟢"
+            elif age_days < 90:
+                badge = "🟡"
+            elif age_days < 180:
+                badge = "🟠"
+            else:
+                badge = "🔴"
+            lines.append(f"- {badge} `[[{p}]]` ({age_days}d)")
         lines.append("")
 
     return "\n".join(lines)

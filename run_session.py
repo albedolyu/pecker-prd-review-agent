@@ -539,7 +539,17 @@ def main():
                         help="非交互模式(CI/CD),禁止 input() 阻塞,缺省值走 fallback")
     parser.add_argument("--resume", choices=["prompt", "auto", "skip"], default="prompt",
                         help="session 恢复策略: prompt=询问(默认), auto=自动恢复, skip=忽略旧 session")
+    parser.add_argument("--auto-decide", choices=["off", "by-confidence", "accept-all", "reject-all"],
+                        default="off",
+                        help=("缺失 ⑥ Phase 3 批量决策: by-confidence 按 confidence 自动 Y/N "
+                              "(>=0.8 接受, <0.5 驳回, 中间挂起);accept-all 全 Y;reject-all 全 N"))
     args = parser.parse_args()
+
+    # 缺失 ⑥ 自动检测 nohup/CI 等无 stdin 场景,自动启用非交互
+    # (避免用户忘记加 --non-interactive 导致进程卡死)
+    if not sys.stdin.isatty() and not args.non_interactive:
+        print("[auto] 检测到 stdin 非 tty (nohup/CI/管道),自动启用 --non-interactive")
+        args.non_interactive = True
 
     # 非交互模式:设置环境变量,让 _read_input() 和下游模块(post_review 等)都生效
     if args.non_interactive:
@@ -547,6 +557,12 @@ def main():
     # 非交互模式下 --resume 默认改为 skip(避免潜在 prompt)
     if _is_noninteractive() and args.resume == "prompt":
         args.resume = "skip"
+    # 缺失 ⑥ 非交互模式下 --auto-decide 默认 by-confidence
+    if _is_noninteractive() and args.auto_decide == "off":
+        args.auto_decide = "by-confidence"
+        print(f"[auto] 非交互模式自动启用 --auto-decide=by-confidence")
+    # 设到环境让 post_review 链消费
+    os.environ["PECKER_AUTO_DECIDE"] = args.auto_decide
 
     # 合并模式（--merge）
     if args.merge:

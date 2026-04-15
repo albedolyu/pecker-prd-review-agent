@@ -206,7 +206,7 @@ def run_post_review(workspace, wiki_path, prd_name, reviewer, model_tier, parall
 
         items_for_report = parallel_result["items"] if parallel_result else []
         peck = parallel_result.get("peck_score") if parallel_result else None
-        # 工程化修复层（借鉴百灵 riskbird_test_fixer）: 补齐 evidence_type + 调 verify_evidence 回写 verification_status
+        # 工程化修复层(借鉴百灵 riskbird_test_fixer): 补齐 evidence_type + 调 verify_evidence 回写 verification_status
         if items_for_report:
             try:
                 from review_fixer import fix_review_items
@@ -216,6 +216,30 @@ def run_post_review(workspace, wiki_path, prd_name, reviewer, model_tier, parall
                       f"未验证 {_fix_stats['unchecked']}, A/B 降权 {_fix_stats['downgraded']}")
             except Exception as _e:
                 print(f"  [修复] fix_review_items 失败: {_e}")
+
+        # 缺失 ⑥ Phase 3 批量决策: 非交互模式下按 confidence 自动 Y/N
+        _auto_decide = os.environ.get("PECKER_AUTO_DECIDE", "off")
+        if _auto_decide != "off" and items_for_report:
+            _auto_y = _auto_n = _auto_pending = 0
+            for it in items_for_report:
+                conf = it.get("confidence_score", 0.5)
+                if _auto_decide == "accept-all":
+                    it["status"] = "confirmed"
+                    _auto_y += 1
+                elif _auto_decide == "reject-all":
+                    it["status"] = "rejected"
+                    _auto_n += 1
+                else:  # by-confidence
+                    if conf >= 0.8:
+                        it["status"] = "confirmed"
+                        _auto_y += 1
+                    elif conf < 0.5:
+                        it["status"] = "rejected"
+                        _auto_n += 1
+                    else:
+                        it["status"] = "pending"
+                        _auto_pending += 1
+            print(f"  [auto-decide={_auto_decide}] Y={_auto_y} N={_auto_n} pending={_auto_pending}")
         if items_for_report and prd_content_for_report:
             report = build_actionable_report(items_for_report, prd_content_for_report, prd_name, reviewer, peck)
             if report:
@@ -231,6 +255,26 @@ def run_post_review(workspace, wiki_path, prd_name, reviewer, model_tier, parall
                 with open(items_json_path, "w", encoding="utf-8") as f:
                     _json.dump(items_for_report, f, ensure_ascii=False, indent=2)
                 print(f"  [报告] 结构化 items 已落盘: {items_json_path}")
+
+    # 5.6 缺失 ③ C 类回写 wiki: 把 PM 已确认的 C 类升级为 wiki 决策页
+    with _step(step_results, "C类回写wiki", required=False):
+        try:
+            from promote_c_to_wiki import promote
+            from datetime import datetime as _dt2
+            _date_tag = _dt2.now().strftime('%Y%m%d')
+            # 只在 auto-decide 接受了 C 类的情况下执行(避免污染 wiki)
+            if items_for_report and any(
+                (it.get("evidence_type") or "").upper() == "C" and it.get("status") == "confirmed"
+                for it in items_for_report
+            ):
+                items_json_path_for_promote = os.path.join(workspace, "output", f"review_items_{_date_tag}.json")
+                if os.path.isfile(items_json_path_for_promote):
+                    print(f"  [promote] 检测到 C 类已确认 item,升级为 wiki 决策页...")
+                    promote(workspace, items_file=items_json_path_for_promote, dry_run=False)
+            else:
+                print(f"  [promote] 无 C 类已确认 item,跳过")
+        except Exception as _e:
+            print(f"  [promote] C 类回写失败: {_e}")
 
     # 6. 推送 wiki
     with _step(step_results, "Wiki push", required=False):
