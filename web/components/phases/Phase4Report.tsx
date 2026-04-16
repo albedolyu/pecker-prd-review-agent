@@ -199,6 +199,43 @@ export function Phase4Report() {
         </CardContent>
       </Card>
 
+      {/* ========== CC-pattern: 成本归因(如果后端返回了 cost_breakdown) ========== */}
+      {reviewResult?.cost_breakdown && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="font-mono uppercase tracking-wider">
+                成本归因
+              </span>
+              <span className="h-px flex-1 bg-border" />
+              <span className="font-mono tabular-nums">
+                $
+                {Object.values(
+                  reviewResult.cost_breakdown as Record<string, number>,
+                )
+                  .reduce((a: number, b: number) => a + b, 0)
+                  .toFixed(3)}
+              </span>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-3">
+              {Object.entries(
+                reviewResult.cost_breakdown as Record<string, number>,
+              ).map(([dim, cost]) => (
+                <div
+                  key={dim}
+                  className="rounded-sm border bg-muted/30 px-2 py-1 text-[11px]"
+                >
+                  <span className="text-muted-foreground">{dim}</span>{" "}
+                  <span className="font-mono tabular-nums">
+                    ${(cost as number).toFixed(3)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ========== 3 条出口 ========== */}
       <Card>
         <CardHeader>

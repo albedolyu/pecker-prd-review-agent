@@ -189,6 +189,12 @@ export interface ReviewItem {
   readonly provenance?: ItemProvenance;
   /** 哪些 worker 同时指证了这条 — len ≥ 2 = 共识强信号 */
   readonly cited_by_workers?: ReadonlyArray<string>;
+  /** CC-pattern: 苍鹰 gate 链决策日志 */
+  readonly gate_log?: ReadonlyArray<{
+    type: string;
+    pass: boolean;
+    detail?: string;
+  }>;
   readonly [key: string]: unknown;
 }
 
@@ -215,6 +221,8 @@ export interface ReviewResult {
   readonly usage: Readonly<Record<string, number>>;
   readonly goshawk_summary: Readonly<Record<string, unknown>> | null;
   readonly signature: string;
+  /** CC-pattern: 各维度成本归因(dim_key → USD) */
+  readonly cost_breakdown?: Readonly<Record<string, number>>;
 }
 
 export interface PrecheckRequest {

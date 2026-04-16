@@ -274,6 +274,21 @@ function ItemCard({ item, role, decision, onChange }: ItemCardProps) {
               置信度 {(item.confidence * 100).toFixed(0)}%
             </span>
           )}
+          {/* CC-pattern: gate_log 悬浮显示审核链路 */}
+          {Array.isArray(item.gate_log) && item.gate_log.length > 0 && (
+            <span
+              className="ml-1 cursor-help text-[10px] text-muted-foreground/70 underline decoration-dashed"
+              title={item.gate_log
+                .map(
+                  (g) =>
+                    `${g.pass ? "✓" : "✗"} ${g.type}${g.detail ? ": " + g.detail : ""}`,
+                )
+                .join("\n")}
+            >
+              gate {item.gate_log.filter((g) => g.pass).length}/
+              {item.gate_log.length}
+            </span>
+          )}
         </div>
 
         {/* 问题 */}
