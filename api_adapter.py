@@ -556,8 +556,18 @@ class ClaudeCodeCLIClient:
             raise APIError(f"找不到 claude CLI: {self.claude_bin}。请先安装 Claude Code 并登录")
 
         if proc.returncode != 0:
-            from exceptions import APIError
-            raise APIError(f"claude -p 退出码 {proc.returncode}: {(proc.stderr or proc.stdout)[:300]}")
+            from exceptions import APIError, QuotaExhaustedError
+            err_text = (proc.stderr or proc.stdout)[:500]
+            # P0-3: 配额耗尽专用异常类型,让 UI 能给出"配额重置时间"友好提示
+            if "hit your limit" in err_text or "usage limit" in err_text.lower():
+                import re
+                m = re.search(r"resets\s+([^\"\\]+?)(?:\"|$|\\)", err_text)
+                reset_hint = m.group(1).strip() if m else None
+                raise QuotaExhaustedError(
+                    f"Claude CLI 配额已用完{(', ' + reset_hint + ' 重置') if reset_hint else ''}",
+                    reset_hint=reset_hint,
+                )
+            raise APIError(f"claude -p 退出码 {proc.returncode}: {err_text[:300]}")
 
         stdout = (proc.stdout or "").strip()
         if not stdout:
@@ -591,8 +601,17 @@ class ClaudeCodeCLIClient:
         if structured_tool is not None:
             parsed = self._parse_json_from_text(text_result, structured_tool["name"])
             if parsed is None:
-                log.warning(f"[cc_client] tool={structured_tool['name']} JSON 解析失败，返回空壳")
-                parsed = self._empty_tool_fallback(structured_tool)
+                # P0-2: JSON 解析失败不能静默返回空壳(会被上游当成"评审无问题")
+                # 改为抛 APIError,让 worker error 上报链路接管
+                from exceptions import APIError
+                log.error(
+                    f"[cc_client] tool={structured_tool['name']} JSON 解析失败, "
+                    f"text_result 前 200 字: {text_result[:200]}"
+                )
+                raise APIError(
+                    f"CLI JSON parse failed for tool {structured_tool['name']} "
+                    f"(text_result {len(text_result)} chars)"
+                )
             import uuid as _uuid
             tool_calls.append({
                 "id": f"toolu_{_uuid.uuid4().hex[:16]}",

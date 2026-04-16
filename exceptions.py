@@ -17,6 +17,17 @@ class APIError(PeckerError):
         super().__init__(message)
 
 
+class QuotaExhaustedError(APIError):
+    """Claude CLI 配额耗尽（P0-3）
+
+    区别于 generic APIError，UI 可给出"配额已用完，重置时间"的友好提示，
+    不让用户误以为评审系统故障。
+    """
+    def __init__(self, message, reset_hint=None):
+        self.reset_hint = reset_hint  # 如 "8am (America/Los_Angeles)"
+        super().__init__(message)
+
+
 class WikiError(PeckerError):
     """Wiki 知识库操作失败（读写/锁/路径）"""
     pass

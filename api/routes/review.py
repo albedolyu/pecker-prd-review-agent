@@ -37,6 +37,55 @@ router = APIRouter(tags=["review"])
 
 
 # ============================================================
+# Phase 2 辅助: 全员失败分类(P0-1,抽出来便于单测)
+# ============================================================
+
+def classify_worker_failures(workers_list: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """检查 workers 结果列表,如果全员失败返回 review_failed 的 payload,否则返回 None
+
+    Returns:
+        None: 没有全员失败(正常路径继续)
+        dict: {
+            "reason": "quota_exhausted" | "all_workers_failed",
+            "message": 给用户看的中文消息,
+            "failed_count": int,
+            "total_count": int,
+            "worker_errors": [{"dim": ..., "error": ...}, ...],
+        }
+    """
+    if not workers_list:
+        return None
+    failed_workers = [w for w in workers_list if w.get("error")]
+    failed_count = len(failed_workers)
+    total_count = len(workers_list)
+    if failed_count != total_count:
+        return None  # 部分失败不是全员失败
+
+    def _is_quota_err(w: Dict[str, Any]) -> bool:
+        e = w.get("error") or ""
+        return "hit your limit" in e or "配额" in e or "QuotaExhausted" in e
+
+    all_quota = all(_is_quota_err(w) for w in failed_workers)
+    reason = "quota_exhausted" if all_quota else "all_workers_failed"
+    message = (
+        "Claude CLI 配额已用完,请稍后重试或联系管理员"
+        if all_quota
+        else f"全部 {total_count} 个 worker 失败,请重试"
+    )
+    worker_errors_summary = [
+        {"dim": w.get("dimension", "?"), "error": (w.get("error") or "")[:200]}
+        for w in failed_workers
+    ]
+    return {
+        "reason": reason,
+        "message": message,
+        "failed_count": failed_count,
+        "total_count": total_count,
+        "worker_errors": worker_errors_summary,
+    }
+
+
+# ============================================================
 # 预检 (Phase 1): 扫 wiki + Claude 知识盲区分析
 # ============================================================
 
@@ -233,11 +282,19 @@ async def run_review(req: ReviewRequest, request: Request):
             else:
                 def _on_worker_done(dim, r):
                     emitter.emit_worker_done(dim, r)
-                    # Pattern 21: 记录每个 worker 完成事件
+                    # Pattern 21: 记录每个 worker 完成事件 (P1-3 补 telemetry)
+                    telemetry = r.get("telemetry") if isinstance(r, dict) else None
                     evt.append("worker_done", {
                         "dim": dim,
                         "items_count": len(r.get("items", [])) if isinstance(r, dict) else 0,
                         "error": str(r.get("error", ""))[:200] if isinstance(r, dict) and "error" in r else None,
+                        # P1-3: 持久化 cost/时长/token 用量，支持事后成本分析和性能回归
+                        "duration_ms": telemetry.get("duration_ms") if telemetry else None,
+                        "input_tokens": telemetry.get("input_tokens") if telemetry else None,
+                        "output_tokens": telemetry.get("output_tokens") if telemetry else None,
+                        "cost_usd": telemetry.get("cost_usd") if telemetry else r.get("cost_usd") if isinstance(r, dict) else None,
+                        "model": telemetry.get("model") if telemetry else r.get("model_used") if isinstance(r, dict) else None,
+                        "degraded": telemetry.get("degraded") if telemetry else None,
                     })
 
                 result = await parallel_review(
@@ -248,6 +305,32 @@ async def run_review(req: ReviewRequest, request: Request):
             items = result.get("merged_items", [])
             # Pattern 21: workers 全部完成后 checkpoint
             evt.append("checkpoint", {"workers_done": len(result.get("workers", [])), "items_count": len(items)})
+
+            # P0-1: 全员失败 abort — 所有 worker 都出错时,发 review_failed 不走正常完成路径
+            workers_list = result.get("workers", [])
+            failure_payload = classify_worker_failures(workers_list)
+            if failure_payload is not None:
+                emitter.emit("review_failed", data=failure_payload)
+                evt.append("review_failed", failure_payload)
+                # 直接返回失败标记,不走 ReviewResult.create (避免用户基于 0-items 做下游决策)
+                return {
+                    "status": "failed",
+                    **failure_payload,
+                }
+
+            # 部分失败 + 无 items 的降级提示(非 abort,仅告警)
+            failed_count = sum(1 for w in workers_list if w.get("error"))
+            total_count = len(workers_list)
+            if failed_count > 0 and len(items) == 0:
+                emitter.emit("review_degraded", data={
+                    "failed_count": failed_count,
+                    "total_count": total_count,
+                    "message": f"部分 worker 失败({failed_count}/{total_count}),未获得任何评审项,建议重试",
+                })
+                evt.append("review_degraded", {
+                    "failed_count": failed_count,
+                    "total_count": total_count,
+                })
 
             # 3. 终审 (苍鹰) — 仅标准模式
             if req.mode == "standard" and items:
