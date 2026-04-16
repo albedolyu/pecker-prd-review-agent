@@ -26,6 +26,10 @@ from api.deps import (
 from api.models import ConfirmRequest, ReviewResult, verify_review_result
 from api.stream import ReviewProgressEmitter, sse_review_pipeline
 
+# 预检 wiki scan 缓存(同一 workspace 10 分钟内复用)
+_wiki_scan_cache: Dict[str, Any] = {}
+_WIKI_CACHE_TTL = 600
+
 router = APIRouter(tags=["review"])
 
 
@@ -87,17 +91,25 @@ async def precheck(req: PrecheckRequest, project_root: Path = Depends(get_projec
     """Phase 1 预检: wiki 扫描 + Claude 知识盲区分析。
 
     两步:
-    1. 本地扫 wiki 目录(无 LLM 调用,<1s)
+    1. 本地扫 wiki 目录(无 LLM 调用,<1s) — 10 分钟内复用缓存
     2. 调 Claude Sonnet 做知识盲区分析(~10s)
 
     预检不走 semaphore(短且只读),只对正式评审做并发保护。
     """
+    import time as _time
     ws_dir = get_workspace_dir(req.workspace)
     wiki_path = ws_dir / "wiki"
     if not wiki_path.is_dir():
         wiki_path = project_root / "shared-wiki"
 
-    wiki_scan = _scan_wiki_for_prd(req.prd_content, wiki_path)
+    # 预检缓存:同一 workspace 10 分钟内复用 wiki scan 结果
+    cache_key = req.workspace
+    cached = _wiki_scan_cache.get(cache_key)
+    if cached and (_time.time() - cached["ts"]) < _WIKI_CACHE_TTL:
+        wiki_scan = cached["result"]
+    else:
+        wiki_scan = _scan_wiki_for_prd(req.prd_content, wiki_path)
+        _wiki_scan_cache[cache_key] = {"result": wiki_scan, "ts": _time.time()}
 
     # 调 Claude 做 gap 分析
     try:

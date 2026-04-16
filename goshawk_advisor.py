@@ -137,7 +137,8 @@ SUBMIT_ADVISOR_REVIEW_TOOL = {
 # 默认模型（从 agent_config 统一获取）
 # ============================================================
 
-DEFAULT_MODEL = MODEL_TIERS["opus"]
+# Opus→Sonnet: Opus CLI 2/3 轮 timeout,Sonnet 稳定 30-60s。质量略降但每次跑完。
+DEFAULT_MODEL = MODEL_TIERS["sonnet"]
 
 
 # ============================================================

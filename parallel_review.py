@@ -734,12 +734,22 @@ def _build_worker_messages(prd_content, wiki_pages, dim_key=None, wiki_path=None
             filtered = relevant if relevant else wiki_pages
         else:
             filtered = wiki_pages
+        # strong 页(≥3 关键词命中)= filtered 里和 relevant 交集的;
+        # weak 页 = filtered 里不在 relevant 里的(fallback 到全量时全部算 weak)
+        strong_titles = set(relevant.keys()) if dim_key and dim_key in wk else set()
+
+        WEAK_SUMMARY_CHARS = 500  # weak 页只传前 500 字摘要
+
         parts.append("## 相关知识库页面\n")
         for title, content in filtered.items():
             # 加新鲜度标记（CC memoryAge 模式）
             if wiki_path:
                 fpath = os.path.join(wiki_path, f"{title}.md")
                 content = _add_freshness_note(fpath, content)
+            # strong 页全文, weak 页截断到 500 字摘要
+            is_strong = title in strong_titles or not strong_titles
+            if not is_strong and len(content) > WEAK_SUMMARY_CHARS:
+                content = content[:WEAK_SUMMARY_CHARS] + f"\n\n(... 余 {len(content) - WEAK_SUMMARY_CHARS} 字已省略 — weak 相关页摘要)"
             wiki_char_total += len(content)
             parts.append(f"### {title}\n{content}\n")
 
@@ -1072,7 +1082,7 @@ async def _single_round_async(client, prd_content, wiki_pages, model_tiers, wiki
     # 错峰启动: Windows 下 4 个 claude CLI 子进程同时启动会触发 Node.js libuv assertion
     # (UV_HANDLE_CLOSING / 0xC0000409 STATUS_STACK_BUFFER_OVERRUN),给每个 worker 加 stagger
     async def _staggered(idx, dim_key):
-        await asyncio.sleep(idx * 0.5)
+        await asyncio.sleep(idx * 0.3)  # 0.5→0.3: 省 0.8s 总启动时间
         try:
             result = await _run_worker_async(
                 client, dim_key, prd_content, wiki_pages, model_tiers, rule_perf_history, wiki_path, diff_context
