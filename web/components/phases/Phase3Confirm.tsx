@@ -28,6 +28,7 @@ import { useReviewStore } from "@/lib/store";
 import { ROLES, normalizeDimensionKey, type RoleKey } from "@/lib/roles";
 import {
   reviewApi,
+  auditApi,
   ApiError,
   type ConfirmResponse,
   type ReviewItem,
@@ -95,6 +96,20 @@ export function Phase3Confirm() {
       toast.success(
         `决策已确认:${resp.accepted} 接受 · ${resp.edited} 改写 · ${resp.rejected} 拒绝`,
       );
+      // P0-4: 审计 review_confirmed(fire-and-forget)
+      void auditApi
+        .log({
+          event: "review_confirmed",
+          workspace: reviewResult?.workspace ?? "",
+          prd_name: reviewResult?.prd_name ?? "",
+          extra: {
+            accepted: resp.accepted,
+            rejected: resp.rejected,
+            edited: resp.edited,
+            total: resp.total ?? 0,
+          },
+        })
+        .catch(() => {});
       setPhase(4);
     },
     onError: (e: ApiError) => {

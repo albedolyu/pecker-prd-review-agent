@@ -33,7 +33,10 @@ import { ROLES, WORKER_ROLE_KEYS, type RoleKey } from "@/lib/roles";
 import {
   useReviewStream,
   type WorkerDoneEvent,
+  type ReviewFailedEvent,
+  type ReviewDegradedEvent,
 } from "@/lib/useReviewStream";
+import { auditApi } from "@/lib/api";
 
 import { ProgressRail } from "@/components/ProgressRail";
 import { RoleCard, type RoleCardState } from "@/components/RoleCard";
@@ -64,6 +67,15 @@ export function Phase2Running() {
   const startReview = useCallback(() => {
     startedAtRef.current = Date.now();
     setElapsed(0);
+    // P0-4: 审计 review_started(fire-and-forget,失败不阻塞)
+    void auditApi
+      .log({
+        event: "review_started",
+        workspace,
+        prd_name: prdName || "未命名",
+        extra: { mode },
+      })
+      .catch(() => {});
     void stream.start({
       reviewer,
       workspace,
@@ -186,6 +198,23 @@ export function Phase2Running() {
       }
     }
     return m;
+  }, [stream.events]);
+
+  // ========== P0-1: review_failed / review_degraded 提取(配额或全员失败) ==========
+  const reviewFailedEvent = useMemo(() => {
+    for (let i = stream.events.length - 1; i >= 0; i--) {
+      const e = stream.events[i];
+      if (e?.event === "review_failed") return e as ReviewFailedEvent;
+    }
+    return null;
+  }, [stream.events]);
+
+  const reviewDegradedEvent = useMemo(() => {
+    for (let i = stream.events.length - 1; i >= 0; i--) {
+      const e = stream.events[i];
+      if (e?.event === "review_degraded") return e as ReviewDegradedEvent;
+    }
+    return null;
   }, [stream.events]);
 
   // ========== 终审(苍鹰)状态 ==========
@@ -376,9 +405,39 @@ export function Phase2Running() {
       {stream.state === "error" && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>评审失败</AlertTitle>
+          <AlertTitle>
+            {reviewFailedEvent?.reason === "quota_exhausted"
+              ? "Claude CLI 配额已用完"
+              : reviewFailedEvent
+                ? "评审失败 — 所有编辑都出错"
+                : "评审失败"}
+          </AlertTitle>
           <AlertDescription>
-            {stream.error ?? "未知错误,请重试或返回上一步"}
+            {reviewFailedEvent?.message ??
+              stream.error ??
+              "未知错误,请重试或返回上一步"}
+            {reviewFailedEvent?.worker_errors &&
+              reviewFailedEvent.worker_errors.length > 0 && (
+                <ul className="mt-2 space-y-1 text-xs opacity-80">
+                  {reviewFailedEvent.worker_errors.map((we, i) => (
+                    <li key={i}>
+                      <span className="font-mono">{we.dim}</span>:{" "}
+                      {we.error.slice(0, 120)}
+                    </li>
+                  ))}
+                </ul>
+              )}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* ========== 降级态(部分 worker 失败但未 abort) ========== */}
+      {stream.state !== "error" && reviewDegradedEvent && (
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>部分编辑失败,建议重试</AlertTitle>
+          <AlertDescription>
+            {reviewDegradedEvent.message}
           </AlertDescription>
         </Alert>
       )}

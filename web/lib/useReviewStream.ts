@@ -93,6 +93,24 @@ export interface ErrorEvent extends BaseEvent {
   readonly message: string;
 }
 
+// P0-1: 后端在所有 worker 失败时发 review_failed(走配额耗尽或全员其他失败)
+export interface ReviewFailedEvent extends BaseEvent {
+  readonly event: "review_failed";
+  readonly reason: "quota_exhausted" | "all_workers_failed" | string;
+  readonly message: string;
+  readonly failed_count?: number;
+  readonly total_count?: number;
+  readonly worker_errors?: ReadonlyArray<{ dim: string; error: string }>;
+}
+
+// P0-1: 部分 worker 失败且 merged_items 为空时的降级提示(非致命,不 abort)
+export interface ReviewDegradedEvent extends BaseEvent {
+  readonly event: "review_degraded";
+  readonly failed_count?: number;
+  readonly total_count?: number;
+  readonly message: string;
+}
+
 export type ReviewStreamEvent =
   | UploadedEvent
   | WikiScannedEvent
@@ -101,7 +119,9 @@ export type ReviewStreamEvent =
   | FinalReviewerStartedEvent
   | FinalReviewerDoneEvent
   | ResultEvent
-  | ErrorEvent;
+  | ErrorEvent
+  | ReviewFailedEvent
+  | ReviewDegradedEvent;
 
 // ============================================================
 // SSE 帧解析器
@@ -261,7 +281,12 @@ export function useReviewStream(): UseReviewStreamResult {
             } else if (ev.event === "error") {
               setError(ev.message ?? "评审失败");
               setState("error");
+            } else if (ev.event === "review_failed") {
+              // P0-1: 全员失败 abort,不让 UI 自动推进到 Phase 3
+              setError(ev.message ?? "评审失败");
+              setState("error");
             }
+            // review_degraded 不改 state,只留在 events 里供 UI 读取展示
           }
         }
 

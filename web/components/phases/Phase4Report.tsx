@@ -33,6 +33,7 @@ import {
   reportsApi,
   feishuApi,
   draftsApi,
+  auditApi,
   ApiError,
 } from "@/lib/api";
 import { useReviewStore } from "@/lib/store";
@@ -90,6 +91,15 @@ export function Phase4Report() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     toast.success(`已下载 ${filename}`);
+    // P0-4: 审计 downloaded_report
+    void auditApi
+      .log({
+        event: "downloaded_report",
+        workspace,
+        prd_name: prdName || "未命名",
+        extra: { filename },
+      })
+      .catch(() => {});
   };
 
   // ========== 保存到 wiki ==========
@@ -109,6 +119,15 @@ export function Phase4Report() {
     },
     onSuccess: (resp) => {
       toast.success(`已保存到 wiki${resp.filename ? `: ${resp.filename}` : ""}`);
+      // P0-4: 审计 saved_to_wiki
+      void auditApi
+        .log({
+          event: "saved_to_wiki",
+          workspace,
+          prd_name: prdName || "未命名",
+          extra: { filename: resp.filename ?? "" },
+        })
+        .catch(() => {});
     },
     onError: (e: ApiError) => {
       if (e.status === 403) {
@@ -128,6 +147,15 @@ export function Phase4Report() {
       }),
     onSuccess: (resp) => {
       toast.success(`已推送到飞书${resp.msg_id ? ` (msg_id=${resp.msg_id.slice(0, 12)}...)` : ""}`);
+      // P0-4: 审计 pushed_feishu
+      void auditApi
+        .log({
+          event: "pushed_feishu",
+          workspace,
+          prd_name: prdName || "未命名",
+          extra: { msg_id: resp.msg_id ?? "" },
+        })
+        .catch(() => {});
     },
     onError: (e: ApiError) => {
       if (e.status === 503) {
