@@ -262,6 +262,11 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
 
     result["verdict"] = "REVIEWED"
     result["model_used"] = model
+    # 保存 usage 供成本归因 (CC cost-tracker querySource 模式)
+    result["usage"] = {
+        "input_tokens": response.usage.get("input_tokens", 0) if hasattr(response.usage, 'get') else getattr(response.usage, 'input_tokens', 0),
+        "output_tokens": response.usage.get("output_tokens", 0) if hasattr(response.usage, 'get') else getattr(response.usage, 'output_tokens', 0),
+    }
 
     return result
 
@@ -277,6 +282,9 @@ async def advisor_review_async(client, prd_content, worker_results, wiki_pages=N
 
 #: 漏报补充硬上限(schema + parser 双保险,防止模型绕过 schema)
 MAX_ADDITIONAL_FINDINGS = 2
+
+#: Side Query escalation 单条 item 最大验证次数 (L3 约束)
+MAX_ESCALATIONS = 3
 
 
 def _extract_advisor_result(response):
@@ -311,16 +319,130 @@ def _extract_advisor_result(response):
 # 结果合并
 # ============================================================
 
-def apply_advisor_result(review_items, advisor_result):
+def _verify_wiki_evidence(item, wiki_pages):
+    """Side Query L1: 校验 A 类 evidence 引用的 wiki 页面标题是否真实存在。
+
+    3 层升级链 (CC escalation 模式):
+      L1: wiki 自动验证 — 检查 [[页面名]] 是否在 wiki_pages 中
+      L2: 规则兜底 — evidence_type=A 且 wiki 验证失败 → 降级为 C + advisor_note
+      L3: MAX_ESCALATIONS=3,单条 item 最多验证 3 次
+
+    Returns: (passed: bool, note: str)
+    """
+    import re as _re
+    ev_type = item.get("evidence_type", "")
+    ev_content = item.get("evidence_content", "")
+
+    if ev_type != "A" or not ev_content:
+        return True, ""
+
+    # L1: 提取 [[页面名]] 引用
+    refs = _re.findall(r"\[\[(.+?)\]\]", ev_content)
+    if not refs:
+        return True, ""  # 没有标准引用格式,跳过
+
+    wiki_titles = set(wiki_pages.keys()) if wiki_pages else set()
+    escalation_count = 0
+
+    for ref in refs:
+        if escalation_count >= MAX_ESCALATIONS:
+            break
+        escalation_count += 1
+
+        # 精确匹配 or 模糊匹配(页面名可能是 "约束-接口命名规范" 而引用写 "接口命名规范")
+        found = any(ref == title or ref in title or title in ref for title in wiki_titles)
+        if not found:
+            # L2: 降级为 C 类 + advisor_note
+            item["evidence_type"] = "C"
+            note = f"L2 降级: [[{ref}]] 不在 wiki 中,A→C + ⚠️ 待确定"
+            if "⚠️ 待确定" not in ev_content:
+                item["evidence_content"] = ev_content + " (⚠️ 待确定,wiki 页面不存在)"
+            return False, note
+
+    return True, ""
+
+
+def _build_gate_log(item, advisor_result, fp_map, conflict_map):
+    """为单条 item 构建 gate 决策链 (CC decisionReason 模式)
+
+    gates 列表记录每个检查点的 pass/fail + 原因,供前端 Phase 3 悬浮显示。
+    """
+    gates = []
+    item_id = item.get("id", "")
+
+    # Gate 1: schema 校验 — 必须字段是否齐全
+    required = ("rule_id", "location", "issue", "suggestion", "severity", "evidence_type")
+    missing = [f for f in required if not item.get(f)]
+    gates.append({
+        "type": "schema",
+        "pass": len(missing) == 0,
+        "detail": f"缺少字段: {missing}" if missing else None,
+    })
+
+    # Gate 2: confidence 校验
+    conf = item.get("confidence_score", 1.0)
+    gates.append({
+        "type": "confidence",
+        "pass": conf >= 0.3,
+        "score": conf,
+    })
+
+    # Gate 3: evidence 校验 — verification_status 如果存在
+    v_status = item.get("verification_status", "")
+    if v_status:
+        gates.append({
+            "type": "evidence",
+            "pass": v_status != "retracted",
+            "reason": item.get("verification_reason", ""),
+        })
+
+    # Gate 4: advisor 误报标记
+    if item_id in fp_map:
+        fp = fp_map[item_id]
+        gates.append({
+            "type": "advisor_false_positive",
+            "pass": False,
+            "reason": fp.get("reason", ""),
+            "recommendation": fp.get("recommendation", ""),
+        })
+    else:
+        gates.append({
+            "type": "advisor_false_positive",
+            "pass": True,
+        })
+
+    # Gate 5: advisor 冲突
+    if item_id in conflict_map:
+        res = conflict_map[item_id]
+        gates.append({
+            "type": "advisor_conflict",
+            "pass": True,
+            "resolution": res.get("resolution", ""),
+        })
+
+    return {"gates": gates}
+
+
+def apply_advisor_result(review_items, advisor_result, wiki_pages=None):
     """
     将苍鹰的审核结果合并回改进项列表
-    - 误报：降级 severity 或移除，加 advisor_note
+    - 误报：降级 severity 或移除，加 advisor_note + gate_log
     - 漏报：追加到列表末尾，标记 source="苍鹰补充"
     - 冲突：合并冲突项，保留裁决
-    返回: 合并后的新列表
+    - wiki 验证: A 类 evidence 的 wiki 引用存在性检查 (L1-L3)
+    返回: 合并后的新列表 (每条 item 含 gate_log 字段)
     """
     items = copy.deepcopy(review_items)
     items_by_id = {item["id"]: item for item in items}
+
+    # 预建 fp / conflict 索引,供 gate_log 查询
+    fp_map = {}
+    for fp in advisor_result.get("flagged_as_false_positive", []):
+        fp_map[fp.get("item_id", "")] = fp
+    conflict_map = {}
+    for res in advisor_result.get("conflict_resolutions", []):
+        for cid in res.get("items", []):
+            conflict_map[cid] = res
 
     # 1. 处理误报
     for fp in advisor_result.get("flagged_as_false_positive", []):
@@ -396,6 +518,22 @@ def apply_advisor_result(review_items, advisor_result):
             if cid in items_by_id:
                 items_by_id[cid]["status"] = "MERGED_BY_ADVISOR"
                 items_by_id[cid]["advisor_note"] = f"已合并至 {primary_id}"
+
+    # Side Query L1-L3: wiki 标题验证 (仅在有 wiki_pages 时执行)
+    if wiki_pages:
+        for item in items:
+            passed, note = _verify_wiki_evidence(item, wiki_pages)
+            if not passed:
+                log.info(f"[goshawk] {item.get('id', '?')} wiki 验证: {note}")
+                item.setdefault("advisor_note", "")
+                if item["advisor_note"]:
+                    item["advisor_note"] += "; " + note
+                else:
+                    item["advisor_note"] = note
+
+    # 为每条 item 生成 gate_log (CC decisionReason 模式)
+    for item in items:
+        item["gate_log"] = _build_gate_log(item, advisor_result, fp_map, conflict_map)
 
     # 过滤掉被移除和被合并的（但保留在返回结构中做审计）
     active_items = [

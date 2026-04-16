@@ -178,6 +178,9 @@ _DEFAULT_DIMENSION_WIKI_KEYWORDS = {
 }
 
 # YAML 配置文件名
+# Worker 最大对话轮次 (CC maxTurns 约束: 超过直接走文本兜底)
+MAX_WORKER_TURNS = 2
+
 _YAML_FILENAME = "review-dimensions.yaml"
 # 脚本所在目录（全局 fallback 路径）
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -786,13 +789,30 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
         {"type": "text", "text": dynamic_system},
     ]
 
+    # prompt 指纹日志 (CC firstChangedMessageIndex 模式)
+    # server-side prompt cache 自动匹配 hash,这里记录 hash 方便调试缓存命中
+    import hashlib as _hl
+    static_hash = _hl.md5(_WORKER_SHARED_RULES.encode()).hexdigest()[:8]
+    dynamic_hash = _hl.md5(dynamic_system.encode()).hexdigest()[:8]
+    msg_hash = _hl.md5(json.dumps(messages, ensure_ascii=False).encode()).hexdigest()[:8]
+    log.info(f"[{_cn_label(dim_key)}] prompt_hash static={static_hash} dynamic={dynamic_hash} msg={msg_hash}")
+
+    # 正向工具白名单: tool_choice 里标注维度名,让 submit_review_items 的
+    # dimension 字段被 schema 约束为只能填自己的维度名 (CC allowedTools 模式)
+    dim_constrained_tool = json.loads(json.dumps(SUBMIT_REVIEW_ITEMS_TOOL))
+    dim_constrained_tool["input_schema"]["properties"]["dimension"] = {
+        "type": "string",
+        "const": dim["name"],
+        "description": f"评审维度(必须填 '{dim['name']}')",
+    }
+
     def _call(msgs):
         return client.create(
             model=model,
             max_tokens=8192,
             system=system_blocks,
             messages=msgs,
-            tools=[SUBMIT_REVIEW_ITEMS_TOOL],
+            tools=[dim_constrained_tool],
             tool_choice={"type": "any"},
             retry_policy="worker",
         )
@@ -802,9 +822,11 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
 
     items = _extract_items_from_response(response)
 
-    # Tool 调用检测 + 催促重试 + 文本兜底
-    if not _has_tool_use(response):
-        log.warning(f"[{_cn_label(dim_key)}] 未调用 tool，催促重试")
+    # Tool 调用检测 + 催促重试 + 文本兜底 (CC maxTurns 约束)
+    current_turn = 1  # 已用 1 轮
+    if not _has_tool_use(response) and current_turn < MAX_WORKER_TURNS:
+        current_turn += 1
+        log.warning(f"[{_cn_label(dim_key)}] turn={current_turn}/{MAX_WORKER_TURNS} 未调用 tool,催促重试")
         text = _extract_text(response)
         followup_msgs = messages + [
             {"role": "assistant", "content": text},
@@ -823,15 +845,36 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
             items = _parse_items_from_text(text)
             if items:
                 log.info(f"[{_cn_label(dim_key)}] 从文本中解析出 {len(items)} 条改进项")
+    elif not _has_tool_use(response):
+        # maxTurns 已耗尽,直接走文本兜底
+        log.warning(f"[{_cn_label(dim_key)}] maxTurns={MAX_WORKER_TURNS} 已耗尽,走文本兜底")
+        text = _extract_text(response)
+        if text:
+            items = _parse_items_from_text(text)
+            if items:
+                log.info(f"[{_cn_label(dim_key)}] 文本兜底解析出 {len(items)} 条改进项")
 
     # 过滤非 dict 元素（模型偶尔返回字符串数组而非对象数组）
     items = [item for item in items if isinstance(item, dict)]
 
+    # 强制校正维度名 (防止模型绕过 schema const 约束)
     for item in items:
+        if item.get("dimension") and item["dimension"] != dim["name"]:
+            log.warning(f"[{_cn_label(dim_key)}] 维度越界: {item.get('dimension')} → {dim['name']}")
         item["dimension"] = dim["name"]
 
     # 提取 worker 发现的关键规则 ID（供 scratchpad 跨 worker 共享）
     found_rule_ids = list(set(item.get("rule_id", "") for item in items if item.get("rule_id")))
+
+    # 成本归因 (CC cost-tracker querySource 模式)
+    from api_adapter import compute_call_cost_usd
+    worker_usage = {
+        "input_tokens": response.usage["input_tokens"],
+        "output_tokens": response.usage["output_tokens"],
+        "cache_read_input_tokens": response.usage.get("cache_read_input_tokens", 0),
+        "cache_creation_input_tokens": response.usage.get("cache_creation_input_tokens", 0),
+    }
+    cost_usd = compute_call_cost_usd(model, worker_usage)
 
     return {
         "dimension": dim_key,
@@ -843,6 +886,7 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
             "input_tokens": response.usage["input_tokens"],
             "output_tokens": response.usage["output_tokens"],
         },
+        "cost_usd": cost_usd,
     }
 
 
