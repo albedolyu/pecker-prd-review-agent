@@ -195,6 +195,8 @@ export interface ReviewItem {
     pass: boolean;
     detail?: string;
   }>;
+  /** CC deep #23: 钉选状态 — compact 时不压缩 */
+  readonly pinned?: boolean;
   readonly [key: string]: unknown;
 }
 
