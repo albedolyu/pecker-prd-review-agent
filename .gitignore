@@ -20,6 +20,11 @@ logs/
 eval/results/
 eval/__pycache__/
 
+# Claude Code 本地产物（草稿 / worktrees / 本地权限配置）
+.pecker_drafts/
+.claude/worktrees/
+.claude/settings.local.json
+
 # 测试缓存
 tests/__pycache__/
 
