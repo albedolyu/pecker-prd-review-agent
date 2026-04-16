@@ -63,6 +63,10 @@ MAX_TOOL_TURNS = 30
 WORKER_TIMEOUT = 420
 TOTAL_REVIEW_TIMEOUT = 900
 
+# Phase G #9: 苍鹰(Opus via CLI)交叉校验超时(秒)
+# 苍鹰在 4 worker 全部完成后运行,不受 TOTAL_REVIEW_TIMEOUT 覆盖
+GOSHAWK_TIMEOUT = 600
+
 # tool_loop wall-clock 上限(秒),A4: 防止死循环或单次评审跑飞
 # 20 分钟足够 opus 打 30 轮工具调用;超时抛 AgentTimeoutError
 TOOL_LOOP_TIMEOUT = 1200

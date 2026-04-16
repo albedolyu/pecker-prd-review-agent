@@ -267,12 +267,32 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
 
 
 async def advisor_review_async(client, prd_content, worker_results, wiki_pages=None, model=DEFAULT_MODEL):
-    """苍鹰交叉校验异步版本（在线程池中执行同步逻辑）"""
+    """苍鹰交叉校验异步版本（在线程池中执行同步逻辑）
+
+    Phase G #9: 加 GOSHAWK_TIMEOUT 保护。Opus via Claude CLI 可能跑 10+ 分钟,
+    超时后跳过交叉校验,直接返回一个"苍鹰超时"的空 advisor result,让 pipeline
+    继续推进到 Phase 3。用户能看到 Phase 4 报告但没有苍鹰加持(降级)。
+    """
     import asyncio
+    from agent_config import GOSHAWK_TIMEOUT
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(
-        None, lambda: advisor_review(client, prd_content, worker_results, wiki_pages, model)
-    )
+    try:
+        return await asyncio.wait_for(
+            loop.run_in_executor(
+                None, lambda: advisor_review(client, prd_content, worker_results, wiki_pages, model)
+            ),
+            timeout=GOSHAWK_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        log.warning(f"苍鹰交叉校验超时({GOSHAWK_TIMEOUT}s),跳过终审,直接用 worker 合并结果")
+        return {
+            "flagged_as_false_positive": [],
+            "additional_findings": [],
+            "conflict_resolutions": [],
+            "confidence": 0.0,
+            "verdict": "TIMEOUT",
+            "model_used": model,
+        }
 
 
 #: 漏报补充硬上限(schema + parser 双保险,防止模型绕过 schema)

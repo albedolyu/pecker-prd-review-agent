@@ -26,6 +26,7 @@ from config import (  # noqa: F401
     # 超时
     WORKER_TIMEOUT,
     TOTAL_REVIEW_TIMEOUT,
+    GOSHAWK_TIMEOUT,
     TOOL_LOOP_TIMEOUT,
     # 质量阈值
     EVIDENCE_RELIABILITY_THRESHOLD,

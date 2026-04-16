@@ -11,3 +11,4 @@ from config.base import *  # noqa: F401,F403
 # 4 分钟单 worker 已经足够 dev 调试,超时就走 degraded 路径
 WORKER_TIMEOUT = 240         # 4 分钟 / 单 worker
 TOTAL_REVIEW_TIMEOUT = 600   # 10 分钟总上限,触发后整体降级
+GOSHAWK_TIMEOUT = 300        # Phase G #9: 苍鹰 5 分钟,Opus CLI 慢但不能无限等
