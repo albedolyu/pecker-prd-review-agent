@@ -24,9 +24,24 @@
 **Wave 1 build gate:** pytest 105 passed · tsc 0 error
 **Wave 1 e2e round:** 待跑(本 turn 内继续)
 
-## Wave 2 (01:53 - 02:53) — wiki budget + 共识 boost
+### Wave 1 · e2e round 1 验证结果
 
-待 cron 触发。
+| 验证点 | 状态 | 证据 |
+|---|---|---|
+| #1 重试触发(worker) | ✅ | `[cc_client] submit_review_items JSON 解析失败,重试一次` |
+| #1 重试触发(goshawk) | ✅ | `[cc_client] submit_advisor_review JSON 解析失败,重试一次` |
+| #2 timeout 240s 触发 | ✅ | `[审校] Worker 超时(240s),跳过` |
+| #1 degraded 前端视觉 | ✅ | 审校 ⚠ DEGRADED badge + 琥珀边 + AlertTriangle icon + 错误文字 |
+| #3 provenance badge | ⏳ | 苍鹰 Opus 跑了 11+ 分钟还没完成,Phase 3 未到达,provenance badge 未验证 |
+| usage 累加 bug | ✅ fixed | `int(dict)` → 只取 4 个数值 key (`f85b90f`) |
+
+### Wave 1 新发现的 harness gap
+
+- **#9 苍鹰无 timeout 保护**: `advisor_review()` 是 sync 调用,没有 `asyncio.wait_for`。Opus via CLI 跑 11+ 分钟,超过 TOTAL_REVIEW_TIMEOUT 但因为 goshawk 在 gather 之后运行不受覆盖。前端卡在 70% "终审开始" 不动。**Wave 2 必修**:加 GOSHAWK_TIMEOUT=300s(dev),超时走 degraded(跳过交叉校验,直接用 worker 合并结果)。
+
+## Wave 2 (01:53 - 02:53) — wiki budget + 共识 boost + 苍鹰 timeout
+
+待 cron 触发。新增 #9 苍鹰 timeout。
 
 ## Wave 3 (02:53 - 03:53) — 决策 → rule_weights EMA 闭环
 
