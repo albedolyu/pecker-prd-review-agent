@@ -172,9 +172,25 @@ async def run_review(req: ReviewRequest, request: Request):
 
     async def _pipeline():
         """评审主任务:parallel_review + goshawk,完成后 return 最终 payload。"""
+        import time as _time
+        _pipeline_start = _time.time()
+
         from parallel_review import parallel_review, parallel_review_sync
         from goshawk_advisor import advisor_review_async
         from agent_config import MODEL_TIERS
+
+        # Pattern 21: Session Event Sourcing — JSONL 追加写入事件溯源
+        from event_store import EventStore
+        import uuid
+        review_id = f"rev_{int(_pipeline_start)}_{uuid.uuid4().hex[:6]}"
+        ws_path = str(get_project_root() / req.workspace)
+        evt = EventStore(workspace=ws_path, review_id=review_id)
+        evt.append("review_started", {
+            "prd_name": req.prd_name,
+            "mode": req.mode,
+            "reviewer": req.reviewer,
+            "wiki_pages_count": len(req.wiki_pages),
+        })
 
         # 1. 构建增强 PRD
         enhanced_prd = req.prd_content
@@ -186,6 +202,7 @@ async def run_review(req: ReviewRequest, request: Request):
         emitter.emit("uploaded")
         emitter.emit("wiki_scanned", data={"page_count": len(req.wiki_pages)})
         emitter.emit("workers_started", data={"mode": req.mode})
+        evt.append("workers_started", {"mode": req.mode})
 
         # 2. 并行评审 (semaphore 保护)
         async with review_semaphore:
@@ -199,16 +216,28 @@ async def run_review(req: ReviewRequest, request: Request):
                     functools.partial(parallel_review_sync, client, enhanced_prd, req.wiki_pages, quick_tiers),
                 )
             else:
+                def _on_worker_done(dim, r):
+                    emitter.emit_worker_done(dim, r)
+                    # Pattern 21: 记录每个 worker 完成事件
+                    evt.append("worker_done", {
+                        "dim": dim,
+                        "items_count": len(r.get("items", [])) if isinstance(r, dict) else 0,
+                        "error": str(r.get("error", ""))[:200] if isinstance(r, dict) and "error" in r else None,
+                    })
+
                 result = await parallel_review(
                     client, enhanced_prd, req.wiki_pages, MODEL_TIERS,
-                    on_worker_done=lambda dim, r: emitter.emit_worker_done(dim, r),
+                    on_worker_done=_on_worker_done,
                 )
 
             items = result.get("merged_items", [])
+            # Pattern 21: workers 全部完成后 checkpoint
+            evt.append("checkpoint", {"workers_done": len(result.get("workers", [])), "items_count": len(items)})
 
             # 3. 终审 (苍鹰) — 仅标准模式
             if req.mode == "standard" and items:
                 emitter.emit("final_reviewer_started")
+                evt.append("final_reviewer_started", {"items_count": len(items)})
                 try:
                     goshawk_result = await advisor_review_async(
                         client, enhanced_prd, items, req.wiki_pages
@@ -221,8 +250,13 @@ async def run_review(req: ReviewRequest, request: Request):
                         "false_positive": len(goshawk_result.get("flagged_as_false_positive", [])),
                         "additional": len(goshawk_result.get("additional_findings", [])),
                     })
+                    evt.append("final_reviewer_done", {
+                        "false_positive": len(goshawk_result.get("flagged_as_false_positive", [])),
+                        "additional": len(goshawk_result.get("additional_findings", [])),
+                    })
                 except Exception as e:
                     emitter.emit("final_reviewer_done", data={"error": str(e)[:200]})
+                    evt.append("final_reviewer_done", {"error": str(e)[:200]})
 
         # 成本归因聚合 (CC cost-tracker querySource 模式)
         cost_breakdown = {}
@@ -245,6 +279,19 @@ async def run_review(req: ReviewRequest, request: Request):
         cost_breakdown["total"] = round(total_cost, 6)
         result["cost_breakdown"] = cost_breakdown
 
+        # 3c: 结构化 telemetry 汇总 (CC telemetry 模式)
+        import time as _time
+        worker_telemetry = {}
+        for w in result.get("workers", []):
+            dim = w.get("dimension", "unknown")
+            if w.get("telemetry"):
+                worker_telemetry[dim] = w["telemetry"]
+        result["telemetry"] = {
+            "total_duration_ms": int((_time.time() - _pipeline_start) * 1000),
+            "workers": worker_telemetry,
+            "total_cost_usd": cost_breakdown.get("total", 0),
+        }
+
         # 包装成 Opaque Handle (A14)
         review_result_handle = ReviewResult.create(
             reviewer=req.reviewer,
@@ -257,6 +304,15 @@ async def run_review(req: ReviewRequest, request: Request):
             goshawk_summary=result.get("goshawk"),
             cost_breakdown=cost_breakdown,
         )
+
+        # Pattern 21: review 完成事件(带 result 摘要)
+        evt.append("review_completed", {
+            "review_id": review_result_handle.review_id,
+            "items_count": len(result.get("merged_items", [])),
+            "total_cost_usd": cost_breakdown.get("total", 0),
+            "duration_ms": int((_time.time() - _pipeline_start) * 1000),
+        })
+
         return review_result_handle.model_dump()
 
     async def event_source():

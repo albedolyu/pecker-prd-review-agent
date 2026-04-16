@@ -113,12 +113,14 @@ class TokenTracker:
 
 class UnifiedResponse:
     """统一的 API 响应"""
-    def __init__(self, text_blocks, tool_calls, stop_reason, usage, model):
+    def __init__(self, text_blocks, tool_calls, stop_reason, usage, model, truncated=False):
         self.text_blocks = text_blocks
         self.tool_calls = tool_calls
         self.stop_reason = stop_reason
         self.usage = usage
         self.model = model
+        # 1c: max_output_recovery 钩子 — 标记输出是否被截断 (CC max_tokens 检测)
+        self.truncated = truncated
 
     @property
     def content(self):
@@ -266,6 +268,11 @@ class AnthropicNativeClient:
                     "input": block.input,
                 })
 
+        # 1c: max_output_recovery — 检测输出截断 (CC max_tokens breaker)
+        is_truncated = (response.stop_reason == "max_tokens")
+        if is_truncated:
+            log.warning(f"[cc_client] req={req_id} stop_reason=max_tokens, 输出被截断 (model={current_model})")
+
         unified = UnifiedResponse(
             text_blocks=text_blocks,
             tool_calls=tool_calls,
@@ -277,6 +284,7 @@ class AnthropicNativeClient:
                 "cache_read_input_tokens": getattr(response.usage, 'cache_read_input_tokens', 0) or 0,
             },
             model=response.model,
+            truncated=is_truncated,
         )
         cache_creation = getattr(response.usage, 'cache_creation_input_tokens', 0) or 0
         cache_read = getattr(response.usage, 'cache_read_input_tokens', 0) or 0
@@ -571,6 +579,12 @@ class ClaudeCodeCLIClient:
         # 从 modelUsage 取真实 model 名,回退到传入的 model
         used_model = next(iter(data.get("modelUsage", {}).keys()), cc_model)
 
+        # 1c: max_output_recovery — 检测 CLI 返回的 stop_reason
+        cli_stop_reason = data.get("stop_reason", "")
+        is_truncated = (cli_stop_reason == "max_tokens")
+        if is_truncated:
+            log.warning(f"[cc_client] req={req_id} CLI stop_reason=max_tokens, 输出被截断")
+
         text_blocks = []
         tool_calls = []
 
@@ -611,6 +625,7 @@ class ClaudeCodeCLIClient:
             stop_reason=stop_reason,
             usage=unified_usage,
             model=used_model,
+            truncated=is_truncated,
         )
 
     def create_stream(self, *args, **kwargs):

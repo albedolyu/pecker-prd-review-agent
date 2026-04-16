@@ -350,6 +350,45 @@ def get_wiki_keywords(workspace=None):
 # 结构化输出 Tool Schema
 # ============================================================
 
+
+def _get_compact_tool_schema():
+    """Pattern 17: Deferred Tool Loading — 精简版 tool schema。
+
+    followup 催促重试时用精简版,去掉 items 数组里每个字段的长 description,
+    减少 prompt token 占用。tool name / input_schema structure 不变,
+    模型仍能正确调用。
+    """
+    return {
+        "name": "submit_review_items",
+        "description": "提交评审发现的问题项。全部 pass 时 items 为空数组。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "dimension": {"type": "string"},
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "rule_id": {"type": "string"},
+                            "location": {"type": "string"},
+                            "issue": {"type": "string"},
+                            "suggestion": {"type": "string"},
+                            "severity": {"type": "string", "enum": ["must", "should"]},
+                            "evidence_type": {"type": "string", "enum": ["A", "B", "C"]},
+                            "evidence_content": {"type": "string"},
+                        },
+                        "required": ["rule_id", "location", "issue", "suggestion", "severity", "evidence_type", "evidence_content"],
+                    },
+                },
+                "confidence_in_findings": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                "null_finding_reason": {"type": "string"},
+            },
+            "required": ["dimension", "items"],
+        },
+    }
+
+
 SUBMIT_REVIEW_ITEMS_TOOL = {
     "name": "submit_review_items",
     "description": (
@@ -666,12 +705,26 @@ def _build_real_refs_section(workspace):
     return "\n".join(lines)
 
 
+def _maybe_compact_wiki(wiki_pages, budget):
+    """二次截断钩子 (CC compact 模式预留接口)。
+
+    当 prompt token 估算超过 COMPACT_THRESHOLD 时调用。
+    目前只 log + 返回原 wiki_pages,留接口给未来真正的压缩实现。
+    """
+    log.info(f"[compact] _maybe_compact_wiki 被调用, pages={len(wiki_pages)}, budget={budget}")
+    # TODO: 未来实现: 按相关性评分截断低分 wiki 页面,或对长页面做摘要
+    return wiki_pages
+
+
 def _build_worker_messages(prd_content, wiki_pages, dim_key=None, wiki_path=None, wiki_keywords=None, diff_context=None):
     """构建 worker 的 user messages，包含 PRD 和知识库内容"""
+    from agent_config import MAX_WIKI_CHARS, COMPACT_THRESHOLD
+
     wk = wiki_keywords or get_wiki_keywords()
     parts = [f"## 待评审 PRD\n\n{prd_content}"]
     if diff_context:
         parts.insert(0, diff_context)  # diff context before PRD content
+    wiki_char_total = 0
     if wiki_pages:
         # 按维度筛选相关 wiki 页面，减少无关上下文
         if dim_key and dim_key in wk:
@@ -687,9 +740,28 @@ def _build_worker_messages(prd_content, wiki_pages, dim_key=None, wiki_path=None
             if wiki_path:
                 fpath = os.path.join(wiki_path, f"{title}.md")
                 content = _add_freshness_note(fpath, content)
+            wiki_char_total += len(content)
             parts.append(f"### {title}\n{content}\n")
+
+        # 1b: rapid_refill_breaker 钩子 — wiki 注入接近预算上限时 warning
+        if wiki_char_total > MAX_WIKI_CHARS * 0.95:
+            log.warning(f"[{_cn_label(dim_key) if dim_key else 'global'}] approaching wiki budget limit: {wiki_char_total:,} / {MAX_WIKI_CHARS:,} chars (95%+)")
+
     parts.append("请评审以上 PRD，逐条对照你的检查清单，然后调用 submit_review_items 工具提交发现的所有改进项。每条改进项必须标注 rule_id。")
-    return [{"role": "user", "content": "\n\n".join(parts)}]
+
+    messages = [{"role": "user", "content": "\n\n".join(parts)}]
+
+    # 4a: token 估算 (CC tokenEstimation 模式)
+    estimated_tokens = len(json.dumps(messages, ensure_ascii=False).encode()) // 4
+    log.info(f"[{_cn_label(dim_key) if dim_key else 'global'}] estimated prompt tokens: {estimated_tokens:,}")
+    if estimated_tokens > 100_000:
+        log.warning(f"[{_cn_label(dim_key) if dim_key else 'global'}] prompt token 估算 > 100K,可能触发 context overflow")
+
+    # 4b: compact 钩子 — 超阈值时尝试二次截断 wiki
+    if estimated_tokens > COMPACT_THRESHOLD and wiki_pages:
+        wiki_pages = _maybe_compact_wiki(wiki_pages, COMPACT_THRESHOLD)
+
+    return messages
 
 
 # ============================================================
@@ -772,10 +844,21 @@ def _parse_items_from_text(text):
 def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_perf_history=None, wiki_path=None, diff_context=None):
     """Worker 核心逻辑（sync），返回首次 API 响应和处理后的 items 列表。
     async 版本通过 run_in_executor 包装此函数。"""
+    # 3a: telemetry — 记录 worker 开始时间
+    start_time = time.time()
     dimensions = get_review_dimensions()
     wiki_keywords = get_wiki_keywords()
     dim = dimensions[dim_key]
     model = model_tiers.get(dim["model"], model_tiers["sonnet"])
+
+    # Pattern 20: Effort-Aware Prompt Adaptation — 从 dim config 读 effort level
+    from agent_config import EFFORT_TOKENS
+    effort = dim.get("effort", "medium")
+    max_tokens = EFFORT_TOKENS.get(effort, 8192)
+
+    # Pattern 18: 每个 worker 独立的 cache monitor 实例(线程安全)
+    from cache_monitor import PromptCacheMonitor
+    cache_monitor = PromptCacheMonitor()
     # 从 wiki_path 反推 workspace(wiki_path 总是 workspace/wiki),注入真实依据清单防幻觉
     workspace_dir = os.path.dirname(wiki_path) if wiki_path else None
     dynamic_system = _build_worker_system(dim_key, rule_perf_history, dimensions, workspace=workspace_dir)
@@ -806,16 +889,35 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
         "description": f"评审维度(必须填 '{dim['name']}')",
     }
 
-    def _call(msgs):
-        return client.create(
+    def _call(msgs, use_compact_tool=False):
+        # Pattern 17: followup 催促重试时用精简版 tool schema
+        tool_to_use = dim_constrained_tool
+        if use_compact_tool:
+            tool_to_use = _get_compact_tool_schema()
+            tool_to_use["input_schema"]["properties"]["dimension"] = {
+                "type": "string",
+                "const": dim["name"],
+            }
+
+        # Pattern 18: snapshot before API call
+        system_text = json.dumps(system_blocks, ensure_ascii=False)
+        tools_json = json.dumps([tool_to_use], ensure_ascii=False)
+        cache_monitor.snapshot(system_text, tools_json, model, dim_key=dim_key)
+
+        resp = client.create(
             model=model,
-            max_tokens=8192,
+            max_tokens=max_tokens,  # Pattern 20: effort-aware
             system=system_blocks,
             messages=msgs,
-            tools=[dim_constrained_tool],
+            tools=[tool_to_use],
             tool_choice={"type": "any"},
             retry_policy="worker",
         )
+
+        # Pattern 18: check after API response
+        cache_monitor.check(resp.usage)
+
+        return resp
 
     # client.create 内部已有分级重试，不再外层重复
     response = _call(messages)
@@ -834,7 +936,8 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
         ]
         time.sleep(2 + random.uniform(0, 0.5))
         try:
-            response2 = _call(followup_msgs)
+            # Pattern 17: followup 用精简版 tool schema 节省 token
+            response2 = _call(followup_msgs, use_compact_tool=True)
             items = _extract_items_from_response(response2)
             if _has_tool_use(response2):
                 response = response2
@@ -863,6 +966,14 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
             log.warning(f"[{_cn_label(dim_key)}] 维度越界: {item.get('dimension')} → {dim['name']}")
         item["dimension"] = dim["name"]
 
+    # 2a: Tool Result 截断 — 单 worker 输出上限 (CC tool result truncation 模式)
+    from agent_config import MAX_ITEMS_PER_WORKER
+    if len(items) > MAX_ITEMS_PER_WORKER:
+        log.warning(f"[{_cn_label(dim_key)}] Worker 输出 {len(items)} 条,截断到 {MAX_ITEMS_PER_WORKER}")
+        # 按 severity (must 优先) + confidence (高优先) 排序,保留 top N
+        items.sort(key=lambda x: (0 if x.get("severity") == "must" else 1, -x.get("confidence_score", 0)))
+        items = items[:MAX_ITEMS_PER_WORKER]
+
     # 提取 worker 发现的关键规则 ID（供 scratchpad 跨 worker 共享）
     found_rule_ids = list(set(item.get("rule_id", "") for item in items if item.get("rule_id")))
 
@@ -876,6 +987,19 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
     }
     cost_usd = compute_call_cost_usd(model, worker_usage)
 
+    # 3a: 结构化 telemetry (CC telemetry 模式)
+    is_degraded = (len(items) == 0 and bool(worker_usage.get("output_tokens", 0)))
+    telemetry = {
+        "duration_ms": int((time.time() - start_time) * 1000),
+        "tokens_in": worker_usage["input_tokens"],
+        "tokens_out": worker_usage["output_tokens"],
+        "cost_usd": cost_usd,
+        "items_count": len(items),
+        "degraded": is_degraded,
+        "turns_used": current_turn,
+        "truncated": getattr(response, "truncated", False),
+    }
+
     return {
         "dimension": dim_key,
         "dimension_name": dim["name"],
@@ -887,6 +1011,7 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
             "output_tokens": response.usage["output_tokens"],
         },
         "cost_usd": cost_usd,
+        "telemetry": telemetry,
     }
 
 
@@ -1014,13 +1139,16 @@ async def _single_round_async(client, prd_content, wiki_pages, model_tiers, wiki
             total_input += result["usage"]["input_tokens"]
             total_output += result["usage"]["output_tokens"]
 
+    # 断路器: 可配置的最大 worker 连续失败数 (CC circuit breaker 模式)
+    from agent_config import MAX_CONSECUTIVE_WORKER_FAILURES
+
     # API 不可用时给出明确提示，不要报"过多 Worker 失败"
-    if api_unavailable and len(failed_dims) > 1:
+    if api_unavailable and len(failed_dims) > MAX_CONSECUTIVE_WORKER_FAILURES:
         raise RuntimeError(f"API 不可用（503），请检查中转站额度后重试")
 
-    # 允许最多 1 个 worker 失败，超过则报错
-    if len(failed_dims) > 1:
-        raise RuntimeError(f"过多 Worker 失败 ({len(failed_dims)}/4): {failed_dims}")
+    # 断路器触发: 失败 worker 数超过阈值
+    if len(failed_dims) > MAX_CONSECUTIVE_WORKER_FAILURES:
+        raise RuntimeError(f"断路器触发: Worker 失败 ({len(failed_dims)}/4) 超过阈值 {MAX_CONSECUTIVE_WORKER_FAILURES}: {failed_dims}")
 
     # Scratchpad：记录各 worker 发现的规则 ID（CC coordinatorMode.ts 的 scratchpad 模式）
     scratchpad = {}
@@ -1148,9 +1276,10 @@ def _single_round_sync(client, prd_content, wiki_pages, model_tiers, wiki_path=N
                         })
                 break
 
-    # 允许最多 1 个 worker 失败，超过则报错
-    if len(failed_dims) > 1:
-        raise RuntimeError(f"过多 Worker 失败 ({len(failed_dims)}/4): {failed_dims}")
+    # 断路器: 可配置的最大 worker 连续失败数 (CC circuit breaker 模式)
+    from agent_config import MAX_CONSECUTIVE_WORKER_FAILURES
+    if len(failed_dims) > MAX_CONSECUTIVE_WORKER_FAILURES:
+        raise RuntimeError(f"断路器触发: Worker 失败 ({len(failed_dims)}/4) 超过阈值 {MAX_CONSECUTIVE_WORKER_FAILURES}: {failed_dims}")
 
     # Scratchpad：记录各 worker 发现的规则 ID
     scratchpad = {}

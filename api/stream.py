@@ -83,6 +83,7 @@ class ReviewProgressEmitter:
         """parallel_review 的 on_worker_done callback 专用入口。
 
         动态计算进度: 15% + (已完成 worker 数) * 13.75%
+        3b: 透传 worker telemetry 到 SSE payload
         """
         self._workers_done_count += 1
         progress = int(15 + self._workers_done_count * WORKER_PROGRESS_STEP)
@@ -99,6 +100,9 @@ class ReviewProgressEmitter:
             payload["error"] = str(result["error"])[:200]
         else:
             payload["items_count"] = len(result.get("items", []))
+        # 3b: 透传 worker telemetry (duration_ms, tokens, cost, degraded 等)
+        if result.get("telemetry"):
+            payload["telemetry"] = result["telemetry"]
         try:
             self.queue.put_nowait(payload)
         except asyncio.QueueFull:

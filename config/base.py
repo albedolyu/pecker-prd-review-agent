@@ -75,6 +75,24 @@ TOOL_LOOP_TIMEOUT = 1200
 # 依据可靠率低于此值则伯劳 Gate 6 失败
 EVIDENCE_RELIABILITY_THRESHOLD = 0.80
 
+# 断路器: 并行评审允许的最大 worker 连续失败数 (CC circuit breaker 模式)
+MAX_CONSECUTIVE_WORKER_FAILURES = int(os.environ.get("PECKER_MAX_WORKER_FAILURES", "2"))
+
+# 单个 worker 最大输出 items 数 (CC tool result truncation 模式)
+MAX_ITEMS_PER_WORKER = int(os.environ.get("PECKER_MAX_ITEMS_PER_WORKER", "15"))
+
+# Token 估算: prompt 超过此阈值触发 compact 钩子 (CC token_count tracking)
+COMPACT_THRESHOLD = int(os.environ.get("PECKER_COMPACT_THRESHOLD", "80000"))
+
+# Wiki 注入预算上限 (字符数)
+MAX_WIKI_CHARS = int(os.environ.get("PECKER_MAX_WIKI_CHARS", "60000"))
+
+# Pattern 19: CC Cron Jitter — 批量评审时的确定性抖动(预留)
+JITTER_MAX_FRAC = 0.5
+
+# Pattern 20: Effort-Aware Prompt Adaptation — effort level 映射 max_tokens
+EFFORT_TOKENS = {"low": 4096, "medium": 8192, "high": 16384}
+
 # F4: Eval CI gate 阈值(pytest -m eval 会断言 scorer 输出 >= 此值)
 # 低于则 CI 红,保护评审质量回归
 EVAL_MIN_OVERALL_SCORE = 0.50   # scorer.calculate_scores() overall_score
