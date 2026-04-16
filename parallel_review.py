@@ -576,36 +576,79 @@ def _build_feedback_section(dim_key, rule_perf_history=None, dimensions=None):
                 "eval_recall": eval_recall if eval_has_data else None,
             })
 
-    if not flagged:
+    # P0.2: 同时收集 impact_score 异常的规则(低效 / 高效)
+    low_impact = []   # impact_score < 0.3
+    high_impact = []  # impact_score > 0.8
+    for rule_id, stats in rule_perf_history.items():
+        if not isinstance(stats, dict):
+            continue
+        canonical = rule_id.strip()
+        if canonical not in dim_rule_ids:
+            continue
+        impact = stats.get("impact_score")
+        if impact is not None:
+            name = stats.get("name", "")
+            if impact < 0.3:
+                low_impact.append({"rule_id": canonical, "name": name, "impact_score": impact})
+            elif impact > 0.8:
+                high_impact.append({"rule_id": canonical, "name": name, "impact_score": impact})
+
+    if not flagged and not low_impact and not high_impact:
         return ""
 
-    # 4. 按 missed + rejection_rate + 1-precision 综合排序，取前 5 条
-    def _severity(r):
-        p = r["eval_precision"] if r["eval_precision"] is not None else 1.0
-        return (r["missed"], r["rejection_rate"], 1.0 - p)
-    flagged.sort(key=_severity, reverse=True)
-    flagged = flagged[:5]
+    lines = []
 
-    # 5. 生成提示文本
-    lines = ["## 近期反馈提示", "以下规则在最近的评审中表现异常，请加强审核："]
-    for r in flagged:
-        parts = []
-        if r["name"]:
-            label = f"{r['rule_id']}（{r['name']}）"
-        else:
-            label = r["rule_id"]
+    # 原有的异常规则反馈
+    if flagged:
+        # 4. 按 missed + rejection_rate + 1-precision 综合排序，取前 5 条
+        def _severity(r):
+            p = r["eval_precision"] if r["eval_precision"] is not None else 1.0
+            return (r["missed"], r["rejection_rate"], 1.0 - p)
+        flagged.sort(key=_severity, reverse=True)
+        flagged = flagged[:5]
 
-        if r["missed"] > 2:
-            parts.append(f"漏报率高，近 {r.get('recent_total', '?')} 次评审中 {r['missed']} 次未检出")
-        if r["rejection_rate"] > 0.3:
-            pct = int(r["rejection_rate"] * 100)
-            parts.append(f"驳回率 {pct}%，建议仅在有充分依据时提出")
-        if r["eval_precision"] is not None and r["eval_precision"] < 0.6:
-            parts.append(f"Eval 精确率 {int(r['eval_precision']*100)}%，降低误报")
-        if r["eval_recall"] is not None and r["eval_recall"] < 0.6:
-            parts.append(f"Eval 召回率 {int(r['eval_recall']*100)}%，加强检出")
+        lines += ["## 近期反馈提示", "以下规则在最近的评审中表现异常，请加强审核："]
+        for r in flagged:
+            parts = []
+            if r["name"]:
+                label = f"{r['rule_id']}（{r['name']}）"
+            else:
+                label = r["rule_id"]
 
-        lines.append(f"- {label}：{'；'.join(parts)}")
+            if r["missed"] > 2:
+                parts.append(f"漏报率高，近 {r.get('recent_total', '?')} 次评审中 {r['missed']} 次未检出")
+            if r["rejection_rate"] > 0.3:
+                pct = int(r["rejection_rate"] * 100)
+                parts.append(f"驳回率 {pct}%，建议仅在有充分依据时提出")
+            if r["eval_precision"] is not None and r["eval_precision"] < 0.6:
+                parts.append(f"Eval 精确率 {int(r['eval_precision']*100)}%，降低误报")
+            if r["eval_recall"] is not None and r["eval_recall"] < 0.6:
+                parts.append(f"Eval 召回率 {int(r['eval_recall']*100)}%，加强检出")
+
+            lines.append(f"- {label}：{'；'.join(parts)}")
+
+    # P0.2: impact_score 权重注入 — Worker 感知规则历史表现
+    if low_impact:
+        lines.append("")
+        lines.append("## 低效规则警示")
+        for r in sorted(low_impact, key=lambda x: x["impact_score"]):
+            label = f"{r['rule_id']}（{r['name']}）" if r["name"] else r["rule_id"]
+            score = r["impact_score"]
+            lines.append(
+                f"- {label}：⚠ 低效规则(impact={score}),"
+                f"历史上被评审人频繁驳回,谨慎报告,确保有充分依据"
+            )
+
+    if high_impact:
+        lines.append("")
+        lines.append("## 高效规则优先")
+        for r in sorted(high_impact, key=lambda x: -x["impact_score"]):
+            label = f"{r['rule_id']}（{r['name']}）" if r["name"] else r["rule_id"]
+            score = r["impact_score"]
+            lines.append(
+                f"- {label}：✓ 高效规则(impact={score}),"
+                f"历史上被评审人高度认可,优先检查"
+            )
 
     return "\n".join(lines) + "\n"
 
@@ -975,6 +1018,15 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
         if item.get("dimension") and item["dimension"] != dim["name"]:
             log.warning(f"[{_cn_label(dim_key)}] 维度越界: {item.get('dimension')} → {dim['name']}")
         item["dimension"] = dim["name"]
+
+    # P1.3: Worker 规则越界硬校验 — checklist 里定义的 rule_id 才是本维度的合法范围
+    valid_rule_ids = {r["rule_id"] for r in dim.get("checklist", [])}
+    for item in items:
+        rid = item.get("rule_id", "")
+        if rid and valid_rule_ids and rid not in valid_rule_ids:
+            log.warning(f"[{_cn_label(dim_key)}] 规则越界: {rid} 不在 {dim_key} checklist 中")
+            item["cross_boundary"] = True
+            item["confidence"] = max(0, item.get("confidence", 0.85) - 0.3)
 
     # 2a: Tool Result 截断 — 单 worker 输出上限 (CC tool result truncation 模式)
     from agent_config import MAX_ITEMS_PER_WORKER

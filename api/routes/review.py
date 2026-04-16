@@ -30,6 +30,9 @@ from api.stream import ReviewProgressEmitter, sse_review_pipeline
 _wiki_scan_cache: Dict[str, Any] = {}
 _WIKI_CACHE_TTL = 600
 
+from logger import get_logger
+log = get_logger("review_api")
+
 router = APIRouter(tags=["review"])
 
 
@@ -350,12 +353,113 @@ async def run_review(req: ReviewRequest, request: Request):
 # Phase 3 确认 (Opaque Handle verify)
 # ============================================================
 
+def _update_rule_perf_from_decisions(
+    items: List[Dict[str, Any]],
+    decisions: Dict[str, Dict[str, Any]],
+    workspace: str,
+):
+    """P0.1: 把 Web 端 Y/N/E 决策回流到 rule_performance_history.json
+
+    遍历 items,只处理有 rule_id 的条目:
+    - accept → confirmed +1
+    - reject → rejected +1
+    - edit   → confirmed +1 (编辑意味着认可问题但修改了措辞)
+
+    无 rule_id 的 item 无法归因到具体规则,跳过。
+    """
+    workspace_dir = str(get_project_root() / workspace)
+    history_path = os.path.join(workspace_dir, "output", "rule_performance_history.json")
+
+    # 读已有历史
+    history_data: Dict[str, Any] = {}
+    if os.path.isfile(history_path):
+        try:
+            with open(history_path, "r", encoding="utf-8") as f:
+                history_data = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            history_data = {}
+
+    # 统计日志用计数器
+    total_decisions = len(decisions)
+    has_rule_id = 0
+    updated_rules = 0
+
+    # 建 item_id → item 的索引
+    item_map = {item.get("id", ""): item for item in items}
+
+    for item_id, decision in decisions.items():
+        item = item_map.get(item_id)
+        if not item:
+            continue
+        rule_id = (item.get("rule_id") or "").strip()
+        if not rule_id:
+            continue  # 没有 rule_id 无法归因,跳过
+        has_rule_id += 1
+        action = decision.get("action", "")
+
+        # 初始化规则条目
+        if rule_id not in history_data:
+            history_data[rule_id] = {
+                "name": item.get("dimension", ""),
+                "history": [],
+                "stats": {"confirmed": 0, "rejected": 0, "missed": 0, "total": 0},
+                "rejection_rate": 0.0,
+                "impact_score": 0.5,
+                "is_noisy": False,
+            }
+
+        entry = history_data[rule_id]
+
+        # 更新统计
+        if action == "accept":
+            entry["stats"]["confirmed"] += 1
+        elif action == "reject":
+            entry["stats"]["rejected"] += 1
+        elif action == "edit":
+            entry["stats"]["confirmed"] += 1  # 编辑 = 认可问题
+
+        entry["stats"]["total"] += 1
+
+        # EMA 更新 impact_score
+        alpha = 0.15
+        old_score = entry.get("impact_score", 0.5)
+        if action == "accept":
+            delta = 1.0
+        elif action == "edit":
+            delta = 0.7
+        elif action == "reject":
+            delta = -0.5
+        else:
+            delta = 0.0
+        new_score = alpha * delta + (1 - alpha) * old_score
+        entry["impact_score"] = round(max(0.0, min(1.0, new_score)), 3)
+
+        # 更新驳回率和噪声标记
+        total = entry["stats"]["total"]
+        rejected_count = entry["stats"]["rejected"]
+        entry["rejection_rate"] = round(rejected_count / total, 3) if total > 0 else 0.0
+        entry["is_noisy"] = entry["rejection_rate"] > 0.4
+
+        updated_rules += 1
+
+    # 写回
+    if updated_rules > 0:
+        os.makedirs(os.path.dirname(history_path), exist_ok=True)
+        with open(history_path, "w", encoding="utf-8") as f:
+            json.dump(history_data, f, ensure_ascii=False, indent=2)
+
+    log.info(
+        f"[决策回流] 本次评审 {total_decisions} 条决策中 "
+        f"{has_rule_id} 条有 rule_id,更新了 {updated_rules} 条规则的 impact_score"
+    )
+
+
 @router.post("/review/confirm")
 async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_user)):
     """Phase 3 提交用户 Y/N/E 决策。先验证 signature 防篡改,再返回可生成报告的标志。
 
     真正的报告生成在 /api/reports/{workspace}/save-to-wiki 或前端直接拼接,
-    这里只做 signature 校验 + 决策计数。
+    这里只做 signature 校验 + 决策计数 + 规则历史回流。
     """
     # Step 1: 验证 opaque handle signature
     verify_review_result(req.review_result)
@@ -368,6 +472,14 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
 
     items = req.review_result.get("items", [])
     pending = len(items) - len(decisions)
+
+    # Step 3: P0.1 — 决策回流到 rule_performance_history
+    workspace = req.review_result.get("workspace", "")
+    if workspace and decisions:
+        try:
+            _update_rule_perf_from_decisions(items, decisions, workspace)
+        except Exception as e:
+            log.warning(f"[决策回流] 写入失败,不阻塞确认流程: {e}")
 
     return {
         "status": "confirmed",
