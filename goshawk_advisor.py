@@ -193,7 +193,10 @@ def _build_advisor_user_message(prd_content, worker_results, wiki_pages=None):
 
     parts.append(
         "请仔细审核以上所有改进项，完成后使用 submit_advisor_review 工具提交你的审核结果。\n"
-        "注意：漏报补充最多 2 条，每条必须引用具体规则编号（V-02~V-12, RC-004~RC-015），不得补充规则列表之外的问题。"
+        "注意：漏报补充最多 2 条，每条必须引用具体规则编号（V-02~V-12, RC-004~RC-015），不得补充规则列表之外的问题。\n\n"
+        "**输出格式硬约束**：你必须且只能输出一个 JSON 对象,严格遵循 submit_advisor_review 的 schema。"
+        "不要在 JSON 前后写任何解释文字、markdown code fence 或注释。"
+        "确保所有 string 字段使用双引号,数组用 [],对象用 {},不要有 trailing comma。"
     )
 
     return "\n\n".join(parts)

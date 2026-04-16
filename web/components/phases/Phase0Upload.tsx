@@ -30,6 +30,7 @@ import { useReviewStore } from "@/lib/store";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -274,7 +275,8 @@ export function Phase0Upload() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
-          {/* Workspace */}
+          {/* Workspace — Select + fallback 文本输入(Radix Select 在自动化测试
+              下不稳定,加一个手动输入入口让 e2e 和 CI 也能跑) */}
           <div className="space-y-1.5">
             <Label htmlFor="ws">Workspace</Label>
             <Select
@@ -298,6 +300,17 @@ export function Phase0Upload() {
                 ))}
               </SelectContent>
             </Select>
+            {/* fallback 手动输入:下拉选不动时可以直接输 workspace 名 */}
+            {!workspace && (
+              <Input
+                placeholder="或直接输入 workspace 名(如 workspace-对外投资)"
+                className="mt-1 text-xs"
+                onChange={(e) => {
+                  const v = e.target.value.trim();
+                  if (v) setUserInput({ workspace: v });
+                }}
+              />
+            )}
           </div>
 
           {/* Mode */}

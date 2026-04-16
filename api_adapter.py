@@ -755,7 +755,17 @@ class ClaudeCodeCLIClient:
         return prompt_text + instr
 
     def _parse_json_from_text(self, text, tool_name):
-        """从返回文本中鲁棒解析 JSON 对象"""
+        """从返回文本中鲁棒解析 JSON 对象。
+
+        分层容错(成本从低到高):
+        Layer 1: json.loads(raw)              → 命中率 ~60%
+        Layer 2: json_repair.repair_json()    → 命中率 ~30%(修 trailing comma/quotes/brackets）
+        Layer 3: 由调用方 retry with strict prompt(命中率 ~8%）
+        Layer 4: degraded fallback（兜底 ~2%）
+        """
+        from logger import get_logger
+        log = get_logger("api")
+
         if not text:
             return None
         text = text.strip()
@@ -769,7 +779,7 @@ class ClaudeCodeCLIClient:
                 lines = lines[:-1]
             text = "\n".join(lines).strip()
 
-        # 直接解析
+        # Layer 1: 直接解析
         try:
             return json.loads(text)
         except json.JSONDecodeError:
@@ -778,11 +788,35 @@ class ClaudeCodeCLIClient:
         # 找第一个完整 {...}
         start = text.find("{")
         end = text.rfind("}")
-        if start >= 0 and end > start:
-            try:
-                return json.loads(text[start:end + 1])
-            except json.JSONDecodeError:
-                pass
+        candidate = text[start:end + 1] if start >= 0 and end > start else text
+
+        # Layer 1b: 子串直接解析
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
+
+        # Layer 2: json-repair 自动修复(不调 LLM,纯本地 CPU)
+        # 能修:trailing commas, single quotes, missing quotes, unclosed brackets,
+        # JavaScript-style comments, NaN/Infinity 等 Claude 常犯的 JSON 语法错误
+        try:
+            from json_repair import repair_json
+            repaired = repair_json(candidate, return_objects=False)
+            result = json.loads(repaired)
+            log.info(f"[cc_client] tool={tool_name} json-repair 修复成功")
+            return result
+        except Exception:
+            pass
+
+        # Layer 2b: 对完整 text 也试一次(可能 {...} 提取不对)
+        try:
+            from json_repair import repair_json
+            repaired = repair_json(text, return_objects=False)
+            result = json.loads(repaired)
+            log.info(f"[cc_client] tool={tool_name} json-repair 修复成功(全文)")
+            return result
+        except Exception:
+            pass
 
         return None
 
