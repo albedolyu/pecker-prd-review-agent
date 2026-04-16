@@ -12,6 +12,7 @@ import json
 import random
 import os
 import copy
+import time as _time
 
 from dotenv import load_dotenv
 from agent_config import MODEL_TIERS
@@ -423,7 +424,93 @@ def _build_gate_log(item, advisor_result, fp_map, conflict_map):
     return {"gates": gates}
 
 
-def apply_advisor_result(review_items, advisor_result, wiki_pages=None):
+def _sanity_check_false_positives(fps, items_by_id, client):
+    """用 Haiku 做苍鹰误报标记的 sanity check
+
+    对每个被标为误报的 item,问 Haiku:
+    "以下评审条目被终审标记为误报,理由是 {reason}。
+     原始条目:{item summary}
+     你同意这是误报吗?回答 agree 或 disagree + 一句话理由"
+
+    如果 Haiku disagree,恢复 item 的 status(不标为 REMOVED),
+    加 advisor_note "苍鹰标误报但 Haiku 不同意,保留待人工确认"
+
+    Returns:
+        dict: {"sanity_check_count": int, "sanity_check_disagreed": int}
+    """
+    if not fps or client is None:
+        return {"sanity_check_count": 0, "sanity_check_disagreed": 0}
+
+    haiku_model = MODEL_TIERS.get("haiku", "claude-haiku-4-5")
+    check_count = 0
+    disagreed_count = 0
+
+    for fp in fps:
+        item_id = fp.get("item_id", "")
+        reason = fp.get("reason", "")
+        item = items_by_id.get(item_id)
+        if not item:
+            continue
+
+        # 跳过 pinned items(已在 apply_advisor_result 中处理)
+        if item.get("pinned"):
+            continue
+
+        item_summary = (
+            f"[{item.get('rule_id', '')}] {item.get('location', '')} "
+            f"| {item.get('severity', '')} | {item.get('issue', '')[:200]}"
+        )
+
+        prompt = (
+            f"以下评审条目被终审标记为误报,理由是: {reason}\n\n"
+            f"原始条目: {item_summary}\n\n"
+            f"你同意这是误报吗?回答 agree 或 disagree + 一句话理由。"
+        )
+
+        try:
+            resp = client.create(
+                model=haiku_model,
+                max_tokens=256,
+                messages=[{"role": "user", "content": prompt}],
+                timeout=10,
+            )
+            text = ""
+            for block in resp.content:
+                if block.type == "text":
+                    text += block.text.lower()
+            check_count += 1
+
+            if "disagree" in text:
+                disagreed_count += 1
+                # 恢复 item: 不标为 REMOVED,加备注
+                if item.get("status") == "REMOVED_BY_ADVISOR":
+                    item["status"] = "RESTORED_BY_SANITY_CHECK"
+                item.setdefault("advisor_note", "")
+                sanity_note = "苍鹰标误报但 Haiku 不同意,保留待人工确认"
+                if item["advisor_note"]:
+                    item["advisor_note"] += "; " + sanity_note
+                else:
+                    item["advisor_note"] = sanity_note
+                log.info(f"[sanity_check] {item_id}: Haiku disagree — {text[:100]}")
+
+        except Exception as e:
+            # timeout 或其他异常,跳过不阻塞
+            log.warning(f"[sanity_check] {item_id}: 跳过 ({str(e)[:60]})")
+            continue
+
+    telemetry = {
+        "sanity_check_count": check_count,
+        "sanity_check_disagreed": disagreed_count,
+    }
+    if check_count > 0:
+        log.info(
+            f"[sanity_check] 完成: {check_count} 条检查, "
+            f"{disagreed_count} 条 Haiku 不同意"
+        )
+    return telemetry
+
+
+def apply_advisor_result(review_items, advisor_result, wiki_pages=None, client=None):
     """
     将苍鹰的审核结果合并回改进项列表
     - 误报：降级 severity 或移除，加 advisor_note + gate_log
@@ -538,16 +625,28 @@ def apply_advisor_result(review_items, advisor_result, wiki_pages=None):
                 else:
                     item["advisor_note"] = note
 
+    # Haiku sanity check: 对被标为误报的 item 做二次校验
+    # 只在有 false_positive 且 client 可用时触发(大部分评审 0 条 fp,零开销)
+    sanity_telemetry = {"sanity_check_count": 0, "sanity_check_disagreed": 0}
+    fps_list = advisor_result.get("flagged_as_false_positive", [])
+    if fps_list and client is not None:
+        sanity_telemetry = _sanity_check_false_positives(fps_list, items_by_id, client)
+
     # 为每条 item 生成 gate_log (CC decisionReason 模式)
     for item in items:
         item["gate_log"] = _build_gate_log(item, advisor_result, fp_map, conflict_map)
 
     # 过滤掉被移除和被合并的（但保留在返回结构中做审计）
+    # 注意: RESTORED_BY_SANITY_CHECK 的 item 不会被过滤
     active_items = [
         item
         for item in items
         if item.get("status") not in ("REMOVED_BY_ADVISOR", "MERGED_BY_ADVISOR")
     ]
+
+    # 附加 sanity check telemetry 到第一个 active item(供上层消费)
+    if active_items and sanity_telemetry["sanity_check_count"] > 0:
+        active_items[0].setdefault("_sanity_telemetry", sanity_telemetry)
 
     return active_items
 
@@ -719,8 +818,8 @@ def main():
     client = create_client()
     result = advisor_review(client, prd_content, review_items, wiki_pages, model)
 
-    # 合并结果
-    updated_items = apply_advisor_result(review_items, result)
+    # 合并结果(CLI 模式也传 client,启用 sanity check)
+    updated_items = apply_advisor_result(review_items, result, client=client)
 
     # 生成报告
     report = format_advisor_report(result)

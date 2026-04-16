@@ -1470,6 +1470,16 @@ def verify_evidence(items, workspace):
                 v_details["reason_code"] = "B_missing_rule"
             else:
                 v_details["found"] = True
+                # B 类语义验证: 规则存在但 item 内容可能与规则不相关
+                sem_passed, sem_note = _verify_b_class_semantic(item, rules_dir)
+                if not sem_passed:
+                    v_status = "verified_with_caveat"
+                    v_reason = sem_note
+                    v_details["reason_code"] = "B_semantic_weak"
+                    # 降低 confidence 而非 retract(规则存在,只是语义薄弱)
+                    old_conf = item.get("confidence_score", 0.8)
+                    item["confidence_score"] = round(old_conf * 0.7, 2)
+                    log.info(f"[verify] {item.get('id', '?')}: {sem_note}")
 
         elif ev_type == "C":
             # C 类:必须标记"待确定⚠️"
@@ -1546,6 +1556,81 @@ def summarize_verification(items):
         "retracted_by_reason_code": dict(by_code),
         "reliability": round(reliability, 3),
     }
+
+
+def _verify_b_class_semantic(item, rules_dir):
+    """B 类依据语义验证(轻量版,不调 LLM)
+
+    1. 从 review-rules/ 读 rule 原文
+    2. 提取 item.issue + item.suggestion 的关键词
+    3. 检查关键词和 rule 原文的 overlap ratio
+    4. overlap < 0.1 -> 标记 "B 类依据语义薄弱"
+
+    Returns:
+        (passed: bool, note: str)
+    """
+    ev_content = item.get("evidence_content", "")
+    rule_ids = re.findall(r"(?:RC-\d+|V-\d+)", ev_content)
+    if not rule_ids or not os.path.isdir(rules_dir):
+        return True, ""
+
+    # 读 rule 原文: 在 review-rules/ 下找到包含该 rule_id 的文件,提取上下文
+    rule_text = ""
+    target_rid = rule_ids[0]  # 取第一个 rule_id
+    for root, _, files in os.walk(rules_dir):
+        for fn in files:
+            if not fn.endswith((".md", ".yaml", ".yml", ".txt")):
+                continue
+            try:
+                fp = os.path.join(root, fn)
+                with open(fp, "r", encoding="utf-8", errors="replace") as f:
+                    content = f.read()
+                if target_rid in content:
+                    rule_text = content
+                    break
+            except OSError:
+                continue
+        if rule_text:
+            break
+
+    if not rule_text:
+        return True, ""  # 规则文件找不到,跳过语义验证(存在性已被 _find_rule_reference 检查)
+
+    # 提取 item 的关键词(中文 2-4 字词 + 英文 3+ 字母词)
+    item_text = f"{item.get('issue', '')} {item.get('suggestion', '')}"
+    cn_kw = set(re.findall(r'[\u4e00-\u9fff]{2,4}', item_text))
+    en_kw = set(w.lower() for w in re.findall(r'[a-zA-Z_-]{3,}', item_text))
+    item_keywords = cn_kw | en_kw
+
+    # 停用词过滤
+    stop_words = {"文档", "说明", "需求", "内容", "系统", "功能", "应该", "建议",
+                  "问题", "修改", "添加", "缺少", "the", "and", "for", "that", "this",
+                  "should", "must", "not", "with", "from", "have", "are", "PRD", "prd"}
+    item_keywords -= stop_words
+
+    if not item_keywords:
+        return True, ""
+
+    # 提取 rule 原文的关键词
+    rule_cn_kw = set(re.findall(r'[\u4e00-\u9fff]{2,4}', rule_text))
+    rule_en_kw = set(w.lower() for w in re.findall(r'[a-zA-Z_-]{3,}', rule_text))
+    rule_keywords = (rule_cn_kw | rule_en_kw) - stop_words
+
+    if not rule_keywords:
+        return True, ""
+
+    # 计算 overlap ratio
+    overlap = item_keywords & rule_keywords
+    ratio = len(overlap) / len(item_keywords) if item_keywords else 0
+
+    if ratio < 0.1:
+        note = (
+            f"B 类依据语义薄弱: {target_rid} 原文与 item 关键词 overlap={ratio:.2f} "
+            f"(阈值 0.1), item 可能引用了不相关规则"
+        )
+        return False, note
+
+    return True, ""
 
 
 def _find_wiki_page(evidence_content, wiki_dir, wiki_index=None):

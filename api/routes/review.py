@@ -247,7 +247,7 @@ async def run_review(req: ReviewRequest, request: Request):
                         client, enhanced_prd, items, req.wiki_pages
                     )
                     from goshawk_advisor import apply_advisor_result
-                    items = apply_advisor_result(items, goshawk_result, wiki_pages=req.wiki_pages)
+                    items = apply_advisor_result(items, goshawk_result, wiki_pages=req.wiki_pages, client=client)
                     result["merged_items"] = items
                     result["goshawk"] = goshawk_result
                     emitter.emit("final_reviewer_done", data={
@@ -443,6 +443,62 @@ def _update_rule_perf_from_decisions(
     )
 
 
+def _save_eval_ground_truth(
+    items: List[Dict[str, Any]],
+    decisions: Dict[str, Dict[str, Any]],
+    workspace: str,
+    reviewer: str,
+):
+    """把 Phase 3 的 Y/N/E 决策保存为 Eval ground truth
+
+    格式: eval/ground_truth/{workspace}_{reviewer}_{timestamp}.json
+    积累的人类标注可以直接喂给 cuckoo_eval.py 做回归测试。
+    """
+    import time as _time
+
+    # 建 item_id -> item 索引
+    item_map = {item.get("id", ""): item for item in items}
+
+    gt_items = []
+    for item_id, decision in decisions.items():
+        item = item_map.get(item_id)
+        if not item:
+            continue
+        action = decision.get("action", "")
+        gt_items.append({
+            "id": item_id,
+            "rule_id": item.get("rule_id", ""),
+            "location": item.get("location", ""),
+            "severity": item.get("severity", ""),
+            "action": action,
+            "is_true_positive": action in ("accept", "edit"),
+        })
+
+    if not gt_items:
+        return
+
+    timestamp = int(_time.time())
+    # 清理 workspace 名(去掉 workspace- 前缀方便文件名)
+    ws_short = workspace.replace("workspace-", "") if workspace.startswith("workspace-") else workspace
+    filename = f"{ws_short}_{reviewer}_{timestamp}.json"
+
+    gt_dir = os.path.join(str(get_project_root()), "eval", "ground_truth")
+    os.makedirs(gt_dir, exist_ok=True)
+
+    gt_payload = {
+        "workspace": workspace,
+        "reviewer": reviewer,
+        "timestamp": timestamp,
+        "items": gt_items,
+    }
+
+    gt_path = os.path.join(gt_dir, filename)
+    with open(gt_path, "w", encoding="utf-8") as f:
+        json.dump(gt_payload, f, ensure_ascii=False, indent=2)
+
+    log.info(f"[ground_truth] 保存 {len(gt_items)} 条标注到 {gt_path}")
+
+
 @router.post("/review/confirm")
 async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_user)):
     """Phase 3 提交用户 Y/N/E 决策。先验证 signature 防篡改,再返回可生成报告的标志。
@@ -469,6 +525,14 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
             _update_rule_perf_from_decisions(items, decisions, workspace)
         except Exception as e:
             log.warning(f"[决策回流] 写入失败,不阻塞确认流程: {e}")
+
+    # Step 4: 保存 Eval ground truth(人类标注 -> 回归测试)
+    reviewer = req.review_result.get("reviewer", "unknown")
+    if workspace and decisions:
+        try:
+            _save_eval_ground_truth(items, decisions, workspace, reviewer)
+        except Exception as e:
+            log.warning(f"[ground_truth] 保存失败,不阻塞确认流程: {e}")
 
     return {
         "status": "confirmed",
