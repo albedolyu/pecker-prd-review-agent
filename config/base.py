@@ -87,6 +87,12 @@ COMPACT_THRESHOLD = int(os.environ.get("PECKER_COMPACT_THRESHOLD", "80000"))
 # Wiki 注入预算上限 (字符数)
 MAX_WIKI_CHARS = int(os.environ.get("PECKER_MAX_WIKI_CHARS", "60000"))
 
+# Pattern 19: CC Cron Jitter — 批量评审时的确定性抖动(预留)
+JITTER_MAX_FRAC = 0.5
+
+# Pattern 20: Effort-Aware Prompt Adaptation — effort level 映射 max_tokens
+EFFORT_TOKENS = {"low": 4096, "medium": 8192, "high": 16384}
+
 # F4: Eval CI gate 阈值(pytest -m eval 会断言 scorer 输出 >= 此值)
 # 低于则 CI 红,保护评审质量回归
 EVAL_MIN_OVERALL_SCORE = 0.50   # scorer.calculate_scores() overall_score

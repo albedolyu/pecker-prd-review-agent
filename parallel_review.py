@@ -350,6 +350,45 @@ def get_wiki_keywords(workspace=None):
 # 结构化输出 Tool Schema
 # ============================================================
 
+
+def _get_compact_tool_schema():
+    """Pattern 17: Deferred Tool Loading — 精简版 tool schema。
+
+    followup 催促重试时用精简版,去掉 items 数组里每个字段的长 description,
+    减少 prompt token 占用。tool name / input_schema structure 不变,
+    模型仍能正确调用。
+    """
+    return {
+        "name": "submit_review_items",
+        "description": "提交评审发现的问题项。全部 pass 时 items 为空数组。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "dimension": {"type": "string"},
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "rule_id": {"type": "string"},
+                            "location": {"type": "string"},
+                            "issue": {"type": "string"},
+                            "suggestion": {"type": "string"},
+                            "severity": {"type": "string", "enum": ["must", "should"]},
+                            "evidence_type": {"type": "string", "enum": ["A", "B", "C"]},
+                            "evidence_content": {"type": "string"},
+                        },
+                        "required": ["rule_id", "location", "issue", "suggestion", "severity", "evidence_type", "evidence_content"],
+                    },
+                },
+                "confidence_in_findings": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                "null_finding_reason": {"type": "string"},
+            },
+            "required": ["dimension", "items"],
+        },
+    }
+
+
 SUBMIT_REVIEW_ITEMS_TOOL = {
     "name": "submit_review_items",
     "description": (
@@ -811,6 +850,15 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
     wiki_keywords = get_wiki_keywords()
     dim = dimensions[dim_key]
     model = model_tiers.get(dim["model"], model_tiers["sonnet"])
+
+    # Pattern 20: Effort-Aware Prompt Adaptation — 从 dim config 读 effort level
+    from agent_config import EFFORT_TOKENS
+    effort = dim.get("effort", "medium")
+    max_tokens = EFFORT_TOKENS.get(effort, 8192)
+
+    # Pattern 18: 每个 worker 独立的 cache monitor 实例(线程安全)
+    from cache_monitor import PromptCacheMonitor
+    cache_monitor = PromptCacheMonitor()
     # 从 wiki_path 反推 workspace(wiki_path 总是 workspace/wiki),注入真实依据清单防幻觉
     workspace_dir = os.path.dirname(wiki_path) if wiki_path else None
     dynamic_system = _build_worker_system(dim_key, rule_perf_history, dimensions, workspace=workspace_dir)
@@ -841,16 +889,35 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
         "description": f"评审维度(必须填 '{dim['name']}')",
     }
 
-    def _call(msgs):
-        return client.create(
+    def _call(msgs, use_compact_tool=False):
+        # Pattern 17: followup 催促重试时用精简版 tool schema
+        tool_to_use = dim_constrained_tool
+        if use_compact_tool:
+            tool_to_use = _get_compact_tool_schema()
+            tool_to_use["input_schema"]["properties"]["dimension"] = {
+                "type": "string",
+                "const": dim["name"],
+            }
+
+        # Pattern 18: snapshot before API call
+        system_text = json.dumps(system_blocks, ensure_ascii=False)
+        tools_json = json.dumps([tool_to_use], ensure_ascii=False)
+        cache_monitor.snapshot(system_text, tools_json, model, dim_key=dim_key)
+
+        resp = client.create(
             model=model,
-            max_tokens=8192,
+            max_tokens=max_tokens,  # Pattern 20: effort-aware
             system=system_blocks,
             messages=msgs,
-            tools=[dim_constrained_tool],
+            tools=[tool_to_use],
             tool_choice={"type": "any"},
             retry_policy="worker",
         )
+
+        # Pattern 18: check after API response
+        cache_monitor.check(resp.usage)
+
+        return resp
 
     # client.create 内部已有分级重试，不再外层重复
     response = _call(messages)
@@ -869,7 +936,8 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
         ]
         time.sleep(2 + random.uniform(0, 0.5))
         try:
-            response2 = _call(followup_msgs)
+            # Pattern 17: followup 用精简版 tool schema 节省 token
+            response2 = _call(followup_msgs, use_compact_tool=True)
             items = _extract_items_from_response(response2)
             if _has_tool_use(response2):
                 response = response2

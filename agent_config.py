@@ -34,6 +34,9 @@ from config import (  # noqa: F401
     MAX_ITEMS_PER_WORKER,
     COMPACT_THRESHOLD,
     MAX_WIKI_CHARS,
+    # CC deep patterns (Round 3)
+    JITTER_MAX_FRAC,
+    EFFORT_TOKENS,
     # helper
     load_system_prompt,
     load_pr_review_prompt,

@@ -474,6 +474,13 @@ def apply_advisor_result(review_items, advisor_result, wiki_pages=None):
             continue
 
         target = items_by_id[item_id]
+
+        # Pattern 23: Pinned Edit State — 用户 pin 的 item 不被苍鹰修改
+        if target.get("pinned"):
+            target.setdefault("gate_log", [])
+            target["gate_log"].append(f"pinned: 跳过苍鹰误报标记 ({fp.get('reason', '')[:60]})")
+            continue
+
         rec = fp.get("recommendation", "")
 
         if "移除" in rec:
