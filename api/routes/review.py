@@ -290,6 +290,20 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
     items = req.review_result.get("items", [])
     pending = len(items) - len(decisions)
 
+    # Phase G #4: 决策 → rule_performance_history EMA 闭环
+    # 用户 accept/reject/edit 是最直接的 harness 反馈信号,写入 rule_perf
+    # 让下次同 reviewer 评审时 worker prompt 注入"以下规则 hit rate 低"。
+    try:
+        workspace = req.review_result.get("workspace", "")
+        reviewer = user.get("reviewer", "unknown")
+        if workspace:
+            ws_dir = get_workspace_dir(workspace)
+            _update_rule_perf_from_decisions(ws_dir, items, decisions, reviewer)
+    except Exception as e:
+        # 反馈写入失败不阻塞 Phase 4
+        import logging
+        logging.getLogger("api").warning(f"[Phase G #4] rule_perf 更新失败: {e}")
+
     return {
         "status": "confirmed",
         "review_id": req.review_result.get("review_id"),
@@ -299,3 +313,69 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
         "pending": pending,
         "total": len(items),
     }
+
+
+def _update_rule_perf_from_decisions(ws_dir, items, decisions, reviewer):
+    """Phase G #4: 用户决策 EMA 反馈到 rule_performance_history.json
+
+    - accept: hit_count +1, impact_score EMA↑
+    - reject: false_positive_count +1, impact_score EMA↓
+    - edit:   partial_hit_count +1, impact_score 不变
+
+    α = 0.2,和 feedback.py 的 α=0.15 略高(直接用户信号比代码扫描信号权重更大)。
+    """
+    import json as _json
+    from pathlib import Path
+    history_path = Path(ws_dir) / "output" / "rule_performance_history.json"
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # 读现有 history
+    try:
+        with open(history_path, "r", encoding="utf-8") as f:
+            history = _json.load(f)
+    except (FileNotFoundError, _json.JSONDecodeError):
+        history = {}
+
+    alpha = 0.2  # 用户决策的 EMA 系数(比 feedback.py 的 0.15 大一档)
+
+    for item in items:
+        item_id = item.get("id", "")
+        rule_id = item.get("rule_id", "")
+        if not rule_id:
+            continue  # 没有 rule_id 的 item 不参与规则更新
+
+        decision = decisions.get(item_id, {})
+        action = decision.get("action")
+        if action not in ("accept", "reject", "edit"):
+            continue  # 待决的不更新
+
+        # 确保 rule entry 存在
+        if rule_id not in history:
+            history[rule_id] = {
+                "hit_count": 0,
+                "false_positive_count": 0,
+                "partial_hit_count": 0,
+                "impact_score": 0.5,  # 初始中性
+                "last_reviewer": reviewer,
+            }
+
+        entry = history[rule_id]
+        old_score = entry.get("impact_score", 0.5)
+
+        if action == "accept":
+            entry["hit_count"] = entry.get("hit_count", 0) + 1
+            # EMA↑: 向 1.0 靠拢
+            entry["impact_score"] = old_score * (1 - alpha) + 1.0 * alpha
+        elif action == "reject":
+            entry["false_positive_count"] = entry.get("false_positive_count", 0) + 1
+            # EMA↓: 向 0.0 靠拢
+            entry["impact_score"] = old_score * (1 - alpha) + 0.0 * alpha
+        elif action == "edit":
+            entry["partial_hit_count"] = entry.get("partial_hit_count", 0) + 1
+            # 不改 impact_score(方向对但措辞不准,保持中性)
+
+        entry["last_reviewer"] = reviewer
+
+    # 写回
+    with open(history_path, "w", encoding="utf-8") as f:
+        _json.dump(history, f, ensure_ascii=False, indent=2)

@@ -678,13 +678,27 @@ def _build_worker_messages(prd_content, wiki_pages, dim_key=None, wiki_path=None
             filtered = relevant if relevant else wiki_pages
         else:
             filtered = wiki_pages
+
+        # Phase G #6: wiki token budget — strong 全文优先,超 budget 只写标题
+        # 防止 48 页 wiki 全 inject 导致 prompt 40K+ tokens,worker 跑 4+ 分钟
+        MAX_WIKI_CHARS = int(os.environ.get("PECKER_MAX_WIKI_CHARS", "48000"))
+        wiki_char_total = 0
         parts.append("## 相关知识库页面\n")
         for title, content in filtered.items():
             # 加新鲜度标记（CC memoryAge 模式）
             if wiki_path:
                 fpath = os.path.join(wiki_path, f"{title}.md")
                 content = _add_freshness_note(fpath, content)
-            parts.append(f"### {title}\n{content}\n")
+            if wiki_char_total + len(content) <= MAX_WIKI_CHARS:
+                parts.append(f"### {title}\n{content}\n")
+                wiki_char_total += len(content)
+            else:
+                # 超 budget:只写标题,让 worker 知道这页存在但不塞全文
+                parts.append(f"### {title}\n(知识库页面已省略 — token budget 已满)\n")
+        if wiki_char_total > MAX_WIKI_CHARS * 0.8:
+            log.info(
+                f"[{dim_key or 'worker'}] wiki 注入 {wiki_char_total:,} chars / {MAX_WIKI_CHARS:,} budget"
+            )
     parts.append("请评审以上 PRD，逐条对照你的检查清单，然后调用 submit_review_items 工具提交发现的所有改进项。每条改进项必须标注 rule_id。")
     return [{"role": "user", "content": "\n\n".join(parts)}]
 
