@@ -65,6 +65,14 @@ export interface WorkerDoneEvent extends BaseEvent {
   readonly degraded?: boolean;
   /** Phase G #2: worker timeout 触发降级 */
   readonly timeout?: boolean;
+  /** CC telemetry: worker 运行时指标 */
+  readonly telemetry?: {
+    readonly duration_ms?: number;
+    readonly tokens_in?: number;
+    readonly tokens_out?: number;
+    readonly cost_usd?: number;
+    readonly turns_used?: number;
+  };
 }
 
 export interface FinalReviewerStartedEvent extends BaseEvent {

@@ -199,6 +199,55 @@ export function Phase4Report() {
         </CardContent>
       </Card>
 
+      {/* ========== CC advanced: telemetry 汇总 ========== */}
+      {reviewResult?.telemetry && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="font-mono uppercase tracking-wider">
+                运行指标
+              </span>
+              <span className="h-px flex-1 bg-border" />
+              {reviewResult.telemetry.total_duration_ms && (
+                <span className="font-mono tabular-nums">
+                  {(reviewResult.telemetry.total_duration_ms / 1000).toFixed(1)}s
+                </span>
+              )}
+            </div>
+            {reviewResult.telemetry.workers && (
+              <div className="mt-2 flex flex-wrap gap-3">
+                {Object.entries(
+                  reviewResult.telemetry.workers as Record<
+                    string,
+                    Record<string, number>
+                  >,
+                ).map(([dim, metrics]) => (
+                  <div
+                    key={dim}
+                    className="rounded-sm border bg-muted/30 px-2 py-1 text-[11px]"
+                  >
+                    <div className="font-medium text-foreground/80">{dim}</div>
+                    <div className="mt-0.5 space-x-2 text-muted-foreground">
+                      {metrics.duration_ms && (
+                        <span>{(metrics.duration_ms / 1000).toFixed(0)}s</span>
+                      )}
+                      {metrics.tokens_in && (
+                        <span>{(metrics.tokens_in / 1000).toFixed(1)}K in</span>
+                      )}
+                      {metrics.tokens_out && (
+                        <span>
+                          {(metrics.tokens_out / 1000).toFixed(1)}K out
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* ========== CC-pattern: 成本归因(如果后端返回了 cost_breakdown) ========== */}
       {reviewResult?.cost_breakdown && (
         <Card>

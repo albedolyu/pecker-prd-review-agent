@@ -223,6 +223,12 @@ export interface ReviewResult {
   readonly signature: string;
   /** CC-pattern: 各维度成本归因(dim_key → USD) */
   readonly cost_breakdown?: Readonly<Record<string, number>>;
+  /** CC advanced: telemetry 汇总(总时长 + 各 worker 指标) */
+  readonly telemetry?: Readonly<{
+    total_duration_ms?: number;
+    total_cost_usd?: number;
+    workers?: Readonly<Record<string, unknown>>;
+  }>;
 }
 
 export interface PrecheckRequest {
