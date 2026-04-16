@@ -563,10 +563,15 @@ class ClaudeCodeCLIClient:
                         log.info(
                             f"[cc_client] tool={structured_tool['name']} 重试成功"
                         )
-                        # 累加两次 usage(第一次 + 重试)
+                        # 累加两次 usage(第一次 + 重试),只取已知数值 key
+                        # 避免 usage dict 里混入 nested dict 导致 int() 崩溃
+                        _num_keys = (
+                            "input_tokens", "output_tokens",
+                            "cache_creation_input_tokens", "cache_read_input_tokens",
+                        )
                         usage = {
                             k: int(usage.get(k, 0) or 0) + int(usage_retry.get(k, 0) or 0)
-                            for k in set(usage.keys()) | set(usage_retry.keys())
+                            for k in _num_keys
                         }
                         text_result = text_result_retry
                         used_model = used_model_retry
