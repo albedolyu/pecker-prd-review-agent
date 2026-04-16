@@ -23,3 +23,33 @@ jobs:
 
       - name: Run Eval Gate tests
         run: python -m pytest tests/test_eval_gate.py -m eval -v
+
+  # P1-4: 稳定性护栏 — 覆盖 P0-1/P0-2/P0-3 修复的行为回归
+  stability_gate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install ".[dev]"
+
+      - name: Run stability regression tests
+        run: |
+          python -m pytest \
+            tests/test_cc_error_handling.py \
+            tests/test_review_confirm.py \
+            tests/test_review_fixer.py \
+            -v
+
+      - name: Summarize
+        if: always()
+        run: |
+          echo "### Stability Gate Summary" >> $GITHUB_STEP_SUMMARY
+          echo "Covers: P0-1 全员失败 abort / P0-2 JSON 解析 / P0-3 配额分类 / 决策回流 / review_fixer" >> $GITHUB_STEP_SUMMARY
