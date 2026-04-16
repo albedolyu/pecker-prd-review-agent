@@ -226,7 +226,7 @@ async def run_review(req: ReviewRequest, request: Request):
                         client, enhanced_prd, items, req.wiki_pages
                     )
                     from goshawk_advisor import apply_advisor_result
-                    items = apply_advisor_result(items, goshawk_result)
+                    items = apply_advisor_result(items, goshawk_result, wiki_pages=req.wiki_pages)
                     result["merged_items"] = items
                     result["goshawk"] = goshawk_result
                     emitter.emit("final_reviewer_done", data={
@@ -235,6 +235,27 @@ async def run_review(req: ReviewRequest, request: Request):
                     })
                 except Exception as e:
                     emitter.emit("final_reviewer_done", data={"error": str(e)[:200]})
+
+        # 成本归因聚合 (CC cost-tracker querySource 模式)
+        cost_breakdown = {}
+        total_cost = 0.0
+        for w in result.get("workers", []):
+            dim = w.get("dimension", "unknown")
+            c = w.get("cost_usd", 0.0)
+            cost_breakdown[dim] = round(c, 6)
+            total_cost += c
+        # 苍鹰成本(从 goshawk result 的 usage 计算)
+        goshawk_res = result.get("goshawk")
+        if goshawk_res and goshawk_res.get("usage"):
+            from api_adapter import compute_call_cost_usd
+            gc = compute_call_cost_usd(
+                goshawk_res.get("model_used", "claude-opus-4-6"),
+                goshawk_res["usage"],
+            )
+            cost_breakdown["goshawk"] = round(gc, 6)
+            total_cost += gc
+        cost_breakdown["total"] = round(total_cost, 6)
+        result["cost_breakdown"] = cost_breakdown
 
         # 包装成 Opaque Handle (A14)
         review_result_handle = ReviewResult.create(
@@ -246,6 +267,7 @@ async def run_review(req: ReviewRequest, request: Request):
             workers=result.get("workers", []),
             usage=result.get("total_usage", {}),
             goshawk_summary=result.get("goshawk"),
+            cost_breakdown=cost_breakdown,
         )
         return review_result_handle.model_dump()
 

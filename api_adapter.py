@@ -6,6 +6,7 @@ import os
 import random
 import json
 import threading
+import uuid as _uuid_mod
 
 # 重试策略（参考 Claude Code withRetry.ts:57-89 的 query source 分级）
 RETRY_POLICIES = {
@@ -29,6 +30,11 @@ MODEL_PRICING = {
     "claude-haiku-4-5-20251001":  {"input": 0.8,  "output": 4.0,  "cache_read": 0.08, "cache_write": 1.0},
 }
 FLOOR_MAX_TOKENS = 3000  # 动态调整 max_tokens 的下限
+
+
+def _gen_req_id():
+    """生成短 hex 请求 ID (CC requestLogId 模式)"""
+    return _uuid_mod.uuid4().hex[:8]
 
 
 # ============================================================
@@ -174,6 +180,12 @@ class AnthropicNativeClient:
         current_model = kwargs["model"]
         response = None
 
+        # retry chain ID (CC requestLogId + retryOfRequestLogID 模式)
+        req_id = _gen_req_id()
+        tool_hint = (tools[0]["name"] if tools and isinstance(tools[0], dict) else "none")
+        log.info(f"[cc_client] req={req_id} tool={tool_hint} model={current_model} policy={retry_policy}")
+        original_req_id = req_id  # 链首
+
         # 预算检查（参考 CC QueryEngine.ts 的 maxBudgetUsd）
         max_budget = float(os.environ.get("MAX_BUDGET_USD", "0"))
         if max_budget > 0 and self.tracker.total_cost_usd() >= max_budget:
@@ -199,12 +211,17 @@ class AnthropicNativeClient:
                         current_model = fallback
                         kwargs["model"] = fallback
                         consecutive_overloads = 0
+                        prev_id = req_id
+                        req_id = _gen_req_id()
+                        log.info(f"[cc_client] req={req_id} retryOf={prev_id} tool={tool_hint} 降级重试")
                         continue  # 用新模型立即重试
                 if attempt == max_retries:
                     from exceptions import APIError
                     raise APIError(f"API 限流 {max_retries + 1} 次均失败: {e}")
+                prev_id = req_id
+                req_id = _gen_req_id()
                 delay = 2 ** (attempt + 1) + random.uniform(0, 1)
-                log.warning(f"API 限流 (第{attempt + 1}次)，{delay:.1f}s 后重试: {str(e)[:80]}")
+                log.warning(f"[cc_client] req={req_id} retryOf={prev_id} tool={tool_hint} 限流重试 {delay:.1f}s")
                 time.sleep(delay)
             except _anthropic.BadRequestError as e:
                 # Context overflow 动态调整（CC withRetry.ts:388-427）
@@ -223,11 +240,17 @@ class AnthropicNativeClient:
             except Exception as e:
                 if attempt == max_retries:
                     from exceptions import APIError
-                    log.error(f"API {max_retries + 1} 次调用均失败: {e}")
+                    log.error(f"[cc_client] req={req_id} tool={tool_hint} {max_retries + 1}次均失败: {e}")
                     raise APIError(f"API 调用 {max_retries + 1} 次均失败: {e}")
+                prev_id = req_id
+                req_id = _gen_req_id()
                 delay = 2 ** (attempt + 1) + random.uniform(0, 1)
-                log.warning(f"API 调用失败 (第{attempt + 1}次)，{delay:.1f}s 后重试: {str(e)[:80]}")
+                log.warning(f"[cc_client] req={req_id} retryOf={prev_id} tool={tool_hint} 异常重试 {delay:.1f}s: {str(e)[:80]}")
                 time.sleep(delay)
+
+        # 成功时记录 chain (如果有过重试,req_id 已变)
+        if response is not None and req_id != original_req_id:
+            log.info(f"[cc_client] req={req_id} retryOf={original_req_id} tool={tool_hint} 重试成功")
 
         # 防止 overflow continue 耗尽重试后 response 仍为 None
         if response is None:
@@ -341,6 +364,28 @@ class AnthropicNativeClient:
 
 
 # ============================================================
+# 单次调用成本计算 (CC cost-tracker.ts querySource 归因)
+# ============================================================
+
+def compute_call_cost_usd(model, usage):
+    """从 model 名和 usage dict 计算单次调用成本 USD"""
+    pricing = None
+    for k, v in MODEL_PRICING.items():
+        if k in (model or ""):
+            pricing = v
+            break
+    if not pricing:
+        # fallback: sonnet 定价
+        pricing = MODEL_PRICING.get("claude-sonnet-4-6", {"input": 3.0, "output": 15.0, "cache_read": 0.3, "cache_write": 3.75})
+    cost = 0.0
+    cost += (usage.get("input_tokens", 0) or 0) * pricing["input"] / 1_000_000
+    cost += (usage.get("output_tokens", 0) or 0) * pricing["output"] / 1_000_000
+    cost += (usage.get("cache_read_input_tokens", 0) or 0) * pricing["cache_read"] / 1_000_000
+    cost += (usage.get("cache_creation_input_tokens", 0) or 0) * pricing["cache_write"] / 1_000_000
+    return round(cost, 6)
+
+
+# ============================================================
 # Token 预估（参考 CC tokenEstimation.ts:203-224）
 # ============================================================
 
@@ -425,6 +470,11 @@ class ClaudeCodeCLIClient:
                temperature=0.2, retry_policy="foreground"):
         from logger import get_logger
         log = get_logger("api")
+
+        # retry chain ID (CC requestLogId 模式)
+        req_id = _gen_req_id()
+        tool_hint = (tools[0]["name"] if tools and isinstance(tools[0], dict) else "none")
+        log.info(f"[cc_client] req={req_id} tool={tool_hint} model={model} backend=cli")
 
         system_text = self._flatten_system(system)
         prompt_text = self._flatten_messages(messages)

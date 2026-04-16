@@ -81,6 +81,7 @@ class ReviewResult(BaseModel):
     workers: List[ReviewWorkerInfo] = Field(default_factory=list)
     usage: Dict[str, int] = Field(default_factory=dict)
     goshawk_summary: Optional[Dict[str, Any]] = None
+    cost_breakdown: Optional[Dict[str, float]] = Field(default=None, description="各维度成本归因 USD")
 
     # Opaque handle signature — 前端任何改动都会让 verify 失败
     signature: str = Field(..., description="HMAC-SHA256(secret, review_id + canonical_items)")
@@ -96,6 +97,7 @@ class ReviewResult(BaseModel):
         workers: List[Dict[str, Any]],
         usage: Dict[str, int],
         goshawk_summary: Optional[Dict[str, Any]] = None,
+        cost_breakdown: Optional[Dict[str, float]] = None,
     ) -> "ReviewResult":
         """后端评审完成后调用,自动生成 review_id + signature。"""
         import uuid
@@ -123,6 +125,7 @@ class ReviewResult(BaseModel):
             workers=worker_infos,
             usage=usage,
             goshawk_summary=goshawk_summary,
+            cost_breakdown=cost_breakdown,
             signature=sig,
         )
 
