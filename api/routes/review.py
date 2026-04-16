@@ -175,8 +175,9 @@ async def run_review(req: ReviewRequest, request: Request):
     """
     get_workspace_dir(req.workspace)  # 校验 workspace 合法
 
-    # 注入 WORKSPACE env var(parallel_review 延迟解析会读)
+    # 注入 WORKSPACE + PECKER_REVIEWER env var(parallel_review 延迟解析会读)
     os.environ["WORKSPACE"] = str(get_project_root() / req.workspace)
+    os.environ["PECKER_REVIEWER"] = req.reviewer  # Phase G #8: reviewer profile
 
     emitter = ReviewProgressEmitter()
     client = get_client()
@@ -304,6 +305,9 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
         import logging
         logging.getLogger("api").warning(f"[Phase G #4] rule_perf 更新失败: {e}")
 
+    # Phase G #5: 杜鹃 dev 入口(轻量版)— 3 个启发式质量指标
+    quality = _compute_review_quality(items)
+
     return {
         "status": "confirmed",
         "review_id": req.review_result.get("review_id"),
@@ -312,6 +316,33 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
         "edited": edited,
         "pending": pending,
         "total": len(items),
+        "quality": quality,  # Phase G #5
+    }
+
+
+def _compute_review_quality(items):
+    """Phase G #5: 杜鹃 dev 轻量版 — 3 个启发式质量指标(不跑 Claude)。
+
+    format_completeness: 有多少 % 的 item 三字段齐全(location + evidence + suggestion)
+    severity_ratio: must / total,越高说明越认真(只报 should 可能在凑数)
+    confidence_mean: 平均 confidence score(低 = 不确定的 item 多)
+    """
+    if not items:
+        return {"format_completeness": 0, "severity_ratio": 0, "confidence_mean": 0}
+
+    complete = sum(
+        1 for it in items
+        if it.get("location") and it.get("evidence_content") and it.get("suggestion")
+    )
+    must_count = sum(1 for it in items if it.get("severity") == "must")
+    conf_scores = [
+        float(it.get("confidence", it.get("confidence_score", 0.5)))
+        for it in items
+    ]
+    return {
+        "format_completeness": round(complete / len(items), 2),
+        "severity_ratio": round(must_count / len(items), 2),
+        "confidence_mean": round(sum(conf_scores) / len(conf_scores), 2),
     }
 
 

@@ -475,7 +475,67 @@ def _build_worker_system(dim_key, rule_perf_history=None, dimensions=None, works
     if refs_section:
         base_prompt += "\n" + refs_section
 
+    # Phase G #8: 注入 reviewer 偏好 profile (从 wiki 读)
+    reviewer_section = _build_reviewer_profile_section(workspace)
+    if reviewer_section:
+        base_prompt += "\n" + reviewer_section
+
     return base_prompt
+
+
+def _build_reviewer_profile_section(workspace=None):
+    """Phase G #8: 读 wiki 里的 reviewer 偏好页面注入 worker system prompt。
+
+    匹配逻辑:
+    1. 先找 `概念-{reviewer} 评审偏好*` wiki 页面(精确匹配 reviewer 名)
+    2. 没找到就 fallback 到 `概念-default 评审人的严格度等级`
+    3. 都没有就返回空(新 workspace,还没积累 reviewer profile)
+    """
+    reviewer = os.environ.get("PECKER_REVIEWER", "").strip()
+    if not reviewer or not workspace:
+        return ""
+
+    wiki_dir = os.path.join(workspace, "wiki")
+    if not os.path.isdir(wiki_dir):
+        return ""
+
+    # 找 reviewer-specific profile
+    profile_content = None
+    profile_source = None
+    for fn in os.listdir(wiki_dir):
+        if not fn.endswith(".md"):
+            continue
+        lower = fn.lower()
+        if reviewer.lower() in lower and "评审" in fn:
+            try:
+                with open(os.path.join(wiki_dir, fn), "r", encoding="utf-8") as f:
+                    profile_content = f.read()[:2000]
+                    profile_source = fn[:-3]
+            except OSError:
+                continue
+            break
+
+    # fallback: default 评审人
+    if not profile_content:
+        for fn in os.listdir(wiki_dir):
+            if "default" in fn.lower() and ("严格度" in fn or "评审" in fn):
+                try:
+                    with open(os.path.join(wiki_dir, fn), "r", encoding="utf-8") as f:
+                        profile_content = f.read()[:2000]
+                        profile_source = fn[:-3]
+                except OSError:
+                    continue
+                break
+
+    if not profile_content:
+        return ""
+
+    return (
+        f"\n### 评审人偏好 (from wiki: {profile_source})\n"
+        f"本次评审人: {reviewer}\n"
+        f"请参考以下偏好调整你的评审侧重点:\n\n"
+        f"{profile_content}\n"
+    )
 
 
 def _build_feedback_section(dim_key, rule_perf_history=None, dimensions=None):
@@ -1511,6 +1571,7 @@ def merge_and_deduplicate(items):
     sorted_items = sorted(items, key=lambda x: severity_rank.get(x.get("severity", "should"), 1))
 
     # 去重：逐条检查是否与已保留的 item 高度相似
+    # Phase G #7: 去重时聚合 cited_by_workers — 2+ 个 worker 同时指出 = 共识信号
     kept = []
     for item in sorted_items:
         is_dup = False
@@ -1521,8 +1582,18 @@ def merge_and_deduplicate(items):
             similarity = SequenceMatcher(None, item_text, existing_text).ratio()
             if similarity > 0.8:
                 is_dup = True
-                # 如果当前 item 严重度更高，替换已有的
+                # 聚合 cited_by_workers:winner 吸收 loser 的 worker keys
+                dup_workers = item.get("cited_by_workers", [])
+                existing_workers = existing.get("cited_by_workers", [])
+                merged_workers = list(set(existing_workers) | set(dup_workers))
+                existing["cited_by_workers"] = merged_workers
+                # 共识 boost: ≥2 worker 同时指证,provenance 标为 meta_dedup_kept
+                if len(merged_workers) >= 2:
+                    existing["provenance"] = "meta_dedup_kept"
+                # 如果当前 item 严重度更高，替换已有的(保留聚合后的 workers)
                 if severity_rank.get(item.get("severity"), 1) < severity_rank.get(existing.get("severity"), 1):
+                    item["cited_by_workers"] = merged_workers
+                    item["provenance"] = existing.get("provenance", "worker")
                     kept.remove(existing)
                     kept.append(item)
                 break
