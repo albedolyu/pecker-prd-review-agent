@@ -61,6 +61,10 @@ export interface WorkerDoneEvent extends BaseEvent {
   readonly success: boolean;
   readonly items_count: number;
   readonly error?: string;
+  /** Phase G #1: worker 输出被降级(JSON 解析失败 + 重试无效) */
+  readonly degraded?: boolean;
+  /** Phase G #2: worker timeout 触发降级 */
+  readonly timeout?: boolean;
 }
 
 export interface FinalReviewerStartedEvent extends BaseEvent {

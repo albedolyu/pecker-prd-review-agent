@@ -17,7 +17,7 @@
  */
 
 import type { CSSProperties } from "react";
-import { Loader2, CheckCircle2, XCircle, Circle } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, Circle, AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Tooltip,
@@ -28,7 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import type { Role } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 
-export type RoleCardState = "idle" | "running" | "done" | "error";
+export type RoleCardState = "idle" | "running" | "done" | "degraded" | "error";
 
 export interface RoleCardProps {
   role: Role;
@@ -80,6 +80,10 @@ export function RoleCard({
             // done:暖绿边 + 极淡底 + 左侧竖条
             state === "done" &&
               "border-pecker-success-border bg-pecker-success-bg before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-pecker-success",
+            // Phase G #1+#2: degraded — 琥珀边 + 浅琥珀底 + 警告竖条
+            // 这位编辑这一轮"状态不好",JSON 解析失败 / timeout 走了空兜底
+            state === "degraded" &&
+              "border-amber-500/50 bg-amber-500/[0.06] before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-amber-500",
             // error:深校稿红 + 左侧竖条
             state === "error" &&
               "border-destructive/50 bg-destructive/[0.04] before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-destructive",
@@ -131,12 +135,25 @@ export function RoleCard({
                     Running
                   </Badge>
                 )}
+                {state === "degraded" && (
+                  <Badge
+                    variant="outline"
+                    className="h-5 rounded-sm border-amber-500/50 bg-transparent px-1.5 font-mono text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400"
+                  >
+                    DEGRADED
+                  </Badge>
+                )}
               </div>
               <p className="mt-1.5 truncate text-xs leading-relaxed text-muted-foreground">
                 {role.responsibility}
               </p>
               {state === "error" && errorText && (
                 <p className="mt-1.5 line-clamp-2 text-[11px] text-destructive">
+                  {errorText}
+                </p>
+              )}
+              {state === "degraded" && errorText && (
+                <p className="mt-1.5 line-clamp-2 text-[11px] text-amber-700 dark:text-amber-400">
                   {errorText}
                 </p>
               )}
@@ -167,5 +184,11 @@ function StateIcon({ state }: { state: RoleCardState }) {
     return <Loader2 className={cn(base, "animate-spin text-pecker-running")} />;
   if (state === "done")
     return <CheckCircle2 className={cn(base, "text-pecker-success")} />;
+  if (state === "degraded")
+    return (
+      <AlertTriangle
+        className={cn(base, "text-amber-600 dark:text-amber-400")}
+      />
+    );
   return <XCircle className={cn(base, "text-destructive")} />;
 }

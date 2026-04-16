@@ -827,11 +827,23 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
     # 过滤非 dict 元素（模型偶尔返回字符串数组而非对象数组）
     items = [item for item in items if isinstance(item, dict)]
 
+    # Phase G #3: 给每个 worker 输出的 item 打上 provenance 标记。后续苍鹰
+    # 补遗 / 共识聚合时会覆盖成 'meta_added' / 'meta_dedup_kept'。
     for item in items:
         item["dimension"] = dim["name"]
+        item.setdefault("provenance", "worker")
+        item.setdefault("confidence", 0.85)  # worker 原生输出 confidence 默认 0.85
+        item.setdefault("cited_by_workers", [dim_key])
 
     # 提取 worker 发现的关键规则 ID（供 scratchpad 跨 worker 共享）
     found_rule_ids = list(set(item.get("rule_id", "") for item in items if item.get("rule_id")))
+
+    # Phase G #1: 把 cc_client 的 degraded 标记透传出去
+    is_degraded = bool(getattr(response, "degraded", False))
+    if is_degraded:
+        log.warning(
+            f"[{_cn_label(dim_key)}] worker 被标记 degraded(JSON 解析失败 + 重试无效)"
+        )
 
     return {
         "dimension": dim_key,
@@ -839,6 +851,7 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
         "model": model,
         "items": items,
         "found_rule_ids": found_rule_ids,
+        "degraded": is_degraded,
         "usage": {
             "input_tokens": response.usage["input_tokens"],
             "output_tokens": response.usage["output_tokens"],

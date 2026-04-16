@@ -359,6 +359,7 @@ def apply_advisor_result(review_items, advisor_result):
     for i, finding in enumerate(advisor_result.get("additional_findings", [])[:MAX_ADDITIONAL_FINDINGS], start=1):
         new_id = f"R-{max_num + i:03d}"
         evi_type = finding.get("evidence_type", "A")
+        meta_confidence = compute_confidence(evi_type, is_supplement=True)  # B4
         new_item = {
             "id": new_id,
             "rule_id": finding.get("rule_id", ""),
@@ -368,12 +369,17 @@ def apply_advisor_result(review_items, advisor_result):
             "severity": finding.get("severity", "should"),
             "evidence_type": evi_type,
             "evidence_content": finding.get("evidence_content", finding.get("evidence", "")),
-            "confidence_score": compute_confidence(evi_type, is_supplement=True),  # B4
+            "confidence_score": meta_confidence,  # B4(已有,后端用)
+            # ============ Phase G #3: provenance 字段 ============
+            # 标记这条是苍鹰补遗,前端 Phase 3 会显示"苍鹰补遗 · 红章"
+            "provenance": "meta_added",
+            "confidence": meta_confidence,             # 前端用的标准化字段(0..1)
+            "cited_by_workers": ["final-reviewer"],     # 只有苍鹰一个人指证
             "dimension": "苍鹰补充",
             "source": "苍鹰补充",
         }
         items.append(new_item)
-        print(f'  终审：所有编辑都没看到这个?补充 {new_id} (confidence={new_item["confidence_score"]}).')
+        print(f'  终审：所有编辑都没看到这个?补充 {new_id} (confidence={meta_confidence}).')
 
     # 3. 处理冲突调解
     for resolution in advisor_result.get("conflict_resolutions", []):

@@ -6,7 +6,8 @@
 
 from config.base import *  # noqa: F401,F403
 
-# dev 环境保留 base 的默认值,无需额外覆盖
-# 如需 dev 专属配置,在此覆盖,例如:
-# WORKER_TIMEOUT = 600   # 开发时给更长的超时便于调试
-# MAX_TOKENS = 16384     # 开发时放宽 token
+# Phase G #2: dev 收紧 worker 超时
+# 之前 base WORKER_TIMEOUT=420 太宽,实际 stuck 时用户感知不到,直接卡住
+# 4 分钟单 worker 已经足够 dev 调试,超时就走 degraded 路径
+WORKER_TIMEOUT = 240         # 4 分钟 / 单 worker
+TOTAL_REVIEW_TIMEOUT = 600   # 10 分钟总上限,触发后整体降级

@@ -169,8 +169,13 @@ export const draftsApi = {
 
 /**
  * 单条改进项。后端定义是 Dict[str, Any],字段不固定,这里列出的是常见字段,
- * 其他通过 `[key: string]: unknown` 兜底。Phase C 根据实际报告细化。
+ * 其他通过 `[key: string]: unknown` 兜底。
+ *
+ * Phase G #3:加 provenance / cited_by_workers,用来在 Phase 3 卡片上区分
+ * "worker 原生输出" / "苍鹰补遗" / "共识被 N 个 worker 同时识别"。
  */
+export type ItemProvenance = "worker" | "meta_added" | "meta_dedup_kept";
+
 export interface ReviewItem {
   readonly id: string;
   readonly dimension: string; // 对应 roles.ts 的 RoleKey
@@ -180,6 +185,10 @@ export interface ReviewItem {
   readonly evidence?: string;
   readonly suggestion?: string;
   readonly confidence?: number;
+  /** worker / meta_added / meta_dedup_kept */
+  readonly provenance?: ItemProvenance;
+  /** 哪些 worker 同时指证了这条 — len ≥ 2 = 共识强信号 */
+  readonly cited_by_workers?: ReadonlyArray<string>;
   readonly [key: string]: unknown;
 }
 

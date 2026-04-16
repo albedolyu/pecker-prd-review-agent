@@ -117,6 +117,9 @@ export function Phase2Running() {
   }, [stream.state, stream.result, setReviewResult, setPhase]);
 
   // ========== 派生:每个 worker 当前状态 ==========
+  // Phase G #1+#2: degraded 状态(JSON 解析失败重试无效 / timeout 触发空 fallback)
+  // 算 done 而非 error,因为 worker 仍然返了一个空块,流程能继续。视觉上和 done
+  // 区分,用浅琥珀边 + 警告 icon。
   const workerStates = useMemo(() => {
     const states = new Map<RoleKey, RoleCardState>();
     // 初始态
@@ -138,7 +141,13 @@ export function Phase2Running() {
         const ev = e as WorkerDoneEvent;
         const k = ev.dim_key as RoleKey;
         if (WORKER_ROLE_KEYS.includes(k)) {
-          states.set(k, ev.success ? "done" : "error");
+          if (!ev.success) {
+            states.set(k, "error");
+          } else if (ev.degraded || ev.timeout) {
+            states.set(k, "degraded");
+          } else {
+            states.set(k, "done");
+          }
         }
       }
     }
@@ -170,6 +179,10 @@ export function Phase2Running() {
       if (e.event === "worker_done") {
         const ev = e as WorkerDoneEvent;
         if (ev.error) m.set(ev.dim_key as RoleKey, ev.error);
+        else if (ev.timeout)
+          m.set(ev.dim_key as RoleKey, "超时 - 走空兜底");
+        else if (ev.degraded)
+          m.set(ev.dim_key as RoleKey, "JSON 解析失败 + 重试无效");
       }
     }
     return m;

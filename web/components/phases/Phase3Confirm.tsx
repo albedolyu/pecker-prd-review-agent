@@ -256,13 +256,16 @@ function ItemCard({ item, role, decision, onChange }: ItemCardProps) {
       )}
     >
       <CardContent className="space-y-3 p-4">
-        {/* 顶部: ID + severity + location */}
+        {/* 顶部: ID + severity + provenance + location */}
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="font-mono text-muted-foreground">{item.id}</span>
           {item.severity && <SeverityBadge severity={item.severity} />}
-          <span className="text-muted-foreground">
-            · {role.label}
-          </span>
+          {/* Phase G #3 + #7: provenance badge */}
+          <ProvenanceBadge
+            provenance={item.provenance}
+            citedByWorkers={item.cited_by_workers}
+          />
+          <span className="text-muted-foreground">· {role.label}</span>
           {item.location && (
             <span className="text-muted-foreground">· {item.location}</span>
           )}
@@ -383,6 +386,58 @@ function SeverityBadge({ severity }: { severity: string }) {
       {label}
     </span>
   );
+}
+
+/**
+ * Phase G #3 + #7: ProvenanceBadge
+ *
+ * 按这条改进项的来源在 ID 旁边显示一个小章:
+ * - worker (默认)         : 不显示(原生输出无需特殊标注)
+ * - meta_added            : 红色"补遗"小章,代表苍鹰发现的漏报
+ * - meta_dedup_kept       : 灰色"裁定"小章,代表苍鹰判定的去重赢家
+ * - cited_by_workers ≥ 2  : ★ 共识星,N 个 worker 同时指证
+ */
+function ProvenanceBadge({
+  provenance,
+  citedByWorkers,
+}: {
+  provenance?: string;
+  citedByWorkers?: ReadonlyArray<string>;
+}) {
+  // 共识 boost 优先(更强的信号)
+  const consensus = (citedByWorkers?.length ?? 0) >= 2;
+  if (consensus) {
+    return (
+      <span
+        className="inline-flex items-center gap-0.5 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400"
+        title={`${citedByWorkers?.length} 位编辑同时指出: ${citedByWorkers?.join(" / ")}`}
+      >
+        ★ 共识 {citedByWorkers?.length}
+      </span>
+    );
+  }
+  if (provenance === "meta_added") {
+    return (
+      <span
+        className="inline-flex items-center rounded border border-pecker-red/40 bg-pecker-red/10 px-1.5 py-0.5 text-[10px] font-medium italic text-pecker-red/85"
+        title="苍鹰交叉校验时发现的漏报,worker 都没看到"
+      >
+        ✱ 苍鹰补遗
+      </span>
+    );
+  }
+  if (provenance === "meta_dedup_kept") {
+    return (
+      <span
+        className="inline-flex items-center rounded border border-foreground/30 bg-foreground/5 px-1.5 py-0.5 text-[10px] font-medium text-foreground/65"
+        title="苍鹰判定保留的去重赢家"
+      >
+        ⚖ 终审保留
+      </span>
+    );
+  }
+  // worker 原生输出,不加 badge,保持卡片整洁
+  return null;
 }
 
 function ActionButton({
