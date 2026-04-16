@@ -113,15 +113,14 @@ class TokenTracker:
 
 class UnifiedResponse:
     """统一的 API 响应"""
-    def __init__(self, text_blocks, tool_calls, stop_reason, usage, model, degraded=False):
+    def __init__(self, text_blocks, tool_calls, stop_reason, usage, model, truncated=False):
         self.text_blocks = text_blocks
         self.tool_calls = tool_calls
         self.stop_reason = stop_reason
         self.usage = usage
         self.model = model
-        # Phase G #1: 标记本次结构化输出是否被降级(JSON 解析失败 + 重试无效)
-        # 上游可据此发出 worker_degraded 事件,前端能看到"这位编辑这次状态不好"
-        self.degraded = degraded
+        # 1c: max_output_recovery 钩子 — 标记输出是否被截断 (CC max_tokens 检测)
+        self.truncated = truncated
 
     @property
     def content(self):
@@ -269,6 +268,11 @@ class AnthropicNativeClient:
                     "input": block.input,
                 })
 
+        # 1c: max_output_recovery — 检测输出截断 (CC max_tokens breaker)
+        is_truncated = (response.stop_reason == "max_tokens")
+        if is_truncated:
+            log.warning(f"[cc_client] req={req_id} stop_reason=max_tokens, 输出被截断 (model={current_model})")
+
         unified = UnifiedResponse(
             text_blocks=text_blocks,
             tool_calls=tool_calls,
@@ -280,6 +284,7 @@ class AnthropicNativeClient:
                 "cache_read_input_tokens": getattr(response.usage, 'cache_read_input_tokens', 0) or 0,
             },
             model=response.model,
+            truncated=is_truncated,
         )
         cache_creation = getattr(response.usage, 'cache_creation_input_tokens', 0) or 0
         cache_read = getattr(response.usage, 'cache_read_input_tokens', 0) or 0
@@ -531,114 +536,63 @@ class ClaudeCodeCLIClient:
             raise APIError(f"预算已耗尽: ${self.tracker.total_cost_usd():.2f} >= ${max_budget:.2f}")
 
         import subprocess
-
-        def _invoke_subprocess(invoke_prompt: str):
-            """跑一次 claude -p 子进程,返回 (text_result, usage_dict, used_model_name)。
-            失败抛 APIError(向上传递)。Phase G #1 把 subprocess 抽成 helper,以便
-            JSON 解析失败时能换 prompt 重试。"""
-            try:
-                p = subprocess.run(
-                    cmd,
-                    input=invoke_prompt,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    env=env,
-                    cwd=cwd,
-                    timeout=600,
-                )
-            except subprocess.TimeoutExpired:
-                from exceptions import APIError
-                raise APIError("claude -p 子进程 600s 超时")
-            except FileNotFoundError:
-                from exceptions import APIError
-                raise APIError(f"找不到 claude CLI: {self.claude_bin}。请先安装 Claude Code 并登录")
-
-            if p.returncode != 0:
-                from exceptions import APIError
-                raise APIError(f"claude -p 退出码 {p.returncode}: {(p.stderr or p.stdout)[:300]}")
-
-            stdout_local = (p.stdout or "").strip()
-            if not stdout_local:
-                from exceptions import APIError
-                raise APIError(f"claude -p 无输出 (stderr: {p.stderr[:200]})")
-
-            try:
-                data_local = json.loads(stdout_local)
-            except json.JSONDecodeError as e:
-                from exceptions import APIError
-                raise APIError(f"claude -p 输出非 JSON: {e}\n前 200 字: {stdout_local[:200]}")
-
-            if data_local.get("is_error"):
-                from exceptions import APIError
-                raise APIError(f"claude -p 返回错误: {str(data_local.get('result', ''))[:300]}")
-
-            return (
-                data_local.get("result", "") or "",
-                data_local.get("usage") or {},
-                next(iter(data_local.get("modelUsage", {}).keys()), cc_model),
+        try:
+            proc = subprocess.run(
+                cmd,
+                input=prompt_text,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                env=env,
+                cwd=cwd,
+                timeout=600,
             )
+        except subprocess.TimeoutExpired:
+            from exceptions import APIError
+            raise APIError("claude -p 子进程 600s 超时")
+        except FileNotFoundError:
+            from exceptions import APIError
+            raise APIError(f"找不到 claude CLI: {self.claude_bin}。请先安装 Claude Code 并登录")
 
-        # ============ 第一次调用 ============
-        text_result, usage, used_model = _invoke_subprocess(prompt_text)
+        if proc.returncode != 0:
+            from exceptions import APIError
+            raise APIError(f"claude -p 退出码 {proc.returncode}: {(proc.stderr or proc.stdout)[:300]}")
+
+        stdout = (proc.stdout or "").strip()
+        if not stdout:
+            from exceptions import APIError
+            raise APIError(f"claude -p 无输出 (stderr: {proc.stderr[:200]})")
+
+        try:
+            data = json.loads(stdout)
+        except json.JSONDecodeError as e:
+            from exceptions import APIError
+            raise APIError(f"claude -p 输出非 JSON: {e}\n前 200 字: {stdout[:200]}")
+
+        if data.get("is_error"):
+            from exceptions import APIError
+            raise APIError(f"claude -p 返回错误: {str(data.get('result', ''))[:300]}")
+
+        text_result = data.get("result", "") or ""
+        usage = data.get("usage") or {}
+        # 从 modelUsage 取真实 model 名,回退到传入的 model
+        used_model = next(iter(data.get("modelUsage", {}).keys()), cc_model)
+
+        # 1c: max_output_recovery — 检测 CLI 返回的 stop_reason
+        cli_stop_reason = data.get("stop_reason", "")
+        is_truncated = (cli_stop_reason == "max_tokens")
+        if is_truncated:
+            log.warning(f"[cc_client] req={req_id} CLI stop_reason=max_tokens, 输出被截断")
 
         text_blocks = []
         tool_calls = []
-        degraded_flag = False
 
         if structured_tool is not None:
             parsed = self._parse_json_from_text(text_result, structured_tool["name"])
-
-            # ============ Phase G #1: 重试一次 ============
             if parsed is None:
-                log.warning(
-                    f"[cc_client] tool={structured_tool['name']} JSON 解析失败,重试一次"
-                )
-                retry_prompt = (
-                    prompt_text
-                    + "\n\n[系统重试提示]\n你上一次的输出不是合法的 JSON,无法被解析。"
-                    + f"请严格按 {structured_tool['name']} 工具的 schema 格式重新输出,"
-                    + "**只输出一个 JSON 对象**(不要 markdown code fence,不要解释文字),"
-                    + "确保所有 string 字段被双引号包围,所有数组用 [],所有对象用 {}。"
-                )
-                try:
-                    text_result_retry, usage_retry, used_model_retry = _invoke_subprocess(
-                        retry_prompt
-                    )
-                    parsed_retry = self._parse_json_from_text(
-                        text_result_retry, structured_tool["name"]
-                    )
-                    if parsed_retry is not None:
-                        log.info(
-                            f"[cc_client] tool={structured_tool['name']} 重试成功"
-                        )
-                        # 累加两次 usage(第一次 + 重试),只取已知数值 key
-                        # 避免 usage dict 里混入 nested dict 导致 int() 崩溃
-                        _num_keys = (
-                            "input_tokens", "output_tokens",
-                            "cache_creation_input_tokens", "cache_read_input_tokens",
-                        )
-                        usage = {
-                            k: int(usage.get(k, 0) or 0) + int(usage_retry.get(k, 0) or 0)
-                            for k in _num_keys
-                        }
-                        text_result = text_result_retry
-                        used_model = used_model_retry
-                        parsed = parsed_retry
-                except Exception as retry_err:
-                    log.warning(
-                        f"[cc_client] tool={structured_tool['name']} 重试本身抛错: {retry_err}"
-                    )
-
-            # ============ 重试仍失败:走 fallback 空壳 + 标记 degraded ============
-            if parsed is None:
-                log.warning(
-                    f"[cc_client] tool={structured_tool['name']} 重试仍失败,返回空壳并标记 degraded"
-                )
+                log.warning(f"[cc_client] tool={structured_tool['name']} JSON 解析失败，返回空壳")
                 parsed = self._empty_tool_fallback(structured_tool)
-                degraded_flag = True
-
             import uuid as _uuid
             tool_calls.append({
                 "id": f"toolu_{_uuid.uuid4().hex[:16]}",
@@ -648,7 +602,7 @@ class ClaudeCodeCLIClient:
             stop_reason = "tool_use"
         else:
             text_blocks.append({"type": "text", "text": text_result})
-            stop_reason = "end_turn"
+            stop_reason = data.get("stop_reason") or "end_turn"
 
         unified_usage = {
             "input_tokens": int(usage.get("input_tokens") or 0),
@@ -671,7 +625,7 @@ class ClaudeCodeCLIClient:
             stop_reason=stop_reason,
             usage=unified_usage,
             model=used_model,
-            degraded=degraded_flag,
+            truncated=is_truncated,
         )
 
     def create_stream(self, *args, **kwargs):
@@ -805,17 +759,7 @@ class ClaudeCodeCLIClient:
         return prompt_text + instr
 
     def _parse_json_from_text(self, text, tool_name):
-        """从返回文本中鲁棒解析 JSON 对象。
-
-        分层容错(成本从低到高):
-        Layer 1: json.loads(raw)              → 命中率 ~60%
-        Layer 2: json_repair.repair_json()    → 命中率 ~30%(修 trailing comma/quotes/brackets）
-        Layer 3: 由调用方 retry with strict prompt(命中率 ~8%）
-        Layer 4: degraded fallback（兜底 ~2%）
-        """
-        from logger import get_logger
-        log = get_logger("api")
-
+        """从返回文本中鲁棒解析 JSON 对象"""
         if not text:
             return None
         text = text.strip()
@@ -829,7 +773,7 @@ class ClaudeCodeCLIClient:
                 lines = lines[:-1]
             text = "\n".join(lines).strip()
 
-        # Layer 1: 直接解析
+        # 直接解析
         try:
             return json.loads(text)
         except json.JSONDecodeError:
@@ -838,35 +782,11 @@ class ClaudeCodeCLIClient:
         # 找第一个完整 {...}
         start = text.find("{")
         end = text.rfind("}")
-        candidate = text[start:end + 1] if start >= 0 and end > start else text
-
-        # Layer 1b: 子串直接解析
-        try:
-            return json.loads(candidate)
-        except json.JSONDecodeError:
-            pass
-
-        # Layer 2: json-repair 自动修复(不调 LLM,纯本地 CPU)
-        # 能修:trailing commas, single quotes, missing quotes, unclosed brackets,
-        # JavaScript-style comments, NaN/Infinity 等 Claude 常犯的 JSON 语法错误
-        try:
-            from json_repair import repair_json
-            repaired = repair_json(candidate, return_objects=False)
-            result = json.loads(repaired)
-            log.info(f"[cc_client] tool={tool_name} json-repair 修复成功")
-            return result
-        except Exception:
-            pass
-
-        # Layer 2b: 对完整 text 也试一次(可能 {...} 提取不对)
-        try:
-            from json_repair import repair_json
-            repaired = repair_json(text, return_objects=False)
-            result = json.loads(repaired)
-            log.info(f"[cc_client] tool={tool_name} json-repair 修复成功(全文)")
-            return result
-        except Exception:
-            pass
+        if start >= 0 and end > start:
+            try:
+                return json.loads(text[start:end + 1])
+            except json.JSONDecodeError:
+                pass
 
         return None
 

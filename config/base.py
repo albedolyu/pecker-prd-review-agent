@@ -63,10 +63,6 @@ MAX_TOOL_TURNS = 30
 WORKER_TIMEOUT = 420
 TOTAL_REVIEW_TIMEOUT = 900
 
-# Phase G #9: 苍鹰(Opus via CLI)交叉校验超时(秒)
-# 苍鹰在 4 worker 全部完成后运行,不受 TOTAL_REVIEW_TIMEOUT 覆盖
-GOSHAWK_TIMEOUT = 600
-
 # tool_loop wall-clock 上限(秒),A4: 防止死循环或单次评审跑飞
 # 20 分钟足够 opus 打 30 轮工具调用;超时抛 AgentTimeoutError
 TOOL_LOOP_TIMEOUT = 1200
@@ -78,6 +74,18 @@ TOOL_LOOP_TIMEOUT = 1200
 
 # 依据可靠率低于此值则伯劳 Gate 6 失败
 EVIDENCE_RELIABILITY_THRESHOLD = 0.80
+
+# 断路器: 并行评审允许的最大 worker 连续失败数 (CC circuit breaker 模式)
+MAX_CONSECUTIVE_WORKER_FAILURES = int(os.environ.get("PECKER_MAX_WORKER_FAILURES", "2"))
+
+# 单个 worker 最大输出 items 数 (CC tool result truncation 模式)
+MAX_ITEMS_PER_WORKER = int(os.environ.get("PECKER_MAX_ITEMS_PER_WORKER", "15"))
+
+# Token 估算: prompt 超过此阈值触发 compact 钩子 (CC token_count tracking)
+COMPACT_THRESHOLD = int(os.environ.get("PECKER_COMPACT_THRESHOLD", "80000"))
+
+# Wiki 注入预算上限 (字符数)
+MAX_WIKI_CHARS = int(os.environ.get("PECKER_MAX_WIKI_CHARS", "60000"))
 
 # F4: Eval CI gate 阈值(pytest -m eval 会断言 scorer 输出 >= 此值)
 # 低于则 CI 红,保护评审质量回归

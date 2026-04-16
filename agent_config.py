@@ -26,10 +26,14 @@ from config import (  # noqa: F401
     # 超时
     WORKER_TIMEOUT,
     TOTAL_REVIEW_TIMEOUT,
-    GOSHAWK_TIMEOUT,
     TOOL_LOOP_TIMEOUT,
     # 质量阈值
     EVIDENCE_RELIABILITY_THRESHOLD,
+    # 断路器 + 截断 + token 追踪
+    MAX_CONSECUTIVE_WORKER_FAILURES,
+    MAX_ITEMS_PER_WORKER,
+    COMPACT_THRESHOLD,
+    MAX_WIKI_CHARS,
     # helper
     load_system_prompt,
     load_pr_review_prompt,

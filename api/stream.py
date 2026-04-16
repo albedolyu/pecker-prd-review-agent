@@ -83,13 +83,10 @@ class ReviewProgressEmitter:
         """parallel_review 的 on_worker_done callback 专用入口。
 
         动态计算进度: 15% + (已完成 worker 数) * 13.75%
+        3b: 透传 worker telemetry 到 SSE payload
         """
         self._workers_done_count += 1
         progress = int(15 + self._workers_done_count * WORKER_PROGRESS_STEP)
-        # Phase G #1+#2: 把 worker degraded 信号透传给前端,RoleCard 据此显示
-        # "状态不好"的视觉(JSON 解析失败但有兜底空块 / timeout 走了 fallback)
-        is_degraded = bool(result.get("degraded", False))
-        is_timeout = result.get("status") == "timeout"
         payload = {
             "event": "worker_done",
             "progress": progress,
@@ -98,13 +95,14 @@ class ReviewProgressEmitter:
             "success": "error" not in result,
             "items_count": len(result.get("items", [])) if "items" not in ("error",) else 0,
             "dim_name": result.get("dimension_name", dim_key),
-            "degraded": is_degraded,
-            "timeout": is_timeout,
         }
         if "error" in result:
             payload["error"] = str(result["error"])[:200]
         else:
             payload["items_count"] = len(result.get("items", []))
+        # 3b: 透传 worker telemetry (duration_ms, tokens, cost, degraded 等)
+        if result.get("telemetry"):
+            payload["telemetry"] = result["telemetry"]
         try:
             self.queue.put_nowait(payload)
         except asyncio.QueueFull:

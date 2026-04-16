@@ -99,40 +99,29 @@ async def precheck(req: PrecheckRequest, project_root: Path = Depends(get_projec
 
     wiki_scan = _scan_wiki_for_prd(req.prd_content, wiki_path)
 
-    # PECKER_PRECHECK_SKIP_LLM=1 → 跳过 Claude 调用,只返回本地 wiki scan 结果。
-    # 用于 dev 环境避开 Next.js dev rewrite 的 30s timeout(Claude CLI 启动慢)。
-    skip_llm = os.environ.get("PECKER_PRECHECK_SKIP_LLM", "").strip().lower() in ("1", "true", "yes", "on")
-
     # 调 Claude 做 gap 分析
     try:
-        if skip_llm:
-            llm_result = {
-                "strong": [],
-                "weak": [],
-                "gaps": ["[dev] LLM 盲区分析已跳过 (PECKER_PRECHECK_SKIP_LLM=1)"],
-            }
-        else:
-            client = get_client()
-            context = f"PRD 内容:\n{req.prd_content[:3000]}"
-            if req.raw_materials:
-                context += "\n\n补充资料:\n" + "\n---\n".join(t[:1000] for t in req.raw_materials)
+        client = get_client()
+        context = f"PRD 内容:\n{req.prd_content[:3000]}"
+        if req.raw_materials:
+            context += "\n\n补充资料:\n" + "\n---\n".join(t[:1000] for t in req.raw_materials)
 
-            from agent_config import MODEL_TIERS
-            response = client.create(
-                model=MODEL_TIERS["sonnet"],
-                max_tokens=2048,
-                system='''你是啄木鸟知识盲区预检模块。分析 PRD 内容,输出以下 3 类信息(JSON 格式):
+        from agent_config import MODEL_TIERS
+        response = client.create(
+            model=MODEL_TIERS["sonnet"],
+            max_tokens=2048,
+            system='''你是啄木鸟知识盲区预检模块。分析 PRD 内容,输出以下 3 类信息(JSON 格式):
 {
   "strong": ["强相关的已知知识点"],
   "weak": ["弱相关的知识点"],
   "gaps": ["知识盲区——PRD 涉及但你没有足够信息判断的领域"]
 }
 每类最多 5 条。盲区要具体说明缺什么信息。''',
-                messages=[{"role": "user", "content": context}],
-            )
-            text = response.content[0].text if response.content else "{}"
-            m = re.search(r'\{[\s\S]*\}', text)
-            llm_result = json.loads(m.group()) if m else {"strong": [], "weak": [], "gaps": []}
+            messages=[{"role": "user", "content": context}],
+        )
+        text = response.content[0].text if response.content else "{}"
+        m = re.search(r'\{[\s\S]*\}', text)
+        llm_result = json.loads(m.group()) if m else {"strong": [], "weak": [], "gaps": []}
     except Exception as e:
         # 预检失败不阻塞流程,返回本地 wiki 扫描结果
         llm_result = {"strong": [], "weak": [], "gaps": [f"预检失败: {str(e)[:100]}"]}
@@ -175,15 +164,17 @@ async def run_review(req: ReviewRequest, request: Request):
     """
     get_workspace_dir(req.workspace)  # 校验 workspace 合法
 
-    # 注入 WORKSPACE + PECKER_REVIEWER env var(parallel_review 延迟解析会读)
+    # 注入 WORKSPACE env var(parallel_review 延迟解析会读)
     os.environ["WORKSPACE"] = str(get_project_root() / req.workspace)
-    os.environ["PECKER_REVIEWER"] = req.reviewer  # Phase G #8: reviewer profile
 
     emitter = ReviewProgressEmitter()
     client = get_client()
 
     async def _pipeline():
         """评审主任务:parallel_review + goshawk,完成后 return 最终 payload。"""
+        import time as _time
+        _pipeline_start = _time.time()
+
         from parallel_review import parallel_review, parallel_review_sync
         from goshawk_advisor import advisor_review_async
         from agent_config import MODEL_TIERS
@@ -257,6 +248,19 @@ async def run_review(req: ReviewRequest, request: Request):
         cost_breakdown["total"] = round(total_cost, 6)
         result["cost_breakdown"] = cost_breakdown
 
+        # 3c: 结构化 telemetry 汇总 (CC telemetry 模式)
+        import time as _time
+        worker_telemetry = {}
+        for w in result.get("workers", []):
+            dim = w.get("dimension", "unknown")
+            if w.get("telemetry"):
+                worker_telemetry[dim] = w["telemetry"]
+        result["telemetry"] = {
+            "total_duration_ms": int((_time.time() - _pipeline_start) * 1000),
+            "workers": worker_telemetry,
+            "total_cost_usd": cost_breakdown.get("total", 0),
+        }
+
         # 包装成 Opaque Handle (A14)
         review_result_handle = ReviewResult.create(
             reviewer=req.reviewer,
@@ -313,23 +317,6 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
     items = req.review_result.get("items", [])
     pending = len(items) - len(decisions)
 
-    # Phase G #4: 决策 → rule_performance_history EMA 闭环
-    # 用户 accept/reject/edit 是最直接的 harness 反馈信号,写入 rule_perf
-    # 让下次同 reviewer 评审时 worker prompt 注入"以下规则 hit rate 低"。
-    try:
-        workspace = req.review_result.get("workspace", "")
-        reviewer = user.get("reviewer", "unknown")
-        if workspace:
-            ws_dir = get_workspace_dir(workspace)
-            _update_rule_perf_from_decisions(ws_dir, items, decisions, reviewer)
-    except Exception as e:
-        # 反馈写入失败不阻塞 Phase 4
-        import logging
-        logging.getLogger("api").warning(f"[Phase G #4] rule_perf 更新失败: {e}")
-
-    # Phase G #5: 杜鹃 dev 入口(轻量版)— 3 个启发式质量指标
-    quality = _compute_review_quality(items)
-
     return {
         "status": "confirmed",
         "review_id": req.review_result.get("review_id"),
@@ -338,97 +325,4 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
         "edited": edited,
         "pending": pending,
         "total": len(items),
-        "quality": quality,  # Phase G #5
     }
-
-
-def _compute_review_quality(items):
-    """Phase G #5: 杜鹃 dev 轻量版 — 3 个启发式质量指标(不跑 Claude)。
-
-    format_completeness: 有多少 % 的 item 三字段齐全(location + evidence + suggestion)
-    severity_ratio: must / total,越高说明越认真(只报 should 可能在凑数)
-    confidence_mean: 平均 confidence score(低 = 不确定的 item 多)
-    """
-    if not items:
-        return {"format_completeness": 0, "severity_ratio": 0, "confidence_mean": 0}
-
-    complete = sum(
-        1 for it in items
-        if it.get("location") and it.get("evidence_content") and it.get("suggestion")
-    )
-    must_count = sum(1 for it in items if it.get("severity") == "must")
-    conf_scores = [
-        float(it.get("confidence", it.get("confidence_score", 0.5)))
-        for it in items
-    ]
-    return {
-        "format_completeness": round(complete / len(items), 2),
-        "severity_ratio": round(must_count / len(items), 2),
-        "confidence_mean": round(sum(conf_scores) / len(conf_scores), 2),
-    }
-
-
-def _update_rule_perf_from_decisions(ws_dir, items, decisions, reviewer):
-    """Phase G #4: 用户决策 EMA 反馈到 rule_performance_history.json
-
-    - accept: hit_count +1, impact_score EMA↑
-    - reject: false_positive_count +1, impact_score EMA↓
-    - edit:   partial_hit_count +1, impact_score 不变
-
-    α = 0.2,和 feedback.py 的 α=0.15 略高(直接用户信号比代码扫描信号权重更大)。
-    """
-    import json as _json
-    from pathlib import Path
-    history_path = Path(ws_dir) / "output" / "rule_performance_history.json"
-    history_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # 读现有 history
-    try:
-        with open(history_path, "r", encoding="utf-8") as f:
-            history = _json.load(f)
-    except (FileNotFoundError, _json.JSONDecodeError):
-        history = {}
-
-    alpha = 0.2  # 用户决策的 EMA 系数(比 feedback.py 的 0.15 大一档)
-
-    for item in items:
-        item_id = item.get("id", "")
-        rule_id = item.get("rule_id", "")
-        if not rule_id:
-            continue  # 没有 rule_id 的 item 不参与规则更新
-
-        decision = decisions.get(item_id, {})
-        action = decision.get("action")
-        if action not in ("accept", "reject", "edit"):
-            continue  # 待决的不更新
-
-        # 确保 rule entry 存在
-        if rule_id not in history:
-            history[rule_id] = {
-                "hit_count": 0,
-                "false_positive_count": 0,
-                "partial_hit_count": 0,
-                "impact_score": 0.5,  # 初始中性
-                "last_reviewer": reviewer,
-            }
-
-        entry = history[rule_id]
-        old_score = entry.get("impact_score", 0.5)
-
-        if action == "accept":
-            entry["hit_count"] = entry.get("hit_count", 0) + 1
-            # EMA↑: 向 1.0 靠拢
-            entry["impact_score"] = old_score * (1 - alpha) + 1.0 * alpha
-        elif action == "reject":
-            entry["false_positive_count"] = entry.get("false_positive_count", 0) + 1
-            # EMA↓: 向 0.0 靠拢
-            entry["impact_score"] = old_score * (1 - alpha) + 0.0 * alpha
-        elif action == "edit":
-            entry["partial_hit_count"] = entry.get("partial_hit_count", 0) + 1
-            # 不改 impact_score(方向对但措辞不准,保持中性)
-
-        entry["last_reviewer"] = reviewer
-
-    # 写回
-    with open(history_path, "w", encoding="utf-8") as f:
-        _json.dump(history, f, ensure_ascii=False, indent=2)
