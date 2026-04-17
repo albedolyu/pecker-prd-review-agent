@@ -14,8 +14,10 @@ def generate_dashboard(workspace, prd_name=None):
     rule_data = _load_rule_history(workspace)
     session_data = _load_session_stats(workspace)
     achievements = _load_achievements(workspace)
+    impact_timeline = _load_impact_timeline(workspace)
 
-    html = _render_html(rule_data, session_data, achievements, prd_name)
+    html = _render_html(rule_data, session_data, achievements, prd_name,
+                        impact_timeline=impact_timeline)
 
     output_dir = os.path.join(workspace, "output")
     os.makedirs(output_dir, exist_ok=True)
@@ -29,6 +31,37 @@ def generate_dashboard(workspace, prd_name=None):
 # ============================================================
 # 数据加载
 # ============================================================
+
+def _load_impact_timeline(workspace, top_n=8):
+    """读取 rule_impact_timeline.json,返回 top_n 个 rule 的 (ts, score) 时序.
+
+    只返回最近被调整次数最多的 top_n 条 rule,避免 chart 图线过多。
+    数据结构: [{"rule_id": "V-02", "points": [{"ts": "...", "score": 0.5}, ...]}]
+    """
+    path = os.path.join(workspace, "output", "rule_impact_timeline.json")
+    if not os.path.isfile(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+    if not data:
+        return None
+
+    # 按该 rule 累计调整次数降序,取 top_n
+    ranked = sorted(data.items(), key=lambda kv: len(kv[1]), reverse=True)[:top_n]
+    return [
+        {
+            "rule_id": rid,
+            "points": [
+                {"ts": h["ts"], "score": h["score"]}
+                for h in entries
+            ],
+        }
+        for rid, entries in ranked
+    ]
+
 
 def _load_rule_history(workspace):
     """解析 rule_performance_history.json，提取每条规则的统计"""
@@ -159,10 +192,24 @@ def _load_achievements(workspace):
 # HTML 渲染
 # ============================================================
 
-def _render_html(rule_data, session_data, achievements, prd_name=None):
+def _render_html(rule_data, session_data, achievements, prd_name=None,
+                 impact_timeline=None):
     """构建自包含 HTML，内嵌 Chart.js 图表"""
     title = f"啄木鸟质量趋势 — {prd_name}" if prd_name else "啄木鸟质量趋势仪表盘"
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    # 图4: rule impact_score 时序曲线 (feedback loop 调节轨迹)
+    impact_series = "[]"
+    has_impact = False
+    if impact_timeline:
+        has_impact = True
+        impact_series = json.dumps([
+            {
+                "rule_id": s["rule_id"],
+                "data": [{"x": p["ts"], "y": p["score"]} for p in s["points"]],
+            }
+            for s in impact_timeline
+        ], ensure_ascii=False)
 
     # 准备图表数据 JSON
     # 图1: 啄伤度趋势
@@ -398,6 +445,12 @@ def _render_html(rule_data, session_data, achievements, prd_name=None):
     <h3>Reviewer 工作量统计</h3>
     {'<div class="chart-wrap"><canvas id="reviewerChart"></canvas></div>' if has_reviewers else '<div class="no-data">暂无数据</div>'}
   </div>
+
+  <!-- 图4: rule impact_score 时序 (feedback loop 调节轨迹) -->
+  <div class="chart-card full-width">
+    <h3>规则权重调节轨迹 (impact_score 时序)</h3>
+    {'<div class="chart-wrap"><canvas id="impactChart"></canvas></div>' if has_impact else '<div class="no-data">暂无 EMA 更新记录 — 跑 feedback.py 后自动生成</div>'}
+  </div>
 </div>
 
 <div class="ach-section">
@@ -548,6 +601,43 @@ def _render_html(rule_data, session_data, achievements, prd_name=None):
         maintainAspectRatio: false,
         plugins: {{
           legend: {{ position: 'bottom', labels: {{ padding: 16 }} }},
+        }}
+      }}
+    }});
+  }}
+
+  // ---- 图4: rule impact_score 时序 (feedback loop 调节轨迹) ----
+  const impactSeries = {impact_series};
+  if (impactSeries.length > 0) {{
+    const palette = [COLORS.green, COLORS.brown, COLORS.red,
+                     '#5a7a8a', '#8a6a9a', '#6a8a6a', '#9a8a5a', '#a06a7a'];
+    new Chart(document.getElementById('impactChart'), {{
+      type: 'line',
+      data: {{
+        datasets: impactSeries.map((s, i) => ({{
+          label: s.rule_id,
+          data: s.data,
+          borderColor: palette[i % palette.length],
+          backgroundColor: palette[i % palette.length] + '33',
+          tension: 0.15,
+          pointRadius: 3,
+        }})),
+      }},
+      options: {{
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {{
+          legend: {{ position: 'top', labels: {{ padding: 12 }} }},
+        }},
+        scales: {{
+          x: {{
+            type: 'timeseries',
+            ticks: {{ maxRotation: 45, font: {{ size: 10 }} }},
+          }},
+          y: {{
+            min: 0, max: 1,
+            title: {{ display: true, text: 'impact_score (0=弱 1=强)' }},
+          }}
         }}
       }}
     }});

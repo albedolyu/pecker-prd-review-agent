@@ -24,3 +24,22 @@ jobs:
 
       - name: Run tests
         run: pytest tests/ -v
+
+      - name: Generate STATUS.md (auto-reflect project state)
+        run: python scripts/generate_status.py
+
+      - name: Guard against stale hand-written self-eval docs
+        run: |
+          set -e
+          for f in HARNESS_MATURITY.md PRODUCTION_READINESS.md; do
+            if [ -f "$f" ]; then
+              echo "::error file=$f::Hand-written self-eval doc detected. Use STATUS.md (auto-generated) instead."
+              exit 1
+            fi
+          done
+
+      - name: Upload STATUS.md artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: status-report
+          path: STATUS.md

@@ -126,3 +126,17 @@
 ## [2026-04-15] rebuild_index | pages=35
 
 ## [2026-04-15] review_done | reviewer=default prd=对外投资基线v4 items=9 retracted=0
+
+## [2026-04-15] auto_fix | add_to_index=4
+
+## [2026-04-15 13:41] consolidation | 鸮鹦自动整理
+
+### 添加到索引 (4)
+- `决策-FR 与技术约定的联动检查.md`
+- `决策-伪代码字段验证规则.md`
+- `实体-投资类 PRD 的数据源特性.md`
+- `概念-交叉校验（苍鹰）的重点方向.md`
+
+## [2026-04-15] rebuild_index | pages=39
+
+## [2026-04-15] review_done | reviewer=default prd=对外投资基线v8 items=4 retracted=0
