@@ -41,7 +41,7 @@ cd web && pnpm dev
 # 浏览器打开 http://localhost:3000
 
 # 终端 3 — Streamlit 旧版(迁移期 fallback,可选)
-streamlit run app.py --server.port 8501
+streamlit run legacy/app.py --server.port 8501
 # 浏览器打开 http://localhost:8501
 ```
 

@@ -5,7 +5,7 @@
   - 团队正式环境请走 Next.js + FastAPI 新版(web/ + api/)
   - 本文件保留仅为单用户本地兜底,不接 2026-04-16 后的 harness 升级
     (P0 配额 bug 修复 / audit 链路接通 / review_failed 事件等均不生效)
-  - 长期计划: 1.4.x 后移入 legacy/ 目录,根目录不再直接放置
+  - 2026-04-16 迁入 legacy/ 目录,根目录不再直接放置
 
 交互流程:
   1. 上传 PRD + 可选业务资料
@@ -14,7 +14,7 @@
   4. 逐条确认(接受/驳回/修改)
   5. 生成最终报告 + 导出
 
-启动: streamlit run app.py
+启动: streamlit run legacy/app.py
 (推荐改用: cd web && pnpm dev  &  uvicorn api.main:app --reload)
 """
 
@@ -25,10 +25,12 @@ import time
 import json
 import re
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# 迁入 legacy/ 后,sys.path 指向 parent (根目录) 以继续 import 主模块
+_PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _PARENT_DIR)
 
 from dotenv import load_dotenv
-load_dotenv(os.path.join(os.path.dirname(__file__), ".env"), override=True)
+load_dotenv(os.path.join(_PARENT_DIR, ".env"), override=True)
 os.environ.pop("ANTHROPIC_AUTH_TOKEN", None)
 
 

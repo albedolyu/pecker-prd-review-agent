@@ -62,289 +62,24 @@ def _get_rule_perf_history_path():
     return os.path.join(workspace, "output", "rule_performance_history.json")
 
 # ============================================================
-# 评审维度定义
+# 评审维度定义 - 已拆到 review/dimensions.py
+# 2026-04-16 重构:保留 re-export 让外部 import parallel_review 不破坏
 # ============================================================
 
-# 中文职能词映射 — 日志输出用,对齐 web/lib/roles.ts 的 UI 术语约定
-# (鸟名 codename 仍保留为数据字段,向后兼容 + 彩蛋品牌)
-_CN_LABEL = {
-    "structure": "责编",
-    "quality": "审校",
-    "ai_coding": "技术编辑",
-    "data_quality": "数据核对员",
-}
-
-
-def _cn_label(dim_or_key):
-    """从 dim dict 或 dim_key 字符串取中文职能词,找不到就回退到 codename。"""
-    if isinstance(dim_or_key, dict):
-        # 需要拿到 key:尝试 dim 里是否有 'key' 字段,否则回退 codename
-        key = dim_or_key.get("key", "")
-        if key in _CN_LABEL:
-            return _CN_LABEL[key]
-        return dim_or_key.get("codename", "unknown")
-    return _CN_LABEL.get(dim_or_key, dim_or_key)
-
-
-_DEFAULT_REVIEW_DIMENSIONS = {
-    "structure": {
-        "name": "结构层",
-        "codename": "织布鸟",
-        "rules": """BMAD V-02~V-06，逐条检查：
-
-V-02 格式规范性：验证 PRD 是否遵循标准模板（标准/变体/Legacy）。
-V-03 信息密度：检测对话式填充、冗余表达、重复短语。反模式：
-  - "The system will allow users to..." → 直接写功能
-  - "Due to the fact that" → "because"
-  严重度：≥10 处 = must
-V-04 Brief 覆盖率：检查 Brief → PRD 的映射完整性，识别未覆盖的 Brief 要求。
-V-05 信息完整性：PRD 中引用的所有信息（字段、规则、布局）能在文档内自洽，不依赖外部未注明的文档。
-V-06 可追溯链完整性：验证 愿景 → FR → 用户故事 的链路完整，不能断链。""",
-        "checklist": [
-            {"rule_id": "V-02", "name": "格式规范性"},
-            {"rule_id": "V-03", "name": "信息密度"},
-            {"rule_id": "V-04", "name": "Brief 覆盖率"},
-            {"rule_id": "V-05", "name": "信息完整性"},
-            {"rule_id": "V-06", "name": "可追溯链完整性"},
-        ],
-        "model": "sonnet",
-    },
-    "quality": {
-        "name": "质量层",
-        "codename": "猫头鹰",
-        "rules": """BMAD V-07~V-12，逐条检查：
-
-V-07 逻辑一致性：检查 PRD 内部各章节的描述是否自洽，排序规则/筛选规则/字段映射等不能互相矛盾。
-V-08 实现泄漏检测：FR 不应含技术实现细节（如具体 API、框架名、SQL 语句），除非在技术约定节中。
-V-09 SMART 验证：成功标准须满足 SMART 原则 — Specific（具体明确）、Measurable（可量化）、Attainable（可实现）、Relevant（与目标相关）、Traceable（可追踪）。
-V-10 领域合规性：检查 PRD 是否符合业务领域的法规和合规要求。
-V-11 整体质量评估：综合评价 PRD 的完整性、一致性和可操作性。
-V-12 完整性评估：检查是否有遗漏的核心功能模块、边界条件、异常处理。""",
-        "checklist": [
-            {"rule_id": "V-07", "name": "逻辑一致性"},
-            {"rule_id": "V-08", "name": "实现泄漏检测"},
-            {"rule_id": "V-09", "name": "SMART 验证"},
-            {"rule_id": "V-10", "name": "领域合规性"},
-            {"rule_id": "V-11", "name": "整体质量评估"},
-            {"rule_id": "V-12", "name": "完整性评估"},
-        ],
-        "model": "sonnet",
-    },
-    "ai_coding": {
-        "name": "AI Coding 友好度",
-        "codename": "渡鸦",
-        "rules": """RC-004~RC-008, RC-013~RC-015，逐条检查：
-
-RC-004 技术约定节存在（must）：PRD 必须包含技术约定节（框架/鉴权方式/基础路径），不能依赖外部文档独立支撑开发。
-RC-005 四态 UI 规范已定义（must）：PRD 必须定义加载中/请求失败/筛选无结果/空数据四种 UI 状态的文案与样式。
-RC-006 图片路径使用相对路径（should）：PRD 中引用的图片应使用相对路径，避免绝对路径导致协作问题。
-RC-007 复杂联动逻辑有伪代码（should）：复杂联动逻辑、非结构化文本处理等必须有伪代码或流程描述。
-RC-008 筛选追溯完整（must）：筛选/查询逻辑须从用户操作追溯到 WHERE 条件，中间无断点；非常规逻辑（继承/降级/空值）需有具体示例覆盖。
-RC-013 伪代码字段可追溯（must）：伪代码中每个字段均可在 DDL 中找到；跨表字段标注 JOIN 来源。
-RC-014 筛选逻辑追溯到 WHERE（must）：筛选/查询逻辑从用户操作追溯到 WHERE 条件，中间无断点。
-RC-015 非常规逻辑有示例（should）：非常规逻辑（继承/降级/空值）须有具体示例覆盖。""",
-        "checklist": [
-            {"rule_id": "RC-004", "name": "技术约定节存在"},
-            {"rule_id": "RC-005", "name": "四态 UI 规范已定义"},
-            {"rule_id": "RC-006", "name": "图片路径使用相对路径"},
-            {"rule_id": "RC-007", "name": "复杂联动逻辑有伪代码"},
-            {"rule_id": "RC-008", "name": "筛选追溯完整"},
-            {"rule_id": "RC-013", "name": "伪代码字段可追溯"},
-            {"rule_id": "RC-014", "name": "筛选逻辑追溯到 WHERE"},
-            {"rule_id": "RC-015", "name": "非常规逻辑有示例"},
-        ],
-        "model": "opus",  # 需要深度推理
-    },
-    "data_quality": {
-        "name": "数据质量",
-        "codename": "鸬鹚",
-        "rules": """RC-009~RC-010，逐条检查：
-
-RC-009 字段映射一致性（must）：字段映射表中字段名与物理表 DDL 一致；跨表字段须标注 JOIN 来源和优先级。
-RC-010 数值类字段标注来源（must）：数值类字段（分页数/导出上限/阈值）须标注来源或标注 TBD；跨表字段须说明空值降级处理。""",
-        "checklist": [
-            {"rule_id": "RC-009", "name": "字段映射一致性"},
-            {"rule_id": "RC-010", "name": "数值类字段标注来源"},
-        ],
-        "model": "sonnet",  # haiku 对复杂字段映射判定不够稳定，升级到 sonnet
-    },
-}
-
-_DEFAULT_DIMENSION_WIKI_KEYWORDS = {
-    "structure": ["模板", "格式", "规范", "brief", "结构", "追溯"],
-    "quality": ["逻辑", "一致", "合规", "SMART", "完整", "质量"],
-    "ai_coding": ["技术", "UI", "伪代码", "字段", "筛选", "DDL", "coding", "开发"],
-    "data_quality": ["字段", "映射", "DDL", "数值", "数据", "JOIN"],
-}
-
-# YAML 配置文件名
-# Worker 最大对话轮次 (CC maxTurns 约束: 超过直接走文本兜底)
-MAX_WORKER_TURNS = 2
-
-_YAML_FILENAME = "review-dimensions.yaml"
-# 脚本所在目录（全局 fallback 路径）
-_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# review-dimensions.yaml 的 schema 定义(B2: 启动时校验,不合法 fail-fast)
-_REVIEW_DIMENSIONS_SCHEMA = {
-    "type": "object",
-    "required": ["dimensions"],
-    "properties": {
-        "dimensions": {
-            "type": "object",
-            "minProperties": 1,
-            "additionalProperties": {
-                "type": "object",
-                "required": ["name", "codename", "rules", "checklist"],
-                "properties": {
-                    "name": {"type": "string", "minLength": 1},
-                    "codename": {"type": "string", "minLength": 1},
-                    "model": {"type": "string", "enum": ["haiku", "sonnet", "opus"]},
-                    "wiki_keywords": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                    },
-                    "rules": {"type": "string", "minLength": 1},
-                    "checklist": {
-                        "type": "array",
-                        "minItems": 1,
-                        "items": {
-                            "type": "object",
-                            "required": ["rule_id", "name"],
-                            "properties": {
-                                "rule_id": {
-                                    "type": "string",
-                                    "pattern": r"^(V|RC)-\d+$",
-                                },
-                                "name": {"type": "string", "minLength": 1},
-                                "enabled": {"type": "boolean"},
-                            },
-                        },
-                    },
-                },
-            },
-        }
-    },
-}
-
-
-def _validate_review_dimensions_yaml(yaml_content, source_path):
-    """使用 jsonschema 校验 review-dimensions.yaml(B2)
-
-    校验失败时抛 ValueError,让 load_review_dimensions 处理降级;
-    schema 定义在 _REVIEW_DIMENSIONS_SCHEMA。
-    """
-    try:
-        import jsonschema
-    except ImportError:
-        log.warning("[config] jsonschema 未安装,跳过 YAML schema 校验")
-        return
-    try:
-        jsonschema.validate(yaml_content, _REVIEW_DIMENSIONS_SCHEMA)
-    except jsonschema.ValidationError as e:
-        # 组装精简的错误路径
-        path_str = "/".join(str(p) for p in e.absolute_path) or "<root>"
-        raise ValueError(
-            f"{source_path}: {path_str} 不合法 — {e.message}"
-        ) from e
-
-
-# 运行时加载的维度配置（首次使用时初始化）
-_loaded_dimensions = None
-_loaded_wiki_keywords = None
-
-
-def load_review_dimensions(workspace=None):
-    """从 YAML 加载评审维度配置，支持 workspace 级覆盖 → 全局 fallback → 硬编码默认值。
-    返回 (dimensions_dict, wiki_keywords_dict)"""
-
-    yaml_content = None
-
-    # 严格模式:PECKER_STRICT_YAML=1 时 schema 校验失败直接 fail-fast 不降级
-    strict = os.environ.get("PECKER_STRICT_YAML", "").lower() in ("1", "true", "yes")
-
-    # 1. workspace 级配置优先
-    if workspace:
-        ws_path = os.path.join(workspace, "review-rules", _YAML_FILENAME)
-        if os.path.isfile(ws_path):
-            try:
-                with open(ws_path, "r", encoding="utf-8") as f:
-                    loaded = yaml.safe_load(f)
-                _validate_review_dimensions_yaml(loaded, ws_path)
-                yaml_content = loaded
-                log.info(f"[config] 从 workspace 加载评审维度: {ws_path}")
-            except (yaml.YAMLError, OSError, ValueError) as e:
-                log.warning(f"[config] workspace YAML 无效,降级: {e}")
-                if strict:
-                    raise
-
-    # 2. 全局配置（脚本同目录）
-    if yaml_content is None:
-        global_path = os.path.join(_BASE_DIR, _YAML_FILENAME)
-        if os.path.isfile(global_path):
-            try:
-                with open(global_path, "r", encoding="utf-8") as f:
-                    loaded = yaml.safe_load(f)
-                _validate_review_dimensions_yaml(loaded, global_path)
-                yaml_content = loaded
-                log.info(f"[config] 从全局路径加载评审维度: {global_path}")
-            except (yaml.YAMLError, OSError, ValueError) as e:
-                log.warning(f"[config] 全局 YAML 无效,降级到硬编码: {e}")
-                if strict:
-                    raise
-
-    # 3. 硬编码默认值 fallback
-    if yaml_content is None or "dimensions" not in yaml_content:
-        log.info("[config] 使用硬编码默认评审维度")
-        return _DEFAULT_REVIEW_DIMENSIONS, _DEFAULT_DIMENSION_WIKI_KEYWORDS
-
-    # 解析 YAML 并转换为与硬编码相同的数据结构
-    dimensions = {}
-    wiki_keywords = {}
-
-    for dim_key, dim_cfg in yaml_content["dimensions"].items():
-        # 过滤 enabled: false 的 checklist 项
-        raw_checklist = dim_cfg.get("checklist", [])
-        filtered_checklist = [
-            {"rule_id": item["rule_id"], "name": item["name"]}
-            for item in raw_checklist
-            if item.get("enabled", True)
-        ]
-
-        dimensions[dim_key] = {
-            "name": dim_cfg["name"],
-            "codename": dim_cfg["codename"],
-            "rules": dim_cfg["rules"].rstrip("\n"),
-            "checklist": filtered_checklist,
-            "model": dim_cfg.get("model", "sonnet"),
-        }
-
-        # wiki_keywords 从 YAML 中提取
-        if "wiki_keywords" in dim_cfg:
-            wiki_keywords[dim_key] = dim_cfg["wiki_keywords"]
-
-    # 如果 YAML 中没有 wiki_keywords，用默认值补全
-    for dim_key in dimensions:
-        if dim_key not in wiki_keywords:
-            wiki_keywords[dim_key] = _DEFAULT_DIMENSION_WIKI_KEYWORDS.get(dim_key, [])
-
-    return dimensions, wiki_keywords
-
-
-def get_review_dimensions(workspace=None):
-    """获取评审维度配置（带缓存），首次调用时从 YAML 加载"""
-    global _loaded_dimensions, _loaded_wiki_keywords
-    if _loaded_dimensions is None:
-        _loaded_dimensions, _loaded_wiki_keywords = load_review_dimensions(workspace)
-    return _loaded_dimensions
-
-
-def get_wiki_keywords(workspace=None):
-    """获取 wiki 关键词配置（带缓存），首次调用时从 YAML 加载"""
-    global _loaded_dimensions, _loaded_wiki_keywords
-    if _loaded_wiki_keywords is None:
-        _loaded_dimensions, _loaded_wiki_keywords = load_review_dimensions(workspace)
-    return _loaded_wiki_keywords
+from review.dimensions import (  # noqa: E402,F401
+    MAX_WORKER_TURNS,
+    _BASE_DIR,
+    _CN_LABEL,
+    _DEFAULT_DIMENSION_WIKI_KEYWORDS,
+    _DEFAULT_REVIEW_DIMENSIONS,
+    _REVIEW_DIMENSIONS_SCHEMA,
+    _YAML_FILENAME,
+    _cn_label,
+    _validate_review_dimensions_yaml,
+    get_review_dimensions,
+    get_wiki_keywords,
+    load_review_dimensions,
+)
 
 # ============================================================
 # 结构化输出 Tool Schema
@@ -867,6 +602,21 @@ def _has_tool_use(response):
     return any(block.type == "tool_use" for block in response.content)
 
 
+def _is_empty_tool_submission(response) -> bool:
+    """模型调了 submit_review_items 但 items 数组为空。
+
+    这是 data_quality / quality worker 50% 静默率的典型触发点:
+    模型 tool_choice=any 被强制走 tool,但没想到具体改进项,交了空提交。
+    与"没调 tool"不同,不能用 _has_tool_use 检测,需要检查 items 字段。
+    """
+    for block in response.content:
+        if block.type == "tool_use" and block.name == "submit_review_items":
+            items = block.input.get("items", [])
+            if not items:
+                return True
+    return False
+
+
 def _extract_text(response):
     """从响应中提取纯文本"""
     return "\n".join(block.text for block in response.content if block.type == "text")
@@ -979,6 +729,7 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
 
     # Tool 调用检测 + 催促重试 + 文本兜底 (CC maxTurns 约束)
     current_turn = 1  # 已用 1 轮
+    empty_retry_used = False  # telemetry: 是否触发了"空提交重试"分支
     if not _has_tool_use(response) and current_turn < MAX_WORKER_TURNS:
         current_turn += 1
         log.warning(f"[{_cn_label(dim_key)}] turn={current_turn}/{MAX_WORKER_TURNS} 未调用 tool,催促重试")
@@ -1001,6 +752,35 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
             items = _parse_items_from_text(text)
             if items:
                 log.info(f"[{_cn_label(dim_key)}] 从文本中解析出 {len(items)} 条改进项")
+    elif _is_empty_tool_submission(response) and current_turn < MAX_WORKER_TURNS:
+        # 空提交重试: 模型调了 tool 但 items=[],常见于 data_quality/quality
+        # 静默率 50% 的典型场景 (session 2 真实出现)。
+        # 给一次复检机会,让它要么补充遗漏要么写清楚"为何为空"。
+        current_turn += 1
+        empty_retry_used = True
+        log.warning(f"[{_cn_label(dim_key)}] turn={current_turn}/{MAX_WORKER_TURNS} 空提交,re-prompt 复检")
+        prev_text = _extract_text(response)
+        followup_msgs = messages + [
+            {"role": "assistant",
+             "content": prev_text or "(我已完成首次审查,提交了 0 条改进项)"},
+            {"role": "user",
+             "content": ("你刚才用 submit_review_items 提交了 0 条改进项。请在本维度 checklist 里"
+                         "逐条复核一遍,如仍认为无问题请在 items 里提交一条 severity='nit'、"
+                         "location='整体'、issue='本维度复核后确认无问题:简述检查了哪 3 条具体项'"
+                         "作为显式确认;如有遗漏请重新 submit_review_items。")},
+        ]
+        time.sleep(2 + random.uniform(0, 0.5))
+        try:
+            response2 = _call(followup_msgs, use_compact_tool=True)
+            retry_items = _extract_items_from_response(response2)
+            if retry_items:
+                items = retry_items
+                response = response2
+                log.info(f"[{_cn_label(dim_key)}] 空提交复检后出了 {len(items)} 条")
+            else:
+                log.info(f"[{_cn_label(dim_key)}] 空提交复检后仍为 0 条 (可能真无问题)")
+        except Exception as e:
+            log.warning(f"[{_cn_label(dim_key)}] 空提交复检失败: {str(e)[:80]}")
     elif not _has_tool_use(response):
         # maxTurns 已耗尽,直接走文本兜底
         log.warning(f"[{_cn_label(dim_key)}] maxTurns={MAX_WORKER_TURNS} 已耗尽,走文本兜底")
@@ -1026,7 +806,11 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
         if rid and valid_rule_ids and rid not in valid_rule_ids:
             log.warning(f"[{_cn_label(dim_key)}] 规则越界: {rid} 不在 {dim_key} checklist 中")
             item["cross_boundary"] = True
-            item["confidence"] = max(0, item.get("confidence", 0.85) - 0.3)
+            # 2026-04-16 harness audit 修复: 原先改的是 confidence 字段,
+            # 下游(scorer/merge/verify)全部只读 confidence_score,导致越界惩罚静默失效。
+            # 统一成 confidence_score,让惩罚真的作用到下游加权。
+            current = item.get("confidence_score", 0.85)
+            item["confidence_score"] = max(0.0, round(current - 0.3, 2))
 
     # 2a: Tool Result 截断 — 单 worker 输出上限 (CC tool result truncation 模式)
     from agent_config import MAX_ITEMS_PER_WORKER
@@ -1060,6 +844,7 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
         "degraded": is_degraded,
         "turns_used": current_turn,
         "truncated": getattr(response, "truncated", False),
+        "empty_retry_used": empty_retry_used,
     }
 
     return {
@@ -1414,420 +1199,25 @@ def parallel_review_sync(client, prd_content, wiki_pages, model_tiers, voting_ro
 # 依据验证 (Side Query)
 # ============================================================
 
-def _build_wiki_index(wiki_dir):
-    """构建 wiki 文件索引（一次 glob，多次复用）"""
-    if not os.path.isdir(wiki_dir):
-        return {}
-    index = {}
-    for wiki_file in glob_module.glob(os.path.join(wiki_dir, "*.md")):
-        basename = os.path.basename(wiki_file)
-        index[basename] = wiki_file
-    return index
+# ============================================================
+# 依据验证 (Side Query) - 已拆到 review/evidence_verify.py
+# 2026-04-16 重构:保留 re-export 让外部 import parallel_review 不破坏
+# ============================================================
 
-
-def verify_evidence(items, workspace):
-    """
-    验证每条改进项的依据是否可回溯
-
-    v1.2(B1): 细化返回字段
-    - item["status"]: "VERIFIED" / "RETRACTED"  (向后兼容,run_session.py:336 的过滤仍有效)
-    - item["verification_status"]: "verified" / "verified_with_caveat" / "retracted"  (细粒度)
-    - item["verification_reason"]: 详细原因(成功/失败都有)
-    - item["verification_details"]: {evidence_type, target, found}
-    - item["retract_reason"]: 向后兼容(同 verification_reason)
-
-    Args:
-        items: 改进项列表
-        workspace: 工作目录路径
-
-    Returns:
-        验证后的 items 列表(失败的标记 RETRACTED)
-    """
-    wiki_dir = os.path.join(workspace, "wiki")
-    rules_dir = os.path.join(workspace, "review-rules")
-    wiki_index = _build_wiki_index(wiki_dir)
-
-    verified = []
-    for item in items:
-        ev_type = item.get("evidence_type", "")
-        ev_content = item.get("evidence_content", "")
-        retract_reason = None
-        v_status = "verified"
-        v_reason = f"{ev_type} 类依据通过校验" if ev_type else "无依据类型标注,跳过校验"
-        v_details = {
-            "evidence_type": ev_type or "unknown",
-            "target": (ev_content or "")[:100],
-        }
-
-        if ev_type == "A":
-            # A 类:检查 wiki/ 中是否存在对应页面
-            if not _find_wiki_page(ev_content, wiki_dir, wiki_index):
-                retract_reason = f"A 类依据验证失败:wiki 中未找到相关页面「{ev_content}」"
-                v_status = "retracted"
-                v_reason = retract_reason
-                v_details["found"] = False
-                v_details["reason_code"] = "A_missing_wiki_page"
-            else:
-                v_details["found"] = True
-
-        elif ev_type == "B":
-            # B 类:检查规则编号是否在 review-rules/ 中存在
-            if not _find_rule_reference(ev_content, rules_dir):
-                retract_reason = f"B 类依据验证失败:review-rules 中未找到规则「{ev_content}」"
-                v_status = "retracted"
-                v_reason = retract_reason
-                v_details["found"] = False
-                v_details["reason_code"] = "B_missing_rule"
-            else:
-                v_details["found"] = True
-                # B 类语义验证: 规则存在但 item 内容可能与规则不相关
-                sem_passed, sem_note = _verify_b_class_semantic(item, rules_dir)
-                if not sem_passed:
-                    v_status = "verified_with_caveat"
-                    v_reason = sem_note
-                    v_details["reason_code"] = "B_semantic_weak"
-                    # 降低 confidence 而非 retract(规则存在,只是语义薄弱)
-                    old_conf = item.get("confidence_score", 0.8)
-                    item["confidence_score"] = round(old_conf * 0.7, 2)
-                    log.info(f"[verify] {item.get('id', '?')}: {sem_note}")
-
-        elif ev_type == "C":
-            # C 类:必须标记"待确定⚠️"
-            if "待确定" not in ev_content and "⚠️" not in ev_content:
-                # 自动补标,不 retract;但状态标为 verified_with_caveat(需人工确认)
-                item["evidence_content"] = ev_content + "(待确定⚠️)"
-                v_status = "verified_with_caveat"
-                v_reason = "C 类依据自动补标'待确定⚠️',需人工确认"
-                v_details["reason_code"] = "C_auto_annotated"
-            else:
-                v_status = "verified_with_caveat"
-                v_reason = "C 类依据已标注待确定,需人工确认"
-                v_details["reason_code"] = "C_pending_confirm"
-
-        # 写入 item(保留旧字段 + 新字段)
-        if retract_reason:
-            item["status"] = "RETRACTED"
-            item["retract_reason"] = retract_reason
-        else:
-            item["status"] = "VERIFIED"
-
-        item["verification_status"] = v_status
-        item["verification_reason"] = v_reason
-        item["verification_details"] = v_details
-
-        verified.append(item)
-
-    return verified
-
-
-def summarize_verification(items):
-    """从验证后的 items 统计概要(供 shrike 门禁使用)
-
-    v1.2(B1): 把 verification_status 汇总,给伯劳做决策
-
-    Returns:
-        {
-            "total": N,
-            "verified": N,              # verified + verified_with_caveat
-            "retracted": N,
-            "caveat": N,                # verified_with_caveat (C 类待确认)
-            "retracted_by_reason_code": {"A_missing_wiki_page": N, ...},
-            "reliability": 0.0-1.0,     # verified / total
-        }
-    """
-    from collections import Counter
-    total = len(items)
-    if total == 0:
-        return {"total": 0, "verified": 0, "retracted": 0, "caveat": 0,
-                "retracted_by_reason_code": {}, "reliability": 1.0}
-
-    verified_count = 0
-    retracted_count = 0
-    caveat_count = 0
-    by_code = Counter()
-    for item in items:
-        vs = item.get("verification_status", "")
-        if vs == "verified":
-            verified_count += 1
-        elif vs == "verified_with_caveat":
-            verified_count += 1
-            caveat_count += 1
-        elif vs == "retracted":
-            retracted_count += 1
-            code = item.get("verification_details", {}).get("reason_code", "unknown")
-            by_code[code] += 1
-
-    reliability = verified_count / total if total > 0 else 1.0
-    return {
-        "total": total,
-        "verified": verified_count,
-        "retracted": retracted_count,
-        "caveat": caveat_count,
-        "retracted_by_reason_code": dict(by_code),
-        "reliability": round(reliability, 3),
-    }
-
-
-def _verify_b_class_semantic(item, rules_dir):
-    """B 类依据语义验证(轻量版,不调 LLM)
-
-    1. 从 review-rules/ 读 rule 原文
-    2. 提取 item.issue + item.suggestion 的关键词
-    3. 检查关键词和 rule 原文的 overlap ratio
-    4. overlap < 0.1 -> 标记 "B 类依据语义薄弱"
-
-    Returns:
-        (passed: bool, note: str)
-    """
-    ev_content = item.get("evidence_content", "")
-    rule_ids = re.findall(r"(?:RC-\d+|V-\d+)", ev_content)
-    if not rule_ids or not os.path.isdir(rules_dir):
-        return True, ""
-
-    # 读 rule 原文: 在 review-rules/ 下找到包含该 rule_id 的文件,提取上下文
-    rule_text = ""
-    target_rid = rule_ids[0]  # 取第一个 rule_id
-    for root, _, files in os.walk(rules_dir):
-        for fn in files:
-            if not fn.endswith((".md", ".yaml", ".yml", ".txt")):
-                continue
-            try:
-                fp = os.path.join(root, fn)
-                with open(fp, "r", encoding="utf-8", errors="replace") as f:
-                    content = f.read()
-                if target_rid in content:
-                    rule_text = content
-                    break
-            except OSError:
-                continue
-        if rule_text:
-            break
-
-    if not rule_text:
-        return True, ""  # 规则文件找不到,跳过语义验证(存在性已被 _find_rule_reference 检查)
-
-    # 提取 item 的关键词(中文 2-4 字词 + 英文 3+ 字母词)
-    item_text = f"{item.get('issue', '')} {item.get('suggestion', '')}"
-    cn_kw = set(re.findall(r'[\u4e00-\u9fff]{2,4}', item_text))
-    en_kw = set(w.lower() for w in re.findall(r'[a-zA-Z_-]{3,}', item_text))
-    item_keywords = cn_kw | en_kw
-
-    # 停用词过滤
-    stop_words = {"文档", "说明", "需求", "内容", "系统", "功能", "应该", "建议",
-                  "问题", "修改", "添加", "缺少", "the", "and", "for", "that", "this",
-                  "should", "must", "not", "with", "from", "have", "are", "PRD", "prd"}
-    item_keywords -= stop_words
-
-    if not item_keywords:
-        return True, ""
-
-    # 提取 rule 原文的关键词
-    rule_cn_kw = set(re.findall(r'[\u4e00-\u9fff]{2,4}', rule_text))
-    rule_en_kw = set(w.lower() for w in re.findall(r'[a-zA-Z_-]{3,}', rule_text))
-    rule_keywords = (rule_cn_kw | rule_en_kw) - stop_words
-
-    if not rule_keywords:
-        return True, ""
-
-    # 计算 overlap ratio
-    overlap = item_keywords & rule_keywords
-    ratio = len(overlap) / len(item_keywords) if item_keywords else 0
-
-    if ratio < 0.1:
-        note = (
-            f"B 类依据语义薄弱: {target_rid} 原文与 item 关键词 overlap={ratio:.2f} "
-            f"(阈值 0.1), item 可能引用了不相关规则"
-        )
-        return False, note
-
-    return True, ""
-
-
-def _find_wiki_page(evidence_content, wiki_dir, wiki_index=None):
-    """在 wiki 目录中搜索依据提到的页面"""
-    if not os.path.isdir(wiki_dir):
-        return False
-
-    # 从依据内容中提取 [[页面名]] 格式的引用
-    import re
-    page_refs = re.findall(r"\[\[(.+?)\]\]", evidence_content)
-
-    if page_refs:
-        # 有明确的页面引用，检查文件是否存在
-        for ref in page_refs:
-            for basename in (wiki_index or {}):
-                if ref in basename:
-                    return True
-            if not wiki_index:
-                pattern = os.path.join(wiki_dir, f"*{ref}*")
-                if glob_module.glob(pattern):
-                    return True
-        return False
-
-    # 模糊搜索用索引代替 glob
-    all_basenames = list(wiki_index.keys()) if wiki_index else [
-        os.path.basename(f) for f in glob_module.glob(os.path.join(wiki_dir, "*.md"))
-    ]
-    cn_keywords = re.findall(r'[\u4e00-\u9fff]{2,4}', evidence_content)
-    en_keywords = [w for w in re.findall(r'[a-zA-Z_-]+', evidence_content) if len(w) > 2]
-    keywords = cn_keywords + en_keywords
-    for basename in all_basenames:
-        for kw in keywords[:5]:
-            if kw in basename:
-                return True
-    return False
-
-
-def _find_rule_reference(evidence_content, rules_dir):
-    """检查规则编号是否在 review-rules 目录中存在"""
-    if not os.path.isdir(rules_dir):
-        return False
-
-    # 提取规则编号（如 RC-005, V-07, BMAD V-02 等）
-    import re
-    rule_ids = re.findall(r"(?:RC-\d+|BMAD\s+V-\d+|V-\d+)", evidence_content)
-    if not rule_ids:
-        # 没有明确规则编号，视为验证失败
-        return False
-
-    # 在 review-rules 目录下递归搜索
-    all_rules_files = glob_module.glob(os.path.join(rules_dir, "**", "*"), recursive=True)
-    for rules_file in all_rules_files:
-        if not os.path.isfile(rules_file):
-            continue
-        try:
-            with open(rules_file, "r", encoding="utf-8", errors="replace") as f:
-                content = f.read()
-            for rid in rule_ids:
-                # 去掉 "BMAD " 前缀做匹配
-                clean_rid = rid.replace("BMAD ", "")
-                if clean_rid in content:
-                    return True
-        except OSError:
-            continue
-
-    return False
+from review.evidence_verify import (  # noqa: E402,F401
+    _build_wiki_index,
+    _find_rule_reference,
+    _find_wiki_page,
+    _verify_b_class_semantic,
+    summarize_verification,
+    verify_evidence,
+)
 
 
 # ============================================================
-# 合并与去重
+# 合并与去重 - 已拆到 review/aggregation.py (2026-04-16)
 # ============================================================
 
-def majority_vote(all_runs_items, min_votes=2):
-    """
-    多数投票：多轮评审结果取交集，只保留出现 >= min_votes 次的改进项
-    - all_runs_items: list[list[dict]]，每轮评审的合并后改进项列表
-    - min_votes: 最少出现次数，默认 2
-    - 匹配逻辑：优先用 rule_id 精确匹配；无 rule_id 时降级为 issue 文本相似度 >= 0.6
-    - 对于匹配上的 items，保留文本最长的那条（信息最丰富）
-    """
-    if not all_runs_items:
-        return []
-
-    # 把所有轮次的 items 展平，标记来源轮次
-    tagged = []
-    for run_idx, items_in_run in enumerate(all_runs_items):
-        for item in items_in_run:
-            tagged.append((run_idx, item))
-
-    # 分组：按 rule_id + location 聚类，无 rule_id 时用 issue 文本相似度
-    clusters = []  # 每个 cluster 是 list[(run_idx, item)]
-
-    for run_idx, item in tagged:
-        rule_id = item.get("rule_id", "")
-        issue_text = item.get("issue", "")
-        matched_cluster = None
-
-        for cluster in clusters:
-            representative = cluster[0][1]
-            rep_rule_id = representative.get("rule_id", "")
-
-            # 优先 rule_id 精确匹配
-            if rule_id and rep_rule_id and rule_id == rep_rule_id:
-                loc_sim = SequenceMatcher(
-                    None,
-                    item.get("location", ""),
-                    representative.get("location", ""),
-                ).ratio()
-                if loc_sim >= 0.5:
-                    matched_cluster = cluster
-                    break
-            else:
-                # rule_id 不同或缺失时，用 issue 文本相似度兜底
-                rep_issue = representative.get("issue", "")
-                if issue_text and rep_issue:
-                    sim = SequenceMatcher(None, issue_text, rep_issue).ratio()
-                    if sim >= 0.6:
-                        matched_cluster = cluster
-                        break
-
-        if matched_cluster is not None:
-            matched_cluster.append((run_idx, item))
-        else:
-            clusters.append([(run_idx, item)])
-
-    # 筛选：只保留出现在 >= min_votes 个不同轮次的 cluster
-    result = []
-    for cluster in clusters:
-        distinct_runs = len(set(run_idx for run_idx, _ in cluster))
-        if distinct_runs >= min_votes:
-            # 保留文本最长的那条（issue + suggestion 总长度）
-            best = max(
-                cluster,
-                key=lambda t: len(t[1].get("issue", "")) + len(t[1].get("suggestion", "")),
-            )
-            result.append(best[1])
-
-    # 重新排序和编号
-    severity_rank = {"must": 0, "should": 1}
-    result.sort(key=lambda x: severity_rank.get(x.get("severity", "should"), 1))
-    for i, item in enumerate(result, start=1):
-        item["id"] = f"R-{i:03d}"
-
-    return result
+from review.aggregation import majority_vote, merge_and_deduplicate  # noqa: E402,F401
 
 
-def merge_and_deduplicate(items):
-    """
-    合并多个 worker 的改进项，去重并重新编号
-    - 如果两条 item 的 location + issue 相似度 > 80%，保留严重度更高的
-    - 重新编号为 R-001, R-002, ...
-    - 按严重度排序（must 在前）
-    """
-    if not items:
-        return []
-
-    # 严重度排序权重
-    severity_rank = {"must": 0, "should": 1}
-
-    # 按严重度排序（must 优先）
-    sorted_items = sorted(items, key=lambda x: severity_rank.get(x.get("severity", "should"), 1))
-
-    # 去重：逐条检查是否与已保留的 item 高度相似
-    kept = []
-    for item in sorted_items:
-        is_dup = False
-        item_text = f"{item.get('location', '')} {item.get('issue', '')}"
-
-        for existing in kept:
-            existing_text = f"{existing.get('location', '')} {existing.get('issue', '')}"
-            similarity = SequenceMatcher(None, item_text, existing_text).ratio()
-            if similarity > 0.8:
-                is_dup = True
-                # 如果当前 item 严重度更高，替换已有的
-                if severity_rank.get(item.get("severity"), 1) < severity_rank.get(existing.get("severity"), 1):
-                    kept.remove(existing)
-                    kept.append(item)
-                break
-
-        if not is_dup:
-            kept.append(item)
-
-    # 重新排序：must 在前
-    kept.sort(key=lambda x: severity_rank.get(x.get("severity", "should"), 1))
-
-    # 重新编号
-    for i, item in enumerate(kept, start=1):
-        item["id"] = f"R-{i:03d}"
-
-    return kept
