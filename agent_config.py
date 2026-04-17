@@ -27,6 +27,7 @@ from config import (  # noqa: F401
     WORKER_TIMEOUT,
     TOTAL_REVIEW_TIMEOUT,
     TOOL_LOOP_TIMEOUT,
+    GOSHAWK_TIMEOUT,
     # 质量阈值
     EVIDENCE_RELIABILITY_THRESHOLD,
     # 断路器 + 截断 + token 追踪

@@ -246,6 +246,7 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
     # Tool 调用检测：没有 tool_use 时催促重试
     result = _extract_advisor_result(response)
     has_tool = any(block.type == "tool_use" for block in response.content)
+    empty_retry_used = False
 
     if not has_tool:
         print("  终审未调用 tool，催促重试...")
@@ -262,11 +263,57 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
             if has_tool2:
                 result = result2
                 response = response2
+                has_tool = True
         except Exception:
             pass
+    elif _is_empty_advisor_submission(response):
+        # 苍鹰调了 tool 但三数组全空 — 同 worker 空提交 bug,给一次复核机会
+        # cost: 仅 sonnet 一次额外调用,比 worker 层更值得 (苍鹰本就是关键交叉校验)
+        log.warning("苍鹰首轮空提交(无误报/漏报/冲突),re-prompt 复核")
+        empty_retry_used = True
+        text_parts = "\n".join(
+            block.text for block in response.content if block.type == "text"
+        )
+        followup_msgs = messages + [
+            {"role": "assistant",
+             "content": text_parts or "(我已审阅,首次提交 0 条 flagged/additional/conflict)"},
+            {"role": "user",
+             "content": ("你刚才提交的审核结果三个数组全部为空 "
+                         "(flagged_as_false_positive/additional_findings/conflict_resolutions)。"
+                         "请复核 Workers 的 items 一次:如确实没有误报/漏报/冲突,请在 confidence "
+                         "字段写 ≥0.8 的数值作为显式背书;如有遗漏请重新 submit_advisor_review。")},
+        ]
+        time.sleep(2 + random.uniform(0, 0.5))
+        try:
+            response2 = _call(followup_msgs)
+            result2 = _extract_advisor_result(response2)
+            # 任一数组非空 → 采用 retry 结果;仍全空 → 保留首次 (confidence 可能已被修正)
+            if any(result2.get(k) for k in ("flagged_as_false_positive",
+                                             "additional_findings",
+                                             "conflict_resolutions")):
+                result = result2
+                response = response2
+            elif result2.get("confidence", 0) > result.get("confidence", 0):
+                # retry 后 confidence 上调 → 采用新 confidence 作为显式背书信号
+                result["confidence"] = result2.get("confidence", 0)
+                response = response2
+        except Exception as e:
+            log.warning(f"苍鹰空提交复核失败: {str(e)[:80]}")
 
-    result["verdict"] = "REVIEWED"
+    # 根据真实状态精细化 verdict,而不是一律"REVIEWED"
+    has_any_output = any(
+        result.get(k) for k in (
+            "flagged_as_false_positive", "additional_findings", "conflict_resolutions"
+        )
+    )
+    if not has_tool:
+        result["verdict"] = "SILENT"  # tool 始终未被调用 (retry 也失败)
+    elif has_any_output:
+        result["verdict"] = "REVIEWED"
+    else:
+        result["verdict"] = "EMPTY_APPROVAL"  # tool 调了,但显式"三无"
     result["model_used"] = model
+    result["empty_retry_used"] = empty_retry_used
     # 保存 usage 供成本归因 (CC cost-tracker querySource 模式)
     result["usage"] = {
         "input_tokens": response.usage.get("input_tokens", 0) if hasattr(response.usage, 'get') else getattr(response.usage, 'input_tokens', 0),
@@ -308,6 +355,11 @@ async def advisor_review_async(client, prd_content, worker_results, wiki_pages=N
 #: 漏报补充硬上限(schema + parser 双保险,防止模型绕过 schema)
 MAX_ADDITIONAL_FINDINGS = 2
 
+#: 误报标记占比硬上限 (2026-04-16 harness audit)
+#: 原先无约束,苍鹰理论上可以把所有 worker items 全标为误报 (违反"只审不重审"拓扑)
+#: 0.3 = 误报最多占 worker items 总数的 30%,超出按 confidence 从低到高截断
+MAX_FALSE_POSITIVE_RATIO = 0.3
+
 #: Side Query escalation 单条 item 最大验证次数 (L3 约束)
 MAX_ESCALATIONS = 3
 
@@ -338,6 +390,22 @@ def _extract_advisor_result(response):
         "conflict_resolutions": [],
         "confidence": 0.0,
     }
+
+
+def _is_empty_advisor_submission(response) -> bool:
+    """苍鹰调了 submit_advisor_review 但三个数组都空。
+
+    Parallel to worker's _is_empty_tool_submission: 防止"调了 tool 但没说什么"
+    的静默失败被误当成"真无问题"。
+    """
+    for block in response.content:
+        if block.type == "tool_use" and block.name == "submit_advisor_review":
+            data = block.input
+            fps = data.get("flagged_as_false_positive", []) or []
+            adds = data.get("additional_findings", []) or []
+            confs = data.get("conflict_resolutions", []) or []
+            return not (fps or adds or confs)
+    return False
 
 
 # ============================================================
@@ -545,6 +613,27 @@ def apply_advisor_result(review_items, advisor_result, wiki_pages=None, client=N
     """
     items = copy.deepcopy(review_items)
     items_by_id = {item["id"]: item for item in items}
+
+    # 2026-04-16 harness audit 修复: 误报标记硬上限 (拓扑完整性)
+    # 苍鹰是 meta-reviewer,"只审不重审"—— 不允许它否定大部分 worker 输出。
+    # 超过 MAX_FALSE_POSITIVE_RATIO 的误报 flag 按 item 原始 confidence 从低到高截断
+    # (优先保留那些 worker 自己都不太确定的 item 被标误报,符合直觉)。
+    import math as _math
+    max_fps = max(1, _math.ceil(len(items) * MAX_FALSE_POSITIVE_RATIO))
+    fps_raw = advisor_result.get("flagged_as_false_positive", []) or []
+    if len(fps_raw) > max_fps:
+        # 按被 flag 的 item 的 confidence_score 升序 (低 conf 优先被 flag,因为更可能是错)
+        def _fp_sort_key(fp):
+            tgt = items_by_id.get(fp.get("item_id", ""))
+            return tgt.get("confidence_score", 1.0) if tgt else 1.0
+        fps_raw_sorted = sorted(fps_raw, key=_fp_sort_key)
+        fps_capped = fps_raw_sorted[:max_fps]
+        log.warning(
+            f"苍鹰返回 {len(fps_raw)} 条误报标记,超出硬上限 {max_fps} "
+            f"(items={len(items)} * ratio={MAX_FALSE_POSITIVE_RATIO}),截断"
+        )
+        advisor_result = dict(advisor_result)  # 不改原 dict
+        advisor_result["flagged_as_false_positive"] = fps_capped
 
     # 预建 fp / conflict 索引,供 gate_log 查询
     fp_map = {}

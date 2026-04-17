@@ -197,7 +197,11 @@ SECURITY_PATTERNS = [
 
 
 def _scan_file(filepath):
-    """扫描单个文件，返回命中列表 [(line_no, pattern_name, snippet), ...]"""
+    """扫描单个文件，返回命中列表 [(line_no, pattern_name, snippet), ...]
+
+    设计决策: 一行一 pattern 最多报 1 次(避免重复污染报告),
+    所以把一行里多个 match 合并成单条 hit。如果需要精确计数,使用 re.finditer 重写。
+    """
     hits = []
     with open(filepath, "r", encoding="utf-8", errors="replace") as fh:
         for lineno, line in enumerate(fh, 1):

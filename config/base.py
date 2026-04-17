@@ -67,6 +67,11 @@ TOTAL_REVIEW_TIMEOUT = 900
 # 20 分钟足够 opus 打 30 轮工具调用;超时抛 AgentTimeoutError
 TOOL_LOOP_TIMEOUT = 1200
 
+# 苍鹰(goshawk) 交叉校验超时,Phase G #9
+# 单独给 5 分钟;Opus via Claude CLI 慢但不能无限等
+# 必须在 base.py 定义,否则 prod/test 环境 import 会失败(曾在 session 2 真实崩溃过)
+GOSHAWK_TIMEOUT = 300
+
 
 # ============================================================
 # 质量阈值

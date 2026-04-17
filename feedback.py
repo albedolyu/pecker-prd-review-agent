@@ -636,6 +636,11 @@ def update_rule_scores(outcomes, rules_file, workspace=None, prd_name=None):
 
     alpha = 0.15  # EMA 系数
 
+    # 2026-04-16 harness audit: 单 session 对单条规则的累计 delta 上限
+    # 防止少量高 confidence 异常 session 一把顶爆 rule 权重 (过拟合保护)。
+    # 例如多条 signal 都映射同一 rule,累计变动不应超过 ±0.15。
+    PER_SESSION_DELTA_CAP = 0.15
+
     # 计算每个结局类型对 impact_score 的增量
     outcome_deltas = {
         "effective_catch": 1.0,      # 有效捕获，加分
@@ -645,7 +650,12 @@ def update_rule_scores(outcomes, rules_file, workspace=None, prd_name=None):
         "no_signal": 0.0,
     }
 
+    session_cumulative_delta = {}  # rule_id -> 本 session 累计 |delta|
     updated_count = 0
+    capped_count = 0
+    # 2026-04-16: 记录 EMA 更新后的 score 时序,供 dashboard 画曲线
+    # 格式: {rule_id: [{ts, score, outcome}, ...]}
+    timeline_updates = []
     for outcome in outcomes:
         if outcome["outcome"] in ("missed", "no_signal"):
             continue
@@ -663,16 +673,80 @@ def update_rule_scores(outcomes, rules_file, workspace=None, prd_name=None):
                 # EMA 更新（按 confidence 加权）
                 new_score = effective_alpha * delta + (1 - effective_alpha) * old_score
                 new_score = max(0.0, min(1.0, new_score))
+
+                # 防过拟合: 单 session 对此 rule 累计 |delta| 不超过 PER_SESSION_DELTA_CAP
+                prior = session_cumulative_delta.get(rule_id, 0.0)
+                this_change = abs(new_score - old_score)
+                remaining_budget = PER_SESSION_DELTA_CAP - prior
+                if remaining_budget <= 0:
+                    capped_count += 1
+                    continue  # 已耗尽,跳过此 outcome
+                if this_change > remaining_budget:
+                    # 夹到剩余预算
+                    direction = 1 if new_score > old_score else -1
+                    new_score = old_score + direction * remaining_budget
+                    session_cumulative_delta[rule_id] = PER_SESSION_DELTA_CAP
+                else:
+                    session_cumulative_delta[rule_id] = prior + this_change
+
                 rule["impact_score"] = round(new_score, 3)
                 updated_count += 1
+                timeline_updates.append({
+                    "rule_id": rule_id,
+                    "score": round(new_score, 3),
+                    "outcome": outcome["outcome"],
+                    "prd": prd_name or "unknown",
+                })
+
+    if capped_count > 0:
+        print(f"[cap] {capped_count} 条 outcome 因 PER_SESSION_DELTA_CAP={PER_SESSION_DELTA_CAP} 被拦截 (过拟合保护)")
 
     if updated_count > 0:
         with open(rules_file, "w", encoding="utf-8") as f:
             yaml.dump(rules_data, f, allow_unicode=True, default_flow_style=False)
         print(f"\n[完成] 已更新 {updated_count} 条规则的 impact_score")
+
+        # 追加 timeline 记录 (供 dashboard 画曲线)
+        if workspace and timeline_updates:
+            _append_impact_timeline(timeline_updates, workspace)
     else:
         print("\n[提示] 未找到可匹配的规则，打印建议：")
         _print_score_suggestions(outcomes)
+
+
+def _append_impact_timeline(updates, workspace):
+    """把 EMA 更新后的 impact_score 追加到 rule_impact_timeline.json.
+
+    数据结构: {rule_id: [{ts, score, outcome, prd}, ...]}
+    每次 update_rule_scores 的所有 delta 都用同一个 ts,便于按 session 聚合。
+    dashboard.py 读取后画时序曲线,一眼看出哪些 rule 被 feedback loop 逐步调低/调高。
+    """
+    timeline_path = os.path.join(workspace, "output", "rule_impact_timeline.json")
+    now_iso = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+
+    timeline = {}
+    if os.path.isfile(timeline_path):
+        raw = _read_file_safe(timeline_path)
+        if raw:
+            try:
+                timeline = json.loads(raw)
+            except json.JSONDecodeError:
+                timeline = {}
+
+    for u in updates:
+        rid = u["rule_id"]
+        if rid not in timeline:
+            timeline[rid] = []
+        timeline[rid].append({
+            "ts": now_iso,
+            "score": u["score"],
+            "outcome": u["outcome"],
+            "prd": u["prd"],
+        })
+
+    os.makedirs(os.path.dirname(timeline_path), exist_ok=True)
+    with open(timeline_path, "w", encoding="utf-8") as f:
+        json.dump(timeline, f, ensure_ascii=False, indent=2)
 
 
 def _append_rule_history(outcomes, workspace, prd_name=None):

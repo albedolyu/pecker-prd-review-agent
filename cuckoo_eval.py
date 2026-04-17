@@ -320,8 +320,31 @@ def _get_eval_history_path(workspace):
     return os.path.join(workspace, "output", EVAL_HISTORY_FILE)
 
 
+def _safe_get(scores, key, default=0.0):
+    """从 scores 里取值,缺失或类型错误一律走 default(防止旧/降级 scorer shape 崩溃)."""
+    v = scores.get(key, default) if isinstance(scores, dict) else default
+    try:
+        return round(float(v), 4)
+    except (TypeError, ValueError):
+        return default
+
+
+def _atomic_write_json(path, data):
+    """原子写 JSON: 先写 .tmp 再 rename,避免 crash 中损坏目标文件."""
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp_path, path)  # Windows/Linux 都原子
+
+
 def append_eval_history(workspace, test_case_name, scores, model=None):
-    """每次评测追加一条记录到 eval_history.json"""
+    """每次评测追加一条记录到 eval_history.json
+
+    加固点 (Round 4):
+    - 读取:损坏/缺失文件不抛,当作空历史
+    - _safe_get:缺 key / 非数值字段降级为 0.0,不抛 KeyError
+    - 写入:原子 rename,中途 crash 不污染历史
+    """
     history_path = _get_eval_history_path(workspace)
 
     history = []
@@ -329,45 +352,56 @@ def append_eval_history(workspace, test_case_name, scores, model=None):
         try:
             with open(history_path, "r", encoding="utf-8") as f:
                 history = json.load(f)
+            if not isinstance(history, list):
+                history = []
         except (json.JSONDecodeError, OSError):
             history = []
+
+    detail = scores.get("detail", {}) if isinstance(scores, dict) else {}
 
     entry = {
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "test_case": test_case_name,
         "model": model or "unknown",
-        "overall_score": round(scores["overall_score"], 4),
-        "overall_verdict": scores["overall_verdict"],
-        "recall": round(scores["recall"], 4),
-        "precision": round(scores["precision"], 4),
-        "location_accuracy": round(scores["location_accuracy"], 4),
-        "evidence_reliability": round(scores["evidence_reliability"], 4),
-        "severity_accuracy": round(scores["severity_accuracy"], 4),
-        "format_completeness": round(scores["format_completeness"], 4),
+        "overall_score": _safe_get(scores, "overall_score"),
+        "overall_verdict": scores.get("overall_verdict", "UNKNOWN") if isinstance(scores, dict) else "UNKNOWN",
+        "recall": _safe_get(scores, "recall"),
+        "precision": _safe_get(scores, "precision"),
+        "location_accuracy": _safe_get(scores, "location_accuracy"),
+        "evidence_reliability": _safe_get(scores, "evidence_reliability"),
+        "severity_accuracy": _safe_get(scores, "severity_accuracy"),
+        "format_completeness": _safe_get(scores, "format_completeness"),
         "detail": {
-            "total_bugs": scores["detail"]["total_bugs"],
-            "total_items": scores["detail"]["total_items"],
-            "hit_count": scores["detail"]["hit_count"],
+            "total_bugs": detail.get("total_bugs", 0),
+            "total_items": detail.get("total_items", 0),
+            "hit_count": detail.get("hit_count", 0),
         },
     }
 
     history.append(entry)
 
     os.makedirs(os.path.dirname(history_path), exist_ok=True)
-    with open(history_path, "w", encoding="utf-8") as f:
-        json.dump(history, f, ensure_ascii=False, indent=2)
+    _atomic_write_json(history_path, history)
 
     return entry
 
 
 def print_eval_trend(workspace, test_case_name=None, last_n=5):
-    """打印最近 N 次评测的趋势对比"""
+    """打印最近 N 次评测的趋势对比
+
+    Round 4: 加固 — history 文件损坏不抛,静默跳过趋势显示。
+    """
     history_path = _get_eval_history_path(workspace)
     if not os.path.isfile(history_path):
         return
 
-    with open(history_path, "r", encoding="utf-8") as f:
-        history = json.load(f)
+    try:
+        with open(history_path, "r", encoding="utf-8") as f:
+            history = json.load(f)
+        if not isinstance(history, list):
+            return
+    except (json.JSONDecodeError, OSError):
+        return
 
     if test_case_name:
         history = [h for h in history if h.get("test_case") == test_case_name]

@@ -295,6 +295,9 @@ async def run_review(req: ReviewRequest, request: Request):
                         "cost_usd": telemetry.get("cost_usd") if telemetry else r.get("cost_usd") if isinstance(r, dict) else None,
                         "model": telemetry.get("model") if telemetry else r.get("model_used") if isinstance(r, dict) else None,
                         "degraded": telemetry.get("degraded") if telemetry else None,
+                        # Round 2: 空提交重试分支 telemetry,后续由 generate_status 聚合
+                        "empty_retry_used": telemetry.get("empty_retry_used") if telemetry else None,
+                        "turns_used": telemetry.get("turns_used") if telemetry else None,
                     })
 
                 result = await parallel_review(
@@ -344,13 +347,19 @@ async def run_review(req: ReviewRequest, request: Request):
                     items = apply_advisor_result(items, goshawk_result, wiki_pages=req.wiki_pages, client=client)
                     result["merged_items"] = items
                     result["goshawk"] = goshawk_result
+                    # Round 8: 把 goshawk verdict + retry 信号持久化到 jsonl,
+                    # 让 STATUS 能聚合 SILENT/EMPTY_APPROVAL/REVIEWED 分布
                     emitter.emit("final_reviewer_done", data={
                         "false_positive": len(goshawk_result.get("flagged_as_false_positive", [])),
                         "additional": len(goshawk_result.get("additional_findings", [])),
+                        "verdict": goshawk_result.get("verdict", "UNKNOWN"),
                     })
                     evt.append("final_reviewer_done", {
                         "false_positive": len(goshawk_result.get("flagged_as_false_positive", [])),
                         "additional": len(goshawk_result.get("additional_findings", [])),
+                        "verdict": goshawk_result.get("verdict", "UNKNOWN"),
+                        "confidence": goshawk_result.get("confidence", 0.0),
+                        "empty_retry_used": goshawk_result.get("empty_retry_used", False),
                     })
                 except Exception as e:
                     emitter.emit("final_reviewer_done", data={"error": str(e)[:200]})
