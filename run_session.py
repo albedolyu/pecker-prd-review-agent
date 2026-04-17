@@ -46,29 +46,9 @@ API_KEY = ""
 BASE_URL = "https://api.anthropic.com"
 
 
-# --- 非交互模式 helper ---
-def _is_noninteractive():
-    """检测是否处于非交互模式(CI/CD 场景)
-
-    触发条件:
-    - 环境变量 PECKER_NONINTERACTIVE=1/true/yes
-    - 或 CLI 参数 --non-interactive 被设置(会在 main() 中设置环境变量)
-    """
-    return os.environ.get("PECKER_NONINTERACTIVE", "").lower() in ("1", "true", "yes")
-
-
-def _read_input(prompt, fallback=""):
-    """非交互模式下直接返回 fallback,不调用 input()
-
-    用法:
-        name = _read_input("PRD 名称: ", fallback="unnamed")
-    """
-    if _is_noninteractive():
-        return fallback
-    try:
-        return input(prompt).strip()
-    except (EOFError, KeyboardInterrupt):
-        return fallback
+# --- 非交互模式 helper(已抽至 interactive_io.py,此处保留旧名兼容) ---
+from interactive_io import is_noninteractive as _is_noninteractive
+from interactive_io import read_input as _read_input
 
 
 def check_pending_feedback(non_interactive: bool):
@@ -187,217 +167,30 @@ def _init_config():
 
 
 # ============================================================
-# 意图路由
+# 意图路由(已抽至 router.py,此处保留旧名兼容)
 # ============================================================
 
-def route_intent(client, prd_name, user_instruction="PRD 评审"):
-    """用 Haiku 做轻量分类，决定用哪个模型"""
-    try:
-        response = client.create(
-            model=MODEL_TIERS["haiku"],
-            max_tokens=10,
-            system=ROUTER_PROMPT,
-            messages=[{
-                "role": "user",
-                "content": f"PRD 名称：{prd_name}\n用户指令：{user_instruction}",
-            }],
-        )
-        tier = response.content[0].text.strip().lower()
-        if tier in MODEL_TIERS:
-            return tier
-    except Exception:
-        pass
-    return "sonnet"
+from router import route_intent
 
 
 # ============================================================
-# Tool 执行循环（核心）
+# Tool 执行循环(已抽至 tool_runtime.py,保留旧名兼容)
 # ============================================================
 
-# 只读工具集合(保留常量供旧代码兼容;真源在 tools.py 的 AgentTool.is_concurrency_safe)
-# 改动时优先改 tools.py _AGENT_TOOLS 定义,这里由 is_concurrency_safe_tool(name) 查询。
-CONCURRENT_SAFE_TOOLS = {"read_file", "search_files", "list_directory"}
-
-# Tool result 落盘阈值（参考 CC toolResultStorage.ts:272-334）
-TOOL_RESULT_PERSIST_THRESHOLD = 10000
-
-
-def _process_tool_result(result, tool_name, workspace):
-    """CC 模式：大结果落盘+预览，空结果标记，错误不截断"""
-    if not result or not result.strip():
-        return f"({tool_name} 执行完成，无输出)"
-
-    if result.startswith("[blocked]") or result.startswith("[error]"):
-        return result
-
-    if len(result) <= TOOL_RESULT_PERSIST_THRESHOLD:
-        return result
-
-    # 大结果写磁盘，返回 2KB 预览
-    import time as _t
-    persist_dir = os.path.join(workspace, "output", ".tool_results")
-    os.makedirs(persist_dir, exist_ok=True)
-    fname = f"{tool_name}_{int(_t.time())}.txt"
-    fpath = os.path.join(persist_dir, fname)
-    with open(fpath, "w", encoding="utf-8", errors="replace") as f:
-        f.write(result)
-
-    # 在换行处截断预览（CC 用 2KB）
-    preview = result[:2000]
-    last_nl = preview.rfind("\n")
-    if last_nl > 500:
-        preview = preview[:last_nl]
-    return f"{preview}\n...\n[完整结果已保存至 .tool_results/{fname}，共 {len(result)} 字符]"
-
-
-def tool_loop(client, model, system_blocks, messages, workspace, turn_callback=None, max_turns=MAX_TOOL_TURNS, wall_clock_limit=None):
-    """
-    Messages API + tool use 循环
-
-    A4: 加 wall-clock 总时长上限(默认 TOOL_LOOP_TIMEOUT 秒),超时抛 AgentTimeoutError。
-    max_turns 保护的是"最多几轮工具调用",wall_clock_limit 保护的是"最长跑多少秒"。
-    两者是互补的:API 慢响应也会被 wall-clock 拦住。
-    """
-    import time as _time
-    start_time = _time.time()
-    limit = wall_clock_limit if wall_clock_limit is not None else TOOL_LOOP_TIMEOUT
-
-    for turn in range(max_turns):
-        # A4: 每轮前检查 wall-clock
-        elapsed = _time.time() - start_time
-        if elapsed > limit:
-            raise AgentTimeoutError(
-                f"tool_loop 超时:已运行 {elapsed:.0f}s,上限 {limit}s(轮次 {turn}/{max_turns})",
-                elapsed=elapsed,
-                limit=limit,
-            )
-
-        response = client.create(
-            model=model,
-            max_tokens=MAX_TOKENS,
-            system=system_blocks,
-            messages=messages,
-            tools=TOOL_SCHEMAS,
-        )
-
-        # API 错误检查
-        has_error = any(b.type == "text" and b.text.startswith("[API error]") for b in response.content)
-        if has_error:
-            for b in response.content:
-                if b.type == "text":
-                    print(b.text, flush=True)
-            break
-
-        # 解析响应
-        text_parts = []
-        tool_calls = []
-        for block in response.content:
-            if block.type == "text":
-                print(block.text, end="", flush=True)
-                text_parts.append(block.text)
-            elif block.type == "tool_use":
-                print(f"\n  [tool] {block.name}({_brief_input(block.input)})", flush=True)
-                tool_calls.append(block)
-
-        if tool_calls:
-            # 执行工具，按 Anthropic API 合约构建 tool_result blocks
-            assistant_content = []
-            for tp in text_parts:
-                assistant_content.append({"type": "text", "text": tp})
-            for tc in tool_calls:
-                assistant_content.append({"type": "tool_use", "id": tc.id, "name": tc.name, "input": tc.input})
-            messages.append({"role": "assistant", "content": assistant_content})
-
-            tool_results = []
-            # CC 模式:只读工具可并发,写工具串行
-            # 真源是 tools.AgentTool.is_concurrency_safe(查询通过 is_concurrency_safe_tool)
-            safe_calls = [tc for tc in tool_calls if is_concurrency_safe_tool(tc.name)]
-            unsafe_calls = [tc for tc in tool_calls if not is_concurrency_safe_tool(tc.name)]
-            executed = {}
-
-            if len(safe_calls) > 1:
-                # 多个只读工具并发执行
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-                    futures = {
-                        pool.submit(safe_execute_tool, tc.name, tc.input, workspace): tc
-                        for tc in safe_calls
-                    }
-                    for future in concurrent.futures.as_completed(futures):
-                        tc = futures[future]
-                        try:
-                            executed[tc.id] = future.result()
-                        except Exception as e:
-                            executed[tc.id] = f"[error] {e}"
-            else:
-                for tc in safe_calls:
-                    executed[tc.id] = safe_execute_tool(tc.name, tc.input, workspace)
-
-            for tc in unsafe_calls:
-                executed[tc.id] = safe_execute_tool(tc.name, tc.input, workspace)
-
-            for tc in tool_calls:
-                result = executed[tc.id]
-                processed = _process_tool_result(result, tc.name, workspace)
-                print(f"  [done] {result[:60]}", flush=True)
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": tc.id,
-                    "content": processed,
-                })
-            messages.append({"role": "user", "content": tool_results})
-        else:
-            messages.append({"role": "assistant", "content": "\n".join(text_parts)})
-            if response.stop_reason == "end_turn":
-                print()
-                break
-            messages.append({"role": "user", "content": "请继续。"})
-
-        if turn_callback:
-            turn_callback(messages, response)
-
-    return messages
-
-
-def _brief_input(inputs):
-    """工具输入的简短展示"""
-    if "path" in inputs:
-        return inputs["path"]
-    if "command" in inputs:
-        cmd = inputs["command"]
-        return cmd[:60] + "..." if len(cmd) > 60 else cmd
-    if "pattern" in inputs:
-        return inputs["pattern"]
-    return ""
+from tool_runtime import (
+    CONCURRENT_SAFE_TOOLS,
+    TOOL_RESULT_PERSIST_THRESHOLD,
+    tool_loop,
+)
+from tool_runtime import process_tool_result as _process_tool_result
+from tool_runtime import brief_input as _brief_input
 
 
 # ============================================================
-# PRD / Wiki 共享读取
+# PRD / Wiki 共享读取(已抽至 content_loader.py,保留旧名兼容)
 # ============================================================
 
-def load_prd_content(workspace):
-    """读取 workspace/prd/ 下所有 .md 文件，返回 (prd_content, prd_files) 或 (None, [])"""
-    prd_dir = os.path.join(workspace, "prd")
-    prd_files = [f for f in os.listdir(prd_dir) if f.endswith(".md")] if os.path.isdir(prd_dir) else []
-    if not prd_files:
-        return None, []
-    prd_parts = []
-    for pf in sorted(prd_files):
-        with open(os.path.join(prd_dir, pf), "r", encoding="utf-8") as f:
-            prd_parts.append(f"## {pf}\n\n{f.read()}")
-    return "\n\n---\n\n".join(prd_parts), prd_files
-
-
-def load_wiki_pages(wiki_path):
-    """读取 wiki 目录下所有 .md 页面（排除 index/log/scratchpad），返回 dict"""
-    wiki_pages = {}
-    if os.path.isdir(wiki_path):
-        for wf in os.listdir(wiki_path):
-            if wf.endswith(".md") and wf not in ("index.md", "log.md", "_scratchpad.md"):
-                wp = os.path.join(wiki_path, wf)
-                with open(wp, "r", encoding="utf-8", errors="replace") as f:
-                    wiki_pages[wf.replace(".md", "")] = f.read()
-    return wiki_pages
+from content_loader import load_prd_content, load_wiki_pages
 
 
 # ============================================================
@@ -409,6 +202,10 @@ def run_parallel_review(client, workspace, wiki_path, prd_content, prd_files, wi
     """
     调用并行 Workers 评审 PRD，返回结构化改进项列表
     prd_content / prd_files / wiki_pages 由 main() 预读传入
+
+    2026-04-16: CLI 路径也补上 EventStore 事件流,让 shadow_run 能采集
+    telemetry (empty_retry_used / items_count / error / turns_used),
+    与 api/routes/review.py 的 web 路径持平,STATUS.md 聚合数据两条路径都有。
     """
     from parallel_review import parallel_review, parallel_review_sync, verify_evidence
     from easter_eggs import calculate_peck_score, format_peck_score as format_peck
@@ -421,17 +218,51 @@ def run_parallel_review(client, workspace, wiki_path, prd_content, prd_files, wi
     print(f"  [并行评审] Wiki: {len(wiki_pages)} 页")
     print(f"  [并行评审] 派出: 织布鸟(结构) + 猫头鹰(质量) + 渡鸦(AI Coding) + 鸬鹚(数据)")
 
+    # 构造 EventStore,记录本次 review 的事件流 (供 STATUS 聚合)
+    from event_store import EventStore
+    import time as _time
+    import uuid as _uuid
+    review_id = f"rev_{int(_time.time())}_{_uuid.uuid4().hex[:8]}"
+    evt = EventStore(workspace=workspace, review_id=review_id)
+    evt.append("review_started", {
+        "prd_files": prd_files,
+        "wiki_pages_count": len(wiki_pages),
+        "mode": "cli",
+    })
+    evt.append("workers_started", {"mode": "cli"})
+
+    def _on_worker_done(dim, r):
+        """Worker 完成回调: 把 items_count / error / telemetry 落盘。"""
+        if isinstance(r, dict):
+            telemetry = r.get("telemetry") or {}
+            evt.append("worker_done", {
+                "dim": dim,
+                "items_count": len(r.get("items", [])),
+                "error": str(r.get("error", ""))[:200] if r.get("error") else None,
+                "empty_retry_used": telemetry.get("empty_retry_used"),
+                "turns_used": telemetry.get("turns_used"),
+                "duration_ms": telemetry.get("duration_ms"),
+                "cost_usd": telemetry.get("cost_usd") or r.get("cost_usd"),
+            })
+        else:
+            evt.append("worker_done", {"dim": dim, "items_count": 0, "error": str(r)[:200]})
+
     # 用 adapter client 调 workers（并行 async）
     import asyncio
     # Windows 兼容：避免 asyncio 在 Windows 上的 ProactorEventLoop 问题
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-    import time as _time
     t_start = _time.time()
-    result = asyncio.run(parallel_review(client, prd_content, wiki_pages, MODEL_TIERS, wiki_path=wiki_path, diff_context=diff_context))
+    result = asyncio.run(parallel_review(client, prd_content, wiki_pages, MODEL_TIERS,
+                                          wiki_path=wiki_path, diff_context=diff_context,
+                                          on_worker_done=_on_worker_done))
     elapsed = _time.time() - t_start
     print(f"  [并行评审] 4 个 worker 并行完成，耗时 {elapsed:.1f}s")
+    evt.append("checkpoint", {
+        "workers_done": len(result.get("workers", [])),
+        "items_count": len(result.get("merged_items", [])),
+    })
 
     # 打印 worker 结果
     for w in result["workers"]:
@@ -461,12 +292,18 @@ def run_parallel_review(client, workspace, wiki_path, prd_content, prd_files, wi
     print(f"\n  [并行评审] 合并后 {len(valid_items)} 条有效改进项")
     print(f"  [token] input={result['total_usage']['input_tokens']}, output={result['total_usage']['output_tokens']}")
 
+    evt.append("review_completed", {
+        "items_count": len(valid_items),
+        "duration_ms": int(elapsed * 1000),
+    })
+
     return {
         "items": valid_items,
         "retracted": retracted,
         "verification_summary": verification_summary,
         "peck_score": peck,
         "usage": result["total_usage"],
+        "event_store": evt,  # 供 run_goshawk_review 继续追加 final_reviewer_* 事件
     }
 
 
@@ -495,6 +332,10 @@ def run_goshawk_review(client, workspace, wiki_path, parallel_result, model, sys
     import time as _time
     t_start = _time.time()
 
+    evt = parallel_result.get("event_store") if isinstance(parallel_result, dict) else None
+    if evt:
+        evt.append("final_reviewer_started", {"items_count": len(parallel_result.get("items", []))})
+
     try:
         goshawk_result = advisor_review(
             client, prd_content, parallel_result["items"], wiki_pages,
@@ -511,6 +352,15 @@ def run_goshawk_review(client, workspace, wiki_path, parallel_result, model, sys
         print(f"\n  苍鹰审核完毕 ({elapsed:.1f}s)：误报 {fp_count}，补充 {add_count}，调解 {conf_count}，"
               f"信心度 {goshawk_result.get('confidence', 0):.0%}")
 
+        if evt:
+            evt.append("final_reviewer_done", {
+                "false_positive": fp_count,
+                "additional": add_count,
+                "verdict": goshawk_result.get("verdict", "UNKNOWN"),
+                "confidence": goshawk_result.get("confidence", 0.0),
+                "empty_retry_used": goshawk_result.get("empty_retry_used", False),
+            })
+
         goshawk_report = format_advisor_report(goshawk_result)
         messages.append({"role": "user", "content": f"苍鹰交叉校验已完成：\n{goshawk_report}\n\n请结合苍鹰的审核意见，进入 Phase 3 交互确认。"})
         from security import save_session_turn
@@ -518,65 +368,24 @@ def run_goshawk_review(client, workspace, wiki_path, parallel_result, model, sys
         save_session_turn(session_file, messages, {"model": model, "turn": "goshawk"})
     except Exception as e:
         print(f"  苍鹰交叉校验失败（继续评审）: {str(e)[:80]}")
+        if evt:
+            evt.append("final_reviewer_done", {"error": str(e)[:200]})
 
     return messages
 
 
 # ============================================================
-# System Prompt 构建
+# System Prompt 构建(已抽至 router.py,保留旧名兼容)
 # ============================================================
 
-def build_system_blocks(system_prompt, prd_content=None, workspace=None):
-    """构建 system prompt blocks，支持 prompt caching"""
-    blocks = [
-        {
-            "type": "text",
-            "text": system_prompt,
-            "cache_control": {"type": "ephemeral"},
-        }
-    ]
-
-    if prd_content:
-        blocks.append({
-            "type": "text",
-            "text": f"## 当前待评审 PRD 内容\n\n{prd_content}",
-            "cache_control": {"type": "ephemeral"},
-        })
-
-    if workspace:
-        scratchpad = read_scratchpad(workspace)
-        if scratchpad:
-            blocks.append({
-                "type": "text",
-                "text": f"## 当前评审状态\n\n{scratchpad}",
-            })
-
-    return blocks
+from router import build_system_blocks
 
 
 # ============================================================
-# Wiki 同步
+# Wiki 同步(已抽至 content_loader.py,保留旧名兼容)
 # ============================================================
 
-def sanitize_branch_name(name):
-    """将中文/特殊字符转为 git 安全的分支名"""
-    name = re.sub(r"[^\w\u4e00-\u9fff-]", "-", name)
-    name = re.sub(r"-+", "-", name).strip("-")
-    return name or "unnamed"
-
-
-def wiki_pull(wiki_path):
-    """评审开始前拉取最新知识库"""
-    if not os.path.isdir(os.path.join(wiki_path, ".git")):
-        return
-    result = subprocess.run(
-        ["git", "pull", "--rebase", "--autostash"],
-        capture_output=True, text=True, cwd=wiki_path,
-    )
-    if result.returncode == 0:
-        print(f"[wiki] 已同步最新知识库")
-    else:
-        print(f"[wiki] pull 失败（继续评审）: {result.stderr.strip()[:80]}")
+from content_loader import sanitize_branch_name, wiki_pull
 
 
 
@@ -587,67 +396,17 @@ def wiki_pull(wiki_path):
 def main():
     _init_config()
 
-    parser = argparse.ArgumentParser(
-        description="啄木鸟 PRD Review Agent",
-        epilog="示例:\n"
-               "  python run_session.py 搜索优化\n"
-               "  python run_session.py 搜索优化 --model opus\n"
-               "  python run_session.py 搜索优化 --no-parallel\n"
-               "  python run_session.py 搜索优化 --workspace ./my-project\n",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+    from session_setup import (
+        build_parser, apply_noninteractive_defaults,
+        run_merge_mode, resolve_messages, build_initial_message,
     )
-    parser.add_argument("prd_name", nargs="?", help="PRD 名称")
-    parser.add_argument("--model", choices=["auto", "opus", "sonnet", "haiku"], default="auto")
-    parser.add_argument("--reviewer", default=os.environ.get("REVIEWER", "default"))
-    parser.add_argument("--workspace", default=DEFAULT_WORKSPACE, help="工作目录路径")
-    parser.add_argument("--no-parallel", action="store_true", help="关闭并行 Workers，用单 agent 评审")
-    parser.add_argument("--merge", nargs=2, metavar="REVIEWER", help="合并两个 reviewer 的评审结果")
-    parser.add_argument("--non-interactive", action="store_true",
-                        help="非交互模式(CI/CD),禁止 input() 阻塞,缺省值走 fallback")
-    parser.add_argument("--resume", choices=["prompt", "auto", "skip"], default="prompt",
-                        help="session 恢复策略: prompt=询问(默认), auto=自动恢复, skip=忽略旧 session")
-    parser.add_argument("--auto-decide", choices=["off", "by-confidence", "accept-all", "reject-all"],
-                        default="off",
-                        help=("缺失 ⑥ Phase 3 批量决策: by-confidence 按 confidence 自动 Y/N "
-                              "(>=0.8 接受, <0.5 驳回, 中间挂起);accept-all 全 Y;reject-all 全 N"))
-    args = parser.parse_args()
 
-    # 缺失 ⑥ 自动检测 nohup/CI 等无 stdin 场景,自动启用非交互
-    # (避免用户忘记加 --non-interactive 导致进程卡死)
-    if not sys.stdin.isatty() and not args.non_interactive:
-        print("[auto] 检测到 stdin 非 tty (nohup/CI/管道),自动启用 --non-interactive")
-        args.non_interactive = True
+    args = build_parser().parse_args()
+    apply_noninteractive_defaults(args, stdin_is_tty=sys.stdin.isatty())
 
-    # 非交互模式:设置环境变量,让 _read_input() 和下游模块(post_review 等)都生效
-    if args.non_interactive:
-        os.environ["PECKER_NONINTERACTIVE"] = "1"
-    # 非交互模式下 --resume 默认改为 skip(避免潜在 prompt)
-    if _is_noninteractive() and args.resume == "prompt":
-        args.resume = "skip"
-    # 缺失 ⑥ 非交互模式下 --auto-decide 默认 by-confidence
-    if _is_noninteractive() and args.auto_decide == "off":
-        args.auto_decide = "by-confidence"
-        print(f"[auto] 非交互模式自动启用 --auto-decide=by-confidence")
-    # 设到环境让 post_review 链消费
-    os.environ["PECKER_AUTO_DECIDE"] = args.auto_decide
-
-    # 合并模式（--merge）
+    # 合并模式 (--merge) — 独立流程,早返
     if args.merge:
-        from merge_reviews import load_reviewer_items, merge_reviews, format_merged_report
-        prd_name = args.prd_name or _read_input("PRD 名称: ", fallback="unnamed") or "unnamed"
-        workspace = os.path.abspath(args.workspace)
-        reviewer_a, reviewer_b = args.merge
-        items_a = load_reviewer_items(workspace, prd_name, reviewer_a)
-        items_b = load_reviewer_items(workspace, prd_name, reviewer_b)
-        print(f"[合并] {reviewer_a}: {len(items_a)} 条, {reviewer_b}: {len(items_b)} 条")
-        result = merge_reviews(items_a, items_b, reviewer_a, reviewer_b)
-        report = format_merged_report(result)
-        output_path = os.path.join(workspace, "output", f"PRD_合并报告_{datetime.date.today().strftime('%Y%m%d')}.md")
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(report)
-        print(f"[合并] 共识 {result['agreement']['agreed']} 条，合并后 {result['agreement']['total']} 条")
-        print(f"[合并] 报告: {output_path}")
+        run_merge_mode(args)
         return
 
     prd_name = args.prd_name or _read_input("PRD 名称: ", fallback="") or "unnamed"
@@ -730,29 +489,7 @@ def main():
 
     # 尝试恢复 —— 根据 --resume 策略决定
     resumed = resume_session(os.path.join(workspace, "output"), prd_name)
-    if resumed:
-        prev_messages, prev_meta = resumed
-        if prev_messages:
-            if args.resume == "auto":
-                messages = prev_messages
-                print(f"[resume=auto] 自动恢复 {len(messages)} 条消息的会话。\n")
-            elif args.resume == "skip":
-                print(f"[resume=skip] 忽略已有 session,开始新评审。")
-                messages = None
-            else:  # prompt
-                answer = _read_input(
-                    f"发现未完成的评审 session,是否恢复？(y/n): ",
-                    fallback="n",
-                ).lower()
-                if answer == "y":
-                    messages = prev_messages
-                    print(f"已恢复 {len(messages)} 条消息的会话。\n")
-                else:
-                    messages = None
-        else:
-            messages = None
-    else:
-        messages = None
+    messages = resolve_messages(args.resume, resumed)
 
     # 首轮消息
     date_str = datetime.date.today().strftime("%Y-%m-%d")
@@ -761,15 +498,11 @@ def main():
     branch_name = f"review/{safe_reviewer}/{safe_prd}/{date_str}"
 
     if messages is None:
-        init_message = (
-            f"今天是 {date_str}。\n"
-            f"评审人：{args.reviewer}\n"
-            f"PRD 名称：{prd_name}\n"
-            f"工作目录：{workspace}\n"
-            f"Git 分支：{branch_name}\n\n"
-            f"请执行 Phase 0 初始化，检查工作目录结构，然后执行 Phase 0.5 知识库预检。"
-        )
-        messages = [{"role": "user", "content": init_message}]
+        messages = [{
+            "role": "user",
+            "content": build_initial_message(date_str, args.reviewer, prd_name,
+                                             workspace, branch_name),
+        }]
 
     # 首轮
     print("=" * 60)
