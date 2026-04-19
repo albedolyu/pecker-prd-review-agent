@@ -13,7 +13,7 @@
  * - 顶部渲染阶段进度条(v8 PhaseNav / v7 PhaseStepper)
  */
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -34,6 +34,14 @@ import { PhaseStepper } from "@/components/PhaseStepper";
 import { PhaseNav, type PhaseId } from "@/components/nav/PhaseNav";
 
 export default function ReviewPage() {
+  return (
+    <Suspense fallback={null}>
+      <ReviewPageInner />
+    </Suspense>
+  );
+}
+
+function ReviewPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   // v7=7 显式回退,其他一律 v8 主线
