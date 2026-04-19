@@ -1,0 +1,52 @@
+name: Web CI
+
+# 前端质量门禁 · tsc / vitest / next build 都要绿才能 merge
+# 不跑 playwright(需要完整 dev server + 后端 · 放 nightly)
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/web-ci.yml"
+  pull_request:
+    paths:
+      - "web/**"
+      - ".github/workflows/web-ci.yml"
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: TypeScript check
+        run: pnpm exec tsc --noEmit
+
+      - name: Vitest unit tests
+        run: pnpm test
+
+      - name: Next build(standalone · 含 Google Fonts 下载)
+        run: pnpm build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+          # prod build 里 rewrites 目标,本 CI 不跑 server 只 build,填占位
+          API_BASE_URL: http://localhost:8000

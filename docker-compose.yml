@@ -46,13 +46,23 @@ services:
       - USE_CLAUDE_CODE=1
       - PECKER_ENV=prod
 
-  # Next.js 前端(5 阶段 wizard + 赛博森林首页 + 10 鸟家族)
+  # Next.js 前端 v8(Agent 工作台 + 工作文档)
+  # v7 legacy 回退入口:/review?v=7
   frontend:
-    build: ./web
+    build:
+      context: ./web
+      # 如果 build 时网络访问 Google Fonts 失败,传 HTTPS_PROXY=http://host.docker.internal:7890
+      # args:
+      #   HTTPS_PROXY: ${HTTPS_PROXY}
     ports:
       - "3000:3000"
     depends_on:
       - api
+    environment:
+      # Next.js rewrites 把 /api/* 代理到容器网络里的 api service
+      - API_BASE_URL=http://api:8000
+      # 浏览器端 SSE 直连(useReviewStream.ts · NEXT_PUBLIC_SSE_BASE)· 外网访问用域名
+      - NEXT_PUBLIC_SSE_BASE=http://localhost:8000
 
   # [遗留] Streamlit 旧版(仅 CLI 调试用,正式使用 frontend)
   web-legacy:

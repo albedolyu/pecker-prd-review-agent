@@ -1,0 +1,29 @@
+# next build 不需要这些 · 让 build context 轻,cache 命中率高
+
+node_modules
+.next
+out
+coverage
+.git
+.github
+
+# 编辑器 / IDE
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+
+# 测试产物
+test-results
+playwright-report
+tests/e2e
+tests/*.test.ts
+tests/*.test.tsx
+
+# 本地配置
+.env.local
+.env*.local
+.env.development.local
+.env.production.local
+.env.test.local
