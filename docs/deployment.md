@@ -91,17 +91,52 @@ docker compose ps
 2. **登录** · `/login` · 用 `.env` 里 `PECKER_WEB_PASSWORD`
 3. **Phase 0→4** · 真实 API 评审流
 
-### 网络受限(Google Fonts 被墙)
+### 网络受限(Google Fonts 被墙)· 推荐用 GHCR 预 build 镜像
 
-build 阶段 Next.js 要下载 Geist / Geist Mono 字体。如果构建机网络受限:
+build 阶段 Next.js 要下载 Geist / Geist Mono 字体。内网访问 fonts.gstatic.com 基本 100% 失败。
+**推荐走 GitHub Actions 在墙外 build · 推到 GHCR · 内网只 pull**:
+
+#### CI 侧 · 自动 build 推 GHCR(已配置)
+
+`.github/workflows/web-docker-publish.yml` · push main 自动触发:
+- 构建 `ghcr.io/xinshu001/pecker-web:latest` + `:sha-xxxxxxx`
+- 约 3-5 分钟完成
+- Actions 页面可以看到最新镜像 tag
+
+#### 内网侧 · 一键拉取 + 启动
 
 ```bash
-# 方法 1 · 把代理传进 build
-docker compose build --build-arg HTTPS_PROXY=http://host.docker.internal:7890 frontend
+# 1. 一次性登录 GHCR
+#    PAT 创建:https://github.com/settings/tokens · 勾 read:packages
+#    如果 repo 是 private,另勾 repo scope
+echo $GITHUB_PAT | docker login ghcr.io -u <your-github-user> --password-stdin
 
-# 方法 2 · 在墙外 CI(GitHub Actions / Vercel)build 好再 pull 镜像
-# 把 build 产出推到 GHCR,服务器只 pull
-docker pull ghcr.io/xinshu001/pecker-web:v8
+# 2. 用生产 compose(GHCR 镜像代替本地 build)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml pull frontend
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d api frontend
+
+# 3. 升级到最新(CI 有新 main push 后)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml pull frontend
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d frontend
+```
+
+#### Package visibility 配置
+
+**首次** workflow 跑完推镜像后:
+1. 打开 https://github.com/xinshu001?tab=packages
+2. 找到 `pecker-web`package
+3. Settings → Change package visibility → **Public**(对同事公开)或 Private(需每人 PAT)
+4. 如果 repo 是 private · package 默认也是 private · 要手动改 Public 或给同事发 PAT
+
+**固定版本部署**:
+改 `docker-compose.prod.yml` 里的 `image: ghcr.io/.../pecker-web:latest`
+换成 `:sha-abc1234` 或 `:v1.0.0`(打 git tag 自动生成语义化版本)。
+
+#### 替代方案 · 本地 build + 代理(不推荐)
+
+```bash
+# 需要本地开着 Clash / v2ray · 7890 端口
+docker compose build --build-arg HTTPS_PROXY=http://host.docker.internal:7890 frontend
 ```
 
 ### 反向代理(可选 · 同域名)

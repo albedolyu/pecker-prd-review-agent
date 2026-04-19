@@ -1,0 +1,25 @@
+# Docker Compose override · 生产 / 内网部署(拉 GHCR 镜像 · 不在本地 build)
+#
+# 场景:
+# - 内网机器访问 Google Fonts 失败 · 无法本地 build frontend
+# - CI 在 GitHub 墙外环境 build 好镜像推到 GHCR · 内网只 pull
+#
+# 用法:
+#   # 一次性登录 GHCR(需要 PAT · read:packages 权限)
+#   echo $GITHUB_PAT | docker login ghcr.io -u <your-github-user> --password-stdin
+#
+#   # 拉镜像 + 起服务
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml pull frontend
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d api frontend
+#
+#   # 更新到最新版
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml pull frontend
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d frontend
+
+services:
+  frontend:
+    # 覆盖主 compose 的 build 指令 · 直接用 CI 推的 latest 镜像
+    # 固定版本时把 :latest 换成 :sha-xxxxxxx 或 :v1.0.0
+    image: ghcr.io/xinshu001/pecker-web:latest
+    # 显式 pull policy · 不每次 up 都去 pull(节省时间)· 需要时手动 docker compose pull
+    pull_policy: missing

@@ -1,0 +1,84 @@
+name: Web Docker Publish
+
+# 前端镜像发布到 GHCR(GitHub Container Registry)
+# 绕开内网 build 时 Google Fonts 被墙问题 · 内网机器只 pull 预 build 镜像即可
+#
+# 镜像: ghcr.io/xinshu001/pecker-web
+# tag 策略(metadata-action 自动生成):
+#   - latest         · main 分支 push
+#   - main-<sha>     · 主分支每次 commit
+#   - sha-<short>    · 7 位 commit hash
+#   - v1.x.x         · git tag 发布时
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/web-docker-publish.yml"
+    tags:
+      - "v*.*.*"
+  workflow_dispatch: # 手动触发(dashboard 上点 Run workflow)
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/pecker-web
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # 推镜像到 GHCR
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata(tag + labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=sha,prefix=sha-,format=short
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ./web
+          file: ./web/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # GitHub Actions cache · 第二次 build 快(只重新跑变的 stage)
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # 单平台 linux/amd64 · 多平台构建慢 3x · 内网服务器基本都是 amd64
+          platforms: linux/amd64
+
+      - name: Summary
+        run: |
+          echo "### Docker image pushed to GHCR" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Pull on your server:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
