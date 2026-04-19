@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh"><head>
+<meta charset="utf-8"/><title>啄木鸟 v8 · Keymap</title>
+<link rel="stylesheet" href="tokens.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  body{margin:0;background:var(--surface-canvas);color:var(--text-default);font-family:var(--font-sans);}
+  .wrap{max-width:1080px;margin:0 auto;padding:56px 48px 80px;}
+  h1{font-size:32px;font-weight:600;letter-spacing:-.5px;margin:0 0 4px;color:var(--text-strong);}
+  .sub{color:var(--text-muted);font-size:14px;margin-bottom:32px;}
+  h2{font-size:11px;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-muted);
+     font-weight:600;margin:36px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border-subtle);}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  td{padding:10px 12px;border-bottom:1px solid var(--border-subtle);vertical-align:top;}
+  td.scope{width:140px;color:var(--text-muted);font-family:var(--font-mono);font-size:11px;padding-top:13px;}
+  td.keys{width:220px;}
+  td.desc{color:var(--text-default);padding-top:13px;}
+  .k{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;
+     padding:0 6px;border-radius:4px;border:1px solid var(--border-default);
+     background:var(--surface-raised);box-shadow:0 1px 0 var(--border-default);
+     font-family:var(--font-mono);font-size:11px;font-weight:600;color:var(--text-strong);}
+  .plus{display:inline-block;margin:0 4px;color:var(--text-faint);font-size:11px;}
+  .chain{display:inline-block;margin:0 6px;color:var(--text-faint);font-size:11px;font-family:var(--font-mono);}
+  .pill{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;
+        font-size:10px;font-weight:600;font-family:var(--font-mono);}
+  .pill.ok    {background:var(--status-done-bg);color:var(--status-done-fg);}
+  .pill.warn  {background:var(--status-warn-bg);color:var(--status-warn-fg);}
+  .pill.info  {background:var(--status-info-bg);color:var(--status-info-fg);}
+  .note{font-size:12px;color:var(--text-muted);margin-top:8px;line-height:1.6;}
+  .banner{display:flex;gap:14px;padding:14px 16px;background:var(--surface-sunken);
+          border:1px solid var(--border-subtle);border-radius:8px;margin-bottom:28px;font-size:13px;}
+  .banner b{color:var(--text-strong);font-weight:600;}
+  .checks{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px;}
+  .check{padding:14px 16px;border:1px solid var(--border-subtle);border-radius:8px;background:var(--surface-raised);}
+  .check h3{margin:0 0 6px;font-size:13px;color:var(--text-strong);font-weight:600;}
+  .check p{margin:0;font-size:12px;color:var(--text-muted);line-height:1.55;}
+  .themer{position:fixed;top:16px;right:16px;display:flex;gap:6px;}
+  .themer button{border:1px solid var(--border-default);background:var(--surface-raised);
+                 color:var(--text-default);font-family:var(--font-mono);font-size:11px;
+                 padding:6px 10px;border-radius:6px;cursor:pointer;}
+  .themer button[data-on=true]{background:var(--accent-500);color:var(--accent-fg);border-color:var(--accent-500);}
+</style>
+</head><body>
+<div class="themer">
+  <button id="btnL" data-on="true">浅</button>
+  <button id="btnD">暗</button>
+</div>
+<div class="wrap">
+  <h1>Keymap · 啄木鸟 v8</h1>
+  <div class="sub">全局快捷键映射 · 冲突检查在尾部 · <code style="font-family:var(--font-mono);font-size:12px;">?</code> 随处可呼出本页</div>
+
+  <div class="banner">
+    <span class="pill info">约定</span>
+    <div>
+      <b>单键</b>仅在列表 / 文档 / drawer 焦点时生效，不抢输入框。<br/>
+      <b>Leader 链 <span class="k">g</span><span class="chain">→</span><span class="k">x</span></b> 用于导航类跳转，避免占用单键。<br/>
+      <b><span class="k">⌘</span> / <span class="k">Ctrl</span></b> 前缀保留给编辑 / 写作类；与系统冲突不使用。
+    </div>
+  </div>
+
+  <h2>Global</h2>
+  <table><tbody>
+    <tr><td class="scope">global</td><td class="keys"><span class="k">?</span></td><td class="desc">打开 Keymap 帮助</td></tr>
+    <tr><td class="scope">global</td><td class="keys"><span class="k">⌘</span><span class="plus">+</span><span class="k">K</span></td><td class="desc">命令面板</td></tr>
+    <tr><td class="scope">global</td><td class="keys"><span class="k">⌘</span><span class="plus">+</span><span class="k">/</span></td><td class="desc">切换浅 / 暗</td></tr>
+    <tr><td class="scope">global</td><td class="keys"><span class="k">Esc</span></td><td class="desc">关闭 drawer / overlay / 取消当前选择</td></tr>
+  </tbody></table>
+
+  <h2>PhaseNav</h2>
+  <table><tbody>
+    <tr><td class="scope">phase-nav</td><td class="keys"><span class="k">g</span><span class="chain">→</span><span class="k">0..4</span></td><td class="desc">跳到 Phase 0 / 1 / 2 / 3 / 4</td></tr>
+    <tr><td class="scope">phase-nav</td><td class="keys"><span class="k">g</span><span class="chain">→</span><span class="k">h</span></td><td class="desc">跳 Phase 1.5（运行质量检查）</td></tr>
+    <tr><td class="scope">phase-nav</td><td class="keys"><span class="k">[</span> / <span class="k">]</span></td><td class="desc">上一步 / 下一步（仅已完成节点可回跳）</td></tr>
+  </tbody></table>
+
+  <h2>Phase 3 · 逐条确认（最高频）</h2>
+  <table><tbody>
+    <tr><td class="scope">comment-list</td><td class="keys"><span class="k">j</span> / <span class="k">k</span></td><td class="desc">下一条 / 上一条评论</td></tr>
+    <tr><td class="scope">comment-list</td><td class="keys"><span class="k">y</span></td><td class="desc">accept（接受）</td></tr>
+    <tr><td class="scope">comment-list</td><td class="keys"><span class="k">n</span></td><td class="desc">reject（拒绝）</td></tr>
+    <tr><td class="scope">comment-list</td><td class="keys"><span class="k">e</span></td><td class="desc">edit（编辑）</td></tr>
+    <tr><td class="scope">comment-list</td><td class="keys"><span class="k">x</span></td><td class="desc">选中 / 取消选中（批量）</td></tr>
+    <tr><td class="scope">comment-list</td><td class="keys"><span class="k">Y</span></td><td class="desc">批量 accept 当前选中</td></tr>
+    <tr><td class="scope">comment-list</td><td class="keys"><span class="k">o</span></td><td class="desc">展开 / 收起依据区</td></tr>
+    <tr><td class="scope">comment-list</td><td class="keys"><span class="k">Enter</span></td><td class="desc">跳到原文锚点并高亮</td></tr>
+    <tr><td class="scope">comment-list</td><td class="keys"><span class="k">+</span></td><td class="desc">我发现一个他们漏掉的问题</td></tr>
+    <tr><td class="scope">comment-list</td><td class="keys"><span class="k">1</span>..<span class="k">5</span></td><td class="desc">按维度筛选（业务/数据/体验/风险/苍鹰）</td></tr>
+    <tr><td class="scope">comment-list</td><td class="keys"><span class="k">s</span></td><td class="desc">切换排序（按鸟 ↔ 按维度）</td></tr>
+  </tbody></table>
+
+  <h2>DocumentView</h2>
+  <table><tbody>
+    <tr><td class="scope">document</td><td class="keys"><span class="k">J</span> / <span class="k">K</span></td><td class="desc">下一个 / 上一个锚点（Shift + j/k · 避开列表）</td></tr>
+    <tr><td class="scope">document</td><td class="keys"><span class="k">g</span><span class="chain">→</span><span class="k">g</span></td><td class="desc">跳文档顶</td></tr>
+    <tr><td class="scope">document</td><td class="keys"><span class="k">G</span></td><td class="desc">跳文档底</td></tr>
+    <tr><td class="scope">document</td><td class="keys"><span class="k">/</span></td><td class="desc">在原文中搜索</td></tr>
+  </tbody></table>
+
+  <h2>Phase 2 · 运行中</h2>
+  <table><tbody>
+    <tr><td class="scope">run</td><td class="keys"><span class="k">p</span></td><td class="desc">暂停 / 继续</td></tr>
+    <tr><td class="scope">run</td><td class="keys"><span class="k">r</span></td><td class="desc">重跑失败的 worker</td></tr>
+    <tr><td class="scope">run</td><td class="keys"><span class="k">l</span></td><td class="desc">打开 / 关闭 RunConsole 日志流</td></tr>
+    <tr><td class="scope">run</td><td class="keys"><span class="k">1</span>..<span class="k">5</span></td><td class="desc">聚焦某只鸟的 AgentStatusCard</td></tr>
+  </tbody></table>
+
+  <h2>Phase 1.5 · RunHealthCheck</h2>
+  <table><tbody>
+    <tr><td class="scope">health</td><td class="keys"><span class="k">c</span></td><td class="desc">继续 Phase 3（partial_silent 场景禁用）</td></tr>
+    <tr><td class="scope">health</td><td class="keys"><span class="k">r</span></td><td class="desc">重跑失败 worker</td></tr>
+    <tr><td class="scope">health</td><td class="keys"><span class="k">d</span></td><td class="desc">展开失败分类详情</td></tr>
+  </tbody></table>
+
+  <h2>Phase 4 · 报告</h2>
+  <table><tbody>
+    <tr><td class="scope">report</td><td class="keys"><span class="k">⌘</span><span class="plus">+</span><span class="k">S</span></td><td class="desc">导出 Markdown</td></tr>
+    <tr><td class="scope">report</td><td class="keys"><span class="k">⌘</span><span class="plus">+</span><span class="k">P</span></td><td class="desc">导出 PDF</td></tr>
+    <tr><td class="scope">report</td><td class="keys"><span class="k">⌘</span><span class="plus">+</span><span class="k">⇧</span><span class="plus">+</span><span class="k">F</span></td><td class="desc">导出飞书</td></tr>
+  </tbody></table>
+
+  <h2>冲突检查</h2>
+  <div class="checks">
+    <div class="check">
+      <h3><span class="pill ok">✓ 无冲突</span> j/k 单键</h3>
+      <p>仅在 <code>comment-list</code> focus 时生效。文档中用 Shift + J/K 避开列表。</p>
+    </div>
+    <div class="check">
+      <h3><span class="pill ok">✓ 无冲突</span> 1..5 复用</h3>
+      <p>Phase 2 / Phase 3 同时用 1..5，但两个 Phase 互斥（不会同屏），不冲突。</p>
+    </div>
+    <div class="check">
+      <h3><span class="pill ok">✓ 无冲突</span> r 单键</h3>
+      <p>Phase 1.5 / Phase 2 都用 <span class="k">r</span> 重跑，语义一致，不冲突。</p>
+    </div>
+    <div class="check">
+      <h3><span class="pill warn">⚠ 注意</span> g 作 Leader</h3>
+      <p><span class="k">g</span> 作为 leader 等待 200ms 第二键；单独 <span class="k">g</span> 不触发跳转，避免与 Gmail 类习惯冲突。</p>
+    </div>
+    <div class="check">
+      <h3><span class="pill warn">⚠ 注意</span> / 与浏览器</h3>
+      <p>Firefox 默认 <span class="k">/</span> 是"快速查找"，我们在 DocumentView 内 preventDefault 后使用。</p>
+    </div>
+    <div class="check">
+      <h3><span class="pill ok">✓ 无冲突</span> ⌘+K</h3>
+      <p>命令面板用 <span class="k">⌘</span><span class="plus">+</span><span class="k">K</span>（Linear / Notion 共识），不与浏览器冲突。</p>
+    </div>
+    <div class="check">
+      <h3><span class="pill info">ℹ 说明</span> 输入框豁免</h3>
+      <p>所有单键在 <code>input / textarea / contenteditable</code> 获得焦点时不触发。</p>
+    </div>
+    <div class="check">
+      <h3><span class="pill info">ℹ 说明</span> ShortcutHint 显示策略</h3>
+      <p>悬停 600ms 后显示，或开启"始终显示"偏好。不要在 hover 0ms 弹出，噪声太大。</p>
+    </div>
+  </div>
+</div>
+<script>
+  const root = document.documentElement;
+  const bL = document.getElementById('btnL'), bD = document.getElementById('btnD');
+  function set(theme){
+    root.setAttribute('data-theme', theme);
+    bL.dataset.on = theme === 'light';
+    bD.dataset.on = theme === 'dark';
+  }
+  bL.onclick = () => set('light');
+  bD.onclick = () => set('dark');
+</script>
+</body></html>

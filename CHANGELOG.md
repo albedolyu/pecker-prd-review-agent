@@ -2,6 +2,67 @@
 
 所有重要变更记录。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [Unreleased] - 2026-04-18 前端 UI v8 重做(Agent 工作台气质)
+
+### 🎨 前端从 v7 "编辑部散文"切换到 v8 "Agent 工作台 + 工作文档"
+
+**动机(v7 两个病因):**
+- 气质错位:PM 带任务进来做 PRD review,v7 的 Fraunces serif + sage 绿 + 杂志刊头让产品看起来像"一本可读的杂志",唤起阅读状态而非工作状态
+- 状态反馈弱:Phase 2 运行中(4 worker 并行 + 苍鹰终审)UI 几乎没讲 agent 协作,`partial_silent` 类 run 完全不告警 — PM 会在不完整结果上做决策
+
+**v8 方向:** `/review` 默认气质切到 **Linear + 飞书文档 + Vercel Build Output**。保留 10 只鸟评审设定,但鸟从"插画作者"变成"工作 Agent 成员"(32/24/16 三尺寸头像)。双版本共存:`/review?v=7` 为 legacy 回退入口。
+
+### 🆕 新组件 · 15 个(harness 增量全部落地)
+
+- **基础层** · `BirdAvatar`(3 尺寸 + 10 只全集 + 状态灯)· `BirdBadge` · `PhaseNav`(6 步含 Phase 1.5 警示三角 + 回跳)
+- **文档主线** · `DocumentView`(PRD 原文 + 锚点联动 + 3 色高亮)· `CommentThread`(harness 依据验证 3 态自动折叠)· `EvidenceBlock` · `ShortcutHint` / `KeymapBar`
+- **调度中心** · `AgentStatusCard`(worker / meta 两 variant + 失败 5 色分类 recovery)· `RunConsole`(深色流式日志)· `RunHealthCheck`(Phase 1.5 必经节点 · session 分类 + consistency 环 + 5 色失败矩阵 + 5 鸟健康度)· `RunDiff`(baseline vs shadow 对比 diff)
+- **harness 反馈** · `MissingReportButton`("我发现一个他们漏掉的问题"modal · localStorage 草稿)
+
+### 🆕 新 Phase 页面 · 5 个(V8 后缀)
+
+- `Phase0UploadV8` · 单列工作表单,去 hero 插画 / 刊头散文 / 编号字段
+- `Phase1PrecheckV8` · 3 列汇总(strong 绿 / weak 黄 / gap 红),去水彩卡 / 呼吸点散文
+- `Phase2RunningV8` · `data-phase2` 局部色温 overlay + 上层 4 worker + 下层苍鹰 + SVG dash-flow 依赖边 · 完成后内嵌 `RunHealthCheck` 必经节点(harness P0-③),PM 主动点继续才进 Phase 3
+- `Phase3ConfirmV8` · PM 最高频场景 · 全键盘(j/k/y/n/e)· 焦点 accent 左粗边 + 平滑滚动 · 每条带苍鹰验证徽章 + 依据 3 态 + confidence tag + edit/reject textarea · 底部常驻 `KeymapBar`
+- `Phase4ReportV8` · 工作文档气质报告页 · 元信息卡 + 按维度分组评审摘要(BirdAvatar + decision chip ✓✗✎)+ 反馈回声 banner + md/wiki/飞书 3 导出
+
+### 🆕 新路由
+
+- `/runs/diff` · Run 对比管理页(sample 数据 · 真实 shadow_run.py 接入待 Sprint 5)
+- `/v8-preview` · 组件 gallery(所有 15 个组件的全状态覆盖,盲测用)
+
+### 🔧 数据契约零回归
+
+v8 全部基于现有 `useReviewStore` / `useReviewStream` / `reviewApi` / `auditApi` / `draftsApi` / `reportsApi` / `feishuApi` / `generateReportMarkdown` / `computeStats`,后端零改动。
+
+### 🎨 design tokens 重构(globals.css)
+
+- **删**:Fraunces serif + italic · sage 绿 `#eef2e5` · 半透纸卡 · watercolor 雾 · grain 噪点 · 非 4 倍数手工间距(22/42)· wobbly radius · hard offset shadow · tilt 微旋
+- **加**:neutral slate 浅色偏冷 · burnt-orange `#E8590C` 单一 accent · 4/8 倍数标准网格 · ≤ 8px 圆角 · 弱阴影 · `data-phase2` 局部色温 overlay · `dot-breathe` / `dot-halo` running 动画 · `--bird-1` 到 `--bird-10` 识别色
+- **保留归档**:所有 v7 token / utilities 全部 `@deprecated-v7` 标记但不删,供未迁移页面(ForestLanding / about)兜底
+
+### 📦 v7 归档
+
+- `design-handoff.md` → `design-handoff-v7.archived.md`
+- `design-system/啄木鸟-pecker/` → `design-system/啄木鸟-pecker-v7.archived/`
+- v7 组件(`PhaseHead.tsx` / `primitives.tsx` / `BirdArt.tsx`)加 `@deprecated-v7` JSDoc,新组件禁止引用
+- 老 Phase 0-4 组件保留 · 通过 `/review?v=7` 可回访
+
+### 📝 文档
+
+- `design-handoff-v8.md` · v8 briefing(气质 + 10 鸟新定位 + 11 组件清单 + 禁止项 + 检验标准)
+- `docs/ui-v8-delivery.md` · v8 交付总结报告(Sprint 1-4 逐 Sprint 产出 + 盲测建议)
+- `C:\Users\20834\.claude\plans\ui-velvet-koala.md` · 原始 plan(含 Sprint 5 v2 预留路径)
+
+### ⏭ 未做(Sprint 5 · v2 预留)
+
+- Audit trail / replay · 每次 run 完整审计链可回放
+- "系统健康" tab · eval 回归 + 历史 run consistency 趋势图
+- Prompt / Rule 透明度 · 让 PM 看每只鸟当前 rule 集 + 临时覆盖权重做实验
+
+---
+
 ## [Unreleased] - 2026-04-16 稳定性修复 + 10 轮迭代
 
 ### 🚀 P0 全部落地（代码层修复）

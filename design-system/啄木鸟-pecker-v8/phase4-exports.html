@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="zh"><head>
+<meta charset="utf-8"/><title>啄木鸟 v8 · Phase 4 导出格式</title>
+<link rel="stylesheet" href="tokens.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>body{margin:0;background:#f0eee9;font-family:var(--font-sans);}</style>
+</head><body><div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel">
+const {DesignCanvas, DCSection, DCArtboard} = window;
+
+function Board({ label, w, h, theme='light', children, pad=0, bg }) {
+  return (
+    <DCArtboard label={label} width={w} height={h}>
+      <div data-theme={theme} style={{width:'100%',height:'100%',background:bg||'var(--surface-canvas)',color:'var(--text-default)',padding:pad,overflow:'auto',fontFamily:'var(--font-sans)'}}>
+        {children}
+      </div>
+    </DCArtboard>
+  );
+}
+
+// ─── Export format menu（导出入口） ───────────────────────────
+function ExportMenu() {
+  const items = [
+    { id:'md',    label:'Markdown',  desc:'.md · 技术团队友好 · 可版本化', kbd:'⌘S', icon:'M↓' },
+    { id:'pdf',   label:'PDF',       desc:'.pdf · 打印 / 分享 / 归档',      kbd:'⌘P', icon:'P' },
+    { id:'feishu',label:'飞书文档',  desc:'同步到当前 workspace · 保留锚点', kbd:'⌘⇧F', icon:'F' },
+  ];
+  return (
+    <div style={{
+      width:'100%', background:'var(--surface-raised)',
+      border:'1px solid var(--border-default)', borderRadius:'var(--r-4)',
+      padding:12, display:'flex', flexDirection:'column', gap:4,
+    }}>
+      <div style={{
+        padding:'6px 10px', fontSize:10, textTransform:'uppercase', letterSpacing:1,
+        color:'var(--text-muted)', fontWeight:600, fontFamily:'var(--font-mono)',
+      }}>导出</div>
+      {items.map(it => (
+        <div key={it.id} style={{
+          display:'flex', alignItems:'center', gap:12,
+          padding:'10px 12px', borderRadius:'var(--r-3)',
+          cursor:'pointer',
+          background: it.id === 'md' ? 'var(--surface-sunken)' : 'transparent',
+        }}>
+          <div style={{
+            width:32, height:32, borderRadius:'var(--r-3)',
+            background:'var(--neutral-100)', color:'var(--text-strong)',
+            display:'flex', alignItems:'center', justifyContent:'center',
+            fontFamily:'var(--font-mono)', fontSize:12, fontWeight:700,
+          }}>{it.icon}</div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:13, fontWeight:600, color:'var(--text-strong)'}}>{it.label}</div>
+            <div style={{fontSize:11, color:'var(--text-muted)', marginTop:1}}>{it.desc}</div>
+          </div>
+          <span style={{
+            fontFamily:'var(--font-mono)', fontSize:10, color:'var(--text-muted)',
+            padding:'2px 6px', border:'1px solid var(--border-default)',
+            borderRadius:'var(--r-2)', background:'var(--surface-canvas)',
+          }}>{it.kbd}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Markdown 导出 ────────────────────────────────────────────
+function MdExport() {
+  return (
+    <div style={{
+      padding:'24px 28px', fontFamily:'var(--font-mono)',
+      fontSize:12, lineHeight:1.75, color:'var(--text-default)',
+      background:'var(--surface-raised)', height:'100%',
+      whiteSpace:'pre-wrap', overflow:'auto',
+    }}>
+{`# 啄木鸟评审报告 · PRD-2026-Q2-国际订单
+
+> 生成于 2026-04-16 14:32  ·  run r-9a8k2f  ·  session: productive
+> 耗时 2m 48s  ·  tokens 18.4k  ·  accept 61%
+
+## 元信息
+
+| 项目       | 值                        |
+| ---------- | ------------------------- |
+| 文档版本   | v3.2                      |
+| 评审模式   | 5 鸟全量                  |
+| 一致性分数 | 0.87                      |
+| 失败分类   | 1 × tool_call_failed (已重跑) |
+
+## 评审摘要
+
+### 🟠 业务 · 4 条
+
+- **[R042] 国际订单用户群体未定义入口路径** (conf 0.89) ✓ 已验证
+  > 原文 L12: 本期目标是扩展国际订单链路...
+  建议：补充默认币种与地区识别策略。
+
+- **[R133] 冲突合并策略未定义** (conf 0.78) ✓ 已验证
+  > 原文 L15: 并发合并场景下...
+
+### 🔵 数据 · 3 条
+
+- **[R201] 综合转化率口径未定义** (conf 0.64) ⊖ 未验证
+  > 建议补充三个口径 (UV→下单 / 下单→支付 / 整体)
+
+### 🔴 风险 · 2 条
+
+- **[R118] 支付失败重试缺少指数退避** (conf 0.91) ✓ 已验证
+- **[R145] 国际支付合规未说明 PCI-DSS** (conf 0.82) ✓ 已验证
+
+## 反馈回声
+
+> 你本周的反馈影响了 3 条规则权重：
+> R042 ↑ · R201 ↓ · R133 ↑
+
+---
+*由啄木鸟 v8 生成  ·  [查看完整 trace](https://pecker.internal/run/r-9a8k2f)*`}
+    </div>
+  );
+}
+
+// ─── PDF 导出（打印预览风） ───────────────────────────────────
+function PdfExport() {
+  return (
+    <div style={{
+      padding:'20px', height:'100%', background:'#d9d9d3', overflow:'auto',
+      display:'flex', justifyContent:'center',
+    }}>
+      <div style={{
+        width:'85%', background:'#fff', boxShadow:'0 2px 8px rgba(0,0,0,.15)',
+        padding:'48px 56px', fontFamily:'"Times New Roman", "Songti SC", serif',
+        color:'#1a1a1a', fontSize:11, lineHeight:1.6,
+      }}>
+        <div style={{borderBottom:'2px solid #1a1a1a', paddingBottom:12, marginBottom:20}}>
+          <div style={{fontSize:10, letterSpacing:2, textTransform:'uppercase', color:'#666', marginBottom:6}}>
+            PRD REVIEW REPORT
+          </div>
+          <div style={{fontSize:20, fontWeight:700, letterSpacing:-.3}}>国际订单 · PRD-2026-Q2</div>
+          <div style={{fontSize:10, color:'#666', marginTop:4, fontFamily:'var(--font-mono)'}}>
+            r-9a8k2f · 2026-04-16 14:32 · 评审模式: 5 鸟全量
+          </div>
+        </div>
+
+        <div style={{display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:12, marginBottom:24,
+                     padding:'12px 14px', background:'#f4f2ee', borderRadius:2}}>
+          <Stat n="23" l="评审条数"/>
+          <Stat n="14" l="已接受"/>
+          <Stat n="61%" l="接受率"/>
+          <Stat n="18.4k" l="tokens"/>
+        </div>
+
+        <h2 style={{fontSize:13, fontWeight:700, margin:'18px 0 8px', borderBottom:'1px solid #ccc', paddingBottom:4}}>
+          1. 业务 (4 条)
+        </h2>
+        <div style={{marginBottom:10}}>
+          <div style={{fontWeight:700, fontSize:11}}>1.1 国际订单用户群体未定义入口路径</div>
+          <div style={{fontSize:10, color:'#555', fontFamily:'var(--font-mono)'}}>业务鸟 · conf 0.89 · R042 · 已接受</div>
+          <div style={{marginTop:4}}>补充默认币种与地区识别策略，建议在文档 §2.1 加入"区域识别流程"子章节。</div>
+        </div>
+        <div style={{marginBottom:10}}>
+          <div style={{fontWeight:700, fontSize:11}}>1.2 冲突合并策略未定义</div>
+          <div style={{fontSize:10, color:'#555', fontFamily:'var(--font-mono)'}}>业务鸟 · conf 0.78 · R133 · 已接受</div>
+          <div style={{marginTop:4}}>并发场景的冲突解决规则需在下一迭代给出 last-write-wins 或 CRDT 选项。</div>
+        </div>
+
+        <h2 style={{fontSize:13, fontWeight:700, margin:'18px 0 8px', borderBottom:'1px solid #ccc', paddingBottom:4}}>
+          2. 数据 (3 条)
+        </h2>
+        <div style={{marginBottom:10}}>
+          <div style={{fontWeight:700, fontSize:11}}>2.1 综合转化率口径未定义</div>
+          <div style={{fontSize:10, color:'#555', fontFamily:'var(--font-mono)'}}>数据鸟 · conf 0.64 · R201 · 未接受</div>
+        </div>
+
+        <h2 style={{fontSize:13, fontWeight:700, margin:'18px 0 8px', borderBottom:'1px solid #ccc', paddingBottom:4}}>
+          3. 风险 (2 条)
+        </h2>
+        <div style={{marginBottom:10}}>
+          <div style={{fontWeight:700, fontSize:11}}>3.1 支付失败重试缺少指数退避</div>
+          <div style={{fontSize:10, color:'#555', fontFamily:'var(--font-mono)'}}>风险鸟 · conf 0.91 · R118 · 已接受</div>
+        </div>
+
+        <div style={{
+          marginTop:28, padding:'10px 12px', border:'1px solid #ccc',
+          fontSize:10, color:'#555', display:'flex', justifyContent:'space-between',
+          fontFamily:'var(--font-mono)',
+        }}>
+          <span>第 1 页 / 共 3 页</span>
+          <span>由啄木鸟 v8 生成</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+function Stat({n,l}) {
+  return (
+    <div>
+      <div style={{fontSize:18, fontWeight:700, letterSpacing:-.3}}>{n}</div>
+      <div style={{fontSize:9, color:'#666', textTransform:'uppercase', letterSpacing:1}}>{l}</div>
+    </div>
+  );
+}
+
+// ─── 飞书文档导出 ────────────────────────────────────────────
+function FeishuExport() {
+  return (
+    <div style={{
+      height:'100%', background:'#fff', overflow:'auto',
+      fontFamily:'"PingFang SC", system-ui, sans-serif', fontSize:13, color:'#1f2329',
+    }}>
+      {/* feishu header */}
+      <div style={{
+        display:'flex', alignItems:'center', gap:12, padding:'10px 16px',
+        borderBottom:'1px solid #e3e6eb', fontSize:12,
+      }}>
+        <div style={{
+          width:20, height:20, borderRadius:4, background:'#3370ff',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          color:'#fff', fontSize:11, fontWeight:700,
+        }}>F</div>
+        <span style={{fontWeight:600, color:'#1f2329'}}>飞书文档</span>
+        <span style={{color:'#8f959e'}}>/</span>
+        <span style={{color:'#646a73'}}>产品 /</span>
+        <span style={{color:'#1f2329'}}>啄木鸟评审 · 国际订单</span>
+        <span style={{marginLeft:'auto', color:'#8f959e', fontSize:11}}>自动同步 · 刚刚</span>
+      </div>
+
+      <div style={{padding:'32px 48px', maxWidth:720, margin:'0 auto'}}>
+        <h1 style={{fontSize:26, fontWeight:600, margin:'0 0 6px', color:'#1f2329'}}>
+          啄木鸟评审 · 国际订单 PRD
+        </h1>
+        <div style={{fontSize:12, color:'#8f959e', marginBottom:20}}>
+          PM · 张某 · 编辑于刚刚 · 阅读量 0
+        </div>
+
+        <div style={{
+          padding:'12px 16px', background:'#f6f7f9', borderLeft:'3px solid #3370ff',
+          borderRadius:4, fontSize:13, color:'#4e5969', marginBottom:20, lineHeight:1.65,
+        }}>
+          💡 本文档由 <b>啄木鸟 v8</b> 自动生成，保留与原 PRD 的锚点链接。<br/>
+          run <code style={{background:'#e5e7eb',padding:'1px 5px',borderRadius:3,fontSize:11}}>r-9a8k2f</code>
+          {' · 耗时 2m 48s · 接受率 61%'}
+        </div>
+
+        <h2 style={{fontSize:18, fontWeight:600, margin:'24px 0 10px'}}>评审概览</h2>
+        <table style={{borderCollapse:'collapse', width:'100%', fontSize:12}}>
+          <thead>
+            <tr style={{background:'#f6f7f9'}}>
+              <th style={thCell}>维度</th><th style={thCell}>条数</th>
+              <th style={thCell}>接受</th><th style={thCell}>未接受</th>
+            </tr>
+          </thead>
+          <tbody>
+            <Row d="业务" n={4} y={3} nn={1} c="#ff7a00"/>
+            <Row d="数据" n={3} y={1} nn={2} c="#3370ff"/>
+            <Row d="体验" n={5} y={4} nn={1} c="#00875a"/>
+            <Row d="风险" n={2} y={2} nn={0} c="#d1453b"/>
+            <Row d="苍鹰" n={9} y={4} nn={5} c="#7748e7"/>
+          </tbody>
+        </table>
+
+        <h2 style={{fontSize:18, fontWeight:600, margin:'28px 0 10px'}}>业务 (4 条)</h2>
+        <FeishuItem n="1" title="国际订单用户群体未定义入口路径"
+          tag="业务鸟 · R042" conf="0.89" status="accepted"
+          anchor="#L12-国际订单用户群体"/>
+        <FeishuItem n="2" title="冲突合并策略未定义"
+          tag="业务鸟 · R133" conf="0.78" status="accepted"
+          anchor="#L15-冲突解决规则"/>
+
+        <h2 style={{fontSize:18, fontWeight:600, margin:'28px 0 10px'}}>风险 (2 条)</h2>
+        <FeishuItem n="1" title="支付失败重试缺少指数退避"
+          tag="风险鸟 · R118" conf="0.91" status="accepted"
+          anchor="#L14-避免放大下游限流"/>
+
+        <div style={{
+          marginTop:32, padding:'14px 16px', background:'#fffbea',
+          border:'1px solid #f9d576', borderRadius:6, fontSize:12, color:'#614700',
+        }}>
+          <b>反馈回声</b> · 你本周的反馈影响了 3 条规则权重：R042 ↑ · R201 ↓ · R133 ↑
+        </div>
+      </div>
+    </div>
+  );
+}
+const thCell = { padding:'8px 12px', textAlign:'left', fontWeight:600, color:'#1f2329',
+                 borderBottom:'1px solid #e3e6eb', fontSize:11 };
+const tdCell = { padding:'8px 12px', borderBottom:'1px solid #f0f2f5' };
+function Row({d,n,y,nn,c}) {
+  return (
+    <tr>
+      <td style={tdCell}><span style={{
+        display:'inline-block', width:6, height:6, borderRadius:99, background:c, marginRight:8,
+      }}/>{d}</td>
+      <td style={tdCell}>{n}</td>
+      <td style={{...tdCell, color:'#00875a', fontWeight:600}}>{y}</td>
+      <td style={{...tdCell, color:'#646a73'}}>{nn}</td>
+    </tr>
+  );
+}
+function FeishuItem({n, title, tag, conf, status, anchor}) {
+  return (
+    <div style={{
+      padding:'12px 14px', borderLeft:'2px solid #e3e6eb',
+      marginBottom:10,
+    }}>
+      <div style={{fontWeight:600, fontSize:13, color:'#1f2329', marginBottom:3}}>
+        {n}. {title}
+      </div>
+      <div style={{fontSize:11, color:'#8f959e', display:'flex', gap:10, flexWrap:'wrap', alignItems:'center'}}>
+        <span>{tag}</span>
+        <span>·</span>
+        <span>conf {conf}</span>
+        <span>·</span>
+        {status === 'accepted' && <span style={{color:'#00875a', fontWeight:600}}>✓ 已接受</span>}
+        <a style={{color:'#3370ff', marginLeft:'auto', textDecoration:'none', fontSize:11}}>{anchor} →</a>
+      </div>
+    </div>
+  );
+}
+
+// ─── Export state toasts ─────────────────────────────────────
+function Toast({ state }) {
+  const map = {
+    progress: { bg:'var(--surface-raised)', fg:'var(--text-strong)',
+                icon:<Spinner/>, text:'正在导出 Markdown...' },
+    success:  { bg:'var(--status-done-bg)', fg:'var(--status-done-fg)',
+                icon:'✓', text:'飞书文档已创建 · 点击打开 →' },
+    error:    { bg:'var(--status-failed-bg)', fg:'var(--status-failed-fg)',
+                icon:'!', text:'PDF 导出失败 · 字体缺失 · 点击重试' },
+  }[state];
+  return (
+    <div style={{
+      display:'inline-flex', alignItems:'center', gap:10,
+      padding:'10px 14px', background:map.bg, color:map.fg,
+      borderRadius:'var(--r-4)', border:'1px solid ' + (state==='progress' ? 'var(--border-default)' : 'transparent'),
+      fontSize:13, fontWeight:500,
+      boxShadow: state === 'progress' ? 'var(--shadow-md)' : 'none',
+    }}>
+      <span style={{
+        display:'inline-flex', alignItems:'center', justifyContent:'center',
+        width:18, height:18, borderRadius:99,
+        background: state==='success' ? 'var(--status-done-dot)'
+                  : state==='error'   ? 'var(--status-failed-dot)' : 'transparent',
+        color: state === 'progress' ? undefined : '#fff',
+        fontSize:11, fontWeight:700,
+      }}>{map.icon}</span>
+      {map.text}
+    </div>
+  );
+}
+function Spinner() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" style={{animation:'spin 800ms linear infinite'}}>
+      <circle cx="7" cy="7" r="5" fill="none" stroke="var(--neutral-200)" strokeWidth="1.5"/>
+      <path d="M7 2 a5 5 0 0 1 5 5" fill="none" stroke="var(--accent-500)" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+function App() {
+  return (
+    <DesignCanvas>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <div style={{padding:'0 60px 40px'}}>
+        <div style={{fontSize:12,letterSpacing:.8,textTransform:'uppercase',color:'rgba(60,50,40,.55)',fontWeight:600,marginBottom:8}}>
+          啄木鸟 · v8 · Phase 4 导出
+        </div>
+        <div style={{fontSize:36,fontWeight:600,color:'rgba(30,20,10,.9)',letterSpacing:-.6,marginBottom:6}}>
+          三导出格式 · md / pdf / 飞书
+        </div>
+        <div style={{fontSize:14,color:'rgba(60,50,40,.6)',maxWidth:760,lineHeight:1.55}}>
+          Phase 4 报告的三种导出视觉稿。每种格式保留 run 元数据 + 锚点 + 反馈回声。
+        </div>
+      </div>
+
+      <DCSection title="导出菜单入口" subtitle="Phase 4 顶栏右侧下拉">
+        <Board label="浅" w={420} h={260} pad={14}><ExportMenu/></Board>
+        <Board label="暗" w={420} h={260} pad={14} theme="dark"><ExportMenu/></Board>
+      </DCSection>
+
+      <DCSection title="Markdown · .md" subtitle="技术团队 / 版本化 / 工程师友好">
+        <Board label="浅" w={680} h={620}><MdExport/></Board>
+        <Board label="暗" w={680} h={620} theme="dark"><MdExport/></Board>
+      </DCSection>
+
+      <DCSection title="PDF · 打印预览" subtitle="A4 · 衬线正文 · 归档分享">
+        <Board label="浅" w={680} h={760}><PdfExport/></Board>
+      </DCSection>
+
+      <DCSection title="飞书文档" subtitle="同步到 workspace · 保留与原 PRD 锚点">
+        <Board label="浅" w={780} h={780}><FeishuExport/></Board>
+      </DCSection>
+
+      <DCSection title="导出状态" subtitle="toast · progress / success / error">
+        <Board label="progress" w={380} h={100} pad={20}><Toast state="progress"/></Board>
+        <Board label="success" w={380} h={100} pad={20}><Toast state="success"/></Board>
+        <Board label="error" w={380} h={100} pad={20}><Toast state="error"/></Board>
+      </DCSection>
+
+      <div style={{height:80}}/>
+    </DesignCanvas>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script></body></html>

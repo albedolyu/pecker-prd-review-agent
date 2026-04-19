@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="zh"><head>
+<meta charset="utf-8"/><title>啄木鸟 v8 · 扩展状态（空/错/骨架/断网）</title>
+<link rel="stylesheet" href="tokens.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>body{margin:0;background:#f0eee9;font-family:var(--font-sans);}</style>
+</head><body><div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel">
+const {DesignCanvas, DCSection, DCArtboard} = window;
+
+// ─── Skeleton primitives ──────────────────────────────────────
+const Skel = ({w='100%', h=12, r=4, style={}}) => (
+  <div style={{
+    width:w, height:h, borderRadius:r,
+    background:'linear-gradient(90deg, var(--neutral-100) 0%, var(--neutral-150) 40%, var(--neutral-100) 80%)',
+    backgroundSize:'200% 100%',
+    animation:'skel-shimmer 1.4s linear infinite',
+    ...style,
+  }}/>
+);
+
+// ─── Empty state primitives ──────────────────────────────────
+const EmptyGlyph = ({ kind }) => {
+  const stroke = 'var(--text-faint)';
+  if (kind === 'doc') return (
+    <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+      <rect x="10" y="6" width="24" height="34" rx="2" stroke={stroke} strokeWidth="1.5"/>
+      <path d="M14 16h14M14 22h16M14 28h10" stroke={stroke} strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  );
+  if (kind === 'comments') return (
+    <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+      <path d="M10 12h24a4 4 0 014 4v14a4 4 0 01-4 4H20l-8 6v-6h-2a4 4 0 01-4-4V16a4 4 0 014-4z"
+            stroke={stroke} strokeWidth="1.5" strokeLinejoin="round"/>
+    </svg>
+  );
+  if (kind === 'wifi') return (
+    <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+      <path d="M4 18c12-10 28-10 40 0M10 24c8-6 20-6 28 0M16 30c4-3 12-3 16 0" stroke={stroke} strokeWidth="1.5" strokeLinecap="round"/>
+      <circle cx="24" cy="36" r="2" fill={stroke}/>
+      <line x1="6" y1="6" x2="42" y2="42" stroke="var(--status-failed-dot)" strokeWidth="1.8" strokeLinecap="round"/>
+    </svg>
+  );
+  if (kind === 'lock') return (
+    <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+      <rect x="12" y="22" width="24" height="18" rx="2" stroke={stroke} strokeWidth="1.5"/>
+      <path d="M16 22v-4a8 8 0 0116 0v4" stroke={stroke} strokeWidth="1.5"/>
+    </svg>
+  );
+  return null;
+};
+
+function EmptyState({ glyph, title, desc, action, secondary }) {
+  return (
+    <div style={{
+      height:'100%', display:'flex', flexDirection:'column', alignItems:'center',
+      justifyContent:'center', gap:14, padding:'32px 24px', textAlign:'center',
+    }}>
+      <EmptyGlyph kind={glyph}/>
+      <div style={{fontSize:14, fontWeight:600, color:'var(--text-strong)', letterSpacing:-.1}}>{title}</div>
+      <div style={{fontSize:12, color:'var(--text-muted)', maxWidth:280, lineHeight:1.55}}>{desc}</div>
+      <div style={{display:'flex', gap:8, marginTop:4}}>
+        {action && <button style={{
+          padding:'7px 14px', borderRadius:'var(--r-3)',
+          background:'var(--accent-500)', color:'var(--accent-fg)',
+          border:'none', fontSize:12, fontWeight:600, cursor:'pointer',
+          fontFamily:'var(--font-sans)',
+        }}>{action}</button>}
+        {secondary && <button style={{
+          padding:'7px 14px', borderRadius:'var(--r-3)',
+          background:'transparent', color:'var(--text-default)',
+          border:'1px solid var(--border-default)', fontSize:12, fontWeight:500, cursor:'pointer',
+          fontFamily:'var(--font-sans)',
+        }}>{secondary}</button>}
+      </div>
+    </div>
+  );
+}
+
+function ErrorState({ title, desc, code, action }) {
+  return (
+    <div style={{
+      height:'100%', display:'flex', flexDirection:'column',
+      background:'var(--status-failed-bg)',
+      border:'1px solid color-mix(in oklch, var(--status-failed-dot) 40%, transparent)',
+      borderRadius:'var(--r-4)',
+      padding:'18px 20px',
+      gap:8,
+    }}>
+      <div style={{display:'flex', alignItems:'center', gap:10}}>
+        <span style={{
+          width:24, height:24, borderRadius:'var(--r-pill)',
+          background:'var(--status-failed-dot)', color:'#fff',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          fontSize:14, fontWeight:700,
+        }}>!</span>
+        <span style={{fontSize:13, fontWeight:600, color:'var(--status-failed-fg)'}}>{title}</span>
+        {code && <span style={{
+          marginLeft:'auto', fontFamily:'var(--font-mono)', fontSize:10,
+          color:'var(--status-failed-fg)', opacity:.7,
+        }}>{code}</span>}
+      </div>
+      <div style={{fontSize:12, color:'var(--status-failed-fg)', opacity:.85, lineHeight:1.55}}>{desc}</div>
+      {action && <div style={{marginTop:'auto', display:'flex', gap:8}}>
+        <button style={{
+          padding:'6px 12px', borderRadius:'var(--r-2)', fontSize:12, fontWeight:600,
+          background:'var(--status-failed-fg)', color:'#fff', border:'none', cursor:'pointer',
+          fontFamily:'var(--font-sans)',
+        }}>{action}</button>
+        <button style={{
+          padding:'6px 12px', borderRadius:'var(--r-2)', fontSize:12, fontWeight:500,
+          background:'transparent', color:'var(--status-failed-fg)',
+          border:'1px solid color-mix(in oklch, var(--status-failed-dot) 35%, transparent)',
+          cursor:'pointer', fontFamily:'var(--font-sans)',
+        }}>查看日志</button>
+      </div>}
+    </div>
+  );
+}
+
+// offline toast ribbon
+function OfflineRibbon() {
+  return (
+    <div style={{
+      display:'flex', alignItems:'center', gap:8,
+      padding:'8px 14px', background:'var(--neutral-800)',
+      color:'var(--neutral-0)', borderRadius:'var(--r-3)',
+      fontSize:12, fontWeight:500, width:'fit-content',
+    }}>
+      <span style={{
+        width:7, height:7, borderRadius:99,
+        background:'var(--status-warn-dot)',
+        animation:'dot-breathe 1.8s ease-in-out infinite',
+      }}/>
+      离线 · 本地暂存 4 条操作 · 恢复连接后自动同步
+      <button style={{
+        marginLeft:4, padding:'3px 8px', fontSize:11,
+        background:'transparent', color:'var(--neutral-300)',
+        border:'1px solid var(--neutral-600)',
+        borderRadius:'var(--r-2)', cursor:'pointer', fontFamily:'var(--font-sans)',
+      }}>查看</button>
+    </div>
+  );
+}
+
+// ─── Skeleton compositions ────────────────────────────────────
+function CommentSkeleton() {
+  return (
+    <div style={{
+      padding:'14px 16px', border:'1px solid var(--border-subtle)',
+      borderRadius:'var(--r-4)', background:'var(--surface-raised)',
+      display:'flex', flexDirection:'column', gap:10,
+    }}>
+      <div style={{display:'flex', gap:10, alignItems:'center'}}>
+        <Skel w={24} h={24} r={999}/>
+        <Skel w={80}/>
+        <Skel w={48} style={{marginLeft:'auto'}}/>
+      </div>
+      <Skel w="92%" h={13}/>
+      <Skel w="72%" h={13}/>
+      <div style={{display:'flex', gap:8, marginTop:4}}>
+        <Skel w={60} h={18} r={99}/>
+        <Skel w={80} h={18} r={99}/>
+      </div>
+    </div>
+  );
+}
+
+function DocSkeleton() {
+  return (
+    <div style={{padding:'20px 24px', display:'flex', flexDirection:'column', gap:12}}>
+      <Skel w="40%" h={20}/>
+      <Skel w="95%"/>
+      <Skel w="88%"/>
+      <Skel w="92%"/>
+      <Skel w="60%"/>
+      <div style={{height:8}}/>
+      <Skel w="35%" h={16}/>
+      <Skel w="90%"/>
+      <Skel w="82%"/>
+    </div>
+  );
+}
+
+function AgentCardSkeleton() {
+  return (
+    <div style={{
+      padding:'14px 16px', border:'1px solid var(--border-subtle)',
+      borderRadius:'var(--r-4)', background:'var(--surface-raised)',
+      display:'flex', flexDirection:'column', gap:10, width:240,
+    }}>
+      <div style={{display:'flex', gap:10, alignItems:'center'}}>
+        <Skel w={32} h={32} r={999}/>
+        <div style={{display:'flex', flexDirection:'column', gap:5}}>
+          <Skel w={64} h={10}/>
+          <Skel w={42} h={9}/>
+        </div>
+        <Skel w={8} h={8} r={99} style={{marginLeft:'auto'}}/>
+      </div>
+      <Skel w="100%" h={6} r={3}/>
+      <div style={{display:'flex', gap:6}}>
+        <Skel w={44} h={16} r={99}/>
+        <Skel w={58} h={16} r={99}/>
+      </div>
+    </div>
+  );
+}
+
+// ─── Board ────────────────────────────────────────────────────
+function Board({ label, w, h, theme='light', children, pad=0, bg }) {
+  return (
+    <DCArtboard label={label} width={w} height={h}>
+      <div data-theme={theme} style={{
+        width:'100%', height:'100%',
+        background: bg || 'var(--surface-canvas)',
+        color:'var(--text-default)',
+        padding:pad, overflow:'hidden',
+      }}>{children}</div>
+    </DCArtboard>
+  );
+}
+
+function App() {
+  return (
+    <DesignCanvas>
+      <style>{`
+        @keyframes skel-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+      `}</style>
+      <div style={{padding:'0 60px 40px'}}>
+        <div style={{fontSize:12,letterSpacing:.8,textTransform:'uppercase',color:'rgba(60,50,40,.55)',fontWeight:600,marginBottom:8}}>
+          啄木鸟 · v8 · 扩展状态
+        </div>
+        <div style={{fontSize:36,fontWeight:600,color:'rgba(30,20,10,.9)',letterSpacing:-.6,marginBottom:6}}>
+          空态 / 错误 / 骨架 / 断网
+        </div>
+        <div style={{fontSize:14,color:'rgba(60,50,40,.6)',maxWidth:720,lineHeight:1.55}}>
+          每个组件在主状态之外，补齐 4 种边界态。设计原则：空态给方向、错误给恢复、骨架给期待、断网给安全感。
+        </div>
+      </div>
+
+      {/* Empty states */}
+      <DCSection title="空态" subtitle="首次使用 / 筛选无结果 / 权限不足">
+        <Board label="评论列表 · 首次" w={360} h={280} pad={0}>
+          <EmptyState glyph="comments"
+            title="还没有评审意见"
+            desc="完成 Phase 2 运行后，5 只鸟的意见会在这里汇总。"
+            action="去 Phase 2"/>
+        </Board>
+        <Board label="评论列表 · 筛选无结果" w={360} h={280} pad={0}>
+          <EmptyState glyph="comments"
+            title="当前筛选无评论"
+            desc="清除「验证失败」或「confidence < 0.7」过滤条件后重试。"
+            secondary="清除筛选"/>
+        </Board>
+        <Board label="文档 · 未上传" w={360} h={280} pad={0}>
+          <EmptyState glyph="doc"
+            title="还没有文档"
+            desc="拖拽 md / docx / 飞书链接开始 Phase 0。"
+            action="上传文档"/>
+        </Board>
+        <Board label="权限不足" w={360} h={280} pad={0}>
+          <EmptyState glyph="lock"
+            title="没有查看权限"
+            desc="这个 workspace 不在你的访问列表里，联系 admin 申请。"
+            action="申请访问" secondary="返回"/>
+        </Board>
+      </DCSection>
+
+      {/* Error states */}
+      <DCSection title="错误态" subtitle="失败恢复 · 原因 + 动作">
+        <Board label="worker 崩溃" w={360} h={220} pad={20}>
+          <ErrorState
+            code="ERR_AGENT_CRASH"
+            title="数据鸟执行失败"
+            desc="tool_call_failed · 第 2 次尝试调用工具时超时。已暂停其余 workers。"
+            action="重跑数据鸟"/>
+        </Board>
+        <Board label="配额耗尽" w={360} h={220} pad={20}>
+          <ErrorState
+            code="ERR_QUOTA"
+            title="本月 token 配额已耗尽"
+            desc="苍鹰和 3 只 worker 尚未完成，系统已自动停止。升级套餐后继续。"
+            action="升级套餐"/>
+        </Board>
+        <Board label="JSON 解析" w={360} h={220} pad={20}>
+          <ErrorState
+            code="ERR_JSON_PARSE"
+            title="业务鸟产出不可解析"
+            desc="3 次重试后仍失败，很可能是 schema 漂移。建议查看 raw output。"
+            action="查看 raw"/>
+        </Board>
+      </DCSection>
+
+      {/* Skeletons */}
+      <DCSection title="骨架" subtitle="加载期占位 · shimmer 1.4s · 禁用内容预填">
+        <Board label="CommentThread 骨架" w={400} h={180} pad={16}>
+          <CommentSkeleton/>
+        </Board>
+        <Board label="AgentStatusCard 骨架" w={280} h={180} pad={16}>
+          <AgentCardSkeleton/>
+        </Board>
+        <Board label="DocumentView 骨架" w={480} h={280} pad={0}>
+          <DocSkeleton/>
+        </Board>
+      </DCSection>
+
+      {/* Offline */}
+      <DCSection title="断网" subtitle="降级策略：本地暂存 · 连接恢复后自动重放">
+        <Board label="全局 ribbon" w={520} h={120} pad={20}>
+          <OfflineRibbon/>
+          <div style={{fontSize:11, color:'var(--text-muted)', marginTop:10, lineHeight:1.6}}>
+            所有 accept / reject / edit 操作均可离线进行，队列持久化到 IndexedDB。
+          </div>
+        </Board>
+        <Board label="断网空态" w={360} h={240} pad={0}>
+          <EmptyState glyph="wifi"
+            title="连不上服务器"
+            desc="已离线 2 分钟。你的修改在本地安全暂存，连上后自动同步。"
+            action="重试"
+            secondary="继续离线"/>
+        </Board>
+        <Board label="断网空态 · 暗" w={360} h={240} pad={0} theme="dark" bg="var(--surface-canvas)">
+          <EmptyState glyph="wifi"
+            title="连不上服务器"
+            desc="已离线 2 分钟。你的修改在本地安全暂存，连上后自动同步。"
+            action="重试"
+            secondary="继续离线"/>
+        </Board>
+      </DCSection>
+
+      {/* dark parity */}
+      <DCSection title="暗模式对照" subtitle="关键三态">
+        <Board label="空 · 暗" w={360} h={240} pad={0} theme="dark" bg="var(--surface-canvas)">
+          <EmptyState glyph="comments" title="还没有评审意见"
+            desc="完成 Phase 2 运行后，5 只鸟的意见会在这里汇总。" action="去 Phase 2"/>
+        </Board>
+        <Board label="错 · 暗" w={360} h={220} pad={20} theme="dark" bg="var(--surface-canvas)">
+          <ErrorState code="ERR_AGENT_CRASH" title="数据鸟执行失败"
+            desc="tool_call_failed · 第 2 次尝试调用工具时超时。已暂停其余 workers。"
+            action="重跑数据鸟"/>
+        </Board>
+        <Board label="骨架 · 暗" w={400} h={180} pad={16} theme="dark" bg="var(--surface-canvas)">
+          <CommentSkeleton/>
+        </Board>
+      </DCSection>
+
+      <div style={{height:80}}/>
+    </DesignCanvas>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script></body></html>

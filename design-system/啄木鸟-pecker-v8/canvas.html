@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8"/>
+<title>啄木鸟 v8 · 组件稿</title>
+<link rel="stylesheet" href="tokens.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  body { margin:0; background: #f0eee9; font-family: var(--font-sans); }
+  /* tweak panel */
+  .tweaks {
+    position:fixed; right:16px; bottom:16px; z-index:9999;
+    background:#fff; border:1px solid var(--border-default); border-radius:8px;
+    padding:10px 12px; font-size:12px; font-family:var(--font-sans);
+    box-shadow: 0 2px 8px rgba(0,0,0,.1); display:none;
+    min-width:220px;
+  }
+  .tweaks[data-on="1"] { display:block; }
+  .tweaks h4 { margin:0 0 8px; font-size:11px; text-transform:uppercase; letter-spacing:.8px; color:var(--text-muted); font-weight:600;}
+  .tweaks label { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:6px 0; }
+  .tweaks select, .tweaks input[type=color] { font-family:inherit; font-size:12px; }
+  .dc-host [data-theme="dark"] { background: var(--surface-canvas); color: var(--text-default); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div class="tweaks" id="tweaks">
+  <h4>Tweaks</h4>
+  <label>强调色 <input type="color" id="tw-accent" value="#e8590c"/></label>
+  <label>密度
+    <select id="tw-density">
+      <option value="compact">紧凑</option>
+      <option value="default" selected>默认</option>
+      <option value="loose">松</option>
+    </select>
+  </label>
+  <label>主题
+    <select id="tw-theme">
+      <option value="light" selected>浅</option>
+      <option value="dark">暗</option>
+    </select>
+  </label>
+</div>
+
+<script>
+  const TWEAK_DEFAULS = /*EDITMODE-BEGIN*/{
+    "accent": "#e9770c",
+    "density": "default",
+    "theme": "light"
+  }/*EDITMODE-END*/;
+</script>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="components/bird-avatar.jsx"></script>
+<script type="text/babel" src="components/bird-badge.jsx"></script>
+<script type="text/babel" src="components/phase-nav.jsx"></script>
+<script type="text/babel" src="components/agent-status-card.jsx"></script>
+
+<script type="text/babel">
+// ─── Artboard wrapper that carries theme data attrs ───────────
+function Board({ label, w, h, theme='light', phase2=false, children, bg, pad=24 }) {
+  return (
+    <DCArtboard label={label} width={w} height={h}>
+      <div data-theme={theme} {...(phase2 ? {'data-phase2': true} : {})} style={{
+        width:'100%', height:'100%',
+        background: bg || 'var(--surface-canvas)',
+        color: 'var(--text-default)',
+        padding: pad,
+        overflow:'hidden',
+      }}>
+        {children}
+      </div>
+    </DCArtboard>
+  );
+}
+
+function Row({ children, gap=16, style={} }) {
+  return <div style={{display:'flex', gap, alignItems:'flex-start', flexWrap:'wrap', ...style}}>{children}</div>;
+}
+function Col({ children, gap=12, style={} }) {
+  return <div style={{display:'flex', flexDirection:'column', gap, ...style}}>{children}</div>;
+}
+function Label({ children }) {
+  return <div style={{
+    fontSize:11, textTransform:'uppercase', letterSpacing:'.8px',
+    color:'var(--text-muted)', fontWeight:600, marginBottom:4,
+  }}>{children}</div>;
+}
+
+// ─── PAGE ─────────────────────────────────────────────────────
+function App() {
+  return (
+    <DesignCanvas>
+      {/* === HERO === */}
+      <div style={{ padding:'0 60px 40px' }}>
+        <div style={{ fontSize:12, letterSpacing:.8, textTransform:'uppercase', color:'rgba(60,50,40,.55)', fontWeight:600, marginBottom:8 }}>
+          啄木鸟 · pecker · design system
+        </div>
+        <div style={{ fontSize:36, fontWeight:600, color:'rgba(30,20,10,.9)', letterSpacing:-.6, marginBottom:6 }}>
+          v8 · 核心组件稿
+        </div>
+        <div style={{ fontSize:14, color:'rgba(60,50,40,.6)', maxWidth:720, lineHeight:1.55 }}>
+          Linear + 飞书文档 + Vercel Build 的工作台。本轮交付：token 双主题、PhaseNav、AgentStatusCard、BirdAvatar / Badge 占位——待 BirdArt-v2 SVG 到位后替换内部线稿。
+        </div>
+      </div>
+
+      {/* === 1 · TOKEN · color ══════════════════════════════════ */}
+      <DCSection title="01 · Tokens — Color" subtitle="浅色 + 暗色双版本。accent 单色；status 四态 + pill；5 色失败分类。">
+        <Board label="浅 · neutral" w={460} h={280}>
+          <Col gap={8}>
+            <Label>neutral scale</Label>
+            <NeutralRamp theme="light"/>
+            <Label>accent · #E8590C</Label>
+            <AccentRamp/>
+          </Col>
+        </Board>
+
+        <Board label="暗 · neutral" w={460} h={280} theme="dark">
+          <Col gap={8}>
+            <Label>neutral scale</Label>
+            <NeutralRamp theme="dark"/>
+            <Label>accent</Label>
+            <AccentRamp/>
+          </Col>
+        </Board>
+
+        <Board label="status 四态 + warn/info" w={420} h={280}>
+          <Col gap={10}>
+            <StatusSwatch name="queued"/>
+            <StatusSwatch name="running"/>
+            <StatusSwatch name="done"/>
+            <StatusSwatch name="failed"/>
+            <div style={{display:'flex', gap:8}}>
+              <StatusSwatch name="warn" compact/>
+              <StatusSwatch name="info" compact/>
+            </div>
+          </Col>
+        </Board>
+
+        <Board label="5 色失败分类 · Phase 1.5" w={420} h={280}>
+          <Col gap={8}>
+            <FailRow code="quota_exhausted"  tok="--fail-quota"  desc="配额打满"/>
+            <FailRow code="tool_call_failed" tok="--fail-tool"   desc="工具调用挂了"/>
+            <FailRow code="json_parse_error" tok="--fail-json"   desc="JSON 解析错误"/>
+            <FailRow code="empty_submission" tok="--fail-empty"  desc="空提交（静默失败 · 冷灰不喊叫）"/>
+            <FailRow code="timeout"          tok="--fail-timeout" desc="超时"/>
+          </Col>
+        </Board>
+
+        <Board label="10 鸟识别色" w={460} h={280}>
+          <Col gap={6}>
+            <Label>worker 4 · meta 紫 · 占位灰</Label>
+            <div style={{display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:8}}>
+              {[1,2,3,4,5,6,7,8,9,10].map(i => <BirdSwatch key={i} id={i}/>)}
+            </div>
+          </Col>
+        </Board>
+      </DCSection>
+
+      {/* === 2 · TYPE ════════════════════════════════════════ */}
+      <DCSection title="02 · Tokens — Type" subtitle="Geist Sans + PingFang SC · Geist Mono 元数据。紧凑 scale。">
+        <Board label="scale" w={560} h={380}>
+          <Col gap={10}>
+            <TypeRow size="32" label="3xl / 32" fw="600">32 · 报告摘要数字</TypeRow>
+            <TypeRow size="24" label="2xl / 24" fw="600">24 · 页标题</TypeRow>
+            <TypeRow size="20" label="xl / 20"  fw="600">20 · 区块标题</TypeRow>
+            <TypeRow size="16" label="lg / 16"  fw="500">16 · 小标题</TypeRow>
+            <TypeRow size="14" label="md / 14"  fw="400">14 · 正文、评论主文</TypeRow>
+            <TypeRow size="13" label="base/13"  fw="400">13 · UI 默认</TypeRow>
+            <TypeRow size="12" label="sm / 12"  fw="400">12 · 元数据</TypeRow>
+            <TypeRow size="11" label="xs / 11"  fw="500">11 · 徽章、shortcut</TypeRow>
+          </Col>
+        </Board>
+
+        <Board label="mono · 元数据" w={460} h={380}>
+          <Col gap={10}>
+            <Label>只用在元数据</Label>
+            <div style={{fontFamily:'var(--font-mono)', fontSize:12, lineHeight:1.7, color:'var(--text-default)', fontVariantNumeric:'tabular-nums'}}>
+              <div>model   sonnet-4-6</div>
+              <div>tokens  2,134</div>
+              <div>t       12.4s</div>
+              <div>conf    0.82</div>
+              <div>rule    R042</div>
+              <div>subs    3</div>
+            </div>
+            <Label>禁用范围</Label>
+            <div style={{fontSize:12, color:'var(--text-muted)', lineHeight:1.55}}>
+              主文案 · 标题 · 按钮文字 · 评论意见正文
+            </div>
+          </Col>
+        </Board>
+      </DCSection>
+
+      {/* === 3 · BIRD AVATAR ════════════════════════════════════ */}
+      <DCSection title="03 · BirdAvatar" subtitle="3 尺寸 × 10 鸟 × 4 状态。占位线稿；待 BirdArt-v2 替换。">
+        <Board label="尺寸" w={460} h={220}>
+          <Col gap={14}>
+            <Label>32 · 24 · 16</Label>
+            <Row gap={24} style={{alignItems:'center'}}>
+              <BirdAvatar id={1} size="lg"/>
+              <BirdAvatar id={1} size="md"/>
+              <BirdAvatar id={1} size="sm"/>
+            </Row>
+            <Label>四态 · 32 主位</Label>
+            <Row gap={14}>
+              <BirdAvatar id={2} size="lg" status="queued"/>
+              <BirdAvatar id={2} size="lg" status="running"/>
+              <BirdAvatar id={2} size="lg" status="done"/>
+              <BirdAvatar id={2} size="lg" status="failed"/>
+            </Row>
+          </Col>
+        </Board>
+
+        <Board label="10 只鸟全集 · 32" w={560} h={220}>
+          <Col gap={12}>
+            <Label>worker 1-4</Label>
+            <Row gap={12}>
+              <Col gap={4} style={{alignItems:'center'}}><BirdAvatar id={1} size="lg"/><span style={s_tinyLabel}>业务</span></Col>
+              <Col gap={4} style={{alignItems:'center'}}><BirdAvatar id={2} size="lg"/><span style={s_tinyLabel}>数据</span></Col>
+              <Col gap={4} style={{alignItems:'center'}}><BirdAvatar id={3} size="lg"/><span style={s_tinyLabel}>体验</span></Col>
+              <Col gap={4} style={{alignItems:'center'}}><BirdAvatar id={4} size="lg"/><span style={s_tinyLabel}>风险</span></Col>
+              <span style={{width:1, background:'var(--border-default)', alignSelf:'stretch'}}/>
+              <Col gap={4} style={{alignItems:'center'}}><BirdAvatar id={5} size="lg"/><span style={s_tinyLabel}>苍鹰·meta</span></Col>
+              <span style={{width:1, background:'var(--border-default)', alignSelf:'stretch'}}/>
+              <Col gap={4} style={{alignItems:'center'}}><BirdAvatar id={6} size="lg" placeholder/><span style={s_tinyLabel}>占位</span></Col>
+              <Col gap={4} style={{alignItems:'center'}}><BirdAvatar id={7} size="lg" placeholder/><span style={s_tinyLabel}>占位</span></Col>
+              <Col gap={4} style={{alignItems:'center'}}><BirdAvatar id={8} size="lg" placeholder/><span style={s_tinyLabel}>占位</span></Col>
+              <Col gap={4} style={{alignItems:'center'}}><BirdAvatar id={9} size="lg" placeholder/><span style={s_tinyLabel}>占位</span></Col>
+              <Col gap={4} style={{alignItems:'center'}}><BirdAvatar id={10} size="lg" placeholder/><span style={s_tinyLabel}>占位</span></Col>
+            </Row>
+          </Col>
+        </Board>
+
+        <Board label="暗模式" w={380} h={220} theme="dark">
+          <Col gap={12}>
+            <Label>四态 · 暗</Label>
+            <Row gap={14}>
+              <BirdAvatar id={1} size="lg" status="queued"/>
+              <BirdAvatar id={2} size="lg" status="running"/>
+              <BirdAvatar id={3} size="lg" status="done"/>
+              <BirdAvatar id={4} size="lg" status="failed"/>
+            </Row>
+            <Row gap={14} style={{alignItems:'center'}}>
+              <BirdAvatar id={5} size="lg"/>
+              <BirdAvatar id={5} size="md"/>
+              <BirdAvatar id={5} size="sm"/>
+            </Row>
+          </Col>
+        </Board>
+      </DCSection>
+
+      {/* === 4 · BIRD BADGE ════════════════════════════════════ */}
+      <DCSection title="04 · BirdBadge" subtitle="pill · <dot>职能。inline 贴在评论头部。">
+        <Board label="全集" w={680} h={200}>
+          <Col gap={10}>
+            <Label>md</Label>
+            <Row gap={8}>
+              {[1,2,3,4,5,6,7].map(i => <BirdBadge key={i} id={i}/>)}
+            </Row>
+            <Label>sm · inline</Label>
+            <Row gap={8}>
+              {[1,2,3,4,5].map(i => <BirdBadge key={i} id={i} size="sm"/>)}
+            </Row>
+          </Col>
+        </Board>
+      </DCSection>
+
+      {/* === 5 · PHASE NAV ════════════════════════════════════ */}
+      <DCSection title="05 · PhaseNav" subtitle="顶部常驻。6 节点（0·1·1.5·2·3·4）。1.5 警示三角 · 必经标签。已完成可回跳。">
+        <Board label="当前 = Phase 2（运行中）" w={1200} h={100} pad={0}>
+          <PhaseNav current={2} completed={[0,1,1.5]}/>
+        </Board>
+        <Board label="当前 = Phase 1.5（警示态）" w={1200} h={100} pad={0}>
+          <PhaseNav current={1.5} completed={[0,1]}/>
+        </Board>
+        <Board label="当前 = Phase 3（评审中）" w={1200} h={100} pad={0}>
+          <PhaseNav current={3} completed={[0,1,1.5,2]}/>
+        </Board>
+        <Board label="暗模式" w={1200} h={100} pad={0} theme="dark">
+          <PhaseNav current={2} completed={[0,1,1.5]}/>
+        </Board>
+      </DCSection>
+
+      {/* === 6 · AGENT STATUS CARD ════════════════════════════ */}
+      <DCSection title="06 · AgentStatusCard" subtitle="worker 4 × meta 1。四态 + 失败分类 + recovery。Phase 2 的核心戏份。">
+        <Board label="四态 · worker" w={1000} h={220} phase2>
+          <Row gap={12}>
+            <AgentStatusCard birdId={1} status="queued"  model="sonnet-4-6"/>
+            <AgentStatusCard birdId={2} status="running" progress={62} tokens="2.1k" elapsed="12.4s" model="sonnet-4-6" note="分析中"/>
+            <AgentStatusCard birdId={3} status="done"    tokens="3.8k" elapsed="28.1s" submissions={7} model="sonnet-4-6"/>
+            <AgentStatusCard birdId={4} status="failed"  tokens="0.4k" elapsed="4.2s"  failReason="empty_submission" model="sonnet-4-6"/>
+          </Row>
+        </Board>
+
+        <Board label="5 种失败分类（全部 failed 态）" w={1140} h={260} phase2>
+          <Row gap={12}>
+            <AgentStatusCard birdId={1} status="failed" tokens="—"   elapsed="—"    failReason="quota_exhausted"/>
+            <AgentStatusCard birdId={2} status="failed" tokens="1.2k" elapsed="8.9s" failReason="tool_call_failed"/>
+            <AgentStatusCard birdId={3} status="failed" tokens="2.0k" elapsed="14s"  failReason="json_parse_error"/>
+            <AgentStatusCard birdId={4} status="failed" tokens="0.4k" elapsed="4.2s" failReason="empty_submission"/>
+            <AgentStatusCard birdId={1} status="failed" tokens="—"   elapsed="60s+"  failReason="timeout"/>
+          </Row>
+        </Board>
+
+        <Board label="meta · 苍鹰三子态" w={1140} h={420} phase2>
+          <Col gap={14}>
+            <AgentStatusCard variant="meta" birdId={5} status="queued" note="等待 worker 完成 1/4" model="opus-4"/>
+            <AgentStatusCard variant="meta" birdId={5} status="running" progress={40} note="交叉校验中" tokens="4.1k" elapsed="18.0s" model="opus-4"/>
+            <AgentStatusCard variant="meta" birdId={5} status="running" progress={72} note="漏报补充 3/5" tokens="5.8k" elapsed="32.7s" model="opus-4"/>
+          </Col>
+        </Board>
+
+        <Board label="Phase 2 完整拓扑 · 4 worker + 1 meta + 依赖边" w={1140} h={520} phase2>
+          <Topology/>
+        </Board>
+
+        <Board label="暗模式 · worker 四态" w={1000} h={220} theme="dark" phase2>
+          <Row gap={12}>
+            <AgentStatusCard birdId={1} status="queued"  model="sonnet-4-6"/>
+            <AgentStatusCard birdId={2} status="running" progress={62} tokens="2.1k" elapsed="12.4s" model="sonnet-4-6" note="分析中"/>
+            <AgentStatusCard birdId={3} status="done"    tokens="3.8k" elapsed="28.1s" submissions={7} model="sonnet-4-6"/>
+            <AgentStatusCard birdId={4} status="failed"  tokens="0.4k" elapsed="4.2s"  failReason="empty_submission" model="sonnet-4-6"/>
+          </Row>
+        </Board>
+      </DCSection>
+
+      {/* Post-its · 关键决策 */}
+      <DCPostIt top={120} right={60} width={220} rotate={-2}>
+        Phase 2 的「A 调度中心」气质通过 data-phase2 属性实现：冷一档 + 对比 +20%，不做全暗色。
+      </DCPostIt>
+      <DCPostIt top={980} left={40} width={200} rotate={2}>
+        苍鹰 = 紫色，与 worker 4 色在 hue 上拉开。视觉承诺：meta ≠ worker。
+      </DCPostIt>
+      <DCPostIt top={2400} right={60} width={240} rotate={-1.5}>
+        「依赖边」动效：worker done 后对应虚线变实 + 橙点沿线段流向苍鹰。PM 3 秒判"系统跑到哪"。
+      </DCPostIt>
+
+      <div style={{height:80}}/>
+    </DesignCanvas>
+  );
+}
+
+// ── swatches ─────────────────────────────────────────────────
+function NeutralRamp({ theme }) {
+  const keys = ['0','25','50','100','150','200','300','400','500','600','700','800','900'];
+  return (
+    <div data-theme={theme} style={{display:'flex', border:'1px solid var(--border-subtle)', borderRadius:4, overflow:'hidden'}}>
+      {keys.map(k => (
+        <div key={k} title={`--neutral-${k}`} style={{
+          flex:1, height:40, background:`var(--neutral-${k})`,
+          display:'flex', alignItems:'flex-end', justifyContent:'center',
+          fontFamily:'var(--font-mono)', fontSize:9, color: +k>=400 ? '#fff' : 'var(--text-muted)',
+          paddingBottom:3,
+        }}>{k}</div>
+      ))}
+    </div>
+  );
+}
+function AccentRamp() {
+  const keys = ['50','100','200','300','400','500','600','700','800'];
+  return (
+    <div style={{display:'flex', border:'1px solid var(--border-subtle)', borderRadius:4, overflow:'hidden'}}>
+      {keys.map(k => (
+        <div key={k} title={`--accent-${k}`} style={{
+          flex:1, height:40, background:`var(--accent-${k})`,
+          display:'flex', alignItems:'flex-end', justifyContent:'center',
+          fontFamily:'var(--font-mono)', fontSize:9, color: +k>=400 ? '#fff' : 'var(--accent-700)',
+          paddingBottom:3,
+        }}>{k}</div>
+      ))}
+    </div>
+  );
+}
+function StatusSwatch({ name, compact }) {
+  return (
+    <div style={{
+      display:'flex', alignItems:'center', gap:10, padding: compact ? '6px 10px' : '8px 12px',
+      background:`var(--status-${name}-bg)`, borderRadius:'var(--r-3)', flex: compact ? 1 : 'unset',
+    }}>
+      <StatusDot status={name==='warn'?'warn':name} size={8}/>
+      <span style={{fontSize:12, color:`var(--status-${name}-fg)`, fontWeight:600}}>{name}</span>
+      {!compact && <span style={{fontSize:11, color:'var(--text-muted)', marginLeft:'auto', fontFamily:'var(--font-mono)'}}>
+        --status-{name}-*
+      </span>}
+    </div>
+  );
+}
+function FailRow({ code, tok, desc }) {
+  return (
+    <div style={{display:'flex', alignItems:'center', gap:10}}>
+      <span style={{width:14, height:14, borderRadius:3, background:`var(${tok})`, flexShrink:0}}/>
+      <span style={{fontFamily:'var(--font-mono)', fontSize:11, color:'var(--text-strong)', fontWeight:500, minWidth:140}}>{code}</span>
+      <span style={{fontSize:12, color:'var(--text-muted)'}}>{desc}</span>
+    </div>
+  );
+}
+function BirdSwatch({ id }) {
+  const meta = BIRD_META[id];
+  return (
+    <div style={{display:'flex', flexDirection:'column', alignItems:'flex-start', gap:4}}>
+      <span style={{width:'100%', height:36, borderRadius:4, background:`var(--bird-${id})`}}/>
+      <span style={{fontSize:10, fontFamily:'var(--font-mono)', color:'var(--text-muted)'}}>bird-{id}</span>
+      <span style={{fontSize:11, color:'var(--text-default)'}}>{meta.label}</span>
+    </div>
+  );
+}
+
+function TypeRow({ size, label, fw, children }) {
+  return (
+    <div style={{display:'flex', alignItems:'baseline', gap:16, borderBottom:'1px dashed var(--border-subtle)', paddingBottom:8}}>
+      <span style={{fontFamily:'var(--font-mono)', fontSize:10, color:'var(--text-muted)', width:80, flexShrink:0}}>{label}</span>
+      <span style={{fontSize:Number(size), fontWeight:fw, color:'var(--text-strong)', lineHeight:1.2}}>{children}</span>
+    </div>
+  );
+}
+const s_tinyLabel = { fontSize:10, color:'var(--text-muted)', fontFamily:'var(--font-mono)' };
+
+// ─── Phase 2 topology with dependency edges ────────────────────
+function Topology() {
+  // SVG 层绝对定位画依赖边
+  return (
+    <div style={{ position:'relative', width:'100%', height:'100%' }}>
+      <svg viewBox="0 0 1080 460" preserveAspectRatio="none" style={{position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents:'none'}}>
+        {/* 4 worker → 1 meta。worker 锚点 x: 137/366/595/824 · y:180。meta 锚点 x:540 y:300 */}
+        {[137, 366, 595, 824].map((x,i) => {
+          const done = i === 2; // 第 3 个 done（id=3 体验鸟）
+          return (
+            <g key={i}>
+              <path d={`M${x} 180 C ${x} 240, 540 240, 540 300`}
+                    fill="none"
+                    stroke={done ? 'var(--accent-500)' : 'var(--neutral-300)'}
+                    strokeWidth={done ? 1.8 : 1.2}
+                    strokeDasharray={done ? '0' : '4 4'}/>
+              {done && (
+                <circle r="3" fill="var(--accent-500)">
+                  <animateMotion dur="1.6s" repeatCount="indefinite"
+                    path={`M${x} 180 C ${x} 240, 540 240, 540 300`}/>
+                </circle>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+
+      {/* worker 层 */}
+      <div style={{ position:'absolute', top:0, left:0, right:0, display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:12 }}>
+        <AgentStatusCard birdId={1} status="running" progress={48} tokens="1.4k" elapsed="9.1s" model="sonnet-4-6" note="分析中"/>
+        <AgentStatusCard birdId={2} status="running" progress={72} tokens="2.3k" elapsed="11.8s" model="sonnet-4-6" note="分析中"/>
+        <AgentStatusCard birdId={3} status="done"    tokens="3.8k" elapsed="28.1s" submissions={7} model="sonnet-4-6"/>
+        <AgentStatusCard birdId={4} status="running" progress={22} tokens="0.8k" elapsed="5.4s" model="sonnet-4-6" note="分析中"/>
+      </div>
+
+      {/* meta 层 */}
+      <div style={{ position:'absolute', top:300, left:'50%', transform:'translateX(-50%)', width:'60%' }}>
+        <AgentStatusCard variant="meta" birdId={5} status="queued" note="等待 worker 完成 1/4" model="opus-4"/>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+
+<script>
+// ── TWEAKS ────────────────────────────────────────────────────
+(function(){
+  const panel = document.getElementById('tweaks');
+  const accentEl = document.getElementById('tw-accent');
+  const densityEl = document.getElementById('tw-density');
+  const themeEl = document.getElementById('tw-theme');
+
+  function applyAccent(hex) {
+    document.documentElement.style.setProperty('--accent-500', hex);
+    document.documentElement.style.setProperty('--accent-600', shade(hex, -14));
+    document.documentElement.style.setProperty('--status-running-dot', hex);
+    document.documentElement.style.setProperty('--status-running-fg', shade(hex, -22));
+  }
+  function applyDensity(d) {
+    document.documentElement.dataset.density = d;
+    if (d === 'compact') {
+      document.documentElement.style.setProperty('--sp-4','12px');
+      document.documentElement.style.setProperty('--sp-6','16px');
+    } else if (d === 'loose') {
+      document.documentElement.style.setProperty('--sp-4','20px');
+      document.documentElement.style.setProperty('--sp-6','28px');
+    } else {
+      document.documentElement.style.removeProperty('--sp-4');
+      document.documentElement.style.removeProperty('--sp-6');
+    }
+  }
+  function applyTheme(t) {
+    // canvas 里 board 是独立 theme；这里切整体 body
+    document.body.dataset.theme = t;
+    if (t === 'dark') document.body.style.background = '#0e1217';
+    else document.body.style.background = '#f0eee9';
+  }
+  function shade(hex, pct) {
+    const n = parseInt(hex.slice(1),16);
+    let r=(n>>16)&0xff, g=(n>>8)&0xff, b=n&0xff;
+    const k = pct/100;
+    r = Math.max(0,Math.min(255, Math.round(r + (k<0?r*k:(255-r)*k))));
+    g = Math.max(0,Math.min(255, Math.round(g + (k<0?g*k:(255-g)*k))));
+    b = Math.max(0,Math.min(255, Math.round(b + (k<0?b*k:(255-b)*k))));
+    return '#'+[r,g,b].map(x=>x.toString(16).padStart(2,'0')).join('');
+  }
+
+  // init from defaults
+  accentEl.value = TWEAK_DEFAULS.accent; applyAccent(TWEAK_DEFAULS.accent);
+  densityEl.value = TWEAK_DEFAULS.density; applyDensity(TWEAK_DEFAULS.density);
+  themeEl.value = TWEAK_DEFAULS.theme; applyTheme(TWEAK_DEFAULS.theme);
+
+  function persist(key, val) {
+    window.parent.postMessage({type:'__edit_mode_set_keys', edits:{[key]:val}}, '*');
+  }
+  accentEl.addEventListener('input', e => { applyAccent(e.target.value); persist('accent', e.target.value); });
+  densityEl.addEventListener('change', e => { applyDensity(e.target.value); persist('density', e.target.value); });
+  themeEl.addEventListener('change', e => { applyTheme(e.target.value); persist('theme', e.target.value); });
+
+  // edit-mode protocol
+  window.addEventListener('message', ev => {
+    const d = ev.data || {};
+    if (d.type === '__activate_edit_mode')   panel.dataset.on = '1';
+    if (d.type === '__deactivate_edit_mode') panel.dataset.on = '0';
+  });
+  window.parent.postMessage({type:'__edit_mode_available'}, '*');
+})();
+</script>
+</body>
+</html>

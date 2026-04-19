@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="zh"><head>
+<meta charset="utf-8"/><title>啄木鸟 v8 · 锚点联动动效时序</title>
+<link rel="stylesheet" href="tokens.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  body{margin:0;background:var(--surface-canvas);color:var(--text-default);font-family:var(--font-sans);}
+  .wrap{max-width:1280px;margin:0 auto;padding:48px 48px 80px;}
+  h1{font-size:28px;font-weight:600;letter-spacing:-.5px;margin:0 0 4px;color:var(--text-strong);}
+  .sub{color:var(--text-muted);font-size:14px;margin-bottom:32px;}
+  h2{font-size:11px;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-muted);
+     font-weight:600;margin:36px 0 14px;padding-bottom:6px;border-bottom:1px solid var(--border-subtle);}
+
+  /* demo area */
+  .demo{display:grid;grid-template-columns:1.1fr 1fr;gap:0;
+        border:1px solid var(--border-default);border-radius:8px;overflow:hidden;
+        background:var(--surface-raised);height:480px;}
+  .doc{padding:24px 28px;border-right:1px solid var(--border-default);overflow:auto;
+       font-size:14px;line-height:1.7;background:var(--surface-raised);}
+  .doc .line{display:flex;gap:12px;padding:4px 0;position:relative;}
+  .doc .ln{color:var(--text-faint);font-family:var(--font-mono);font-size:11px;
+           width:28px;text-align:right;flex-shrink:0;padding-top:3px;}
+  .doc .txt{flex:1;color:var(--text-default);}
+  .anchor{border-radius:3px;padding:1px 3px;margin:-1px -3px;
+          border-bottom:1.5px dotted var(--accent-400);cursor:pointer;transition:background var(--dur-fast);}
+  .anchor:hover{background:color-mix(in oklch, var(--accent-500) 10%, transparent);}
+  .anchor.flash{animation:flash 300ms var(--ease-out) forwards;}
+  @keyframes flash{
+    0%  {background:color-mix(in oklch, var(--accent-500) 45%, transparent);}
+    100%{background:transparent;}
+  }
+
+  .drawer{padding:20px;overflow:auto;background:var(--surface-sunken);}
+  .ct{background:var(--surface-raised);border:1px solid var(--border-subtle);border-radius:8px;
+      padding:14px 16px;margin-bottom:12px;cursor:pointer;transition:border-color var(--dur-fast),
+      box-shadow var(--dur-base) var(--ease-out);}
+  .ct:hover{border-color:var(--border-strong);}
+  .ct.flash{animation:ctflash 300ms var(--ease-out) forwards;box-shadow:var(--shadow-focus);}
+  @keyframes ctflash{
+    0%  {box-shadow:0 0 0 3px color-mix(in oklch, var(--accent-500) 40%, transparent), var(--shadow-md);
+         background:color-mix(in oklch, var(--accent-500) 8%, var(--surface-raised));}
+    100%{box-shadow:var(--shadow-sm);background:var(--surface-raised);}
+  }
+  .ct-meta{display:flex;gap:8px;align-items:center;font-size:11px;color:var(--text-muted);
+           font-family:var(--font-mono);margin-bottom:6px;}
+  .ct-meta .dot{width:8px;height:8px;border-radius:99px;}
+  .ct-title{font-size:13px;color:var(--text-default);line-height:1.55;}
+
+  /* timing diagram */
+  .tl{background:var(--surface-raised);border:1px solid var(--border-default);border-radius:8px;
+      padding:20px 24px;margin-top:20px;}
+  .tl-grid{display:grid;grid-template-columns:120px 1fr;gap:0;align-items:center;}
+  .tl-label{font-family:var(--font-mono);font-size:11px;color:var(--text-muted);padding:4px 0;}
+  .tl-lane{position:relative;height:26px;border-left:1px solid var(--border-subtle);padding-left:12px;}
+  .tl-lane::before,.tl-lane::after{content:'';position:absolute;top:0;bottom:0;width:1px;background:var(--border-subtle);}
+  .tl-lane::before{left:20%;} .tl-lane::after{left:80%;}
+  .tl-bar{position:absolute;top:6px;height:14px;border-radius:3px;display:flex;align-items:center;
+          padding:0 6px;font-family:var(--font-mono);font-size:10px;font-weight:600;white-space:nowrap;}
+  .tl-bar.accent{background:color-mix(in oklch, var(--accent-500) 18%, transparent);
+                 color:var(--accent-600);border:1px solid color-mix(in oklch, var(--accent-500) 35%, transparent);}
+  .tl-bar.neutral{background:var(--neutral-100);color:var(--text-default);border:1px solid var(--border-default);}
+  .tl-bar.info{background:var(--status-info-bg);color:var(--status-info-fg);}
+  .tl-axis{display:grid;grid-template-columns:120px 1fr;margin-top:6px;}
+  .tl-ticks{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:10px;color:var(--text-faint);padding:0 4px;}
+
+  /* motion specs */
+  .specs{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:16px;}
+  .spec{padding:14px 16px;border:1px solid var(--border-subtle);border-radius:8px;background:var(--surface-raised);}
+  .spec h3{margin:0 0 6px;font-size:12px;color:var(--text-strong);font-weight:600;}
+  .spec dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:11px;}
+  .spec dt{color:var(--text-muted);font-family:var(--font-mono);}
+  .spec dd{margin:0;color:var(--text-default);font-family:var(--font-mono);}
+
+  .play{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:6px;
+        background:var(--accent-500);color:var(--accent-fg);font-size:12px;font-weight:600;
+        border:none;cursor:pointer;font-family:var(--font-sans);margin-bottom:12px;}
+  .play:hover{background:var(--accent-600);}
+  .hint{font-size:12px;color:var(--text-muted);margin-left:10px;}
+
+  .rules{margin-top:20px;padding:16px 20px;background:var(--surface-sunken);
+         border:1px solid var(--border-subtle);border-radius:8px;}
+  .rules ol{margin:0;padding-left:20px;font-size:13px;line-height:1.8;}
+  .rules code{font-family:var(--font-mono);font-size:12px;background:var(--neutral-100);padding:1px 5px;border-radius:3px;}
+
+  .themer{position:fixed;top:16px;right:16px;display:flex;gap:6px;z-index:10;}
+  .themer button{border:1px solid var(--border-default);background:var(--surface-raised);
+                 color:var(--text-default);font-family:var(--font-mono);font-size:11px;
+                 padding:6px 10px;border-radius:6px;cursor:pointer;}
+  .themer button[data-on=true]{background:var(--accent-500);color:var(--accent-fg);border-color:var(--accent-500);}
+</style>
+</head><body>
+<div class="themer">
+  <button id="btnL" data-on="true">浅</button>
+  <button id="btnD">暗</button>
+</div>
+<div class="wrap">
+  <h1>锚点联动 · 评论 ↔ 原文</h1>
+  <div class="sub">briefing 关键交互 · 第 4 条 · 双向跳转 + 0.3s 高亮淡出</div>
+
+  <h2>可交互 demo</h2>
+  <button class="play" id="play">▶ 回放联动动效</button>
+  <span class="hint">或点击左侧锚点 / 右侧评论卡</span>
+
+  <div class="demo">
+    <div class="doc" id="doc">
+      <div class="line"><div class="ln">12</div><div class="txt">本期目标是扩展国际订单链路。对于 <span class="anchor" data-id="m1">国际订单用户群体</span>，需要定义清晰的入口路径与默认币种。</div></div>
+      <div class="line"><div class="ln">13</div><div class="txt">转化率的口径 <span class="anchor" data-id="m2">尚未与数据团队对齐</span>，本次需补全事件打点方案。</div></div>
+      <div class="line"><div class="ln">14</div><div class="txt">支付重试策略需要参考现网退避经验，<span class="anchor" data-id="m3">避免放大下游限流</span>。</div></div>
+      <div class="line"><div class="ln">15</div><div class="txt">并发合并场景下，<span class="anchor" data-id="m4">冲突解决规则</span>由业务方在下一迭代给出。</div></div>
+      <div class="line"><div class="ln">16</div><div class="txt">合规要求：国际支付需说明 PCI-DSS 遵循情况，<span class="anchor" data-id="m5">风险项请单列章节</span>。</div></div>
+    </div>
+    <div class="drawer" id="drawer">
+      <div class="ct" data-id="m1"><div class="ct-meta"><span class="dot" style="background:var(--bird-1)"></span>业务鸟 · R042 · conf 0.89</div><div class="ct-title">国际订单用户群体未定义入口路径 · 需补默认币种与地区识别策略</div></div>
+      <div class="ct" data-id="m2"><div class="ct-meta"><span class="dot" style="background:var(--bird-2)"></span>数据鸟 · R201 · conf 0.64</div><div class="ct-title">转化率口径未定义 · 建议补充三个口径（UV → 下单 / 下单 → 支付 / 整体）</div></div>
+      <div class="ct" data-id="m3"><div class="ct-meta"><span class="dot" style="background:var(--bird-4)"></span>风险鸟 · R118 · conf 0.91</div><div class="ct-title">支付失败重试缺少指数退避 · 可能放大限流</div></div>
+      <div class="ct" data-id="m4"><div class="ct-meta"><span class="dot" style="background:var(--bird-1)"></span>业务鸟 · R133 · conf 0.78</div><div class="ct-title">冲突合并策略未定义 · 需下一迭代给出</div></div>
+      <div class="ct" data-id="m5"><div class="ct-meta"><span class="dot" style="background:var(--bird-4)"></span>风险鸟 · R145 · conf 0.82</div><div class="ct-title">国际支付合规未说明 PCI-DSS 要求 · 建议单列章节</div></div>
+    </div>
+  </div>
+
+  <h2>时序图 · 评论 → 原文</h2>
+  <div class="tl">
+    <div class="tl-grid">
+      <div class="tl-label">user</div>
+      <div class="tl-lane"><div class="tl-bar accent" style="left:0;width:40px;">click</div></div>
+
+      <div class="tl-label">scroll</div>
+      <div class="tl-lane"><div class="tl-bar info" style="left:40px;width:240px;">smooth scroll · 320ms · ease-out</div></div>
+
+      <div class="tl-label">anchor halo</div>
+      <div class="tl-lane"><div class="tl-bar accent" style="left:280px;width:300px;">flash 300ms · ease-out · opacity 1→0</div></div>
+
+      <div class="tl-label">focus ring</div>
+      <div class="tl-lane"><div class="tl-bar neutral" style="left:280px;width:120px;">ring 120ms</div></div>
+    </div>
+    <div class="tl-axis">
+      <div></div>
+      <div class="tl-ticks"><span>0ms</span><span>200</span><span>400</span><span>600</span><span>800</span></div>
+    </div>
+  </div>
+
+  <h2>时序图 · 原文 → 评论</h2>
+  <div class="tl">
+    <div class="tl-grid">
+      <div class="tl-label">user</div>
+      <div class="tl-lane"><div class="tl-bar accent" style="left:0;width:40px;">click</div></div>
+
+      <div class="tl-label">drawer scroll</div>
+      <div class="tl-lane"><div class="tl-bar info" style="left:40px;width:180px;">scrollIntoNearest · 240ms</div></div>
+
+      <div class="tl-label">comment flash</div>
+      <div class="tl-lane"><div class="tl-bar accent" style="left:220px;width:300px;">flash 300ms · ring + bg</div></div>
+
+      <div class="tl-label">anchor mark</div>
+      <div class="tl-lane"><div class="tl-bar neutral" style="left:220px;width:120px;">underline emphasis 200ms</div></div>
+    </div>
+    <div class="tl-axis">
+      <div></div>
+      <div class="tl-ticks"><span>0ms</span><span>200</span><span>400</span><span>600</span><span>800</span></div>
+    </div>
+  </div>
+
+  <h2>动效规范</h2>
+  <div class="specs">
+    <div class="spec">
+      <h3>flash（主高亮）</h3>
+      <dl>
+        <dt>duration</dt><dd>300ms</dd>
+        <dt>easing</dt><dd>var(--ease-out)</dd>
+        <dt>from</dt><dd>accent · α 0.45</dd>
+        <dt>to</dt><dd>transparent</dd>
+        <dt>property</dt><dd>background-color</dd>
+      </dl>
+    </div>
+    <div class="spec">
+      <h3>smooth-scroll</h3>
+      <dl>
+        <dt>duration</dt><dd>240–320ms</dd>
+        <dt>easing</dt><dd>var(--ease-out)</dd>
+        <dt>behavior</dt><dd>container scrollTo</dd>
+        <dt>⚠</dt><dd>禁用 scrollIntoView</dd>
+      </dl>
+    </div>
+    <div class="spec">
+      <h3>focus-ring</h3>
+      <dl>
+        <dt>duration</dt><dd>120ms</dd>
+        <dt>easing</dt><dd>var(--ease-out)</dd>
+        <dt>value</dt><dd>var(--shadow-focus)</dd>
+        <dt>fade-out</dt><dd>1200ms · 线性</dd>
+      </dl>
+    </div>
+  </div>
+
+  <h2>落地规则</h2>
+  <div class="rules">
+    <ol>
+      <li>所有锚点联动必须<b>双向</b>：点评论 → 原文高亮；点原文 → 评论高亮。</li>
+      <li>高亮时长固定 <code>300ms</code>，禁止更久——久了成"选中态"，破坏了"一瞥反馈"的意图。</li>
+      <li>禁用 <code>element.scrollIntoView()</code>（项目约束），使用容器的 <code>scrollTo({ top, behavior: 'smooth' })</code>。</li>
+      <li>`prefers-reduced-motion: reduce` 时，关闭 smooth-scroll 与 flash，仅保留 focus-ring。</li>
+      <li>键盘 <code>Enter</code> 触发同样联动，focus-ring 留到下次按键 / blur 才淡出。</li>
+      <li>同时激活多条评论时，只 flash 最近一条——不要连锁动画。</li>
+      <li>Phase 2 期间 drawer 不显示；这套规则仅 Phase 3 适用。</li>
+    </ol>
+  </div>
+</div>
+
+<script>
+  const root = document.documentElement;
+  const bL = document.getElementById('btnL'), bD = document.getElementById('btnD');
+  bL.onclick = () => { root.setAttribute('data-theme','light'); bL.dataset.on='true'; bD.dataset.on='false'; };
+  bD.onclick = () => { root.setAttribute('data-theme','dark');  bD.dataset.on='true'; bL.dataset.on='false'; };
+
+  const doc = document.getElementById('doc');
+  const drawer = document.getElementById('drawer');
+
+  function flashEl(el){ el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+  function scrollNearest(container, el){
+    const cr = container.getBoundingClientRect();
+    const er = el.getBoundingClientRect();
+    const target = container.scrollTop + (er.top - cr.top) - (cr.height/2) + (er.height/2);
+    container.scrollTo({ top: target, behavior: 'smooth' });
+  }
+
+  function jumpDocToComment(id){
+    const a = doc.querySelector('.anchor[data-id="'+id+'"]');
+    const c = drawer.querySelector('.ct[data-id="'+id+'"]');
+    if(!a||!c) return;
+    scrollNearest(doc, a);
+    setTimeout(()=>flashEl(a), 220);
+  }
+  function jumpCommentToDoc(id){
+    const a = doc.querySelector('.anchor[data-id="'+id+'"]');
+    const c = drawer.querySelector('.ct[data-id="'+id+'"]');
+    if(!a||!c) return;
+    scrollNearest(drawer, c);
+    setTimeout(()=>flashEl(c), 180);
+  }
+
+  doc.querySelectorAll('.anchor').forEach(a => {
+    a.addEventListener('click', () => jumpCommentToDoc(a.dataset.id));
+  });
+  drawer.querySelectorAll('.ct').forEach(c => {
+    c.addEventListener('click', () => jumpDocToComment(c.dataset.id));
+  });
+
+  // playback
+  document.getElementById('play').onclick = async () => {
+    const ids = ['m3','m1','m5','m2'];
+    for(const id of ids){
+      jumpDocToComment(id);
+      await new Promise(r=>setTimeout(r, 900));
+      jumpCommentToDoc(id);
+      await new Promise(r=>setTimeout(r, 900));
+    }
+  };
+</script>
+</body></html>

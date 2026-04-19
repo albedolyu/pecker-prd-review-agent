@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="zh"><head>
+<meta charset="utf-8"/><title>啄木鸟 v8 · Phase 2 三变体</title>
+<link rel="stylesheet" href="tokens.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>body{margin:0;background:#f0eee9;font-family:var(--font-sans);}</style>
+</head><body><div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="components/bird-avatar.jsx"></script>
+<script type="text/babel" src="components/bird-badge.jsx"></script>
+<script type="text/babel">
+const {DesignCanvas, DCSection, DCArtboard, BirdAvatar, BirdBadge, BIRD_META} = window;
+
+// Workers & meta data shared across variants
+const WORKERS = [
+  { id:1, label:'业务', state:'done',    pct:100, tokens:'2.4k', elapsed:'18s' },
+  { id:2, label:'数据', state:'running', pct:62,  tokens:'1.1k', elapsed:'12s' },
+  { id:3, label:'体验', state:'running', pct:38,  tokens:'0.6k', elapsed:'8s'  },
+  { id:4, label:'风险', state:'failed',  pct:42,  tokens:'0.9k', elapsed:'—',  err:'tool_call_failed' },
+];
+const META = { id:5, label:'苍鹰', state:'queued', waitOn:'业务 ✓ · 数据 · 体验 · 风险' };
+
+// helpers
+const dotBG = (s) => `var(--status-${s}-dot)`;
+const bg    = (s) => `var(--status-${s}-bg)`;
+const fg    = (s) => `var(--status-${s}-fg)`;
+
+// shared layout shell
+function Shell({ children, title, desc }) {
+  return (
+    <div data-phase2 style={{
+      width:'100%', height:'100%',
+      background:'var(--surface-canvas)',
+      color:'var(--text-default)',
+      padding:'20px 22px 18px',
+      display:'flex', flexDirection:'column', gap:14,
+      fontFamily:'var(--font-sans)',
+      overflow:'hidden',
+    }}>
+      <div style={{display:'flex', alignItems:'baseline', justifyContent:'space-between'}}>
+        <div>
+          <div style={{fontSize:13, fontWeight:600, color:'var(--text-strong)'}}>{title}</div>
+          <div style={{fontSize:11, color:'var(--text-muted)', marginTop:2}}>{desc}</div>
+        </div>
+        <div style={{
+          fontFamily:'var(--font-mono)', fontSize:10, color:'var(--text-muted)',
+          display:'flex', gap:10,
+        }}>
+          <span>run r-8f2k91</span><span>•</span><span>elapsed 00:28</span>
+          <span>•</span><span style={{color:'var(--accent-600)'}}>● live</span>
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ─── VARIANT A · 依赖边（dependency-edge） ────────────────────
+// workers 顶上一排 · 下方苍鹰 · SVG 绘制 4 根连线
+function VariantA() {
+  return (
+    <Shell title="变体 A · 依赖边 (dependency-edge)"
+      desc="SVG 连线显式表达 meta waits on workers · 完成的边为实线、运行中为虚线脉冲、失败为红断线">
+      <div style={{position:'relative', flex:1}}>
+        {/* workers row */}
+        <div style={{
+          display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:12,
+          position:'absolute', top:0, left:0, right:0,
+        }}>
+          {WORKERS.map(w => <WCard key={w.id} w={w} compact/>)}
+        </div>
+
+        {/* SVG edges */}
+        <svg viewBox="0 0 800 200" preserveAspectRatio="none" style={{
+          position:'absolute', top:110, left:0, right:0, width:'100%', height:120,
+          pointerEvents:'none',
+        }}>
+          {/* paths from each worker center (100/300/500/700) down to meta center (400) */}
+          {[
+            { x:100, state:'done' },
+            { x:300, state:'running' },
+            { x:500, state:'running' },
+            { x:700, state:'failed' },
+          ].map((s, i) => {
+            const color = s.state==='done'   ? 'var(--status-done-dot)'
+                       : s.state==='running' ? 'var(--accent-500)'
+                       : s.state==='failed'  ? 'var(--status-failed-dot)'
+                       : 'var(--neutral-400)';
+            const dash = s.state==='running' ? '6 5' : s.state==='failed' ? '2 4' : undefined;
+            return (
+              <g key={i}>
+                <path d={`M${s.x} 0 C ${s.x} 50, 400 60, 400 120`}
+                      fill="none" stroke={color} strokeWidth="1.8"
+                      strokeDasharray={dash}
+                      style={s.state==='running' ? {animation:'dash-flow 1.4s linear infinite'} : null}/>
+                <circle cx={s.x} cy="0" r="3" fill={color}/>
+              </g>
+            );
+          })}
+          <circle cx="400" cy="120" r="5" fill="var(--bird-5)"/>
+        </svg>
+
+        {/* meta row */}
+        <div style={{position:'absolute', left:'50%', bottom:0, transform:'translateX(-50%)', width:'70%'}}>
+          <MetaCard/>
+        </div>
+      </div>
+
+      <Console lines={3}/>
+    </Shell>
+  );
+}
+
+// ─── VARIANT B · 状态灯（status-dashboard） ──────────────────
+// 扁平状态矩阵 · 每行一只鸟 · 大号状态灯 + 进度条
+function VariantB() {
+  return (
+    <Shell title="变体 B · 状态灯 (status-dashboard)"
+      desc={'密度最高 · 一屏看 5 只鸟当前状态 · 强调「状态灯颜色」一眼识别'}>
+      <div style={{
+        background:'var(--surface-raised)',
+        border:'1px solid var(--border-default)',
+        borderRadius:'var(--r-4)',
+        overflow:'hidden',
+        flex:1, display:'flex', flexDirection:'column',
+      }}>
+        <div style={{
+          display:'grid', gridTemplateColumns:'180px 1fr 80px 100px 60px',
+          padding:'8px 16px', fontSize:10, textTransform:'uppercase',
+          letterSpacing:.8, fontWeight:600, color:'var(--text-muted)',
+          borderBottom:'1px solid var(--border-default)',
+          background:'var(--surface-sunken)', fontFamily:'var(--font-mono)',
+        }}>
+          <div>Agent</div><div>Progress</div><div>Tokens</div><div>State</div><div></div>
+        </div>
+        {WORKERS.map(w => <StatusRow key={w.id} w={w}/>)}
+        <div style={{
+          borderTop:'2px solid var(--border-default)',
+          background:'color-mix(in oklch, var(--bird-5) 4%, transparent)',
+        }}>
+          <StatusRow w={{id:META.id, label:META.label, state:META.state,
+                          pct:0, elapsed:'—', tokens:'—', hint:META.waitOn}} isMeta/>
+        </div>
+      </div>
+      <Console lines={2}/>
+    </Shell>
+  );
+}
+
+// ─── VARIANT C · 鸟头像布局（portrait-first） ────────────────
+// 头像大卡 · 围圈放置 workers · 中央苍鹰枢纽 · 视觉上是"鸟 = 主角"
+function VariantC() {
+  // positions for 4 workers around center (clockwise from 12 o'clock-left)
+  const positions = [
+    { top:'6%',   left:'8%'  },
+    { top:'6%',   left:'60%' },
+    { top:'52%',  left:'8%'  },
+    { top:'52%',  left:'60%' },
+  ];
+  return (
+    <Shell title="变体 C · 头像布局 (portrait-first)"
+      desc={'鸟 = 主角 · 4 外围 worker · 中央 meta 枢纽 · 强调「身份」而非进度'}>
+      <div style={{position:'relative', flex:1, minHeight:280}}>
+        {WORKERS.map((w, i) => (
+          <div key={w.id} style={{position:'absolute', ...positions[i], width:'32%'}}>
+            <PortraitCard w={w}/>
+          </div>
+        ))}
+        {/* center meta */}
+        <div style={{
+          position:'absolute', top:'28%', left:'50%', transform:'translateX(-50%)',
+          width:'24%',
+        }}>
+          <PortraitCard w={{id:5, label:'苍鹰', state:'queued', hint:'等待 worker 完成'}} isMeta/>
+        </div>
+        {/* subtle radial dashed guides */}
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none"
+             style={{position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents:'none', opacity:.35}}>
+          <line x1="20" y1="18" x2="50" y2="42" stroke="var(--border-strong)" strokeWidth=".3" strokeDasharray="1 1"/>
+          <line x1="80" y1="18" x2="50" y2="42" stroke="var(--border-strong)" strokeWidth=".3" strokeDasharray="1 1"/>
+          <line x1="20" y1="68" x2="50" y2="50" stroke="var(--border-strong)" strokeWidth=".3" strokeDasharray="1 1"/>
+          <line x1="80" y1="68" x2="50" y2="50" stroke="var(--border-strong)" strokeWidth=".3" strokeDasharray="1 1"/>
+        </svg>
+      </div>
+      <Console lines={2}/>
+    </Shell>
+  );
+}
+
+// ─── Pieces ───────────────────────────────────────────────────
+function WCard({ w, compact }) {
+  return (
+    <div style={{
+      background:'var(--surface-raised)',
+      border:'1px solid var(--border-default)',
+      borderRadius:'var(--r-4)',
+      padding:compact ? '10px 12px' : '14px',
+      display:'flex', flexDirection:'column', gap:8,
+      borderTop: w.state==='running' ? '2px solid var(--accent-500)'
+              : w.state==='failed'   ? '2px solid var(--status-failed-dot)'
+              : w.state==='done'     ? '2px solid var(--status-done-dot)'
+              : '2px solid var(--neutral-300)',
+    }}>
+      <div style={{display:'flex', alignItems:'center', gap:8}}>
+        <BirdAvatar id={w.id} size="md" state={w.state}/>
+        <div style={{display:'flex', flexDirection:'column', gap:1}}>
+          <span style={{fontSize:12, fontWeight:600, color:'var(--text-strong)'}}>{w.label}鸟</span>
+          <span style={{fontSize:10, color:'var(--text-muted)', fontFamily:'var(--font-mono)'}}>
+            {w.elapsed} · {w.tokens}
+          </span>
+        </div>
+        <StateDot state={w.state} style={{marginLeft:'auto'}}/>
+      </div>
+      <div style={{
+        height:4, borderRadius:99, overflow:'hidden',
+        background:'var(--neutral-100)',
+      }}>
+        <div style={{
+          width:`${w.pct}%`, height:'100%',
+          background: w.state==='failed' ? 'var(--status-failed-dot)'
+                   : w.state==='done'    ? 'var(--status-done-dot)'
+                   : 'var(--accent-500)',
+          transition:'width 300ms var(--ease-out)',
+        }}/>
+      </div>
+      {w.err && <div style={{
+        fontSize:10, fontFamily:'var(--font-mono)',
+        color:'var(--status-failed-fg)',
+        background:'var(--status-failed-bg)',
+        padding:'3px 7px', borderRadius:'var(--r-2)',
+        width:'fit-content',
+      }}>⟳ {w.err}</div>}
+    </div>
+  );
+}
+
+function MetaCard() {
+  return (
+    <div style={{
+      background:'color-mix(in oklch, var(--bird-5) 6%, var(--surface-raised))',
+      border:'1px solid color-mix(in oklch, var(--bird-5) 35%, var(--border-default))',
+      borderRadius:'var(--r-4)', padding:'10px 14px',
+      display:'flex', alignItems:'center', gap:12,
+    }}>
+      <BirdAvatar id={5} size="md" state="queued"/>
+      <div style={{display:'flex', flexDirection:'column', gap:1, flex:1}}>
+        <span style={{fontSize:12, fontWeight:600, color:'var(--text-strong)'}}>苍鹰 · 交叉校验 + 漏报补充</span>
+        <span style={{fontSize:10, color:'var(--text-muted)', fontFamily:'var(--font-mono)'}}>
+          等待 worker 完成 · {META.waitOn}
+        </span>
+      </div>
+      <StateDot state="queued"/>
+    </div>
+  );
+}
+
+function StatusRow({ w, isMeta }) {
+  return (
+    <div style={{
+      display:'grid', gridTemplateColumns:'180px 1fr 80px 100px 60px',
+      padding:'10px 16px', alignItems:'center', fontSize:12,
+      borderBottom:'1px solid var(--border-subtle)',
+    }}>
+      <div style={{display:'flex', alignItems:'center', gap:8}}>
+        <BirdAvatar id={w.id} size="sm" state={w.state}/>
+        <span style={{color:'var(--text-strong)', fontWeight:500}}>{w.label}{isMeta ? '' : '鸟'}</span>
+        {isMeta && <span style={{
+          fontSize:9, padding:'2px 6px', borderRadius:'var(--r-2)',
+          background:'color-mix(in oklch, var(--bird-5) 18%, transparent)',
+          color:'var(--bird-5)', fontWeight:700, fontFamily:'var(--font-mono)',
+        }}>META</span>}
+      </div>
+      <div style={{display:'flex', alignItems:'center', gap:10}}>
+        <div style={{height:6, borderRadius:99, flex:1, background:'var(--neutral-100)', overflow:'hidden'}}>
+          <div style={{
+            width:`${w.pct}%`, height:'100%',
+            background: w.state==='failed' ? 'var(--status-failed-dot)'
+                     : w.state==='done'    ? 'var(--status-done-dot)'
+                     : w.state==='running' ? 'var(--accent-500)'
+                     : 'var(--neutral-300)',
+            transition:'width 300ms var(--ease-out)',
+          }}/>
+        </div>
+        <span style={{
+          fontFamily:'var(--font-mono)', fontSize:10, color:'var(--text-muted)',
+          width:30, textAlign:'right',
+        }}>{w.pct}%</span>
+      </div>
+      <div style={{fontFamily:'var(--font-mono)', fontSize:11, color:'var(--text-muted)'}}>{w.tokens}</div>
+      <div>
+        <StatePill state={w.state}/>
+      </div>
+      <div style={{fontFamily:'var(--font-mono)', fontSize:10, color:'var(--text-faint)'}}>{w.elapsed}</div>
+    </div>
+  );
+}
+
+function PortraitCard({ w, isMeta }) {
+  return (
+    <div style={{
+      background: isMeta
+        ? 'color-mix(in oklch, var(--bird-5) 6%, var(--surface-raised))'
+        : 'var(--surface-raised)',
+      border:'1px solid ' + (isMeta
+        ? 'color-mix(in oklch, var(--bird-5) 30%, var(--border-default))'
+        : 'var(--border-default)'),
+      borderRadius:'var(--r-4)',
+      padding:'14px', display:'flex', flexDirection:'column',
+      alignItems:'center', gap:8,
+      boxShadow: isMeta ? 'var(--shadow-md)' : 'var(--shadow-sm)',
+    }}>
+      <BirdAvatar id={w.id} size="lg" state={w.state}/>
+      <div style={{
+        fontSize:12, fontWeight:600, color:'var(--text-strong)',
+      }}>{w.label}{isMeta ? '' : '鸟'}</div>
+      <StatePill state={w.state}/>
+      {w.pct != null && !isMeta && (
+        <div style={{width:'100%', height:3, borderRadius:99, background:'var(--neutral-100)', overflow:'hidden'}}>
+          <div style={{
+            width:`${w.pct}%`, height:'100%',
+            background: w.state==='failed' ? 'var(--status-failed-dot)'
+                     : w.state==='done'    ? 'var(--status-done-dot)'
+                     : 'var(--accent-500)',
+          }}/>
+        </div>
+      )}
+      {(w.tokens || w.hint) && (
+        <div style={{
+          fontSize:10, fontFamily:'var(--font-mono)',
+          color:'var(--text-muted)', textAlign:'center',
+        }}>{w.hint || `${w.elapsed} · ${w.tokens}`}</div>
+      )}
+    </div>
+  );
+}
+
+function StateDot({ state, style={} }) {
+  return (
+    <span style={{
+      width:10, height:10, borderRadius:99,
+      background:dotBG(state),
+      animation: state==='running' ? 'dot-breathe 1.4s ease-in-out infinite' : undefined,
+      ...style,
+    }}/>
+  );
+}
+
+function StatePill({ state }) {
+  const label = { queued:'排队中', running:'运行中', done:'已完成', failed:'失败' }[state];
+  return (
+    <span style={{
+      display:'inline-flex', alignItems:'center', gap:5,
+      padding:'2px 8px', borderRadius:'var(--r-pill)',
+      background:bg(state), color:fg(state),
+      fontSize:10, fontWeight:600,
+    }}>
+      <span style={{
+        width:6, height:6, borderRadius:99, background:dotBG(state),
+        animation: state==='running' ? 'dot-breathe 1.4s ease-in-out infinite' : undefined,
+      }}/>
+      {label}
+    </span>
+  );
+}
+
+function Console({ lines=2 }) {
+  const log = [
+    '[12:08:18] business → submit(2.4k) conf=0.89',
+    '[12:08:25] data     → chunk 12 of ~20',
+    '[12:08:28] risk     → ERR tool_call_failed (attempt 2/3)',
+  ].slice(0, lines);
+  return (
+    <div style={{
+      background:'var(--surface-console)', color:'var(--surface-console-fg)',
+      borderRadius:'var(--r-4)', padding:'10px 12px',
+      fontFamily:'var(--font-mono)', fontSize:10.5, lineHeight:1.65,
+      display:'flex', flexDirection:'column', gap:2,
+    }}>
+      {log.map((l,i) => <div key={i} style={{opacity:.9}}>{l}</div>)}
+    </div>
+  );
+}
+
+// Board
+function Board({ label, w, h, theme='light', children }) {
+  return (
+    <DCArtboard label={label} width={w} height={h}>
+      <div data-theme={theme} style={{width:'100%',height:'100%',overflow:'hidden'}}>{children}</div>
+    </DCArtboard>
+  );
+}
+
+function App() {
+  return (
+    <DesignCanvas>
+      <style>{`
+        @keyframes dash-flow {
+          to { stroke-dashoffset: -22; }
+        }
+      `}</style>
+      <div style={{padding:'0 60px 40px'}}>
+        <div style={{fontSize:12,letterSpacing:.8,textTransform:'uppercase',color:'rgba(60,50,40,.55)',fontWeight:600,marginBottom:8}}>
+          啄木鸟 · v8 · Phase 2 三变体
+        </div>
+        <div style={{fontSize:36,fontWeight:600,color:'rgba(30,20,10,.9)',letterSpacing:-.6,marginBottom:6}}>
+          依赖边 / 状态灯 / 鸟头像布局
+        </div>
+        <div style={{fontSize:14,color:'rgba(60,50,40,.6)',maxWidth:760,lineHeight:1.55}}>
+          briefing 说"Phase 2 可大胆一点"。同一份数据，三种视觉语言——A 关系、B 密度、C 身份。
+        </div>
+      </div>
+
+      <DCSection title="A · 依赖边 (dependency-edge)" subtitle="强调 workers → meta 依赖关系 · SVG 虚线脉冲">
+        <Board label="浅" w={880} h={520}><VariantA/></Board>
+        <Board label="暗" w={880} h={520} theme="dark"><VariantA/></Board>
+      </DCSection>
+
+      <DCSection title="B · 状态灯 (status-dashboard)" subtitle={'信息密度最高 · 一屏 5 只 · 强调「一眼识别状态」'}>
+        <Board label="浅" w={880} h={520}><VariantB/></Board>
+        <Board label="暗" w={880} h={520} theme="dark"><VariantB/></Board>
+      </DCSection>
+
+      <DCSection title="C · 头像布局 (portrait-first)" subtitle={'鸟 = 主角 · 中央 meta 枢纽 · 最接近 briefing「agent 成员」叙事'}>
+        <Board label="浅" w={880} h={540}><VariantC/></Board>
+        <Board label="暗" w={880} h={540} theme="dark"><VariantC/></Board>
+      </DCSection>
+
+      <DCSection title="推荐" subtitle={'briefing 的「3 秒认出谁在跑 / 完成 / 失败」硬指标 +「鸟 = 成员」叙事'}>
+        <Board label="推荐组合" w={600} h={360}>
+          <div style={{padding:'24px 28px', height:'100%', background:'var(--surface-raised)', fontSize:13, lineHeight:1.7}}>
+            <div style={{fontSize:16, fontWeight:600, color:'var(--text-strong)', marginBottom:10}}>主推 · A + C 融合</div>
+            <p style={{color:'var(--text-default)', margin:'0 0 10px'}}>
+              <b>A 的依赖边</b>是 briefing 明确要的（"一条依赖边"），不能丢；
+              <b>C 的头像主导</b>呼应"鸟 = 成员"叙事，比 B 的纯数据矩阵更符合产品气质。
+            </p>
+            <p style={{color:'var(--text-default)', margin:'0 0 10px'}}>
+              <b>B 的状态灯矩阵</b>作备选 —— 适合密度极高、screens-per-workspace 场景，后续做监控页可以复用这套布局。
+            </p>
+            <div style={{
+              padding:'10px 12px', background:'var(--surface-sunken)',
+              borderRadius:'var(--r-3)', fontSize:12, color:'var(--text-muted)',
+              fontFamily:'var(--font-mono)', marginTop:12,
+            }}>
+              默认 = A · workers 顶排 + 依赖边 + meta 底排<br/>
+              Tweak = C · 头像布局（宽屏 1920+ 时启用）<br/>
+              备选 = B · 状态灯矩阵（监控页复用）
+            </div>
+          </div>
+        </Board>
+      </DCSection>
+
+      <div style={{height:80}}/>
+    </DesignCanvas>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script></body></html>

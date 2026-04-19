@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8"/>
+<title>啄木鸟 v8 · 组件稿 · 第二轮</title>
+<link rel="stylesheet" href="tokens.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  body { margin:0; background: #f0eee9; font-family: var(--font-sans); }
+  .tweaks {
+    position:fixed; right:16px; bottom:16px; z-index:9999;
+    background:#fff; border:1px solid var(--border-default); border-radius:8px;
+    padding:10px 12px; font-size:12px; font-family:var(--font-sans);
+    box-shadow: 0 2px 8px rgba(0,0,0,.1); display:none;
+    min-width:220px;
+  }
+  .tweaks[data-on="1"] { display:block; }
+  .tweaks h4 { margin:0 0 8px; font-size:11px; text-transform:uppercase; letter-spacing:.8px; color:var(--text-muted); font-weight:600;}
+  .tweaks label { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:6px 0; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div class="tweaks" id="tweaks">
+  <h4>Tweaks</h4>
+  <label>强调色 <input type="color" id="tw-accent" value="#e8590c"/></label>
+  <label>密度
+    <select id="tw-density">
+      <option value="compact">紧凑</option>
+      <option value="default" selected>默认</option>
+      <option value="loose">松</option>
+    </select>
+  </label>
+  <label>主题
+    <select id="tw-theme">
+      <option value="light" selected>浅</option>
+      <option value="dark">暗</option>
+    </select>
+  </label>
+  <label>Phase
+    <select id="tw-phase">
+      <option value="all" selected>全部</option>
+      <option value="0">0 · 上传</option>
+      <option value="1">1 · 盲区</option>
+      <option value="1.5">1.5 · 健康</option>
+      <option value="2">2 · 运行</option>
+      <option value="3">3 · 评审</option>
+      <option value="4">4 · 报告</option>
+    </select>
+  </label>
+</div>
+
+<script>
+  const TWEAK_DEFAULS = /*EDITMODE-BEGIN*/{
+    "accent": "#e8590c",
+    "density": "default",
+    "theme": "light",
+    "phase": "all"
+  }/*EDITMODE-END*/;
+</script>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="components/bird-avatar.jsx"></script>
+<script type="text/babel" src="components/bird-badge.jsx"></script>
+<script type="text/babel" src="components/phase-nav.jsx"></script>
+<script type="text/babel" src="components/agent-status-card.jsx"></script>
+<script type="text/babel" src="components/shortcut-hint.jsx"></script>
+<script type="text/babel" src="components/evidence-block.jsx"></script>
+<script type="text/babel" src="components/run-console.jsx"></script>
+<script type="text/babel" src="components/run-health-check.jsx"></script>
+<script type="text/babel" src="components/comment-thread.jsx"></script>
+<script type="text/babel" src="components/document-view.jsx"></script>
+<script type="text/babel" src="phase-screens.jsx"></script>
+
+<script type="text/babel">
+function Board({ label, w, h, theme='light', phase2=false, children, bg, pad=0 }) {
+  return (
+    <DCArtboard label={label} width={w} height={h}>
+      <div data-theme={theme} {...(phase2 ? {'data-phase2': true} : {})} style={{
+        width:'100%', height:'100%',
+        background: bg || 'var(--surface-canvas)',
+        color: 'var(--text-default)',
+        padding: pad,
+        overflow:'hidden',
+      }}>
+        {children}
+      </div>
+    </DCArtboard>
+  );
+}
+function Label({ children }) {
+  return <div style={{
+    fontSize:11, textTransform:'uppercase', letterSpacing:'.8px',
+    color:'var(--text-muted)', fontWeight:600, marginBottom:4,
+  }}>{children}</div>;
+}
+
+function App() {
+  const [phase, setPhase] = React.useState('all');
+  React.useEffect(() => {
+    window.__setPhase = setPhase;
+  }, []);
+  const show = p => phase === 'all' || phase === String(p);
+
+  return (
+    <DesignCanvas>
+      <div style={{ padding:'0 60px 40px' }}>
+        <div style={{ fontSize:12, letterSpacing:.8, textTransform:'uppercase', color:'rgba(60,50,40,.55)', fontWeight:600, marginBottom:8 }}>
+          啄木鸟 · pecker · v8 · 第二轮
+        </div>
+        <div style={{ fontSize:36, fontWeight:600, color:'rgba(30,20,10,.9)', letterSpacing:-.6, marginBottom:6 }}>
+          剩余 7 组件 + 5 Phase 整屏
+        </div>
+        <div style={{ fontSize:14, color:'rgba(60,50,40,.6)', maxWidth:720, lineHeight:1.55 }}>
+          本轮交付：EvidenceBlock / CommentThread / DocumentView / RunConsole / RunHealthCheck / ShortcutHint · 以及 6 个 Phase 整屏稿（含 1.5）。用顶部 Tweaks · Phase 切换单屏聚焦。
+        </div>
+      </div>
+
+      {/* ═══ 组件补充 ═══ */}
+      <DCSection title="07 · EvidenceBlock" subtitle="左 2px accent 条 · 引用 · 3 态验证徽章">
+        <Board label="三态" w={560} h={320} pad={18}>
+          <div style={{display:'flex', flexDirection:'column', gap:12}}>
+            <EvidenceBlock
+              quote='3 次重试无指数退避规则 · 也未定义失败日志如何落库'
+              source="Line 7 · 3 · 功能需求"
+              verification="verified"/>
+            <EvidenceBlock
+              quote='综合转化率 62% → 70%'
+              source="Line 9 · 4 · 指标"
+              verification="unverified"/>
+            <EvidenceBlock
+              quote='跨设备购物车同步'
+              source="Line 6"
+              verification="failed"/>
+          </div>
+        </Board>
+      </DCSection>
+
+      <DCSection title="08 · ShortcutHint" subtitle="11px kbd · 贴操作元素；底部常驻 keymap 条">
+        <Board label="inline" w={360} h={140} pad={18}>
+          <div style={{display:'flex', flexDirection:'column', gap:10}}>
+            <ShortcutHint keys={['j']} label="下一条"/>
+            <ShortcutHint keys={['k']} label="上一条"/>
+            <ShortcutHint keys={['y']} label="接受"/>
+            <ShortcutHint keys={['n']} label="拒绝"/>
+            <ShortcutHint keys={['⌘','K']} label="命令面板"/>
+          </div>
+        </Board>
+        <Board label="keymap 条" w={560} h={140} pad={18}>
+          <KeymapBar items={[
+            {keys:['j','k'], label:'跳'},
+            {keys:['y'],     label:'接受'},
+            {keys:['n'],     label:'拒绝'},
+            {keys:['e'],     label:'编辑'},
+            {keys:['⌘','⏎'], label:'批量接受'},
+          ]}/>
+        </Board>
+        <Board label="暗色" w={360} h={140} pad={18} theme="dark">
+          <div style={{display:'flex', flexDirection:'column', gap:10}}>
+            <ShortcutHint variant="dark" keys={['j']} label="下一条"/>
+            <ShortcutHint variant="dark" keys={['y']} label="接受"/>
+            <ShortcutHint variant="dark" keys={['⌘','K']} label="命令面板"/>
+          </div>
+        </Board>
+      </DCSection>
+
+      <DCSection title="09 · RunConsole" subtitle="深色局部卡 · 流式日志 · 时间戳 · 鸟来源着色">
+        <Board label="streaming" w={920} h={360} pad={18} phase2>
+          <RunConsole
+            style={{height:'100%'}}
+            lines={[
+              { t:'00:00', src:{name:'system'}, text:'harness 启动 · 4 worker + 1 meta' },
+              { t:'00:01', src:{name:'业务', bird:1}, level:'info', text:'analyzing: 3.功能需求 · 支付方式' },
+              { t:'00:02', src:{name:'数据', bird:2}, level:'info', text:'extracting metric set · 综合转化率 支付失败率 P95' },
+              { t:'00:04', src:{name:'体验', bird:3}, level:'info', text:'mapping user flow · cart → pay' },
+              { t:'00:08', src:{name:'风险', bird:4}, level:'info', text:'scanning dependencies · 国际支付合规' },
+              { t:'00:12', src:{name:'体验', bird:3}, level:'ok',   text:'submitted 7 comments · 耗时 28.1s' },
+              { t:'00:13', src:{name:'业务', bird:1}, level:'info', text:'rule R042 matched · "指标定义不完整"' },
+              { t:'00:14', src:{name:'风险', bird:4}, level:'warn', text:'tool_call retry 1/3 · http 429' },
+              { t:'00:15', src:{name:'业务', bird:1}, level:'accent',text:'streaming comment draft ...' },
+            ]}
+          />
+        </Board>
+      </DCSection>
+
+      <DCSection title="10 · RunHealthCheck" subtitle="Phase 1.5 · session 分类 + 一致性环 + 5 色矩阵 + 5 鸟健康">
+        <Board label="partial_silent（危险）" w={1040} h={620} pad={20} phase2>
+          <RunHealthCheck
+            sessionClass="partial_silent"
+            consistency={0.68}
+            failures={{quota_exhausted:1, tool_call_failed:0, json_parse_error:1, empty_submission:2, timeout:0}}
+            birds={[
+              { id:1, runs:3, fails:0, submissions:8 },
+              { id:2, runs:3, fails:0, submissions:6 },
+              { id:3, runs:3, fails:2, submissions:0 },
+              { id:4, runs:3, fails:1, submissions:2 },
+              { id:5, runs:1, fails:0, submissions:4 },
+            ]}
+          />
+        </Board>
+        <Board label="productive（健康）" w={1040} h={620} pad={20} phase2>
+          <RunHealthCheck
+            sessionClass="productive"
+            consistency={0.96}
+            failures={{quota_exhausted:0, tool_call_failed:0, json_parse_error:0, empty_submission:0, timeout:0}}
+            birds={[
+              { id:1, runs:3, fails:0, submissions:9 },
+              { id:2, runs:3, fails:0, submissions:7 },
+              { id:3, runs:3, fails:0, submissions:8 },
+              { id:4, runs:3, fails:0, submissions:6 },
+              { id:5, runs:1, fails:0, submissions:5 },
+            ]}
+          />
+        </Board>
+      </DCSection>
+
+      <DCSection title="11 · CommentThread" subtitle="验证失败默认折叠 · 低置信弱化 · 苍鹰验证徽章 3 态">
+        <Board label="全态组合" w={520} h={960} pad={18}>
+          <div style={{display:'flex', flexDirection:'column', gap:12}}>
+            <CommentThread
+              birdId={1} dimension="业务逻辑" eagleMark="passed"
+              title="国际订单用户群体未定义入口路径"
+              body="新增了 C 类用户，但 onboarding 流程没有区分国际订单入口，会导致首次进入 App 的国际用户仍走国内流程。"
+              evidence={{quote:'C. 国际订单用户（新增）', source:'Line 4', verification:'verified'}}
+              meta={{model:'sonnet-4-6', conf:0.89, tokens:'1.2k', rule:'R042'}}
+              selected
+            />
+            <CommentThread
+              birdId={4} dimension="风险" eagleMark="added"
+              title="支付失败重试缺少指数退避 · 可能放大限流"
+              body="3 次重试无退避容易在支付网关侧触发限流。苍鹰补充：国际支付网关的限流阈值比国内低 3 倍。"
+              evidence={{quote:'支付失败后自动重试 3 次（无指数退避规则）', source:'Line 7', verification:'verified'}}
+              meta={{model:'sonnet-4-6', conf:0.91, tokens:'1.8k', rule:'R118'}}
+            />
+            <CommentThread
+              birdId={2} dimension="数据"
+              title="综合转化率口径未定义（低置信 · 弱化）"
+              body="『综合转化率 62% → 70%』未说明分子分母定义。建议补充：浏览→下单 / 下单→支付 / UV→GMV 三个口径。"
+              evidence={{quote:'北极星：综合转化率 62% → 70%', source:'Line 9', verification:'unverified'}}
+              meta={{model:'sonnet-4-6', conf:0.64, tokens:'0.9k', rule:'R201'}}
+            />
+            <CommentThread
+              birdId={3} dimension="体验" eagleMark="revoked"
+              title="跨设备同步提示需要降噪（验证失败 · 默认折叠）"
+              evidence={{quote:'跨设备购物车同步', source:'Line 6', verification:'failed'}}
+              meta={{model:'sonnet-4-6', conf:0.51, tokens:'0.5k', rule:'R087'}}
+            />
+            <CommentThread
+              birdId={1} dimension="业务逻辑"
+              title="冲突合并策略未定义 · 已接受"
+              evidence={{quote:'需要处理冲突合并逻辑', source:'Line 6', verification:'verified'}}
+              meta={{model:'sonnet-4-6', conf:0.78, tokens:'1.1k', rule:'R133'}}
+              accepted={true}
+            />
+          </div>
+        </Board>
+        <Board label="暗色" w={520} h={460} pad={18} theme="dark">
+          <div style={{display:'flex', flexDirection:'column', gap:12}}>
+            <CommentThread
+              birdId={1} dimension="业务逻辑" eagleMark="passed"
+              title="国际订单用户群体未定义入口路径"
+              body="新增了 C 类用户，但 onboarding 流程没有区分国际订单入口。"
+              evidence={{quote:'C. 国际订单用户（新增）', source:'Line 4', verification:'verified'}}
+              meta={{model:'sonnet-4-6', conf:0.89, tokens:'1.2k', rule:'R042'}}
+            />
+            <CommentThread
+              birdId={4} dimension="风险" eagleMark="added"
+              title="支付失败重试缺少指数退避"
+              evidence={{quote:'支付失败后自动重试 3 次', source:'Line 7', verification:'verified'}}
+              meta={{model:'sonnet-4-6', conf:0.91, tokens:'1.8k', rule:'R118'}}
+            />
+          </div>
+        </Board>
+      </DCSection>
+
+      <DCSection title="12 · DocumentView" subtitle="行号 · 汇总条 · inline 高亮（strong/weak/gap）· 锚点联动">
+        <Board label="PRD 视图" w={800} h={600} pad={0}>
+          <DocumentView
+            style={{borderRadius:0, border:0, height:'100%'}}
+            title="PRD · 电商购物车支付优化 v2.3"
+            subtitle="prd-0847 · 2026-04-16"
+            summary={{strong:14, weak:6, gaps:3}}
+            blocks={[
+              { type:'h',  content:'1 · 背景' },
+              { type:'p',  content:'当前购物车转化率为 62%，支付页跳失率 18%，需在 Q2 将综合转化率提升至 70%。',
+                highlights:[{kind:'strong', start:8, end:14}, {kind:'weak', start:24, end:29}] },
+              { type:'h',  content:'2 · 目标用户' },
+              { type:'p',  content:'A. 高频购买用户（月 ≥ 3 单）· B. 跨设备购物用户 · C. 国际订单用户（新增）。',
+                highlights:[{kind:'gap', start:28, end:38}] },
+              { type:'h',  content:'3 · 功能需求' },
+              { type:'li', content:'支持 Apple Pay / Google Pay / 支付宝国际版 三种支付方式并行',
+                highlights:[{kind:'strong', start:4, end:24}] },
+              { type:'li', content:'跨设备购物车同步（本地缓存 → 云端 → 多端），需要处理冲突合并逻辑',
+                highlights:[{kind:'weak', start:0, end:14}] },
+              { type:'li', content:'支付失败后自动重试 3 次（无指数退避规则）· 但未定义失败日志如何落库',
+                highlights:[{kind:'gap', start:14, end:24}] },
+            ]}
+          />
+        </Board>
+      </DCSection>
+
+      {/* ═══ Phase 整屏稿 ═══ */}
+      <DCSection title="Phase 整屏 · 0 / 1 / 1.5 / 2 / 3 / 4" subtitle="1440 × 900 固定尺寸。整屏组合用上述组件拼。">
+        {show(0) && (
+          <Board label="Phase 0 · 上传（B 文档气质）" w={1440} h={900} pad={0}>
+            <Phase0Upload/>
+          </Board>
+        )}
+        {show(1) && (
+          <Board label="Phase 1 · 盲区预检（B · 文档视图 inline 高亮 + 顶部汇总条）" w={1440} h={900} pad={0}>
+            <Phase1Blindspots/>
+          </Board>
+        )}
+        {show(1.5) && (
+          <Board label="Phase 1.5 · 运行质量检查（A · partial_silent 警示）" w={1440} h={900} pad={0}>
+            <Phase1_5/>
+          </Board>
+        )}
+        {show(2) && (
+          <Board label="Phase 2 · 运行中（A · 4 worker + 1 meta + 依赖边 + 流式 console）" w={1440} h={900} pad={0}>
+            <Phase2Running/>
+          </Board>
+        )}
+        {show(3) && (
+          <Board label="Phase 3 · 逐条确认（B · 左文档 + 右 drawer · 最高频）" w={1440} h={900} pad={0}>
+            <Phase3Review/>
+          </Board>
+        )}
+        {show(4) && (
+          <Board label="Phase 4 · 报告（B 文档）" w={1440} h={900} pad={0}>
+            <Phase4Report/>
+          </Board>
+        )}
+      </DCSection>
+
+      <DCSection title="Phase 3 · 暗模式" subtitle="briefing 要求双主题齐备">
+        <Board label="dark" w={1440} h={900} pad={0} theme="dark">
+          <Phase3Review/>
+        </Board>
+      </DCSection>
+
+      <DCPostIt top={100} right={60} width={220} rotate={-2}>
+        Phase 切换：右下 Tweaks 面板的 Phase 下拉可聚焦单个 Phase 整屏。
+      </DCPostIt>
+      <DCPostIt top={800} left={40} width={220} rotate={2}>
+        Phase 1.5 用 partial_silent 场景演示：强制二选一 · 静默失败不喊叫但永远在场。
+      </DCPostIt>
+      <DCPostIt top={1800} right={60} width={220} rotate={-1.5}>
+        {'Phase 3 drawer 里第 3 条（数据鸟）conf=0.64 < 0.7，视觉弱化；第 4 条验证失败，默认折叠。'}
+      </DCPostIt>
+
+      <div style={{height:80}}/>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+
+<script>
+(function(){
+  const panel = document.getElementById('tweaks');
+  const accentEl = document.getElementById('tw-accent');
+  const densityEl = document.getElementById('tw-density');
+  const themeEl = document.getElementById('tw-theme');
+  const phaseEl = document.getElementById('tw-phase');
+
+  function applyAccent(hex) {
+    document.documentElement.style.setProperty('--accent-500', hex);
+    document.documentElement.style.setProperty('--status-running-dot', hex);
+  }
+  function applyDensity(d) {
+    if (d === 'compact') {
+      document.documentElement.style.setProperty('--sp-4','12px');
+      document.documentElement.style.setProperty('--sp-6','16px');
+    } else if (d === 'loose') {
+      document.documentElement.style.setProperty('--sp-4','20px');
+      document.documentElement.style.setProperty('--sp-6','28px');
+    } else {
+      document.documentElement.style.removeProperty('--sp-4');
+      document.documentElement.style.removeProperty('--sp-6');
+    }
+  }
+  function applyTheme(t) {
+    document.body.dataset.theme = t;
+    document.body.style.background = t === 'dark' ? '#0e1217' : '#f0eee9';
+  }
+  function applyPhase(p) {
+    if (window.__setPhase) window.__setPhase(p);
+  }
+
+  accentEl.value = TWEAK_DEFAULS.accent; applyAccent(TWEAK_DEFAULS.accent);
+  densityEl.value = TWEAK_DEFAULS.density; applyDensity(TWEAK_DEFAULS.density);
+  themeEl.value = TWEAK_DEFAULS.theme; applyTheme(TWEAK_DEFAULS.theme);
+  setTimeout(() => {
+    phaseEl.value = TWEAK_DEFAULS.phase; applyPhase(TWEAK_DEFAULS.phase);
+  }, 300);
+
+  function persist(key, val) {
+    window.parent.postMessage({type:'__edit_mode_set_keys', edits:{[key]:val}}, '*');
+  }
+  accentEl.addEventListener('input', e => { applyAccent(e.target.value); persist('accent', e.target.value); });
+  densityEl.addEventListener('change', e => { applyDensity(e.target.value); persist('density', e.target.value); });
+  themeEl.addEventListener('change', e => { applyTheme(e.target.value); persist('theme', e.target.value); });
+  phaseEl.addEventListener('change', e => { applyPhase(e.target.value); persist('phase', e.target.value); });
+
+  window.addEventListener('message', ev => {
+    const d = ev.data || {};
+    if (d.type === '__activate_edit_mode')   panel.dataset.on = '1';
+    if (d.type === '__deactivate_edit_mode') panel.dataset.on = '0';
+  });
+  window.parent.postMessage({type:'__edit_mode_available'}, '*');
+})();
+</script>
+</body>
+</html>

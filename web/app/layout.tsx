@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Fraunces } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
 import { Providers } from "@/components/providers";
 import { TopBanner } from "@/components/TopBanner";
 
+// v8 只引入 Geist 家族(sans + mono)。
+// @deprecated-v7 · Fraunces serif 已移除 —— 新页面用 var(--font-sans) + var(--font-mono)
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -13,17 +15,6 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
-});
-
-// Fraunces — 现代 transitional serif,带 optical size 变化,
-// 给标题一种"刻金属印刷"的严肃感。中文字符会自动 fallback 到
-// 系统 PingFang SC / 微软雅黑,形成 latin serif + 中文黑体的
-// 编辑部混排气质。
-const fraunces = Fraunces({
-  variable: "--font-fraunces",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  style: ["normal", "italic"],
 });
 
 export const metadata: Metadata = {
@@ -40,17 +31,17 @@ export default function RootLayout({
   return (
     <html
       lang="zh-CN"
-      className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body
-        className="relative min-h-full flex flex-col bg-background text-foreground before:content-[''] before:fixed before:inset-0 before:pointer-events-none before:z-0 before:opacity-[0.45] before:mix-blend-multiply before:pecker-grain-bg"
+        className="min-h-full flex flex-col bg-background text-foreground"
         style={{
           fontFamily:
             "var(--font-geist-sans), 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', sans-serif",
         }}
       >
         <Providers>
-          <div className="relative z-10 flex flex-1 flex-col">
+          <div className="flex flex-1 flex-col">
             <TopBanner />
             <main className="flex-1">{children}</main>
           </div>

@@ -1,0 +1,301 @@
+/* ─────────────────────────────────────────────────────────────
+   啄木鸟 v8 · design tokens
+   用法：在根元素上切 data-theme="light" | "dark"
+   Phase 2 的「色温下降 + 对比 +20%」用 data-phase2 局部覆盖。
+   ───────────────────────────────────────────────────────────── */
+
+:root,
+[data-theme="light"] {
+  /* ── neutral（略偏冷 · slate 调） ─────────────────────────── */
+  --neutral-0:   #ffffff;
+  --neutral-25:  #fafbfc;   /* canvas bg */
+  --neutral-50:  #f4f6f8;   /* subtle surface */
+  --neutral-100: #eceff3;
+  --neutral-150: #e1e5ea;
+  --neutral-200: #d5dae1;   /* hairline border */
+  --neutral-300: #b7bec8;
+  --neutral-400: #8f98a3;
+  --neutral-500: #6b7380;
+  --neutral-600: #4d5561;   /* secondary text */
+  --neutral-700: #343b46;
+  --neutral-800: #1f252d;   /* ink */
+  --neutral-900: #0e1217;
+
+  /* ── surface roles ─────────────────────────────────────── */
+  --surface-canvas:    var(--neutral-25);
+  --surface-raised:    var(--neutral-0);
+  --surface-sunken:    var(--neutral-50);
+  --surface-overlay:   var(--neutral-0);
+  --surface-console:   #0f1318;      /* Phase 2 局部深色 console */
+  --surface-console-fg:#d4d7dd;
+
+  /* ── text ──────────────────────────────────────────────── */
+  --text-strong:   var(--neutral-800);
+  --text-default:  var(--neutral-700);
+  --text-muted:    var(--neutral-500);
+  --text-faint:    var(--neutral-400);
+  --text-disabled: var(--neutral-300);
+  --text-inverse:  var(--neutral-0);
+  --text-link:     var(--accent-600);
+
+  /* ── border ────────────────────────────────────────────── */
+  --border-subtle: var(--neutral-150);
+  --border-default:var(--neutral-200);
+  --border-strong: var(--neutral-300);
+  --border-focus:  var(--accent-500);
+
+  /* ── accent（briefing 选 #E8590C · burnt-orange） ───────── */
+  --accent-50:  #fff4ec;
+  --accent-100: #ffe3cf;
+  --accent-200: #ffc49b;
+  --accent-300: #ff9f60;
+  --accent-400: #f67b2e;
+  --accent-500: #e8590c;   /* primary accent */
+  --accent-600: #c7470a;
+  --accent-700: #9e3807;
+  --accent-800: #7a2d08;
+  --accent-fg:  #ffffff;
+
+  /* ── status（briefing 四色齐备） ────────────────────────── */
+  --status-queued-bg:   var(--neutral-100);
+  --status-queued-fg:   var(--neutral-500);
+  --status-queued-dot:  var(--neutral-400);
+
+  --status-running-bg:  var(--accent-50);
+  --status-running-fg:  var(--accent-600);
+  --status-running-dot: var(--accent-500);
+
+  --status-done-bg:     #e6f4ea;
+  --status-done-fg:     #0f6c3a;
+  --status-done-dot:    #10894a;
+
+  --status-failed-bg:   #fdecec;
+  --status-failed-fg:   #a1241b;
+  --status-failed-dot:  #d6352a;
+
+  --status-warn-bg:     #fff6dd;
+  --status-warn-fg:     #8a5a00;
+  --status-warn-dot:    #c78800;
+
+  --status-info-bg:     #e5eefb;
+  --status-info-fg:     #184d9e;
+  --status-info-dot:    #2968c8;
+
+  /* ── 5 色失败分类（Phase 1.5） ─────────────────────────── */
+  --fail-quota:       #c7470a;   /* 赭橙 */
+  --fail-tool:        #a1241b;   /* 警示红 */
+  --fail-json:        #8a5a00;   /* 棕黄 */
+  --fail-empty:       #6b7380;   /* 中性灰 — 静默失败 */
+  --fail-timeout:     #184d9e;   /* 钢蓝 */
+
+  /* ── 10 只鸟的单色线稿标识色 ───────────────────────────── */
+  --bird-1: #c7470a; /* 业务鸟 — 赭橙 */
+  --bird-2: #184d9e; /* 数据鸟 — 钢蓝 */
+  --bird-3: #0f6c3a; /* 体验鸟 — 墨绿 */
+  --bird-4: #a1241b; /* 风险鸟 — 警示红 */
+  --bird-5: #4d3a86; /* 苍鹰   — 深紫（meta 层 · 与 worker 区分）*/
+  --bird-6: #6b7380; /* 占位 1 */
+  --bird-7: #6b7380; /* 占位 2 */
+  --bird-8: #6b7380; /* 占位 3 */
+  --bird-9: #6b7380; /* 占位 4 */
+  --bird-10:#6b7380; /* 占位 5 */
+
+  /* ── shadow（弱阴影） ───────────────────────────────────── */
+  --shadow-sm: 0 1px 1px rgba(15,20,30,.04), 0 1px 2px rgba(15,20,30,.04);
+  --shadow-md: 0 1px 2px rgba(15,20,30,.04), 0 4px 10px rgba(15,20,30,.05);
+  --shadow-lg: 0 2px 4px rgba(15,20,30,.05), 0 12px 28px rgba(15,20,30,.08);
+  --shadow-focus: 0 0 0 3px rgba(232,89,12,.22);
+}
+
+/* ─── dark ─── */
+[data-theme="dark"] {
+  --neutral-0:   #0b0e12;
+  --neutral-25:  #0e1217;
+  --neutral-50:  #141921;
+  --neutral-100: #1a2028;
+  --neutral-150: #212833;
+  --neutral-200: #2a323e;
+  --neutral-300: #3a4452;
+  --neutral-400: #596271;
+  --neutral-500: #7a8292;
+  --neutral-600: #99a1ae;
+  --neutral-700: #bcc2cc;
+  --neutral-800: #dde1e7;
+  --neutral-900: #f3f5f8;
+
+  --surface-canvas:    var(--neutral-25);
+  --surface-raised:    var(--neutral-50);
+  --surface-sunken:    var(--neutral-100);
+  --surface-overlay:   #1b222c;
+  --surface-console:   #06090d;
+  --surface-console-fg:#c6cbd4;
+
+  --text-strong:   var(--neutral-900);
+  --text-default:  var(--neutral-800);
+  --text-muted:    var(--neutral-500);
+  --text-faint:    var(--neutral-400);
+  --text-disabled: var(--neutral-300);
+  --text-inverse:  #0e1217;
+
+  --border-subtle: var(--neutral-150);
+  --border-default:var(--neutral-200);
+  --border-strong: var(--neutral-300);
+
+  --accent-50:  #2a1606;
+  --accent-100: #3f1e08;
+  --accent-200: #6b2d0a;
+  --accent-300: #9a3f0d;
+  --accent-400: #d25712;
+  --accent-500: #f87528;  /* 暗底用稍亮一档 */
+  --accent-600: #ff8c4a;
+  --accent-700: #ffa875;
+  --accent-fg:  #0e1217;
+
+  --status-queued-bg:   var(--neutral-100);
+  --status-queued-fg:   var(--neutral-500);
+  --status-queued-dot:  var(--neutral-400);
+
+  --status-running-bg:  #2a1606;
+  --status-running-fg:  #ffa875;
+  --status-running-dot: #f87528;
+
+  --status-done-bg:     #0f2a19;
+  --status-done-fg:     #5ec784;
+  --status-done-dot:    #2faa5a;
+
+  --status-failed-bg:   #2e1312;
+  --status-failed-fg:   #ff8579;
+  --status-failed-dot:  #e2483b;
+
+  --status-warn-bg:     #2a2106;
+  --status-warn-fg:     #e9b450;
+  --status-warn-dot:    #d89a28;
+
+  --status-info-bg:     #10223d;
+  --status-info-fg:     #7aabee;
+  --status-info-dot:    #3e83d8;
+
+  --fail-quota:   #ff8c4a;
+  --fail-tool:    #ff8579;
+  --fail-json:    #e9b450;
+  --fail-empty:   #7a8292;
+  --fail-timeout: #7aabee;
+
+  --bird-1: #ff8c4a;
+  --bird-2: #7aabee;
+  --bird-3: #5ec784;
+  --bird-4: #ff8579;
+  --bird-5: #b9a3ff;
+  --bird-6: #7a8292;
+  --bird-7: #7a8292;
+  --bird-8: #7a8292;
+  --bird-9: #7a8292;
+  --bird-10:#7a8292;
+
+  --shadow-sm: 0 1px 1px rgba(0,0,0,.3), 0 1px 2px rgba(0,0,0,.25);
+  --shadow-md: 0 1px 2px rgba(0,0,0,.35), 0 4px 10px rgba(0,0,0,.3);
+  --shadow-lg: 0 2px 4px rgba(0,0,0,.4), 0 12px 28px rgba(0,0,0,.45);
+  --shadow-focus: 0 0 0 3px rgba(248,117,40,.35);
+}
+
+/* ─── Phase 2 局部：色温下降 + 对比 +20% ───
+   用法：在 Phase 2 区域根节点加 data-phase2，不改全局 theme。
+   具体做法是把 surface 往冷里挪一档、text 往浓里挪一档。 */
+[data-phase2] {
+  --surface-canvas: color-mix(in oklch, var(--neutral-25) 70%, #dce2ec);
+  --surface-raised: color-mix(in oklch, var(--neutral-0)  92%, #c7ced9);
+  --surface-sunken: color-mix(in oklch, var(--neutral-50) 85%, #c7ced9);
+  --text-default:  var(--neutral-800);
+  --text-muted:    var(--neutral-600);
+  --border-default: var(--neutral-200);
+}
+[data-theme="dark"][data-phase2],
+[data-theme="dark"] [data-phase2] {
+  --surface-canvas: #080b10;
+  --surface-raised: #0f141b;
+  --surface-sunken: #0a0e13;
+  --text-default:  var(--neutral-900);
+  --text-muted:    var(--neutral-600);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   typography
+   主字体：Geist Sans + 苹方/PingFang · Mono：Geist Mono
+   ───────────────────────────────────────────────────────────── */
+:root {
+  --font-sans:
+    "Geist", -apple-system, BlinkMacSystemFont,
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    "Segoe UI", system-ui, sans-serif;
+  --font-mono:
+    "Geist Mono", ui-monospace, "JetBrains Mono",
+    "SF Mono", Menlo, Consolas, monospace;
+
+  /* type scale（PM 工作台 · 紧凑） */
+  --text-xs:   11px;   /* 徽章、shortcut */
+  --text-sm:   12px;   /* 元数据、辅助 */
+  --text-base: 13px;   /* UI 默认 */
+  --text-md:   14px;   /* 正文 */
+  --text-lg:   16px;   /* 小标题 */
+  --text-xl:   20px;   /* 区块标题 */
+  --text-2xl:  24px;   /* 页标题 */
+  --text-3xl:  32px;   /* 最大 */
+
+  --lh-tight:  1.25;
+  --lh-normal: 1.5;
+  --lh-loose:  1.65;
+
+  --fw-regular: 400;
+  --fw-medium:  500;
+  --fw-semibold:600;
+  --fw-bold:    700;
+
+  /* ─── spacing（4/8 倍数网格 · 禁 22/42） ───────────────── */
+  --sp-0: 0;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10:40px;
+  --sp-12:48px;
+  --sp-16:64px;
+
+  /* ─── radius（≤ 8 统一） ─────────────────────────────── */
+  --r-0:   0;
+  --r-1:   2px;
+  --r-2:   4px;
+  --r-3:   6px;
+  --r-4:   8px;   /* 标准卡片 · 按钮 */
+  --r-pill:999px; /* 状态徽章 · 头像 */
+
+  /* ─── motion ──────────────────────────────────────────── */
+  --ease-out:  cubic-bezier(.2,.8,.2,1);
+  --ease-in:   cubic-bezier(.8,.2,1,.8);
+  --dur-fast:  120ms;
+  --dur-base:  200ms;
+  --dur-slow:  320ms;
+
+  /* ─── z ───────────────────────────────────────────────── */
+  --z-nav:     20;
+  --z-drawer:  40;
+  --z-overlay: 60;
+  --z-toast:   80;
+}
+
+/* breathing dot for running state */
+@keyframes dot-breathe {
+  0%,100% { transform: scale(1);   opacity: 1;   }
+  50%     { transform: scale(1.35); opacity: .55; }
+}
+@keyframes dot-halo {
+  0%   { box-shadow: 0 0 0 0   rgba(232,89,12,.45); }
+  70%  { box-shadow: 0 0 0 8px rgba(232,89,12,0);   }
+  100% { box-shadow: 0 0 0 0   rgba(232,89,12,0);   }
+}
+
+/* ─── base resets used by v8 screens ──────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; font-family: var(--font-sans); color: var(--text-default); background: var(--surface-canvas); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-feature-settings: "cv11","ss01","ss02"; }

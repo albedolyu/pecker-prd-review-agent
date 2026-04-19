@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh"><head>
+<meta charset="utf-8"/><title>啄木鸟 v8 · RunDiff</title>
+<link rel="stylesheet" href="tokens.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>body{margin:0;background:#f0eee9;font-family:var(--font-sans);}</style>
+</head><body><div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="components/bird-avatar.jsx"></script>
+<script type="text/babel" src="components/bird-badge.jsx"></script>
+<script type="text/babel" src="components/run-diff.jsx"></script>
+<script type="text/babel">
+function Board({ label, w, h, theme='light', children, pad=0 }) {
+  return (
+    <DCArtboard label={label} width={w} height={h}>
+      <div data-theme={theme} style={{width:'100%',height:'100%',background:'var(--surface-canvas)',color:'var(--text-default)',padding:pad,overflow:'hidden'}}>
+        {children}
+      </div>
+    </DCArtboard>
+  );
+}
+
+const RUN_A = { id:'r-8f2k91', time:'2026-04-14 10:12', session:'productive', commentCount:19, acceptRate:52 };
+const RUN_B = { id:'r-9a8k2f', time:'2026-04-16 14:22', session:'productive', commentCount:23, acceptRate:61 };
+
+const ROWS = [
+  { anchor:'m1', dimension:'业务', birdId:1, change:'unchanged',
+    a:{title:'国际订单用户群体未定义入口路径', conf:0.85, rule:'R042', accepted:true},
+    b:{title:'国际订单用户群体未定义入口路径', conf:0.89, rule:'R042', accepted:true} },
+  { anchor:'m2', dimension:'数据', birdId:2, change:'changed',
+    a:{title:'转化率口径未定义', conf:0.58, rule:'R201', accepted:false},
+    b:{title:'综合转化率口径未定义 · 建议补充三个口径', conf:0.64, rule:'R201', accepted:false} },
+  { anchor:'m3', dimension:'风险', birdId:4, change:'added',
+    a:null,
+    b:{title:'支付失败重试缺少指数退避 · 可能放大限流', conf:0.91, rule:'R118', accepted:true} },
+  { anchor:'m4', dimension:'业务', birdId:1, change:'added',
+    a:null,
+    b:{title:'冲突合并策略未定义', conf:0.78, rule:'R133', accepted:true} },
+  { anchor:'m5', dimension:'体验', birdId:3, change:'removed',
+    a:{title:'onboarding 流程缺少首次引导', conf:0.52, rule:'R087', accepted:false},
+    b:null },
+  { anchor:'m6', dimension:'体验', birdId:3, change:'changed',
+    a:{title:'跨设备同步提示过多', conf:0.48, rule:'R087', accepted:false},
+    b:{title:'跨设备同步提示需要降噪', conf:0.51, rule:'R087', accepted:false} },
+  { anchor:'m7', dimension:'风险', birdId:4, change:'unchanged',
+    a:{title:'国际支付合规未说明 PCI-DSS 要求', conf:0.81, rule:'R145', accepted:true},
+    b:{title:'国际支付合规未说明 PCI-DSS 要求', conf:0.82, rule:'R145', accepted:true} },
+];
+
+function App() {
+  return (
+    <DesignCanvas>
+      <div style={{padding:'0 60px 40px'}}>
+        <div style={{fontSize:12,letterSpacing:.8,textTransform:'uppercase',color:'rgba(60,50,40,.55)',fontWeight:600,marginBottom:8}}>
+          啄木鸟 · pecker · v8 · RunDiff（第 11 组件）
+        </div>
+        <div style={{fontSize:36,fontWeight:600,color:'rgba(30,20,10,.9)',letterSpacing:-.6,marginBottom:6}}>
+          Run 对比
+        </div>
+        <div style={{fontSize:14,color:'rgba(60,50,40,.6)',maxWidth:720,lineHeight:1.55}}>
+          同一 PRD 的两次 run 结果对齐（按 anchor），展示 added / removed / changed / unchanged 四态。
+        </div>
+      </div>
+      <DCSection title="13 · RunDiff" subtitle="briefing 定为 Sprint 4 后期 · 管理页用">
+        <Board label="浅" w={1200} h={640} pad={20}>
+          <RunDiff runA={RUN_A} runB={RUN_B} rows={ROWS} style={{height:'100%'}}/>
+        </Board>
+        <Board label="暗" w={1200} h={640} pad={20} theme="dark">
+          <RunDiff runA={RUN_A} runB={RUN_B} rows={ROWS} style={{height:'100%'}}/>
+        </Board>
+      </DCSection>
+      <div style={{height:80}}/>
+    </DesignCanvas>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script></body></html>

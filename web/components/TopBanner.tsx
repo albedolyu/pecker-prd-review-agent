@@ -1,37 +1,31 @@
 "use client";
 
 /**
- * TopBanner — 所有页面顶部的横条
+ * TopBanner · v8 · 全局顶栏(工作台气质)
  *
- * 内容:
- * - 左: 品牌名 "啄木鸟 Pecker"(仅文字,Phase D 加 logo)
- * - 中: 当前 reviewer / workspace / 今日评审次数
- * - 右: readonly 徽章(如果是只读用户)+ About / 登出
- *
- * 数据源:
+ * 功能零回归:
  * - /api/me → reviewer + readonly
  * - /api/audit/today/{reviewer} → 今日次数
+ * - About 链接 / 登出 按钮
  *
- * 未登录(/api/me 401)时只显示品牌名 + 登录链接。
+ * v8 视觉:
+ * - 无衬线字体 · 紧凑 · monospace 元数据
+ * - brand:小方块 + "Pecker" 字样,去 "2026 春" 季节标签
+ * - 中间:reviewer + 今日次数(mono)· 去散文式"你好"
+ * - 右:About / 登出 极简文字链
  */
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { LogOut, Eye, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import { authApi, auditApi, ApiError } from "@/lib/api";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
 
 export function TopBanner() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  // 当前登录态
   const { data: me, isLoading: meLoading } = useQuery({
     queryKey: ["me"],
     queryFn: () => authApi.me(),
@@ -39,7 +33,6 @@ export function TopBanner() {
     staleTime: 60 * 1000,
   });
 
-  // 今日次数(依赖登录态)
   const { data: todayCount } = useQuery({
     queryKey: ["audit", "today", me?.reviewer],
     queryFn: () => auditApi.todayCount(me!.reviewer),
@@ -60,71 +53,288 @@ export function TopBanner() {
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-      <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-6">
-        {/* ========== 左: 品牌 ========== */}
-        <Link
-          href="/review"
-          className="flex items-center gap-2 font-semibold tracking-tight"
+    <header
+      style={{
+        position: "relative",
+        zIndex: 30,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "10px 20px",
+        borderBottom: "1px solid var(--border-subtle)",
+        background: "var(--surface-raised)",
+        fontFamily: "var(--font-sans)",
+      }}
+    >
+      {/* ── 左 · brand ── */}
+      <Link
+        href="/review"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          color: "var(--text-strong)",
+          textDecoration: "none",
+        }}
+      >
+        <BrandMark />
+        <span
+          style={{
+            fontSize: 14,
+            fontWeight: 600,
+            letterSpacing: "-0.01em",
+          }}
         >
-          <span className="text-lg">🪵</span>
-          <span className="text-base">啄木鸟</span>
-          <span className="hidden text-xs uppercase text-muted-foreground sm:inline">
-            Pecker
-          </span>
-        </Link>
+          Pecker
+        </span>
+        <span
+          style={{
+            fontSize: 10,
+            fontFamily: "var(--font-mono)",
+            color: "var(--text-faint)",
+            padding: "1px 5px",
+            borderRadius: "var(--r-2)",
+            background: "var(--surface-sunken)",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+          }}
+        >
+          v8
+        </span>
+      </Link>
 
-        {/* ========== 中: reviewer 信息(登录后显示) ========== */}
+      {/* ── 右 · reviewer + 辅助 ── */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 14,
+          fontSize: 12,
+          color: "var(--text-muted)",
+        }}
+      >
         {me && (
           <>
-            <Separator orientation="vertical" className="h-5" />
-            <div className="flex items-center gap-3 text-sm">
-              <span className="text-muted-foreground">评审人</span>
-              <span className="font-medium">{me.reviewer}</span>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 10,
+                  color: "var(--text-faint)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                }}
+              >
+                reviewer
+              </span>
+              <span
+                style={{
+                  fontWeight: 500,
+                  color: "var(--text-default)",
+                }}
+              >
+                {me.reviewer}
+              </span>
               {me.readonly && (
-                <Badge variant="secondary" className="gap-1 px-2 py-0">
-                  <Eye className="h-3 w-3" />
-                  只读
-                </Badge>
-              )}
-              {todayCount !== undefined && (
-                <span className="hidden text-muted-foreground md:inline">
-                  今日 <span className="font-medium text-foreground">
-                    {todayCount.count}
-                  </span> 次
+                <span
+                  style={{
+                    fontSize: 10,
+                    padding: "1px 5px",
+                    borderRadius: "var(--r-2)",
+                    background: "var(--status-queued-bg)",
+                    color: "var(--status-queued-fg)",
+                    fontWeight: 600,
+                  }}
+                >
+                  readonly
                 </span>
               )}
-            </div>
+            </span>
+            {todayCount && (
+              <>
+                <Divider />
+                <span
+                  style={{
+                    display: "none",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                  className="sm:inline-flex"
+                >
+                  <span
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 10,
+                      color: "var(--text-faint)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.08em",
+                    }}
+                  >
+                    today
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontWeight: 600,
+                      color: "var(--text-default)",
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {todayCount.count}
+                  </span>
+                </span>
+              </>
+            )}
+            <Divider />
           </>
         )}
 
-        {/* ========== 右: 辅助操作 ========== */}
-        <div className="ml-auto flex items-center gap-2">
+        <Link
+          href="/runs/diff"
+          style={{
+            color: "var(--text-muted)",
+            textDecoration: "none",
+            transition: "color var(--dur-fast) var(--ease-out)",
+          }}
+          onMouseEnter={(e) =>
+            ((e.currentTarget as HTMLAnchorElement).style.color =
+              "var(--accent-600)")
+          }
+          onMouseLeave={(e) =>
+            ((e.currentTarget as HTMLAnchorElement).style.color =
+              "var(--text-muted)")
+          }
+        >
+          Runs
+        </Link>
+        <Link
+          href="/system/health"
+          style={{
+            color: "var(--text-muted)",
+            textDecoration: "none",
+            transition: "color var(--dur-fast) var(--ease-out)",
+          }}
+          onMouseEnter={(e) =>
+            ((e.currentTarget as HTMLAnchorElement).style.color =
+              "var(--accent-600)")
+          }
+          onMouseLeave={(e) =>
+            ((e.currentTarget as HTMLAnchorElement).style.color =
+              "var(--text-muted)")
+          }
+        >
+          System
+        </Link>
+        <Link
+          href="/about"
+          style={{
+            color: "var(--text-muted)",
+            textDecoration: "none",
+            transition: "color var(--dur-fast) var(--ease-out)",
+          }}
+          onMouseEnter={(e) =>
+            ((e.currentTarget as HTMLAnchorElement).style.color =
+              "var(--accent-600)")
+          }
+          onMouseLeave={(e) =>
+            ((e.currentTarget as HTMLAnchorElement).style.color =
+              "var(--text-muted)")
+          }
+        >
+          关于
+        </Link>
+
+        {!meLoading && !me && (
           <Link
-            href="/about"
-            className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
+            href="/login"
+            style={{
+              color: "var(--accent-600)",
+              textDecoration: "none",
+              fontWeight: 500,
+            }}
           >
-            <Sparkles className="mr-1 h-3.5 w-3.5" />
-            关于
+            登录
           </Link>
+        )}
 
-          {!meLoading && !me && (
-            <Link
-              href="/login"
-              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-            >
-              登录
-            </Link>
-          )}
-
-          {me && (
-            <Button variant="ghost" size="sm" onClick={handleLogout}>
-              <LogOut className="mr-1 h-3.5 w-3.5" />
-              登出
-            </Button>
-          )}
-        </div>
+        {me && (
+          <button
+            type="button"
+            onClick={handleLogout}
+            style={{
+              background: "transparent",
+              border: 0,
+              cursor: "pointer",
+              color: "var(--text-muted)",
+              fontSize: 12,
+              fontFamily: "var(--font-sans)",
+              padding: 0,
+              transition: "color var(--dur-fast) var(--ease-out)",
+            }}
+            onMouseEnter={(e) =>
+              ((e.currentTarget as HTMLButtonElement).style.color =
+                "var(--status-failed-fg)")
+            }
+            onMouseLeave={(e) =>
+              ((e.currentTarget as HTMLButtonElement).style.color =
+                "var(--text-muted)")
+            }
+          >
+            登出
+          </button>
+        )}
       </div>
     </header>
+  );
+}
+
+// ============================================================
+// v8 · 极简 brand mark · 圆角方块 + 内凹圆点
+// ============================================================
+function BrandMark() {
+  return (
+    <span
+      aria-hidden
+      style={{
+        position: "relative",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 18,
+        height: 18,
+        borderRadius: "var(--r-3)",
+        background: "var(--accent-500)",
+        color: "var(--accent-fg)",
+      }}
+    >
+      <span
+        style={{
+          width: 6,
+          height: 6,
+          borderRadius: "50%",
+          background: "var(--accent-fg)",
+          opacity: 0.9,
+        }}
+      />
+    </span>
+  );
+}
+
+function Divider() {
+  return (
+    <span
+      aria-hidden
+      style={{
+        width: 1,
+        height: 14,
+        background: "var(--border-default)",
+      }}
+    />
   );
 }

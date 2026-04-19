@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="zh"><head>
+<meta charset="utf-8"/><title>啄木鸟 v8 · 响应式断点</title>
+<link rel="stylesheet" href="tokens.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>body{margin:0;background:#f0eee9;font-family:var(--font-sans);}</style>
+</head><body><div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel">
+const {DesignCanvas, DCSection, DCArtboard} = window;
+
+// Mini Phase 3 mock at 3 widths to demonstrate breakpoint behavior
+function Phase3Mock({ w, layout }) {
+  const showSidebar = layout !== 'compact';
+  const docPct = layout === 'wide' ? 0.52 : layout === 'medium' ? 0.55 : 0.6;
+  return (
+    <div style={{
+      width:'100%', height:'100%', background:'var(--surface-canvas)',
+      display:'flex', flexDirection:'column', fontFamily:'var(--font-sans)',
+    }}>
+      {/* top nav */}
+      <div style={{
+        display:'flex', alignItems:'center', gap:12,
+        padding:'8px 14px', borderBottom:'1px solid var(--border-default)',
+        background:'var(--surface-raised)', fontSize:11,
+      }}>
+        <span style={{fontWeight:700, color:'var(--accent-500)'}}>啄木鸟</span>
+        <span style={{color:'var(--text-faint)'}}>/</span>
+        <span style={{color:'var(--text-muted)', fontFamily:'var(--font-mono)'}}>PRD-2026-Q2</span>
+        <div style={{display:'flex', gap:2, marginLeft:'auto'}}>
+          {['0','1','1.5','2','3','4'].map((s,i) => (
+            <span key={i} style={{
+              padding:'3px 8px', fontSize:10, fontFamily:'var(--font-mono)',
+              borderRadius:3, background: s === '3' ? 'var(--accent-500)' : 'transparent',
+              color: s === '3' ? 'var(--accent-fg)' : 'var(--text-muted)',
+            }}>{s}</span>
+          ))}
+        </div>
+      </div>
+
+      <div style={{flex:1, display:'flex', overflow:'hidden'}}>
+        {/* left rail — hidden at compact */}
+        {showSidebar && (
+          <div style={{
+            width: layout === 'wide' ? 160 : 120,
+            borderRight:'1px solid var(--border-default)',
+            padding:'12px 10px', fontSize:10,
+            background:'var(--surface-sunken)',
+            display:'flex', flexDirection:'column', gap:6,
+          }}>
+            <div style={{fontFamily:'var(--font-mono)', fontSize:9,
+                         textTransform:'uppercase', color:'var(--text-muted)',
+                         letterSpacing:1, marginBottom:4}}>筛选</div>
+            {['全部 23','业务 4','数据 3','体验 5','风险 2','苍鹰 9'].map((x,i) =>
+              <div key={i} style={{padding:'4px 6px', borderRadius:3,
+                background: i===0 ? 'var(--accent-50)' : 'transparent',
+                color: i===0 ? 'var(--accent-600)' : 'var(--text-default)',
+                fontWeight: i===0 ? 600 : 400,
+              }}>{x}</div>)}
+          </div>
+        )}
+
+        {/* doc */}
+        <div style={{
+          width:`${docPct*100}%`, padding:'14px 18px',
+          borderRight:'1px solid var(--border-default)',
+          fontSize:10, lineHeight:1.7, overflow:'auto',
+        }}>
+          <div style={{fontSize:12, fontWeight:600, color:'var(--text-strong)', marginBottom:8}}>
+            国际订单 PRD
+          </div>
+          {Array.from({length:8}).map((_,i) => (
+            <div key={i} style={{display:'flex', gap:8, marginBottom:3}}>
+              <span style={{fontFamily:'var(--font-mono)', color:'var(--text-faint)', width:18, textAlign:'right'}}>{10+i}</span>
+              <span style={{flex:1, color:'var(--text-default)'}}>
+                {i % 3 === 0 ? (
+                  <>本段落包含 <span style={{borderBottom:'1.5px dotted var(--accent-400)', padding:'0 2px'}}>锚点 {i+1}</span>，需要额外说明。</>
+                ) : '常规段落文本内容，描述业务目标与实现路径。'}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* drawer */}
+        <div style={{flex:1, padding:'12px', overflow:'auto',
+          background:'var(--surface-sunken)', display:'flex', flexDirection:'column', gap:8}}>
+          {[1,2,3,4].map(i => (
+            <div key={i} style={{
+              background:'var(--surface-raised)', border:'1px solid var(--border-subtle)',
+              borderRadius:6, padding:'8px 10px',
+            }}>
+              <div style={{display:'flex', gap:6, alignItems:'center', marginBottom:3}}>
+                <span style={{width:6, height:6, borderRadius:99, background:`var(--bird-${i})`}}/>
+                <span style={{fontSize:9, color:'var(--text-muted)', fontFamily:'var(--font-mono)'}}>鸟{i} · R{100+i} · 0.{80+i}</span>
+              </div>
+              <div style={{fontSize:10, color:'var(--text-default)', lineHeight:1.5}}>
+                {layout === 'compact' && i > 2 ? '评论标题...' : '这是一条评审意见标题，描述问题核心。'}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{padding:'4px 14px', background:'var(--surface-raised)',
+        borderTop:'1px solid var(--border-default)', fontSize:9,
+        fontFamily:'var(--font-mono)', color:'var(--text-muted)',
+        display:'flex', gap:14,
+      }}>
+        <span>{w}px</span><span>·</span>
+        <span style={{color: layout === 'wide' ? 'var(--status-done-fg)'
+                           : layout === 'medium' ? 'var(--status-warn-fg)'
+                           : 'var(--status-failed-fg)'}}>{layout}</span>
+        <span style={{marginLeft:'auto'}}>j/k · y · n · e</span>
+      </div>
+    </div>
+  );
+}
+
+function Board({ label, w, h, children, theme='light' }) {
+  return (
+    <DCArtboard label={label} width={w} height={h}>
+      <div data-theme={theme} style={{width:'100%', height:'100%', overflow:'hidden'}}>{children}</div>
+    </DCArtboard>
+  );
+}
+
+// Rules table
+function RulesTable() {
+  const rows = [
+    { bp:'≥ 1920',  name:'wide',    sidebar:'展开 160px', cols:'3 栏 · doc 52%', cards:'密度 × 1.15', density:'8/10' },
+    { bp:'1440–1919', name:'medium', sidebar:'展开 120px', cols:'3 栏 · doc 55%', cards:'标准',         density:'8/10' },
+    { bp:'1280–1439', name:'compact', sidebar:'折叠为抽屉', cols:'2 栏 · doc 60%', cards:'紧凑 · 截断摘要', density:'7/10' },
+    { bp:'< 1280',   name:'narrow',  sidebar:'折叠',       cols:'单栏 · drawer 浮层', cards:'—',           density:'不支持 · 提示用 ≥ 1280' },
+  ];
+  return (
+    <div style={{
+      background:'var(--surface-raised)', border:'1px solid var(--border-default)',
+      borderRadius:'var(--r-4)', overflow:'hidden',
+    }}>
+      <div style={{
+        display:'grid', gridTemplateColumns:'120px 110px 150px 200px 160px 140px',
+        padding:'10px 16px', fontSize:10, textTransform:'uppercase',
+        letterSpacing:.8, fontWeight:600, color:'var(--text-muted)',
+        background:'var(--surface-sunken)', fontFamily:'var(--font-mono)',
+        borderBottom:'1px solid var(--border-default)',
+      }}>
+        <div>Breakpoint</div><div>Name</div><div>Sidebar</div><div>Layout</div><div>Cards</div><div>Density</div>
+      </div>
+      {rows.map((r,i) => (
+        <div key={i} style={{
+          display:'grid', gridTemplateColumns:'120px 110px 150px 200px 160px 140px',
+          padding:'10px 16px', fontSize:12, alignItems:'center',
+          borderBottom: i < rows.length - 1 ? '1px solid var(--border-subtle)' : 'none',
+        }}>
+          <div style={{fontFamily:'var(--font-mono)', color:'var(--text-strong)', fontWeight:600}}>{r.bp}</div>
+          <div><span style={{
+            padding:'2px 8px', borderRadius:99, fontSize:10, fontWeight:600,
+            fontFamily:'var(--font-mono)',
+            background: r.name==='wide'   ? 'var(--status-done-bg)'
+                     : r.name==='medium' ? 'var(--accent-50)'
+                     : r.name==='compact'? 'var(--status-warn-bg)'
+                                         : 'var(--status-failed-bg)',
+            color:    r.name==='wide'   ? 'var(--status-done-fg)'
+                     : r.name==='medium' ? 'var(--accent-600)'
+                     : r.name==='compact'? 'var(--status-warn-fg)'
+                                         : 'var(--status-failed-fg)',
+          }}>{r.name}</span></div>
+          <div style={{color:'var(--text-default)'}}>{r.sidebar}</div>
+          <div style={{color:'var(--text-default)'}}>{r.cols}</div>
+          <div style={{color:'var(--text-default)'}}>{r.cards}</div>
+          <div style={{fontFamily:'var(--font-mono)', fontSize:11, color:'var(--text-muted)'}}>{r.density}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <DesignCanvas>
+      <div style={{padding:'0 60px 40px'}}>
+        <div style={{fontSize:12,letterSpacing:.8,textTransform:'uppercase',color:'rgba(60,50,40,.55)',fontWeight:600,marginBottom:8}}>
+          啄木鸟 · v8 · 响应式
+        </div>
+        <div style={{fontSize:36,fontWeight:600,color:'rgba(30,20,10,.9)',letterSpacing:-.6,marginBottom:6}}>
+          断点 · 1920 / 1440 / 1280
+        </div>
+        <div style={{fontSize:14,color:'rgba(60,50,40,.6)',maxWidth:760,lineHeight:1.55}}>
+          Phase 3 是最高频屏，响应式策略围绕它展开。小于 1280 提示用户扩宽窗口（PM 场景，不做 mobile）。
+        </div>
+      </div>
+
+      <DCSection title="规则表" subtitle="4 档断点 · PM 桌面场景">
+        <div style={{width:960, padding:'0 0 0 0'}}>
+          <RulesTable/>
+        </div>
+      </DCSection>
+
+      <DCSection title="三档预览" subtitle="同一份数据 · 同一 Phase 3 · 三种宽度">
+        <Board label="wide · 1920" w={1920} h={900}><Phase3Mock w={1920} layout="wide"/></Board>
+      </DCSection>
+      <DCSection title="" subtitle="">
+        <Board label="medium · 1440" w={1440} h={760}><Phase3Mock w={1440} layout="medium"/></Board>
+        <Board label="compact · 1280" w={1280} h={720}><Phase3Mock w={1280} layout="compact"/></Board>
+      </DCSection>
+
+      <DCSection title="落地约束" subtitle="工程同学看这段就够">
+        <div style={{
+          width:880, padding:'20px 24px', background:'var(--surface-raised)',
+          border:'1px solid var(--border-default)', borderRadius:'var(--r-4)',
+          fontSize:13, lineHeight:1.8, color:'var(--text-default)',
+        }}>
+          <ol style={{margin:0, paddingLeft:20}}>
+            <li>断点用 <code style={{fontFamily:'var(--font-mono)',fontSize:12,background:'var(--neutral-100)',padding:'1px 5px',borderRadius:3}}>container query</code>，不用 viewport —— 未来嵌入侧边栏场景不翻车。</li>
+            <li>compact 档 sidebar 折叠为抽屉，触发方式：左上角 hamburger 或 <code style={{fontFamily:'var(--font-mono)',fontSize:12,background:'var(--neutral-100)',padding:'1px 5px',borderRadius:3}}>[</code>。</li>
+            <li>narrow 档（&lt; 1280）显示 <b>空态引导</b>："请放大窗口至 ≥ 1280 以获得完整体验"。不做真正的 mobile。</li>
+            <li>字号 / 间距 / 圆角 token <b>不随断点变化</b> —— briefing "4/8 倍数网格"的约束在所有宽度保持一致。</li>
+            <li>wide 档（≥ 1920）右侧 drawer 加宽，允许同屏显示 5 条评审（briefing "3-5 条" 的上限）。</li>
+          </ol>
+        </div>
+      </DCSection>
+
+      <div style={{height:80}}/>
+    </DesignCanvas>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script></body></html>
