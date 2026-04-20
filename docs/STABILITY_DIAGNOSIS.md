@@ -49,7 +49,7 @@
 继续挖后发现问题比想象的更细致，**per-worker 错误上报链路其实是对的**:
 
 - `api_adapter.py:558-560`: CLI 配额耗尽 → `returncode != 0` → raise `APIError`
-- `parallel_review._run_worker_async:1153`: catch 后回调 `{"error": str(e)[:200]}`
+- `review/orchestration.py:_staggered`: `_run_worker_async` 异常 catch 后回调 `{"error": str(e)[:200]}`
 - `api/stream.py:95`: `success = "error" not in result`，错误时设 False
 - `api/stream.py:100`: error 字段透传到 SSE payload
 - `Phase2Running.tsx:144-145`: `if (!ev.success) → state = "error"`，UI 正确显示红卡
@@ -133,7 +133,7 @@ claude -p 退出码 1: You've hit your limit — resets 8am (America/Los_Angeles
 ### 根因候选 1 — Worker 隐性失败被空壳兜底吞掉（可能性: 高）
 
 **证据链**:
-- `parallel_review.py:_empty_tool_fallback` 在解析失败时返回空 items 列表
+- `review/worker.py:_parse_items_from_text` 在解析失败时返回空 items 列表
 - Worker 的完整链路是: 构造 prompt → Claude API → 尝试 tool_use → 失败转 maxTurns 重试 → 耗尽转文本兜底解析 → 兜底失败返回空
 - 整条链路静默吃异常,log 层面看不出差异
 
@@ -167,7 +167,7 @@ claude -p 退出码 1: You've hit your limit — resets 8am (America/Los_Angeles
 ### 根因候选 4 — Worker null_finding_reason 机制被滥用（可能性: 低）
 
 **证据链**:
-- `parallel_review.py` 允许 Worker 返回空 items + null_finding_reason
+- `review/worker.py` 允许 Worker 返回空 items + null_finding_reason
 - 如果 Worker 在 prompt 理解上判断"本维度无问题",会主动交白卷
 - 但劳动仲裁 PRD 已知至少有 5-6 个 bug,全 worker 都判"无问题"不合理
 

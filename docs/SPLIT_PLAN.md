@@ -1,8 +1,12 @@
-# parallel_review.py 拆分方案（未实施）
+# parallel_review.py 拆分方案（已实施 2026-04-19）
 
-> 现状: 1833 行单文件,承担从 dimension 配置 → prompt 构建 → worker 执行 → 编排 → 依据验证 → 合并去重的全部职责。
-> 目标: 按职责拆为 5 个模块 + 1 个 facade,不改变对外公共 API。
-> 工作量预估: 3-4 天(含测试回归,不含 code review)。
+> **状态**: 已完成。parallel_review.py 1223 → 78 行 facade,按 Cluster A/B/C/D/E/F 拆到
+> review/dimensions.py + prompting.py + worker.py + orchestration.py + evidence_verify.py + aggregation.py。
+> 对外 import 路径零改动,pytest 490 passed 零回归。测试 patch 路径已同步迁到 review.worker.*。
+>
+> 原始方案（保留备查）:
+> 1833 行单文件,承担从 dimension 配置 → prompt 构建 → worker 执行 → 编排 → 依据验证 → 合并去重的全部职责。
+> 按职责拆为 5 个模块 + 1 个 facade,不改变对外公共 API。工作量预估: 3-4 天。
 
 ---
 

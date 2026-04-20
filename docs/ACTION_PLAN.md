@@ -91,11 +91,11 @@ P0 修完后稳定性真正好转,再做这批。
 
 ## 三、P2 中长期（一个月内,共 ~8 天）
 
-### P2-1 parallel_review.py 拆分
-- **工作量**: 3-4 天
-- **依据**: `docs/SPLIT_PLAN.md`（6 模块 6 阶段）
-- **触发**: 新功能让 parallel_review.py 突破 2000 行 / 新贡献者加入 / 改动连带 3+ cluster / 回归 bug 出现后
-- **收益**: 长期维护性
+### P2-1 parallel_review.py 拆分 ✅ 已完成（2026-04-19）
+- **实际工作量**: 1 次会话（<1 天），含测试迁移 + 文档同步
+- **落地**: `parallel_review.py` 1223 → 78 行 facade，按 Cluster A/B/C/D/E/F 拆到 `review/{dimensions,prompting,worker,orchestration,evidence_verify,aggregation}.py`
+- **验证**: pytest 490 passed 零回归，对外 import 零改动
+- **收益已兑现**: 单文件最大 482 行（worker.py），远低于 1900 软触发线；test_split_plan_trigger 永久保持绿色
 
 ### P2-2 register_repo 集成到 Web UI
 - **工作量**: 1 天
@@ -135,7 +135,7 @@ P0 修完后稳定性真正好转,再做这批。
   - PRODUCTION_READINESS.md（如 blocker 状态变化）
   - 啄木鸟_产品介绍.md（如核心概念变化）
   - `.env.example`（如新加 env var）
-- 或加 pre-commit hook: 改了 parallel_review.py / goshawk_advisor.py 等核心文件时提醒同步文档
+- 或加 pre-commit hook: 改了 review/ 子包 / goshawk_advisor.py 等核心文件时提醒同步文档
 
 ### 机制-2 rule_perf 防污染
 见 `RULE_PERF_CLEANUP.md` 第五节:

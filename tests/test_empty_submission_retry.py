@@ -110,25 +110,25 @@ def _make_minimal_worker_env(monkeypatch):
         "checklist": [{"rule_id": "R-TEST-001"}],
     }
     monkeypatch.setattr(
-        "parallel_review.get_review_dimensions",
+        "review.worker.get_review_dimensions",
         lambda workspace=None: {"test_dim": fake_dim},
     )
     monkeypatch.setattr(
-        "parallel_review.get_wiki_keywords", lambda workspace=None: [],
+        "review.worker.get_wiki_keywords", lambda workspace=None: [],
     )
     # system / messages 构造
     monkeypatch.setattr(
-        "parallel_review._build_worker_system",
+        "review.worker._build_worker_system",
         lambda *a, **kw: "dynamic system prompt",
     )
     monkeypatch.setattr(
-        "parallel_review._build_worker_messages",
+        "review.worker._build_worker_messages",
         lambda *a, **kw: [{"role": "user", "content": "prd body"}],
     )
     # cache monitor (no-op)
     fake_cm = MagicMock()
     monkeypatch.setattr(
-        "parallel_review.PromptCacheMonitor", lambda: fake_cm,
+        "review.worker.PromptCacheMonitor", lambda: fake_cm,
         raising=False,
     )
     # compute_call_cost_usd
@@ -151,8 +151,8 @@ class TestWorkerEmptyRetry:
         client.create.side_effect = [first, second]
 
         # 避免真实 sleep 拖慢单测
-        monkeypatch.setattr("parallel_review.time.sleep", lambda _: None)
-        monkeypatch.setattr("parallel_review.random.uniform", lambda a, b: 0)
+        monkeypatch.setattr("review.worker.time.sleep", lambda _: None)
+        monkeypatch.setattr("review.worker.random.uniform", lambda a, b: 0)
 
         result = _worker_core(
             client=client, dim_key="test_dim",
@@ -176,8 +176,8 @@ class TestWorkerEmptyRetry:
         client = MagicMock()
         client.create.side_effect = [first, second]
 
-        monkeypatch.setattr("parallel_review.time.sleep", lambda _: None)
-        monkeypatch.setattr("parallel_review.random.uniform", lambda a, b: 0)
+        monkeypatch.setattr("review.worker.time.sleep", lambda _: None)
+        monkeypatch.setattr("review.worker.random.uniform", lambda a, b: 0)
 
         result = _worker_core(
             client=client, dim_key="test_dim",
@@ -220,8 +220,8 @@ class TestWorkerEmptyRetry:
         client = MagicMock()
         client.create.side_effect = [first, RuntimeError("second call boom")]
 
-        monkeypatch.setattr("parallel_review.time.sleep", lambda _: None)
-        monkeypatch.setattr("parallel_review.random.uniform", lambda a, b: 0)
+        monkeypatch.setattr("review.worker.time.sleep", lambda _: None)
+        monkeypatch.setattr("review.worker.random.uniform", lambda a, b: 0)
 
         result = _worker_core(
             client=client, dim_key="test_dim",

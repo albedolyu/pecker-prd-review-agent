@@ -41,16 +41,16 @@ class TestConfidenceFieldUnified:
             "effort": "medium",
             "checklist": [{"rule_id": "RC-001"}],  # 只允许 RC-001
         }
-        with patch("parallel_review.get_review_dimensions",
+        with patch("review.worker.get_review_dimensions",
                    return_value={"test_dim": fake_dim}), \
-             patch("parallel_review.get_wiki_keywords", return_value=[]), \
-             patch("parallel_review._build_worker_system", return_value="sys"), \
-             patch("parallel_review._build_worker_messages",
+             patch("review.worker.get_wiki_keywords", return_value=[]), \
+             patch("review.worker._build_worker_system", return_value="sys"), \
+             patch("review.worker._build_worker_messages",
                    return_value=[{"role": "user", "content": "prd"}]), \
-             patch("parallel_review.PromptCacheMonitor", MagicMock, create=True), \
+             patch("review.worker.PromptCacheMonitor", MagicMock, create=True), \
              patch("api_adapter.compute_call_cost_usd", return_value=0.001), \
-             patch("parallel_review.time.sleep", lambda _: None), \
-             patch("parallel_review.random.uniform", lambda a, b: 0):
+             patch("review.worker.time.sleep", lambda _: None), \
+             patch("review.worker.random.uniform", lambda a, b: 0):
 
             # model 返回一条越界的 item (rule_id 不在 checklist)
             from types import SimpleNamespace
@@ -96,13 +96,13 @@ class TestConfidenceFieldUnified:
             "model": "sonnet", "effort": "medium",
             "checklist": [{"rule_id": "RC-001"}],
         }
-        with patch("parallel_review.get_review_dimensions",
+        with patch("review.worker.get_review_dimensions",
                    return_value={"test_dim": fake_dim}), \
-             patch("parallel_review.get_wiki_keywords", return_value=[]), \
-             patch("parallel_review._build_worker_system", return_value="sys"), \
-             patch("parallel_review._build_worker_messages",
+             patch("review.worker.get_wiki_keywords", return_value=[]), \
+             patch("review.worker._build_worker_system", return_value="sys"), \
+             patch("review.worker._build_worker_messages",
                    return_value=[{"role": "user", "content": "prd"}]), \
-             patch("parallel_review.PromptCacheMonitor", MagicMock, create=True), \
+             patch("review.worker.PromptCacheMonitor", MagicMock, create=True), \
              patch("api_adapter.compute_call_cost_usd", return_value=0.001):
 
             from types import SimpleNamespace
@@ -292,8 +292,8 @@ class TestScratchpadContract:
 
     def test_worker_core_does_not_touch_scratchpad(self):
         """_worker_core 函数体不应出现 'scratchpad' 字样 (字符串或名称)。"""
-        import parallel_review
-        source = open(parallel_review.__file__, encoding="utf-8").read()
+        from review import worker as _worker_mod
+        source = open(_worker_mod.__file__, encoding="utf-8").read()
         tree = ast.parse(source)
 
         worker_core_node = None
@@ -322,8 +322,8 @@ class TestScratchpadContract:
 
     def test_worker_returns_found_rule_ids(self):
         """Worker return dict 必须含 found_rule_ids (供 orchestrator 构造 scratchpad)。"""
-        import parallel_review
-        source = open(parallel_review.__file__, encoding="utf-8").read()
+        from review import worker as _worker_mod
+        source = open(_worker_mod.__file__, encoding="utf-8").read()
         # 简单字符串匹配:_worker_core 的 return 块里应有 found_rule_ids
         # 更严格做法用 ast,这里够用
         core_start = source.index("def _worker_core")
@@ -335,8 +335,8 @@ class TestScratchpadContract:
 
     def test_scratchpad_only_in_orchestrator_functions(self):
         """scratchpad 变量名只能出现在 _single_round_* 或 parallel_review* 里。"""
-        import parallel_review
-        source = open(parallel_review.__file__, encoding="utf-8").read()
+        from review import orchestration as _orch_mod
+        source = open(_orch_mod.__file__, encoding="utf-8").read()
         tree = ast.parse(source)
 
         # 收集每个顶层函数的 scratchpad 使用

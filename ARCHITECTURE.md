@@ -18,7 +18,7 @@ flowchart TD
         D0 --> D3["Worker: ai_coding<br/>codename: 渡鸦<br/>model: opus<br/>timeout: WORKER_TIMEOUT<br/>rules: RC-004~RC-008, RC-013~RC-015"]
         D0 --> D4["Worker: data_quality<br/>codename: 鸬鹚<br/>model: sonnet<br/>timeout: WORKER_TIMEOUT<br/>rules: RC-009~RC-010"]
 
-        D1 --> E["merge_and_deduplicate<br/>parallel_review.py<br/>dedup threshold: 0.8 similarity"]
+        D1 --> E["merge_and_deduplicate<br/>review/aggregation.py<br/>dedup threshold: 0.8 similarity"]
         D2 --> E
         D3 --> E
         D4 --> E
@@ -68,7 +68,7 @@ flowchart LR
 flowchart TD
     A["Phase 3: Y/N/E decisions"] --> B["_update_rule_perf_from_decisions"]
     B --> C["rule_performance_history.json<br/>per rule: confirmed/rejected/missed<br/>impact_score (EMA alpha=0.15)"]
-    C --> D["_build_feedback_section<br/>parallel_review.py"]
+    C --> D["_build_feedback_section<br/>review/prompting.py"]
     D --> E["Worker system prompt injection<br/>- rejection_rate > 0.3 warning<br/>- missed > 2 warning<br/>- eval precision/recall < 0.6<br/>- low/high impact_score hints"]
     E --> F["Next review cycle<br/>Workers get feedback-aware prompts"]
     F --> A
@@ -80,11 +80,11 @@ flowchart TD
 |---|---|---|
 | Orchestrator (Phase 2 SSE) | `api/routes/review.py` | `run_review()` |
 | Precheck (Phase 1) | `api/routes/review.py` | `precheck()` |
-| Worker execution | `parallel_review.py` | `_worker_core()`, `_run_worker_async()` |
-| Parallel dispatch | `parallel_review.py` | `parallel_review()`, `_single_round_async()` |
-| Merge / dedup | `parallel_review.py` | `merge_and_deduplicate()` |
-| Majority vote | `parallel_review.py` | `majority_vote()` |
-| Evidence verification | `parallel_review.py` | `verify_evidence()`, `_find_wiki_page()`, `_find_rule_reference()` |
+| Worker execution | `review/worker.py` | `_worker_core()`, `_run_worker_async()` |
+| Parallel dispatch | `review/orchestration.py` | `parallel_review()`, `_single_round_async()` |
+| Merge / dedup | `review/aggregation.py` | `merge_and_deduplicate()` |
+| Majority vote | `review/aggregation.py` | `majority_vote()` |
+| Evidence verification | `review/evidence_verify.py` | `verify_evidence()`, `_find_wiki_page()`, `_find_rule_reference()` |
 | Goshawk advisor | `goshawk_advisor.py` | `advisor_review()`, `advisor_review_async()` |
 | Goshawk result merge | `goshawk_advisor.py` | `apply_advisor_result()` |
 | Haiku sanity check | `goshawk_advisor.py` | `_sanity_check_false_positives()` |
@@ -92,14 +92,16 @@ flowchart TD
 | Phase 3 confirm | `api/routes/review.py` | `confirm_review()` |
 | Rule perf feedback | `api/routes/review.py` | `_update_rule_perf_from_decisions()` |
 | Eval ground truth | `api/routes/review.py` | `_save_eval_ground_truth()` |
-| Dimension config | `parallel_review.py` | `load_review_dimensions()` |
-| YAML schema validation | `parallel_review.py` | `_validate_review_dimensions_yaml()` |
+| Dimension config | `review/dimensions.py` | `load_review_dimensions()` |
+| YAML schema validation | `review/dimensions.py` | `_validate_review_dimensions_yaml()` |
+| Worker prompt building | `review/prompting.py` | `_build_worker_system()`, `_build_worker_messages()`, `_build_feedback_section()` |
+| Parallel review facade | `parallel_review.py` | re-exports only (1223 → 78 lines after SPLIT_PLAN) |
 | Model tiers / config | `agent_config.py` -> `config/` | `MODEL_TIERS` |
 | Confidence scoring | `cuckoo_parser.py` | `compute_confidence()` |
 | Gate log (decision chain) | `goshawk_advisor.py` | `_build_gate_log()` |
 | Prompt cache monitor | `cache_monitor.py` | `PromptCacheMonitor` |
 | Event sourcing | `event_store.py` | `EventStore` |
-| B-class semantic verify | `parallel_review.py` | `_verify_b_class_semantic()` |
+| B-class semantic verify | `review/evidence_verify.py` | `_verify_b_class_semantic()` |
 
 ## Model Assignment
 

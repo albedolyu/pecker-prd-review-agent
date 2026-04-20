@@ -312,3 +312,9 @@ def get_wiki_keywords(workspace=None):
     if _loaded_wiki_keywords is None:
         _loaded_dimensions, _loaded_wiki_keywords = load_review_dimensions(workspace)
     return _loaded_wiki_keywords
+
+
+# 信鸽反馈历史文件路径（延迟解析，避免在 import 时读不到 WORKSPACE 环境变量）
+def _get_rule_perf_history_path():
+    workspace = os.environ.get("WORKSPACE", os.path.join(os.path.dirname(os.path.dirname(__file__)), "workspace"))
+    return os.path.join(workspace, "output", "rule_performance_history.json")

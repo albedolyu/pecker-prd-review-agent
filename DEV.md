@@ -141,10 +141,17 @@ prd review/
 │   ├── tests/              vitest 单测 + Playwright E2E
 │   └── app/globals.css     Pecker 编辑部主题 token
 │
-├── parallel_review.py      4 worker 并行评审(保持原状 + on_worker_done callback)
+├── parallel_review.py      facade (78 行) - re-export review/ 子包公共 API
+├── review/                 拆分后的评审核心包 (2026-04-19 SPLIT_PLAN 落地)
+│   ├── dimensions.py       YAML 维度配置 + schema 校验 + _cn_label
+│   ├── prompting.py        Worker system / user messages 构建 + wiki 清单注入
+│   ├── worker.py           单 Worker 执行 (prompt → Claude API → items 抽取)
+│   ├── orchestration.py    4 Worker 并行编排 + 多轮投票 + scratchpad
+│   ├── evidence_verify.py  A/B/C 三类依据硬验证 + wiki 索引
+│   └── aggregation.py      merge_and_deduplicate + majority_vote
 ├── goshawk_advisor.py      终审 meta-review
 ├── app.py                  Streamlit 旧版,迁移期保留
-├── tests/                  Python 105 tests
+├── tests/                  Python 490 tests
 └── workspace-*/            每个业务方向一个 workspace
     ├── prd/
     ├── wiki/
