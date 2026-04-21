@@ -2,6 +2,44 @@
 
 所有重要变更记录。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [Unreleased] - 2026-04-21 SSE / precheck base URL 同源化 (Tunnel 内测阻塞修复)
+
+### 🐛 内测阻塞级 bug 定位
+
+PM 内测前夜扫代码发现:`web/lib/useReviewStream.ts` 和 `web/lib/api.ts`
+的 fallback 都是 `http://localhost:8000`,且 `docker-compose.yml` 的
+frontend service 显式传了 `NEXT_PUBLIC_SSE_BASE=http://localhost:8000`。
+
+**症状**:同事通过 Cloudflare Tunnel 打开 `https://pecker-preview.xxx.com`,
+浏览器执行 Phase 1 precheck / Phase 2 SSE 时会去连**同事自己电脑的 8000 端口**
+(`NEXT_PUBLIC_*` 是 build-time 内联到 bundle 的),结果必然 CORS / 连接失败。
+`useReviewStream.ts:224` 注释里早就写了"生产模式这个 base 应该是 `""`(同源)",
+但代码 / compose 都没落地。
+
+### 🔧 三处同步修正
+
+- `web/lib/useReviewStream.ts:226`: fallback `"http://localhost:8000"` → `""`
+- `web/lib/api.ts:300`: 同上
+- `docker-compose.yml` frontend: 删除 `NEXT_PUBLIC_SSE_BASE=...`,改纯注释说明
+  同源走 Cloudflare Tunnel / nginx path 分流的架构意图
+
+### 🏗 运行时路径
+
+- **Tunnel 内测(同事场景)**:`/api/*` 由 Tunnel `config.yml` 的 path 分流直达
+  FastAPI 8000,其余路径到 Next.js 3000,浏览器 SSE 走同源 → 不再跨域
+- **Docker Compose 独立部署**:Next.js standalone `rewrites()` 把 `/api/*`
+  转发到容器网络 `http://api:8000`,同样同源
+- **本地 pnpm dev**:开发者自己在 `web/.env.local` 里设
+  `NEXT_PUBLIC_SSE_BASE=http://localhost:8000` 直连,绕 Next dev rewrite 的
+  streaming buffer(这是 c80aeeb 修过的老坑,dev 仍需保留)
+
+### ⏭ 还要做
+
+- 本地 `docker compose up -d --build frontend api` 重 build 前端镜像落地改动
+- CI web-docker-publish 触发 → GHCR 上新 `pecker-web:latest` 带修复
+
+---
+
 ## [Unreleased] - 2026-04-18 稳定性二次抢救 (timeout buffer + SPLIT_PLAN guard)
 
 ### 🚑 三项抢救动作落地

@@ -297,7 +297,9 @@ export interface ConfirmResponse {
 
 // precheck 和 SSE 一样直连后端,绕开 Next.js dev rewrite 的 30s timeout。
 // 48 页 wiki 扫描 + 构建可能 > 30s,rewrite proxy 会提前返 500。
-const API_BASE = process.env.NEXT_PUBLIC_SSE_BASE ?? "http://localhost:8000";
+// dev: web/.env.local 里设 NEXT_PUBLIC_SSE_BASE=http://localhost:8000
+// prod: 不设,走同源,由反代 / Tunnel 按 path 分流
+const API_BASE = process.env.NEXT_PUBLIC_SSE_BASE ?? "";
 
 export const reviewApi = {
   precheck: (req: PrecheckRequest) =>
