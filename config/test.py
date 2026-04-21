@@ -9,8 +9,10 @@ from config.base import *  # noqa: F401,F403
 
 # 测试用极短超时,快速暴露挂起问题
 WORKER_TIMEOUT = 60           # 1 分钟
-TOTAL_REVIEW_TIMEOUT = 180    # 3 分钟
+TOTAL_REVIEW_TIMEOUT = 180    # 3 分钟 (worker 60 + goshawk 60 + 60s buffer)
 TOOL_LOOP_TIMEOUT = 300       # 5 分钟(A4)
+# test 环境苍鹰应被 mock,这里压缩仅为满足 TOTAL >= WORKER + GOSHAWK 不变量
+GOSHAWK_TIMEOUT = 60          # 1 分钟,真跑会立即 TIMEOUT 退化为空 advisor 结果
 
 # 测试用小 token,减少 API 消耗
 MAX_TOKENS = 2048

@@ -55,11 +55,12 @@ def test_all_public_symbols_importable_in_env(env):
 
 
 def test_dev_worker_timeout_sufficient_for_sonnet():
-    """基于 2026-04-16 shadow run 实测数据:
+    """基于 2026-04-16 + 04-17 shadow + 真实 session 实测数据:
 
-    Sonnet worker (quality/structure/data_quality) 平均 200-250s,
-    原 240s 导致 44-53% 被截断。WORKER_TIMEOUT 必须 ≥ 300s。
-    参考 logs/shadow_20260416_174900/report.json。
+    Sonnet worker (quality/structure/data_quality) 平均 200-250s,实测 p99 369-371s
+    (workspace-对外投资 rev_1776410765 / rev_1776412194)。
+    原 240s 导致 44-53% Sonnet worker 假静默,360s 仍会擦边切。
+    WORKER_TIMEOUT 必须 ≥ 420s (留 50s buffer over 实测 p99)。
 
     这个守卫避免未来 'worker 太慢' 的反应被错误归结为降低 timeout。
     """
@@ -74,10 +75,59 @@ def test_dev_worker_timeout_sufficient_for_sonnet():
     )
     assert result.returncode == 0
     value = int(result.stdout.strip())
-    assert value >= 300, (
-        f"dev WORKER_TIMEOUT={value} 过紧,Sonnet worker 会 44-53% 假静默。"
-        f"参考 SHADOW_20RUN_FINAL_2026_04_16.md 数据,应 ≥ 300s (推荐 360)"
+    assert value >= 420, (
+        f"dev WORKER_TIMEOUT={value} 过紧。Sonnet worker 实测 p99 = 369-371s,"
+        f"必须 ≥ 420s 留 buffer。参考 workspace-对外投资/output/sessions/"
+        f"rev_1776410765,rev_1776412194。"
     )
+
+
+def test_prod_worker_timeout_sufficient_for_sonnet():
+    """prod 也必须留够 buffer,否则一致性回归。
+
+    实测 04-17 worker p99 = 371s,prod 之前 300s 等于擦边切。
+    prod ≥ 360s,留 buffer 但比 dev 紧 60s 体现 prod 对长尾的更严控制。
+    """
+    proj_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    env_vars = os.environ.copy()
+    env_vars["PECKER_ENV"] = "prod"
+    result = subprocess.run(
+        [sys.executable, "-c",
+         "from agent_config import WORKER_TIMEOUT; print(WORKER_TIMEOUT)"],
+        cwd=proj_root, env=env_vars,
+        capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode == 0
+    value = int(result.stdout.strip())
+    assert value >= 360, (
+        f"prod WORKER_TIMEOUT={value} 过紧,实测 p99 369-371s 会被切。"
+    )
+
+
+def test_total_timeout_ge_worker_plus_goshawk():
+    """TOTAL_REVIEW_TIMEOUT 必须 ≥ WORKER_TIMEOUT + GOSHAWK_TIMEOUT,否则 deadman switch 会
+    在还没等完单 worker + 苍鹰串行时间就先触发 (这是 04-17 之前 prod 的 bug:
+    300+300=600 但 TOTAL=720 只剩 120s buffer,worker stagger 0.3s × 4 + IO 一抖就爆)。
+    """
+    for env in ("dev", "prod", "test"):
+        proj_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        env_vars = os.environ.copy()
+        env_vars["PECKER_ENV"] = env
+        result = subprocess.run(
+            [sys.executable, "-c",
+             "from agent_config import WORKER_TIMEOUT, TOTAL_REVIEW_TIMEOUT, GOSHAWK_TIMEOUT;"
+             "print(WORKER_TIMEOUT, TOTAL_REVIEW_TIMEOUT, GOSHAWK_TIMEOUT)"],
+            cwd=proj_root, env=env_vars,
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0, f"{env}: {result.stderr}"
+        worker, total, goshawk = (int(x) for x in result.stdout.strip().split())
+        # worker 是并发的,总时长 = max(worker_duration) + goshawk_duration + buffer
+        assert total >= worker + goshawk, (
+            f"PECKER_ENV={env} TOTAL_REVIEW_TIMEOUT={total} < "
+            f"WORKER_TIMEOUT({worker}) + GOSHAWK_TIMEOUT({goshawk}) = {worker+goshawk},"
+            f" deadman switch 会在 worker+苍鹰串行没完时就先触发。"
+        )
 
 
 @pytest.mark.parametrize("env", ["dev", "prod", "test"])

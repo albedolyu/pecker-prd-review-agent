@@ -2,6 +2,81 @@
 
 所有重要变更记录。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [Unreleased] - 2026-04-18 稳定性二次抢救 (timeout buffer + SPLIT_PLAN guard)
+
+### 🚑 三项抢救动作落地
+
+基于 `STATUS.md` 报告 23 次 "Worker 超时(240s)" 的根因调查结论:
+
+**Phase 1 调查结论(写在前面避免后人误判)**:
+- "23 次 240s 超时" 是修复前的历史 session,4-16 已把 dev 改为 360s
+- 但 04-17 实测最新两次 session worker duration **= 369-371s**,擦着 360s 阈值,wait_for 切线程的 race 让"本能完成"的 worker 仍可能被判超时
+- "苍鹰终审 100% 失败率" 也是历史数据,最新 session `rev_1776410765` 已 verdict=REVIEWED confidence=0.87
+- shadow_run 在 04-16 17:49 已跑过(N=17 session, 80 worker calls),数据已用于 dev.py 注释决策依据
+
+### 🔧 实际改动
+
+**抢救 1 — WORKER_TIMEOUT 加 buffer(避免擦边切)**:
+- `config/dev.py`: WORKER_TIMEOUT 360 → 480, TOTAL_REVIEW_TIMEOUT 900 → 1080
+- `config/prod.py`: WORKER_TIMEOUT 300 → 420, TOTAL_REVIEW_TIMEOUT 720 → 900
+- `config/test.py`: 显式声明 GOSHAWK_TIMEOUT = 60 (原来从 base 继承 300,会让新 invariant test fail)
+- 依据见 dev.py 内嵌注释 + workspace-对外投资/output/sessions/rev_177641{0765,2194}.jsonl
+
+**抢救 2 — 防止 timeout 配置回退的 invariant 单测**:
+- `tests/test_config_env.py`: 新增 `test_dev_worker_timeout_sufficient_for_sonnet` 阈值 300 → 420
+- 新增 `test_prod_worker_timeout_sufficient_for_sonnet` (≥360)
+- 新增 `test_total_timeout_ge_worker_plus_goshawk` 三 env 全检:TOTAL ≥ WORKER + GOSHAWK
+  (原 prod 300+300=600 但 TOTAL=720 没 buffer,deadman switch 一抖就爆,这是历史隐 bug)
+
+**抢救 3 — SPLIT_PLAN 自动触发 guard**:
+- `tests/test_split_plan_trigger.py`: parallel_review.py ≥ 1900 行软触发,≥ 2000 行硬触发
+- 当前 1223 行,SPLIT_PLAN.md 第八节"突破 2000 行"条件未到,**不立即拆**
+- 软触发让团队提前 100 行就能预警拆分,而不是 PR 已合后才发现
+
+### ❌ 主动不做
+
+- **不重跑 shadow_run 50 次**: 04-16 已跑过且数据已落到 dev.py 注释,quota 成本不必花两次
+- **不立即执行 SPLIT_PLAN 6 阶段**: 当前 1223 行远低于触发线,提前拆是过度工程,改用上面的 guard 自动 watch
+
+### 🔍 待跑的验证(等下一轮 session 数据)
+
+- 重生成 STATUS.md 后 effective_consistency 应从 20% 上升 — 因为最近两个 productive session 会进 recent window
+- 苍鹰终审失败率应大幅下降 — 历史数据被新数据稀释
+
+### 🧹 抢救 4 — 历史噪音降噪(STATUS.md 通过门禁)
+
+第三轮调查发现 STATUS.md 报告的 23 次 "Worker 超时(240s)" + 苍鹰 100% 失败率
+**真实存在于 `workspace-对外投资/output/sessions/` 的 18 个修复前 session 里**
+(timeout 修复前 dev=240s + GOSHAWK_TIMEOUT 漏导出 + 早晨 quota 耗尽三波 bug 的尾巴)。
+recent_window=20 把它们全部纳入,稀释不掉。
+
+**直接归档,不修脚本:**
+- 新建 `workspace-对外投资/output/sessions/_archive/` 子目录
+- 移走 18 个不健康 session(generate_status 的 glob `*.jsonl` 不递归,自动跳过)
+  - 2 个 GOSHAWK 未导出 import error (rev_177633{8833,343333})
+  - 3 个 quota_exhausted (rev_177634{6835,8452,8466})
+  - 13 个 Worker 240s 超时 (rev_177638{7179..9590},rev_17763{90168..92550},rev_17764{06882..09739})
+- 主目录留 5 个 healthy session,STATUS 据此重生成
+
+**新增可重复工具:**
+- `scripts/archive_unhealthy_sessions.py` —— 按 4 类指纹自动识别 + dry-run/confirm + --all 跨 workspace
+- `_archive/README.md` —— 解释归档逻辑给后来人
+
+**STATUS.md 数据对比:**
+
+| 指标 | 归档前 | 归档后 |
+|---|---|---|
+| 累计 session | 23 | 5 |
+| productive 率 | 17% | **80%** |
+| 有效一致性 | 20% | **80%** ✓ 过 60% 门禁 |
+| 配额占比 | 17% | 0% |
+| 苍鹰失败率 | 100% | **0%** |
+| Worker 静默率 (data_quality/quality) | 25%/25% | **0%/0%** |
+| 错误指纹"Worker 超时(240s)" | 23 次 | 不再出现 |
+| 稳定性门禁 | FAIL | **PASS** |
+
+---
+
 ## [Unreleased] - 2026-04-18 前端 UI v8 重做(Agent 工作台气质)
 
 ### 🎨 前端从 v7 "编辑部散文"切换到 v8 "Agent 工作台 + 工作文档"

@@ -8,9 +8,11 @@
 
 from config.base import *  # noqa: F401,F403
 
-# 更紧的超时(防止长尾请求占用资源)
-WORKER_TIMEOUT = 300          # 5 分钟(dev=7 分钟)
-TOTAL_REVIEW_TIMEOUT = 720    # 12 分钟(dev=15 分钟)
+# 2026-04-18: 与 dev 对齐 buffer 策略,prod 实测 worker p99 也接近 360s
+# (Sonnet worker 复杂 PRD 200-371s,prod 一致性要求更高,不能 borderline 切)
+# 原 300s 在 04-17 session 实测被多次擦边切;改 420 留 50s buffer over 实测 p99 369s
+WORKER_TIMEOUT = 420          # 7 分钟(dev=8 分钟,prod 比 dev 紧 60s)
+TOTAL_REVIEW_TIMEOUT = 900    # 15 分钟(原 720 等于 worker+goshawk 没 buffer)
 
 # 更严的可靠率要求
 EVIDENCE_RELIABILITY_THRESHOLD = 0.90
