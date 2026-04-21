@@ -8,7 +8,7 @@ from typing import List
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from api.deps import get_project_root
+from api.deps import get_current_user, get_project_root
 
 router = APIRouter(tags=["workspaces"])
 
@@ -25,7 +25,10 @@ class WorkspaceInfo(BaseModel):
 
 
 @router.get("/workspaces", response_model=List[WorkspaceInfo])
-async def list_workspaces(project_root: Path = Depends(get_project_root)):
+async def list_workspaces(
+    project_root: Path = Depends(get_project_root),
+    user: dict = Depends(get_current_user),
+):
     """扫项目根下的 workspace-* 目录列表。
 
     排序: 按字典序。前端拿到后自己决定默认选哪个(通常用 URL query param 或 zustand 持久化)。

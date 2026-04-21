@@ -139,7 +139,11 @@ def _scan_wiki_for_prd(prd_content: str, wiki_path: Path) -> Dict[str, Any]:
 
 
 @router.post("/review/precheck", response_model=PrecheckResponse)
-async def precheck(req: PrecheckRequest, project_root: Path = Depends(get_project_root)):
+async def precheck(
+    req: PrecheckRequest,
+    project_root: Path = Depends(get_project_root),
+    user: dict = Depends(get_current_user),
+):
     """Phase 1 预检: wiki 扫描 + Claude 知识盲区分析。
 
     两步:
@@ -215,7 +219,11 @@ class ReviewRequest(BaseModel):
 
 
 @router.post("/review/run")
-async def run_review(req: ReviewRequest, request: Request):
+async def run_review(
+    req: ReviewRequest,
+    request: Request,
+    user: dict = Depends(get_current_user),
+):
     """Phase 2 评审 (SSE 流): 4 worker 并行 + 终审交叉校验。
 
     事件序列:

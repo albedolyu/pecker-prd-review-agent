@@ -16,7 +16,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from api.deps import get_project_root
+from api.deps import get_current_user, get_project_root
 
 router = APIRouter(tags=["drafts"])
 
@@ -55,7 +55,11 @@ def _draft_path(project_root: Path, reviewer: str) -> Path:
 
 
 @router.get("/drafts/{reviewer}")
-async def get_draft(reviewer: str, project_root: Path = Depends(get_project_root)):
+async def get_draft(
+    reviewer: str,
+    project_root: Path = Depends(get_project_root),
+    user: dict = Depends(get_current_user),
+):
     """读草稿。不存在或过期返回 404。"""
     path = _draft_path(project_root, reviewer)
     if not path.is_file():
@@ -89,6 +93,7 @@ async def save_draft(
     reviewer: str,
     payload: DraftPayload,
     project_root: Path = Depends(get_project_root),
+    user: dict = Depends(get_current_user),
 ):
     """保存/覆盖草稿。原子写 (tempfile + os.replace)。"""
     path = _draft_path(project_root, reviewer)
@@ -121,7 +126,11 @@ async def save_draft(
 
 
 @router.delete("/drafts/{reviewer}")
-async def delete_draft(reviewer: str, project_root: Path = Depends(get_project_root)):
+async def delete_draft(
+    reviewer: str,
+    project_root: Path = Depends(get_project_root),
+    user: dict = Depends(get_current_user),
+):
     """删除草稿。文件不存在也返回成功(幂等)。"""
     path = _draft_path(project_root, reviewer)
     if path.is_file():
