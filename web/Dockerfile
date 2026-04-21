@@ -37,6 +37,13 @@ COPY . .
 ARG HTTPS_PROXY
 ENV HTTPS_PROXY=${HTTPS_PROXY}
 
+# API_BASE_URL: Next.js 15 的 rewrites 在 build 阶段求值并序列化到
+# routes-manifest,runtime env 改不动。所以必须 build 阶段就设对。
+# 默认 host.docker.internal 覆盖"容器 frontend + 宿主机 api"场景(内测主力用法);
+# compose 环境下走 api:8000 可以传 --build-arg API_BASE_URL=http://api:8000 覆盖。
+ARG API_BASE_URL=http://host.docker.internal:8000
+ENV API_BASE_URL=${API_BASE_URL}
+
 RUN pnpm build
 
 # ============================================================

@@ -40,3 +40,6 @@ workspace/wiki/
 
 # 百灵代码扫描产物（180k 行 JSON,可由 riskbird_backend_analyzer.py 重建）
 workspace*/knowledge/backend_call_graph.json
+
+# Docker Compose 本地夹具(每个开发者的本地部署拓扑可能不同 · 如 api 容器化 vs 宿主机 uvicorn)
+docker-compose.override.yml

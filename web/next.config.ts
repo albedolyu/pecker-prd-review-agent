@@ -16,6 +16,9 @@ import type { NextConfig } from "next";
 
 // standalone output · Docker 镜像只拷 .next/standalone + .next/static + public · 体积小
 // Vercel 自动识别无视此配置
+// NOTE Next.js 15 的 SWC 会在 build 阶段把 rewrites 的 destination 序列化到
+// routes-manifest,runtime env 改不动。Docker build 的正确 API_BASE 由
+// web/Dockerfile 的 ARG/ENV API_BASE_URL 在 builder stage 注入。
 const API_BASE = process.env.API_BASE_URL ?? "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {
