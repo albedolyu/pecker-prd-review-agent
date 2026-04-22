@@ -1,0 +1,239 @@
+{
+  "workspace": "workspace-sample",
+  "reviewer": "claude-test",
+  "timestamp": 1776822462,
+  "items": [
+    {
+      "id": "R-001",
+      "rule_id": "V-04",
+      "location": "第 4 章 功能要求",
+      "severity": "must",
+      "action": "accept",
+      "is_true_positive": true
+    },
+    {
+      "id": "R-002",
+      "rule_id": "V-05",
+      "location": "第 4.3 章 上限 → 第 5 章 数据",
+      "severity": "must",
+      "action": "accept",
+      "is_true_positive": true
+    },
+    {
+      "id": "R-003",
+      "rule_id": "V-06",
+      "location": "全文（无对应章节）",
+      "severity": "must",
+      "action": "accept",
+      "is_true_positive": true
+    },
+    {
+      "id": "R-004",
+      "rule_id": "V-06",
+      "location": "第 4.2 章 收藏列表 / 第 5.2 章 字段依赖",
+      "severity": "must",
+      "action": "accept",
+      "is_true_positive": true
+    },
+    {
+      "id": "R-005",
+      "rule_id": "V-06",
+      "location": "第 4.2 章 收藏列表",
+      "severity": "must",
+      "action": "accept",
+      "is_true_positive": true
+    },
+    {
+      "id": "R-006",
+      "rule_id": "V-06",
+      "location": "第 6 章 异常处理",
+      "severity": "must",
+      "action": "accept",
+      "is_true_positive": true
+    },
+    {
+      "id": "R-007",
+      "rule_id": "V-06",
+      "location": "第 4.2 章 收藏列表",
+      "severity": "must",
+      "action": "accept",
+      "is_true_positive": true
+    },
+    {
+      "id": "R-008",
+      "rule_id": "V-07",
+      "location": "§4.3 上限 & §5 数据",
+      "severity": "must",
+      "action": "accept",
+      "is_true_positive": true
+    },
+    {
+      "id": "R-009",
+      "rule_id": "V-08",
+      "location": "§4.3 上限",
+      "severity": "must",
+      "action": "accept",
+      "is_true_positive": true
+    },
+    {
+      "id": "R-010",
+      "rule_id": "V-08",
+      "location": "§4.3 上限",
+      "severity": "must",
+      "action": "accept",
+      "is_true_positive": true
+    },
+    {
+      "id": "R-011",
+      "rule_id": "V-08",
+      "location": "§4.2 收藏列表",
+      "severity": "must",
+      "action": "accept",
+      "is_true_positive": true
+    },
+    {
+      "id": "R-012",
+      "rule_id": "V-10",
+      "location": "§5.2 字段依赖",
+      "severity": "must",
+      "action": "accept",
+      "is_true_positive": true
+    },
+    {
+      "id": "R-013",
+      "rule_id": "V-12",
+      "location": "§6 异常处理",
+      "severity": "must",
+      "action": "accept",
+      "is_true_positive": true
+    },
+    {
+      "id": "R-014",
+      "rule_id": "V-12",
+      "location": "§6 异常处理",
+      "severity": "must",
+      "action": "accept",
+      "is_true_positive": true
+    },
+    {
+      "id": "R-015",
+      "rule_id": "RC-004",
+      "location": "全文（缺失独立章节）",
+      "severity": "must",
+      "action": "accept",
+      "is_true_positive": true
+    },
+    {
+      "id": "R-016",
+      "rule_id": "RC-005",
+      "location": "第 4.2 节 收藏列表",
+      "severity": "must",
+      "action": "accept",
+      "is_true_positive": true
+    },
+    {
+      "id": "R-017",
+      "rule_id": "RC-005",
+      "location": "第 4.1 节 收藏按钮",
+      "severity": "must",
+      "action": "accept",
+      "is_true_positive": true
+    },
+    {
+      "id": "R-018",
+      "rule_id": "RC-008",
+      "location": "第 4.2 节 收藏列表",
+      "severity": "must",
+      "action": "accept",
+      "is_true_positive": true
+    },
+    {
+      "id": "R-019",
+      "rule_id": "RC-014",
+      "location": "第 4.2 节 收藏列表",
+      "severity": "must",
+      "action": "accept",
+      "is_true_positive": true
+    },
+    {
+      "id": "R-020",
+      "rule_id": "RC-009",
+      "location": "5.2 字段依赖",
+      "severity": "must",
+      "action": "accept",
+      "is_true_positive": true
+    },
+    {
+      "id": "R-021",
+      "rule_id": "RC-009",
+      "location": "5.2 字段依赖",
+      "severity": "must",
+      "action": "edit",
+      "is_true_positive": true
+    },
+    {
+      "id": "R-022",
+      "rule_id": "RC-010",
+      "location": "4.3 上限 / 5. 数据",
+      "severity": "must",
+      "action": "edit",
+      "is_true_positive": true
+    },
+    {
+      "id": "R-023",
+      "rule_id": "RC-010",
+      "location": "5.2 字段依赖",
+      "severity": "must",
+      "action": "edit",
+      "is_true_positive": true
+    },
+    {
+      "id": "R-024",
+      "rule_id": "RC-010",
+      "location": "5.2 字段依赖",
+      "severity": "must",
+      "action": "edit",
+      "is_true_positive": true
+    },
+    {
+      "id": "R-025",
+      "rule_id": "V-02",
+      "location": "文档头部（标题处）",
+      "severity": "should",
+      "action": "edit",
+      "is_true_positive": true
+    },
+    {
+      "id": "R-026",
+      "rule_id": "V-09",
+      "location": "§4.2 收藏列表",
+      "severity": "should",
+      "action": "reject",
+      "is_true_positive": false
+    },
+    {
+      "id": "R-027",
+      "rule_id": "V-09",
+      "location": "§4.2 收藏列表",
+      "severity": "should",
+      "action": "reject",
+      "is_true_positive": false
+    },
+    {
+      "id": "R-028",
+      "rule_id": "RC-007",
+      "location": "第 4.3 节 上限",
+      "severity": "should",
+      "action": "reject",
+      "is_true_positive": false
+    },
+    {
+      "id": "R-029",
+      "rule_id": "RC-015",
+      "location": "第 4.3 节 上限 / 第 5.2 节 字段依赖",
+      "severity": "should",
+      "action": "reject",
+      "is_true_positive": false
+    }
+  ]
+}
