@@ -1,5 +1,11 @@
 # 啄木鸟稳定性诊断报告
 
+> **快照注记 (2026-04-22)**:
+> - 本文档为 04-16 时点诊断,文中 17% / 18% 0-items / 70% zero-worker 等数据均为 04-13 那次 8×consistency eval(22 run)的实测。
+> - 诊断指向的 4 个 P0 bug(配额静默吞 / JSON 解析空壳 / 全员失败不 abort / 空 tool_use retry)已在 commits 784df10 / 99a8424 / b478df6 / 3540788 全部代码级落地。
+> - 当前 session-level 健康度(productive 比例)见根目录 [STATUS.md](../STATUS.md),但**这与本文的 22-run eval 级 consistency 是不同口径**,不能直接对比。
+> - 可比的 22-run eval 尚未重跑,下次跑完写入 `eval/results/劳动仲裁_eval_report_v5.md`。
+>
 > 诊断日期: 2026-04-16
 > 诊断范围: `eval/results/` 下 8 次劳动仲裁 consistency 评测（共 22 个 run）+ `workspace-对外投资/output/sessions/` 5 个 event_store session（20 个 worker_done events）
 > 工具: `eval/consistency_analyzer.py` + 自定义 JSON 解析

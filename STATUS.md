@@ -1,13 +1,13 @@
 # 啄木鸟项目状态 — 自动生成
 
-> 生成时间: 2026-04-18 23:34
+> 生成时间: 2026-04-22 14:17
 > 来源: git log + pytest + workspace-*/output/sessions
 > 本文件由 `scripts/generate_status.py` 生成,请勿手工编辑。
 
 ## 代码规模
 
 - 根目录 Python 文件: 49 个
-- 根目录总行数: 17,207
+- 根目录总行数: 16,062
 
 ## 测试状态
 
@@ -15,22 +15,22 @@
 
 ## 最近 14 天开发活动
 
-- commit 数: **68**
+- commit 数: **74**
 
 最近 10 条提交:
 
 | SHA | 日期 | 主题 |
 |-----|------|------|
+| `d73b204` | 2026-04-22 | docs(harness): 从 73 commits 沉淀 harness 工程规则集 (Top 10 + 36 规则) |
+| `4047a46` | 2026-04-22 | fix(web): Dockerfile 注入 API_BASE_URL build arg + gitignore 加 override |
+| `556b597` | 2026-04-21 | fix(api): 4 个端点补登录 guard + workspace-sample 目录 (内测前 P0) |
+| `7fc4603` | 2026-04-21 | fix(web): SSE / precheck base 同源化 · 修 Tunnel 内测阻塞 |
+| `3540788` | 2026-04-21 | fix(stability): timeout 二次抢救 + SPLIT_PLAN guard + 历史噪音归档 |
+| `5c8cd99` | 2026-04-19 | refactor(review): split parallel_review.py 1223 → 78 行 facade |
 | `63ba300` | 2026-04-18 | docs(preview): 紧急回退补注 · ?v=7 要先登录再加 |
 | `e63edd5` | 2026-04-18 | docs(preview): Cloudflare Tunnel 搭建 + PM 试用指南 + 3 份 sample PRD |
 | `353a935` | 2026-04-18 | ci(web): publish Docker image to GHCR + prod compose override |
 | `54ea2aa` | 2026-04-18 | chore(deploy): Vercel + Docker Compose 部署配置 + Web CI |
-| `18f683b` | 2026-04-18 | fix(web): wrap /review useSearchParams in Suspense for prod build |
-| `6a04ec1` | 2026-04-18 | feat(web): UI v8 — Agent workbench redesign (#2) |
-| `6810ad8` | 2026-04-16 | feat(observability): STATUS 自动生成 + impact_score 时序 chart + CI 门禁 + shadow 快照 |
-| `99a8424` | 2026-04-16 | fix(harness): P0/P1 稳定性修复 — 配额/超时/空提交/Windows 并发/依据验证 |
-| `ceb3d0a` | 2026-04-16 | refactor(review+clients): parallel_review 和 api_adapter 按职责拆到子包 |
-| `2b995b4` | 2026-04-16 | refactor(run_session): 拆分 run_session.py 为 5 个单一职责模块 |
 
 ## 真实运行指标 (evidence-based)
 
