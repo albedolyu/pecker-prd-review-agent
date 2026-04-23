@@ -17,5 +17,5 @@
 
 - **主代码改动前先读对应诊断/规划**：改 `review/` 子包（worker/prompting/orchestration）前读 `ARCHITECTURE.md` File Mapping 定位；改 worker 错误处理前读 `STABILITY_DIAGNOSIS.md`
 - **诊断文档不能让它"烂"**：定位的根因修掉后，诊断文档要补 "✅ 已修复 commit XXX"，否则下次又会被误读成仍存在的问题
-- **归档到 research/ 的触发条件**：研究笔记对应的代码改动入库后，顺手移到 `research/` 并在 `research/README.md` 登记
+- **归档到 research/ 的触发条件**：研究笔记对应的代码改动入库后，顺手移到 `research/` 并在 `docs/research/README.md` 登记
 - **诊断文档的生命周期**: 发现 → 写诊断 → 修复 → 标注已修复 → 保留 1-2 版本后移入 research/

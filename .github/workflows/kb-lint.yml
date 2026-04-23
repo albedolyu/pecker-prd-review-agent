@@ -1,0 +1,70 @@
+name: Knowledge Base Lint
+
+# 知识库与文档一致性门禁(warn-only,先积累假阳性数据,上线后再升级为 gate)
+#
+# 两个工具:
+#   1. scripts/doc_coherence.py — endpoint/env_vars/file_paths 三项机器可查一致性
+#   2. kakapo_dream.py --scan-only — wiki 健康度扫描(断链/孤立/过时/矛盾)
+#
+# 都用 continue-on-error: true, 不阻塞 PR merge。生成 artifact 让 reviewer 看。
+
+on:
+  pull_request:
+    paths:
+      - "**.md"
+      - "api/**"
+      - "shared-wiki/**"
+      - "workspace-sample/wiki/**"
+      - "docs/**"
+      - ".env.example"
+      - "scripts/doc_coherence.py"
+      - "kakapo_dream.py"
+      - ".github/workflows/kb-lint.yml"
+  push:
+    branches: [main]
+    paths:
+      - "**.md"
+      - "api/**"
+      - "shared-wiki/**"
+      - "workspace-sample/wiki/**"
+      - "docs/**"
+      - ".env.example"
+  workflow_dispatch:
+
+jobs:
+  kb-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Doc coherence (endpoints / env_vars / file_paths)
+        id: coherence
+        continue-on-error: true
+        run: |
+          python scripts/doc_coherence.py --check all --format json --output coherence.json
+          echo "---text summary---"
+          python scripts/doc_coherence.py --check all
+
+      - name: Kakapo wiki scan (shared-wiki)
+        id: kakapo
+        continue-on-error: true
+        run: |
+          if [ -d shared-wiki ]; then
+            python kakapo_dream.py --wiki-path shared-wiki --scan-only
+          else
+            echo "shared-wiki/ not present, skip"
+          fi
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kb-lint-reports
+          path: |
+            coherence.json
+          retention-days: 14
+          if-no-files-found: ignore
