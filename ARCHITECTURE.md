@@ -5,7 +5,7 @@
 ```mermaid
 flowchart TD
     subgraph "Phase 1 — Precheck"
-        A["POST /api/review/precheck<br/>wiki scan + Claude gap analysis<br/>model: sonnet | timeout: 30s"]
+        A["POST /api/review/precheck<br/>wiki scan + Claude gap analysis<br/>+ prompt_injection_scanner (warn-only)<br/>model: sonnet | timeout: 30s"]
     end
 
     subgraph "Phase 2 — Parallel Review (SSE)"
@@ -67,7 +67,7 @@ flowchart LR
 ```mermaid
 flowchart TD
     A["Phase 3: Y/N/E decisions"] --> B["_update_rule_perf_from_decisions"]
-    B --> C["rule_performance_history.json<br/>per rule: confirmed/rejected/missed<br/>impact_score (EMA alpha=0.15)"]
+    B --> C["rule_performance_history.json (schema v1 __meta__)<br/>per rule: confirmed/rejected/missed<br/>impact_score (EMA + time decay, half_life=90d)<br/>last_update_ts per rule"]
     C --> D["_build_feedback_section<br/>review/prompting.py"]
     D --> E["Worker system prompt injection<br/>- rejection_rate > 0.3 warning<br/>- missed > 2 warning<br/>- eval precision/recall < 0.6<br/>- low/high impact_score hints"]
     E --> F["Next review cycle<br/>Workers get feedback-aware prompts"]
@@ -122,6 +122,12 @@ flowchart TD
 | Prompt cache monitor | `cache_monitor.py` | `PromptCacheMonitor` |
 | Event sourcing | `event_store.py` | `EventStore` |
 | B-class semantic verify | `review/evidence_verify.py` | `_verify_b_class_semantic()` |
+| Rule perf store (v1) | `rule_perf_store.py` | `load()`, `save()`, `iter_rules()`, `_migrate()` |
+| Rule perf EMA + time decay | `rule_perf_decay.py` | `decay_to_neutral()`, `ema_with_time_decay()` |
+| Rule perf hygiene 对账 | `scripts/rule_perf_hygiene.py` | zombies / cold rules 扫描 |
+| Prompt injection scan | `prompt_injection_scanner.py` | `scan()`, `scan_inputs()` (warn-only) |
+| Per-tool-call trace | `review/worker.py`, `goshawk_advisor.py` | `on_tool_call` callback → `tool_call_done` event |
+| Stability metrics (含 retry_rate) | `scripts/stability_metrics.py` | `compute_metrics()`, `tool_breakdown` |
 
 ## Model Assignment
 
@@ -134,3 +140,25 @@ flowchart TD
 | Goshawk advisor (苍鹰) | opus | Cross-validation needs strongest model |
 | Haiku sanity check | haiku | Cheap binary agree/disagree |
 | Precheck gap analysis | sonnet | Lightweight knowledge scan |
+
+## Event Store Schema
+
+所有事件落 `event_store.jsonl`，下游 `stability_metrics` / audit / telemetry 工具消费。新事件追加时保持向后兼容（只加字段不改语义）。
+
+| Event type | 触发点 | 关键字段 |
+|---|---|---|
+| `review_started` | `run_review` 入口 | prd_name, mode, reviewer, wiki_pages_count, **injection_scan** (warn-only 扫描结果) |
+| `workers_started` | 并行 dispatch 前 | mode |
+| `tool_call_done` | 每次 tool 调用完成 (per-worker / per-goshawk) | dim_key, kind, model, duration_ms, tokens, cache_read, use_compact_tool |
+| `worker_done` | 单 worker 结束 | dim_key, telemetry {duration_ms, tokens, cost, model} |
+| `checkpoint` | 并行完成后 | workers_done, items_count |
+| `review_failed` | 全员失败 abort (P0-1) | failed_count, reasons |
+| `review_degraded` | 部分 worker 失败但继续 | degraded_dims, reasons |
+| `final_reviewer_started` / `final_reviewer_done` | Goshawk 前后 | items_count / verdict, confidence |
+| `review_completed` | Phase 2 全部完成 | final_items count, verdict |
+
+`tool_call_done.kind` 枚举（用于 `retry_rate` 计算）：
+- Worker: `initial` / `prompt_followup` / `empty_retry_followup`
+- Goshawk: `goshawk_initial` / `goshawk_retry` (指数退避) / `goshawk_prompt_followup` / `goshawk_empty_retry_followup`
+
+> `injection_scan` 是 `review_started` 事件的 payload 字段，不是独立事件 type — precheck 阶段同样扫描，结果挂在 precheck 响应 `injection_scan` 字段里（非 event）。

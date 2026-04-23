@@ -1,6 +1,12 @@
 # 啄木鸟 — 综合行动计划（2026-04-16 全盘审计后）
 
-> **快照注记 (2026-04-22)**: 本计划为 04-16 排序，P0 四项已全部代码级落地 (commits 784df10 / 99a8424 / b478df6 / 3540788)。当前稳定性现状请参见 [../STATUS.md](../STATUS.md)。
+> **快照注记 (2026-04-23)**: P0 四项已全部代码级落地 (commits 784df10 / 99a8424 / b478df6 / 3540788)。04-23 追加三波薄弱点修复：
+>
+> - **7 层 agent 薄弱** (commit b5ddf25)：编排层 worker 动态确认 / 可观测层 `tool_call_done` 事件 / 安全层 `prompt_injection_scanner` warn-only
+> - **记忆系统薄弱** (commit 7a5a127)：`rule_performance_history` schema 版本化 + `__meta__` / `scripts/rule_perf_hygiene` 对账 zombies+cold rules / `rule_perf_decay` EMA 时间衰减（半衰期 90d）
+> - **e2e 一键化** (commit f59e848)：Playwright webServer 自动启停 Next，CI 步骤 11→8
+>
+> 本清单以下条目按 04-16 排序。当前稳定性现状请参见 [../STATUS.md](../STATUS.md)，架构现状请参见 [../ARCHITECTURE.md](../ARCHITECTURE.md)。
 >
 > 这是 13 轮自主迭代审计的汇总行动清单，对跨散落的 5 份诊断/规划文档做聚合排序。
 > 每一项标注：紧迫度、工作量、依赖关系、落地文件。

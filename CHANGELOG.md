@@ -2,6 +2,57 @@
 
 所有重要变更记录。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [Unreleased] - 2026-04-23 Harness 薄弱点三波修复 (7 层 agent + 记忆系统 + e2e)
+
+### 🎯 7 层 agent 架构薄弱点修复 (commit b5ddf25)
+
+- **编排层**：确认 worker 已动态 (`for idx, dim_key in get_review_dimensions()`)，加 YAML 新维度时 orchestration 零改动；补注释消除"硬编码 4 worker"误判
+- **可观测层**：EventStore 新增 `tool_call_done` 事件，per-tool-call trace 覆盖 worker + goshawk
+  - `review/worker.py` `_worker_core` 加 `on_tool_call` callback，记录 `{dim_key, kind, model, duration_ms, tokens, cache_read, use_compact_tool}`
+  - `kind` 分三档：`initial` / `prompt_followup` / `empty_retry_followup`（goshawk 另加 `goshawk_retry` 指数退避）
+  - `scripts/stability_metrics.py` 聚合 `tool_breakdown`（按 `{dim_key}/{kind}` 分桶）+ `retry_rate`
+- **安全层**：新增 `prompt_injection_scanner.py`（10 个启发式 regex、英中双语），扫 PRD 正文 + raw_materials + user_notes
+  - `precheck` / `run_review` 入口调用，结果挂响应 + event store
+  - warn-only 不 block（技术 PRD 合法词如"指令/系统"易误伤），威胁模型定位是"无意识污染"
+  - 留 `PECKER_STRICT_INJECTION` 升级接口给未来强阻断
+
+### 🧠 记忆系统薄弱点修复 (commit 7a5a127)
+
+- **Schema 版本化** (`rule_perf_store.py`)：`rule_performance_history.json` 顶层 `__meta__ {schema_version, updated_at}`
+  - `load()` 自动识别 v0 (旧无 meta) / v1，走 `_migrate` 到当前版本
+  - 新 `iter_rules(data)` 供下游遍历时跳过 `__meta__`
+- **孤立规则对账** (`scripts/rule_perf_hygiene.py`)：扫 rule_performance_history vs dimensions checklist
+  - 僵尸规则 (zombies)：历史有数据但 checklist 已无 rule_id → wiki 删了但 EMA 残留
+  - 冷启动规则 (cold)：checklist 定义但从未触发 EMA → prompt 引导缺失
+  - kb-lint workflow 集成，warn-only + 上传 `rule_perf_hygiene.json` artifact
+- **EMA 时间衰减** (`rule_perf_decay.py`)：原 EMA 不感知时间，两个月前 reject 和昨天同权重
+  - 两步算法：`decay_to_neutral`（半衰期 90d 向 0.5 回归）→ `ema_with_time_decay`
+  - 半衰期通过 `PECKER_RULE_HALF_LIFE_DAYS` 可调
+  - `api/routes/review.py:_update_rule_perf_from_decisions` 替换原 EMA，保留 stats/rejection_rate/is_noisy
+
+### ⚡ e2e playwright 一键化 (commit f59e848)
+
+- `web/playwright.config.ts` 加 `webServer` 配置自动启停 Next (`reuseExistingServer: !CI`)
+- 本地 `make test-e2e-local` 一行搞定，不再需先 `pnpm dev`
+- CI `playwright-nightly.yml` 从 11 步缩到 8 步（删掉手工 Start/Stop Next + Dump log）
+- 实测：5 passed / 7.7s
+
+### 📊 回归
+
+- pytest: 537 → 572 passed (+35: 17 injection + 7 migration + 11 decay)
+- 无 regression
+
+### 明确延后
+
+- 第 4 层路由 quota 自动降级 → 等真实 quota 数据
+- 第 3 层 extended_thinking → CC CLI 不一定支持
+- 第 2 层 wiki 语义检索 → 上线后 wiki 上百页再做
+- 第 5 层 EMA rollback → 需 schema 版本化配合，架构级
+- 第 7 层 output filter → 等真实事件驱动
+- 记忆 #1/#4：降权后 A/B 证明 + golden set → 依赖真实 PM 决策数据
+
+---
+
 ## [Unreleased] - 2026-04-21 SSE / precheck base URL 同源化 (Tunnel 内测阻塞修复)
 
 ### 🐛 内测阻塞级 bug 定位
