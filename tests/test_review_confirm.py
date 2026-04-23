@@ -134,8 +134,9 @@ def test_items_without_rule_id_are_skipped(tmp_workspace):
     from api.routes.review import get_project_root
     hist = Path(get_project_root()) / ws / "output" / "rule_performance_history.json"
     data = json.loads(hist.read_text(encoding="utf-8"))
-    # 只有 V-05 被记录
-    assert list(data.keys()) == ["V-05"]
+    # 只有 V-05 被记录 (过滤 __meta__ schema 版本 key, 2026-04-23 #3 加)
+    rule_keys = [k for k in data.keys() if k != "__meta__"]
+    assert rule_keys == ["V-05"]
 
 
 def test_noisy_flag_set_when_rejection_rate_exceeds_threshold(tmp_workspace):

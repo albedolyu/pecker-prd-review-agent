@@ -64,6 +64,15 @@ jobs:
             echo "shared-wiki/ not present, skip"
           fi
 
+      - name: Rule perf hygiene (僵尸规则 + 冷启动扫描)
+        id: rule_perf_hygiene
+        continue-on-error: true
+        run: python scripts/rule_perf_hygiene.py
+
+      - name: Rule perf hygiene JSON (for artifact)
+        continue-on-error: true
+        run: python scripts/rule_perf_hygiene.py --format json > rule_perf_hygiene.json
+
       - name: Render PR comment (pull_request only)
         if: github.event_name == 'pull_request'
         continue-on-error: true
@@ -88,5 +97,6 @@ jobs:
           path: |
             coherence.json
             kb-comment.md
+            rule_perf_hygiene.json
           retention-days: 14
           if-no-files-found: ignore

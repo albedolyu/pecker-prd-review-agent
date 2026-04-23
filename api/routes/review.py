@@ -540,9 +540,11 @@ def _update_rule_perf_from_decisions(
 
         entry["stats"]["total"] += 1
 
-        # EMA 更新 impact_score
-        alpha = 0.15
+        # EMA 更新 impact_score (时间衰减版 — 2026-04-23 #2)
+        # 老数据按半衰期向 neutral(0.5) 回归, 让新数据权重更大
+        from rule_perf_decay import ema_with_time_decay
         old_score = entry.get("impact_score", 0.5)
+        last_ts = entry.get("last_update_ts")  # None 或 unix epoch
         if action == "accept":
             delta = 1.0
         elif action == "edit":
@@ -551,8 +553,11 @@ def _update_rule_perf_from_decisions(
             delta = -0.5
         else:
             delta = 0.0
-        new_score = alpha * delta + (1 - alpha) * old_score
-        entry["impact_score"] = round(max(0.0, min(1.0, new_score)), 3)
+        import time as _time
+        now_ts = _time.time()
+        new_score = ema_with_time_decay(old_score, last_ts, delta, now_ts=now_ts)
+        entry["impact_score"] = round(new_score, 3)
+        entry["last_update_ts"] = int(now_ts)
 
         # 更新驳回率和噪声标记
         total = entry["stats"]["total"]

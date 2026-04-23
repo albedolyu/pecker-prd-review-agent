@@ -36,7 +36,10 @@ def test_save_then_load_roundtrip(ws):
     store = RulePerformanceHistoryStore(ws)
     payload = {"V-08": {"stats": {"confirmed": 3, "rejected": 1, "total": 4}}}
     store.save(payload)
-    assert store.load() == payload
+    loaded = store.load()
+    # save 会自动加 __meta__ schema_version, 业务 rule 部分一致即可
+    assert loaded["V-08"] == payload["V-08"]
+    assert loaded["__meta__"]["schema_version"] == store.SCHEMA_VERSION
 
 
 def test_save_creates_output_dir(ws):
@@ -76,9 +79,11 @@ def test_save_is_atomic_no_half_write(ws, monkeypatch):
     with pytest.raises(RuntimeError):
         store.save({"V-02": {"new": True}})
 
-    # 原文件应该还在, 内容是上次保存的
+    # 原文件应该还在, 内容是上次保存的 (业务 rule 部分, __meta__ 不比较)
     monkeypatch.setattr("json.dump", orig_dump)
-    assert store.load() == {"V-01": {"ok": True}}
+    loaded = store.load()
+    assert loaded["V-01"] == {"ok": True}
+    assert "V-02" not in loaded  # bomb 的那次没落盘
 
     # tempfile 不应泄漏到 output/ 目录
     tmp_files = list((ws / "output").glob(".rule_perf_*.tmp"))
