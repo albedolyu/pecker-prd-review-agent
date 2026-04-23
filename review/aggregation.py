@@ -1,14 +1,70 @@
-"""多轮投票 + 跨 worker 合并去重.
+"""多轮投票 + 跨 worker 合并去重 + 跨章节一致性标记.
 
 从 parallel_review.py 拆出 (2026-04-16):
 - majority_vote: 多轮评审结果取交集,只保留 >= min_votes 次出现的 item
 - merge_and_deduplicate: 同轮多 worker 的 item 按 location+issue 相似度去重
 
-两个函数都用 SequenceMatcher 做文本相似度,独立无状态。
+2026-04-23 新增 (gate 6 核心卖点): is_cross_section_contradiction 启发式,
+标记"同一事实/规格在 PRD 多处矛盾"这类手工 review 最易漏的 item. 前端 Phase 3
+可拎到最前栏置顶展示.
+
+两个主函数都用 SequenceMatcher 做文本相似度,独立无状态。
 parallel_review.py re-export 供外部 import 保持兼容。
 """
 
+import re
 from difflib import SequenceMatcher
+
+
+# 跨章节矛盾的典型信号词 (出现在 location 或 issue 里)
+_CROSS_SECTION_SIGNALS = (
+    "矛盾", "不一致", "冲突", "互斥",
+    "前后", "两处", "两次", "多处",
+    "vs ", " vs", " vs.",
+    " ≠ ", " != ",
+    "分别描述为", "分别写", "一处写", "另一处写",
+)
+
+
+def _is_cross_section_contradiction(item: dict) -> bool:
+    """启发式判断一条 item 是否在描述跨章节矛盾.
+
+    判定标准(满足任一即可):
+    1. location 含 "vs" / "两处" / "/" 分隔的多个章节号 (§X.X vs §Y.Y)
+    2. issue 文本含典型信号词 ("矛盾"/"不一致"/"前后"/"冲突" 等)
+    3. rule_id 是 V-06(可追溯链完整性) + V-05(信息完整性/自洽) 这类天然跨章节规则
+
+    不处理假阴性(会漏一些隐晦矛盾), 重点是不误伤 — 明显矛盾才标, 让前端栏位
+    保持高密度.
+    """
+    location = (item.get("location") or "")
+    issue = (item.get("issue") or "")
+    rule_id = (item.get("rule_id") or "").strip()
+
+    # 规则级: V-05 / V-06 本身就是跨章节自洽/追溯
+    if rule_id in ("V-05", "V-06"):
+        return True
+
+    # location 级: "§6 vs §3" / "§X / §Y" 含多个章节引用
+    section_hits = len(re.findall(r"§\s*\d", location))
+    if section_hits >= 2:
+        return True
+
+    # 文本级: location + issue 合并后扫信号词
+    combined = location + " " + issue
+    for signal in _CROSS_SECTION_SIGNALS:
+        if signal in combined:
+            return True
+
+    return False
+
+
+def tag_cross_section_items(items: list) -> list:
+    """原地给每个 item 加 is_cross_section 布尔字段. 返回同一 list 方便链式."""
+    for item in items:
+        if isinstance(item, dict):
+            item["is_cross_section"] = _is_cross_section_contradiction(item)
+    return items
 
 
 def majority_vote(all_runs_items, min_votes=2):
@@ -127,5 +183,8 @@ def merge_and_deduplicate(items):
     # 重新编号
     for i, item in enumerate(kept, start=1):
         item["id"] = f"R-{i:03d}"
+
+    # 标记跨章节矛盾 items (给 Phase 3 前端置顶栏位用)
+    tag_cross_section_items(kept)
 
     return kept

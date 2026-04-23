@@ -1,6 +1,13 @@
-"""POST /api/audit — 前端事件审计日志,追加到 logs/user_actions.jsonl
+"""POST /api/audit — 前端事件审计日志,按日期轮转到 logs/user_actions_YYYYMMDD.jsonl
 
-复用 app.py Step 2.5 的 `_audit_log` 逻辑。
+2026-04-23 按日轮转: 之前写单一 user_actions.jsonl 无上限, 内测几个月后单文件
+会膨胀到 MB 级. 改成按天切分:
+- logs/user_actions_20260423.jsonl  (今天)
+- logs/user_actions_20260424.jsonl  (明天)
+- ...
+
+读取侧(如 count_today_reviews / stability_metrics)扫匹配 pattern 即可.
+旧的 user_actions.jsonl 保留读取兼容, 新写入走新文件.
 """
 from __future__ import annotations
 
@@ -31,11 +38,13 @@ async def log_audit(
     user: dict = Depends(get_current_user),
     project_root: Path = Depends(get_project_root),
 ):
-    """追加一行 jsonl 审计日志。失败静默(不阻塞前端)。"""
+    """追加一行 jsonl 审计日志, 按日期轮转. 失败静默(不阻塞前端)."""
     try:
         log_dir = project_root / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
-        log_path = log_dir / "user_actions.jsonl"
+        # 按日切分: user_actions_YYYYMMDD.jsonl
+        day_tag = time.strftime("%Y%m%d")
+        log_path = log_dir / f"user_actions_{day_tag}.jsonl"
 
         entry = {
             "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
@@ -61,9 +70,18 @@ async def count_today_reviews(
     reviewer: str,
     project_root: Path = Depends(get_project_root),
 ):
-    """数某个 reviewer 今天 review_started 次数,给顶部 banner 用。"""
+    """数某个 reviewer 今天 review_started 次数,给顶部 banner 用.
+
+    2026-04-23 起读今天 user_actions_<today>.jsonl (按日轮转后), 不存在时
+    兼容读旧的 user_actions.jsonl(未轮转前历史数据)."""
     try:
-        log_path = project_root / "logs" / "user_actions.jsonl"
+        logs_dir = project_root / "logs"
+        day_tag = time.strftime("%Y%m%d")
+        today_path = logs_dir / f"user_actions_{day_tag}.jsonl"
+        legacy_path = logs_dir / "user_actions.jsonl"
+
+        # 新路径不存在且旧路径存在 → 读旧的(向后兼容迁移期)
+        log_path = today_path if today_path.is_file() else legacy_path
         if not log_path.is_file():
             return {"reviewer": reviewer, "count": 0}
 

@@ -134,7 +134,7 @@ async def root():
 # 注册路由(每个子模块独立,便于分阶段实现)
 # ============================================================
 
-from api.routes import workspaces, drafts, audit, review, reports, feishu, auth
+from api.routes import workspaces, drafts, audit, review, reports, feishu, auth, metrics
 app.include_router(workspaces.router, prefix="/api")
 app.include_router(drafts.router, prefix="/api")
 app.include_router(audit.router, prefix="/api")
@@ -142,3 +142,4 @@ app.include_router(review.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
 app.include_router(feishu.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
+app.include_router(metrics.router, prefix="/api")

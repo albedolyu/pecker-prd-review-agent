@@ -486,6 +486,35 @@ export function Phase2RunningV8() {
               {mode === "quick" ? "quick" : "standard"}
             </span>
           </span>
+          {(stream.state === "running" || stream.state === "connecting") && (
+            <>
+              <span
+                style={{
+                  width: 1,
+                  height: 14,
+                  background: "var(--border-default)",
+                }}
+              />
+              <span>
+                <span style={{ opacity: 0.6 }}>eta</span>{" "}
+                <span
+                  style={{
+                    color: elapsed > 480
+                      ? "var(--status-failed-dot)"
+                      : elapsed > 180
+                        ? "var(--text-default)"
+                        : "var(--text-muted)",
+                  }}
+                >
+                  {elapsed > 480
+                    ? "超预期, 仍在进行"
+                    : elapsed > 300
+                      ? "正常, 预计 3-8 分钟"
+                      : "预计 3-8 分钟"}
+                </span>
+              </span>
+            </>
+          )}
         </div>
       </header>
 
