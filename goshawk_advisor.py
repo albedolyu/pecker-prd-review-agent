@@ -223,23 +223,9 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
 
     import time
 
-    _deadline_hit = False
+    from deadline_coordinator import DeadlineCoordinator
     # 估单次 retry 分支最坏耗时: sleep 2-2.5s + API call 5-30s Opus
-    _MIN_BUDGET_PER_RETRY = 8.0
-
-    def _time_left():
-        if deadline is None:
-            return float("inf")
-        return max(0.0, deadline - time.monotonic())
-
-    def _can_afford_retry():
-        nonlocal _deadline_hit
-        left = _time_left()
-        if left < _MIN_BUDGET_PER_RETRY:
-            _deadline_hit = True
-            log.warning(f"苍鹰剩余 {left:.1f}s < {_MIN_BUDGET_PER_RETRY}s, 跳过 retry 分支")
-            return False
-        return True
+    coord = DeadlineCoordinator(deadline=deadline, min_per_retry=8.0)
 
     def _call(msgs):
         return client.create(
@@ -265,7 +251,8 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
                 raise
             delay = 2 ** (attempt + 1) + random.uniform(0, 1)
             # deadline 感知: 剩余时间不够再做一轮就主动放弃
-            if not _can_afford_retry():
+            if not coord.can_afford_retry():
+                log.warning(f"苍鹰剩余 {coord.time_left():.1f}s < 8s, 跳过指数退避")
                 raise
             print(f"  终审 API 异常 (第{attempt + 1}次)，{delay:.1f}s 后重试: {str(e)[:60]}")
             time.sleep(delay)
@@ -275,7 +262,7 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
     has_tool = any(block.type == "tool_use" for block in response.content)
     empty_retry_used = False
 
-    if not has_tool and _can_afford_retry():
+    if not has_tool and coord.can_afford_retry():
         print("  终审未调用 tool，催促重试...")
         text_parts = "\n".join(block.text for block in response.content if block.type == "text")
         followup_msgs = messages + [
@@ -293,7 +280,7 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
                 has_tool = True
         except Exception as e:
             log.warning(f"苍鹰催促 retry 失败: {str(e)[:80]}")
-    elif _is_empty_advisor_submission(response) and _can_afford_retry():
+    elif _is_empty_advisor_submission(response) and coord.can_afford_retry():
         # 苍鹰调了 tool 但三数组全空 — 同 worker 空提交 bug,给一次复核机会
         # cost: 仅 sonnet 一次额外调用,比 worker 层更值得 (苍鹰本就是关键交叉校验)
         log.warning("苍鹰首轮空提交(无误报/漏报/冲突),re-prompt 复核")
@@ -342,7 +329,7 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
     result["model_used"] = model
     result["empty_retry_used"] = empty_retry_used
     # deadline 触发过 retry skip → 上层应知道这是降级终审,不是完整结果
-    if _deadline_hit:
+    if coord.was_hit:
         result["truncated_by_deadline"] = True
     # 保存 usage 供成本归因 (CC cost-tracker querySource 模式)
     result["usage"] = {

@@ -20,6 +20,7 @@ import json
 import os
 import random
 import time
+from typing import Any, Dict, List, Optional
 
 from logger import get_logger
 from review.dimensions import (
@@ -33,6 +34,7 @@ from review.prompting import (
     _build_worker_messages,
     _build_worker_system,
 )
+from review.types import WorkerResult
 
 log = get_logger("parallel")
 
@@ -234,9 +236,13 @@ def _parse_items_from_text(text):
 # ============================================================
 
 
-def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_perf_history=None, wiki_path=None, diff_context=None):
+def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_perf_history=None, wiki_path=None, diff_context=None) -> WorkerResult:
     """Worker 核心逻辑（sync），返回首次 API 响应和处理后的 items 列表。
-    async 版本通过 run_in_executor 包装此函数。"""
+    async 版本通过 run_in_executor 包装此函数。
+
+    返回 review.types.WorkerResult (TypedDict): dimension/items/usage/cost_usd/
+    model_used/telemetry; 运行时仍是普通 dict, TypedDict 只给 IDE/mypy 静态检查。
+    """
     # 3a: telemetry — 记录 worker 开始时间
     start_time = time.time()
     dimensions = get_review_dimensions()
@@ -452,7 +458,7 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
     }
 
 
-async def _run_worker_async(client, dim_key, prd_content, wiki_pages, model_tiers, rule_perf_history=None, wiki_path=None, diff_context=None):
+async def _run_worker_async(client, dim_key, prd_content, wiki_pages, model_tiers, rule_perf_history=None, wiki_path=None, diff_context=None) -> WorkerResult:
     """异步包装：在线程池中执行 _worker_core，带超时保护"""
     from agent_config import WORKER_TIMEOUT
     loop = asyncio.get_running_loop()
@@ -477,6 +483,6 @@ async def _run_worker_async(client, dim_key, prd_content, wiki_pages, model_tier
         }
 
 
-def _run_worker_sync(client, dim_key, prd_content, wiki_pages, model_tiers, rule_perf_history=None, wiki_path=None, diff_context=None):
+def _run_worker_sync(client, dim_key, prd_content, wiki_pages, model_tiers, rule_perf_history=None, wiki_path=None, diff_context=None) -> WorkerResult:
     """同步包装：直接调用 _worker_core"""
     return _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_perf_history, wiki_path, diff_context)

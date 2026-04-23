@@ -22,6 +22,7 @@ from review.dimensions import (
     _get_rule_perf_history_path,
     get_review_dimensions,
 )
+from review.types import ParallelReviewResult
 from review.worker import _run_worker_async, _run_worker_sync
 
 log = get_logger("parallel")
@@ -137,7 +138,7 @@ async def _single_round_async(client, prd_content, wiki_pages, model_tiers, wiki
     return workers, merged, total_input, total_output
 
 
-async def parallel_review(client, prd_content, wiki_pages, model_tiers, voting_rounds=1, wiki_path=None, diff_context=None, on_worker_done=None, workspace=None):
+async def parallel_review(client, prd_content, wiki_pages, model_tiers, voting_rounds=1, wiki_path=None, diff_context=None, on_worker_done=None, workspace=None) -> ParallelReviewResult:
     """
     并行执行 4 个评审维度的 worker，合并结果
     - client: anthropic.Anthropic 实例
@@ -268,7 +269,7 @@ def _single_round_sync(client, prd_content, wiki_pages, model_tiers, wiki_path=N
     return workers, merged, total_input, total_output
 
 
-def parallel_review_sync(client, prd_content, wiki_pages, model_tiers, voting_rounds=1, wiki_path=None, diff_context=None, workspace=None):
+def parallel_review_sync(client, prd_content, wiki_pages, model_tiers, voting_rounds=1, wiki_path=None, diff_context=None, workspace=None) -> ParallelReviewResult:
     """
     同步版本：顺序执行 4 个 worker（给不方便用 async 的场景）
     接口和返回值与 parallel_review 一致
