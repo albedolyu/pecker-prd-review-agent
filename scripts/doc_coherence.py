@@ -158,11 +158,11 @@ def check_endpoints() -> List[Finding]:
                 continue
             seen.add(doc_path)
             if not _path_matches(doc_path, route_paths):
-                rel = md.relative_to(PROJECT_ROOT)
+                rel = md.relative_to(PROJECT_ROOT).as_posix()
                 findings.append(Finding(
                     "endpoints", "warn",
                     f"文档提到 endpoint `{doc_path}` 但 FastAPI 路由里不存在",
-                    where=str(rel),
+                    where=rel,
                 ))
     return findings
 
@@ -274,11 +274,11 @@ def check_file_paths() -> List[Finding]:
             seen.add(key)
             full = PROJECT_ROOT / path
             if not full.exists():
-                rel = md.relative_to(PROJECT_ROOT)
+                rel = md.relative_to(PROJECT_ROOT).as_posix()
                 findings.append(Finding(
                     "file_paths", "warn",
                     f"文档引用的路径 `{path}` 在仓库中不存在",
-                    where=str(rel),
+                    where=rel,
                 ))
     return findings
 

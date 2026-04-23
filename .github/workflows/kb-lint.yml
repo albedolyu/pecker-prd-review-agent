@@ -18,6 +18,7 @@ on:
       - "docs/**"
       - ".env.example"
       - "scripts/doc_coherence.py"
+      - "scripts/_render_kb_comment.py"
       - "kakapo_dream.py"
       - ".github/workflows/kb-lint.yml"
   push:
@@ -30,6 +31,10 @@ on:
       - "docs/**"
       - ".env.example"
   workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write  # sticky-pull-request-comment 需要
 
 jobs:
   kb-lint:
@@ -59,6 +64,20 @@ jobs:
             echo "shared-wiki/ not present, skip"
           fi
 
+      - name: Render PR comment (pull_request only)
+        if: github.event_name == 'pull_request'
+        run: |
+          python scripts/_render_kb_comment.py coherence.json > kb-comment.md
+          echo "---comment preview---"
+          cat kb-comment.md
+
+      - name: Post sticky comment on PR
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: kb-lint
+          path: kb-comment.md
+
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -66,5 +85,6 @@ jobs:
           name: kb-lint-reports
           path: |
             coherence.json
+            kb-comment.md
           retention-days: 14
           if-no-files-found: ignore
