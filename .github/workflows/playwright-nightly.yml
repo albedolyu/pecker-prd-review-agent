@@ -66,30 +66,10 @@ jobs:
       - name: Build Next
         run: pnpm build
 
-      - name: Start Next in background
-        run: |
-          nohup pnpm start --port 3000 > /tmp/next-start.log 2>&1 &
-          echo $! > /tmp/next.pid
-          # poll 60s 等 ready
-          for i in $(seq 1 30); do
-            if curl -sf http://127.0.0.1:3000 > /dev/null; then
-              echo "next ready after ${i}×2=$((i*2))s"
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "::error::next server 60s 内未起, 日志如下"
-          cat /tmp/next-start.log
-          exit 1
-
+      # playwright.config.ts 里的 webServer 配置会自动启停 next start :3000,
+      # 不需要再手动 bg 启 + poll + kill.
       - name: Run Playwright e2e (smoke + v8-routes)
         run: pnpm exec playwright test --project chromium-desktop
-
-      - name: Dump Next server log on failure
-        if: failure()
-        run: |
-          echo "=== Next server log ==="
-          cat /tmp/next-start.log || echo "(no log)"
 
       - name: Upload Playwright report + test-results
         if: always()
@@ -101,10 +81,3 @@ jobs:
             web/test-results/
           retention-days: 14
           if-no-files-found: ignore
-
-      - name: Stop Next
-        if: always()
-        run: |
-          if [ -f /tmp/next.pid ]; then
-            kill "$(cat /tmp/next.pid)" 2>/dev/null || true
-          fi

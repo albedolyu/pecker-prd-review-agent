@@ -61,4 +61,16 @@ export default defineConfig({
       maxDiffPixelRatio: 0.05,
     },
   },
+
+  // 自动启停 next server (2026-04-23 加), 本地一键 + CI 一键.
+  // reuseExistingServer: 本地若已手动 `pnpm dev` 开在 3000, 就复用不重启;
+  // CI 里没已有 server, 每次 fresh 启. next start 比 dev 快, 适合 e2e.
+  webServer: {
+    command: "pnpm start --port 3000",
+    url: "http://127.0.0.1:3000",
+    reuseExistingServer: !process.env.CI,
+    timeout: 120 * 1000,
+    stdout: "pipe",
+    stderr: "pipe",
+  },
 });

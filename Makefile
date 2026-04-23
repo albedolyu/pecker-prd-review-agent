@@ -24,7 +24,7 @@ test-py:  ## 只跑 Python 单测
 test-web:  ## 只跑前端单测
 	cd web && pnpm test
 
-test-e2e-local:  ## 本地 e2e (用系统 Chrome 绕 Windows headless-shell 坏掉的问题). 需手动先起 pnpm dev
+test-e2e-local:  ## 本地 e2e, playwright.webServer 自动起停 next (需先 pnpm build)
 	cd web && pnpm exec playwright test --project chrome-local
 
 lint:  ## ESLint + doc_coherence
