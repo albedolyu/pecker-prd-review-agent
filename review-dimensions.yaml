@@ -209,15 +209,22 @@ dimensions:
     name: "数据质量"
     codename: "鸬鹚"
     model: "sonnet"  # haiku 对复杂字段映射判定不够稳定，升级到 sonnet
-    wiki_keywords: ["字段", "映射", "DDL", "数值", "数据", "JOIN"]
+    wiki_keywords: ["字段", "映射", "DDL", "数值", "数据", "JOIN", "物理表", "字段类型", "NOT NULL", "索引"]
     rules: |
       RC-009~RC-010，逐条检查：
 
-      RC-009 字段映射一致性（must）：字段映射表中字段名与物理表 DDL 一致；跨表字段须标注 JOIN 来源和优先级。
+      RC-009 物理表定义一致性（must）：PRD 中引用的每张物理表(如 ds_risk_court_mediation)须有完整声明,缺任一要素即 fail:
+        a) 字段名与 DDL 一致(字段映射表/JOIN 说明里的列名,原规则保留);
+        b) 字段类型/长度(VARCHAR(20) / INT / TIMESTAMP 等),PRD 未声明即 fail,禁止"含糊类字段";
+        c) 可空性 / NOT NULL / 默认值(重要字段须明示);
+        d) 索引与唯一约束(用作筛选/排序/JOIN 键的字段须标注是否有索引);
+        e) 跨表字段须标注 JOIN 来源 + 优先级。
+        注意: 评审 agent 不连真实数据库查 schema, 仅基于 PRD 正文 + wiki 引用内部自洽判断。
+        PRD 里完全没 DDL 片段也是 fail (除非明确引用了 wiki 里既有的表定义)。
       RC-010 数值类字段标注来源（must）：数值类字段（分页数/导出上限/阈值）须标注来源或标注 TBD；跨表字段须说明空值降级处理。
     checklist:
       - rule_id: "RC-009"
-        name: "字段映射一致性"
+        name: "物理表定义一致性"
         enabled: true
         owner: data_quality
       - rule_id: "RC-010"
