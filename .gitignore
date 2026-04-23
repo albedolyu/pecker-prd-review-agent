@@ -35,6 +35,14 @@ pecker-release/__pycache__/
 workspace*/output/
 workspace*/.sessions/
 
+# 真实业务 PRD 工作区（不入公共 repo · workspace-sample 是脱敏 demo,仍可入库）
+workspace-fengniao-mediation/
+workspace-points-payment/
+
+# 桌面误拖入的业务 docx / Office 锁文件
+*.docx
+~$*
+
 # 嵌入的 git 子仓库（wiki 独立管理）
 workspace/wiki/
 
