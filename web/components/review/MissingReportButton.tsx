@@ -185,7 +185,7 @@ export function MissingReportButton({
                   margin: 0,
                 }}
               >
-                报一个"他们没提"的问题
+                报一个&ldquo;他们没提&rdquo;的问题
               </h2>
               <p
                 style={{

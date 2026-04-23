@@ -29,7 +29,7 @@ import {
 import { toast } from "sonner";
 
 import { useReviewStore } from "@/lib/store";
-import { ROLES, WORKER_ROLE_KEYS, type RoleKey } from "@/lib/roles";
+import { WORKER_ROLE_KEYS, type RoleKey } from "@/lib/roles";
 import {
   useReviewStream,
   type ReviewStreamEvent,
@@ -132,6 +132,7 @@ export function Phase2RunningV8() {
   useEffect(() => {
     if (!triggered.current && stream.state === "idle") {
       triggered.current = true;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 首次进入触发外部评审任务,triggered.current 守卫防止重入
       startReview();
     }
   }, [startReview, stream.state]);
@@ -151,6 +152,7 @@ export function Phase2RunningV8() {
   useEffect(() => {
     if (stream.state === "done" && stream.result) {
       setReviewResult(stream.result);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 只在 done 时切换一次到健康度页,条件收敛
       setShowHealthCheck(true);
     }
   }, [stream.state, stream.result, setReviewResult]);
@@ -623,7 +625,7 @@ function buildConsoleLines(
   const lines: ConsoleLine[] = [];
   let startTs: number | null = null;
 
-  const tag = (i: number): string => {
+  const tag = (): string => {
     if (startTs == null) {
       startTs = Date.now();
       return "0.0s";
@@ -632,8 +634,8 @@ function buildConsoleLines(
     return `${elapsed.toFixed(1)}s`;
   };
 
-  events.forEach((e, i) => {
-    const t = tag(i);
+  events.forEach((e) => {
+    const t = tag();
     switch (e.event) {
       case "uploaded":
         lines.push({

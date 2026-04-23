@@ -184,7 +184,7 @@ export default function SystemPromptsPage() {
             lineHeight: 1.55,
           }}
         >
-          看每只鸟当前的 prompt 摘要 + 激活的 rule 集 + 本周 hit/reject · 未来支持"临时覆盖权重"做实验
+          看每只鸟当前的 prompt 摘要 + 激活的 rule 集 + 本周 hit/reject · 未来支持&ldquo;临时覆盖权重&rdquo;做实验
         </p>
       </header>
 

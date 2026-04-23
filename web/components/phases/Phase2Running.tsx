@@ -103,6 +103,7 @@ export function Phase2Running() {
   useEffect(() => {
     if (!triggered.current && stream.state === "idle") {
       triggered.current = true;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 首次进入触发外部评审任务,triggered.current 守卫防止重入
       startReview();
     }
   }, [startReview, stream.state]);

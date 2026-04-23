@@ -23,8 +23,10 @@ from api.deps import (
     get_workspace_dir,
     review_semaphore,
 )
+from api.budget_gate import budget_status_snapshot, check_budget, record_review_cost
 from api.models import ConfirmRequest, ReviewResult, verify_review_result
 from api.stream import ReviewProgressEmitter, sse_review_pipeline
+from api.workspace_acl import require_workspace_access
 
 # 预检 wiki scan 缓存(同一 workspace 10 分钟内复用)
 _wiki_scan_cache: Dict[str, Any] = {}
@@ -154,6 +156,7 @@ async def precheck(
     """
     import time as _time
     ws_dir = get_workspace_dir(req.workspace)
+    require_workspace_access(ws_dir, user)
     wiki_path = ws_dir / "wiki"
     if not wiki_path.is_dir():
         wiki_path = project_root / "shared-wiki"
@@ -190,6 +193,14 @@ async def precheck(
         text = response.content[0].text if response.content else "{}"
         m = re.search(r'\{[\s\S]*\}', text)
         llm_result = json.loads(m.group()) if m else {"strong": [], "weak": [], "gaps": []}
+
+        # 预检成本计入每日预算(防 precheck 端点被无限刷 → 逃票)
+        try:
+            from api_adapter import compute_call_cost_usd
+            _cost = compute_call_cost_usd(MODEL_TIERS["sonnet"], response.usage)
+            record_review_cost(project_root, _cost, user.get("reviewer", ""))
+        except Exception:
+            pass  # 记账失败不阻塞预检
     except Exception as e:
         # 预检失败不阻塞流程,返回本地 wiki 扫描结果
         llm_result = {"strong": [], "weak": [], "gaps": [f"预检失败: {str(e)[:100]}"]}
@@ -234,7 +245,11 @@ async def run_review(
 
     客户端断开时 cancel 主任务,semaphore 在 finally 释放。
     """
-    get_workspace_dir(req.workspace)  # 校验 workspace 合法
+    ws_dir = get_workspace_dir(req.workspace)  # 校验 workspace 合法
+    require_workspace_access(ws_dir, user)
+
+    # 预算卡: 超限直接 429 阻止新评审
+    budget_status = check_budget(get_project_root())
 
     # 注入 WORKSPACE env var(parallel_review 延迟解析会读)
     os.environ["WORKSPACE"] = str(get_project_root() / req.workspace)
@@ -394,6 +409,12 @@ async def run_review(
         cost_breakdown["total"] = round(total_cost, 6)
         result["cost_breakdown"] = cost_breakdown
 
+        # 预算卡: append 本次实际成本到 logs/daily_cost_*.jsonl
+        try:
+            record_review_cost(get_project_root(), total_cost, req.reviewer)
+        except Exception as _e:
+            log.warning(f"[budget] record_review_cost 失败,不阻塞: {_e}")
+
         # 3c: 结构化 telemetry 汇总 (CC telemetry 模式)
         import time as _time
         worker_telemetry = {}
@@ -420,12 +441,14 @@ async def run_review(
             cost_breakdown=cost_breakdown,
         )
 
-        # Pattern 21: review 完成事件(带 result 摘要)
+        # Pattern 21: review 完成事件(带 result 摘要 + 预算状态,给运维/前端 visibility)
+        _budget_after = budget_status_snapshot(get_project_root())
         evt.append("review_completed", {
             "review_id": review_result_handle.review_id,
             "items_count": len(result.get("merged_items", [])),
             "total_cost_usd": cost_breakdown.get("total", 0),
             "duration_ms": int((_time.time() - _pipeline_start) * 1000),
+            "budget": _budget_after,
         })
 
         return review_result_handle.model_dump()
@@ -434,7 +457,7 @@ async def run_review(
         async for chunk in sse_review_pipeline(
             emitter,
             _pipeline(),
-            is_disconnected=lambda: False,  # TODO: 接 request.is_disconnected()
+            is_disconnected=request.is_disconnected,
         ):
             yield chunk
 
@@ -619,6 +642,13 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
     """
     # Step 1: 验证 opaque handle signature
     verify_review_result(req.review_result)
+
+    # ACL: workspace 取自已签名的 review_result(signature 不覆盖 workspace,但 review_id 唯一性
+    # + items 签名已挡住了"换一份 review 结果"的攻击; 这里只挡"换 workspace 写 rule_perf"的情况)
+    _ws_name = (req.review_result.get("workspace") or "").strip()
+    if _ws_name:
+        _ws_dir = get_workspace_dir(_ws_name)
+        require_workspace_access(_ws_dir, user)
 
     # Step 2: 统计决策
     decisions = req.decisions

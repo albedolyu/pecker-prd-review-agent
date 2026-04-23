@@ -209,8 +209,7 @@ function countMixedPunctuation(input: string): number {
   let count = 0;
   // 中文字后紧跟 `,`, `;`, `!`, `?`(半角) — 典型 LLM 混排
   const re = /[\u4e00-\u9fff][,;!?]/g;
-  let m;
-  while ((m = re.exec(input)) !== null) {
+  while (re.exec(input) !== null) {
     count += 1;
   }
   return count;

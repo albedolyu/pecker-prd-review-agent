@@ -47,6 +47,7 @@ export function LoginForm() {
   useEffect(() => {
     try {
       const remembered = localStorage.getItem("pecker_last_reviewer");
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 仅启动时从 localStorage 恢复一次,不会级联
       if (remembered) setReviewer(remembered);
     } catch {
       /* ignore */

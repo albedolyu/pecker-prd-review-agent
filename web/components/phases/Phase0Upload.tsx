@@ -350,7 +350,7 @@ export function Phase0Upload() {
       <div className="flex items-center justify-between rounded-lg border bg-card px-4 py-3">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Info className="h-3.5 w-3.5" />
-          下一步会把 PRD 送去"预检":扫 wiki 找相关页、识别评审模式。
+          下一步会把 PRD 送去&ldquo;预检&rdquo;:扫 wiki 找相关页、识别评审模式。
         </div>
         <Button onClick={handleNext} disabled={!canProceed}>
           下一步:预检

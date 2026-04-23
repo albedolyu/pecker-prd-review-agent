@@ -100,6 +100,7 @@ export function Phase3ConfirmV8() {
 
   // tab 切换时 focusedIdx 归零
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- tab 切换后重置键盘焦点,属纯派生 UI 状态
     setFocusedIdx(0);
   }, [currentTab]);
 

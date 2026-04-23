@@ -41,6 +41,9 @@ jobs:
       - name: TypeScript check
         run: pnpm exec tsc --noEmit
 
+      - name: ESLint
+        run: pnpm run lint
+
       - name: Vitest unit tests
         run: pnpm test
 

@@ -65,13 +65,15 @@ async def login(req: LoginRequest, response: Response):
     }
     token = jwt.encode(payload, _get_jwt_secret(), algorithm=JWT_ALG)
 
+    # prod 环境强制 secure=True; dev/test 走 http 允许 False
+    is_prod = os.environ.get("PECKER_ENV", "dev").lower() == "prod"
     response.set_cookie(
         key=COOKIE_NAME,
         value=token,
         max_age=JWT_EXP_HOURS * 3600,
         httponly=True,
         samesite="lax",
-        secure=False,  # dev 模式 http,prod 部署 HTTPS 时改 True
+        secure=is_prod,
     )
 
     return {

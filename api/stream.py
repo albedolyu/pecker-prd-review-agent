@@ -16,7 +16,7 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
 
 
 # ============================================================
@@ -140,7 +140,7 @@ class ReviewProgressEmitter:
 async def sse_review_pipeline(
     emitter: ReviewProgressEmitter,
     review_coro,
-    is_disconnected: Optional[Callable[[], bool]] = None,
+    is_disconnected: Optional[Callable[[], Union[bool, Awaitable[bool]]]] = None,
 ):
     """把 review_coro (parallel_review + goshawk) 包装成 SSE pipeline。
 
@@ -148,6 +148,8 @@ async def sse_review_pipeline(
         emitter: ReviewProgressEmitter 实例
         review_coro: 一个 coroutine,执行完整评审 + emit 各 milestone,返回最终 result
         is_disconnected: 可选,检测客户端是否断开的 callable
+            支持两种签名: () -> bool 或 () -> Awaitable[bool]
+            (starlette Request.is_disconnected 是 async; 测试里常用 sync lambda)
 
     Yields:
         SSE 格式字符串
@@ -166,10 +168,14 @@ async def sse_review_pipeline(
 
     try:
         async for chunk in emitter.stream():
-            # 检查客户端是否断开
-            if is_disconnected and is_disconnected():
-                task.cancel()
-                break
+            # 检查客户端是否断开(兼容 sync/async 两种实现)
+            if is_disconnected is not None:
+                result = is_disconnected()
+                if asyncio.iscoroutine(result):
+                    result = await result
+                if result:
+                    task.cancel()
+                    break
             yield chunk
     finally:
         if not task.done():

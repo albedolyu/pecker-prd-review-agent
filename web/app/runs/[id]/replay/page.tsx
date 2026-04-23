@@ -18,7 +18,6 @@ import { use, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { BirdId } from "@/components/birds/BirdAvatar";
 import { BirdAvatar } from "@/components/birds/BirdAvatar";
-import { BIRD_META } from "@/components/birds/BirdBadge";
 
 interface ReplayEvent {
   seq: number;

@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from api.deps import get_current_user, get_project_root
+from api.workspace_acl import can_access_workspace
 
 router = APIRouter(tags=["workspaces"])
 
@@ -37,6 +38,10 @@ async def list_workspaces(
     for name in sorted(os.listdir(project_root)):
         full = project_root / name
         if not name.startswith("workspace-") or not full.is_dir():
+            continue
+
+        # ACL: 过滤掉当前用户无权访问的 workspace
+        if not can_access_workspace(full, user):
             continue
 
         prd_dir = full / "prd"

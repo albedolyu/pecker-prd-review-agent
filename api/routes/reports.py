@@ -16,6 +16,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from api.deps import get_current_user, get_workspace_dir, require_writer
+from api.workspace_acl import require_workspace_access
 
 router = APIRouter(tags=["reports"])
 
@@ -36,9 +37,10 @@ class SaveReviewRequest(BaseModel):
 
 
 @router.get("/reports/{workspace}")
-async def list_reports(workspace: str):
+async def list_reports(workspace: str, user: dict = Depends(get_current_user)):
     """列出某个 workspace/output 下的所有 PRD_开发任务_*.md 报告。"""
     ws_dir = get_workspace_dir(workspace)
+    require_workspace_access(ws_dir, user)
     output = ws_dir / "output"
     if not output.is_dir():
         return {"reports": []}
@@ -54,7 +56,11 @@ async def list_reports(workspace: str):
 
 
 @router.get("/reports/{workspace}/download")
-async def download_report(workspace: str, filename: str = Query(...)):
+async def download_report(
+    workspace: str,
+    filename: str = Query(...),
+    user: dict = Depends(get_current_user),
+):
     """下载指定报告文件。防路径穿越: filename 不能含 / \\ ..
 
     前端从 list_reports 拿 filename 后,直接拼 URL 下载。
@@ -62,6 +68,7 @@ async def download_report(workspace: str, filename: str = Query(...)):
     if "/" in filename or "\\" in filename or ".." in filename:
         raise HTTPException(status_code=400, detail="非法文件名")
     ws_dir = get_workspace_dir(workspace)
+    require_workspace_access(ws_dir, user)
     file_path = ws_dir / "output" / filename
     if not file_path.is_file():
         raise HTTPException(status_code=404, detail="报告不存在")
@@ -81,8 +88,10 @@ async def save_to_wiki(
     """把评审记录保存到 workspace/wiki/ 目录。
 
     只读用户 (PECKER_READONLY_USERS) 无权调用此端点,中间件返回 403。
+    无 workspace 访问权限的用户,ACL 校验返回 403。
     """
     ws_dir = get_workspace_dir(workspace)
+    require_workspace_access(ws_dir, user)
     wiki_dir = ws_dir / "wiki"
     wiki_dir.mkdir(parents=True, exist_ok=True)
 
