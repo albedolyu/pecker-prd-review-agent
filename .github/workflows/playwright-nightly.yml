@@ -1,0 +1,110 @@
+name: Playwright Nightly Smoke
+
+# 前端 e2e 冒烟, 不阻塞 PR, 只做夜间巡检 + 按需手动触发.
+#
+# 为什么分离成独立 workflow 而不是挂 PR:
+# - smoke 需要装 chromium + 起 next build, 每次 PR 跑太重
+# - 覆盖的是"纯视觉 + 路由可达"类问题, 对单次改动时效性不高
+# - 作者自测又常常不做 (memory: feedback_verify_call_sites.md Rule 3 — 静态
+#   工具链全绿 ≠ 实际行为验证), 夜间兜底比放任漂移强
+#
+# 触发:
+# - schedule: UTC 18:00 = 北京时间 02:00, 早晨来能看到结果
+# - workflow_dispatch: 改完前端想立刻跑时手动触发, 不需要等夜里
+#
+# 覆盖范围: tests/e2e/smoke.spec.ts + v8-routes.spec.ts, 都声明"不依赖后端",
+# 所以本 workflow **不需要启 uvicorn + python**, 只起 next.
+
+on:
+  schedule:
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: playwright-nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e-smoke:
+    name: Playwright smoke (Ubuntu + chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: web
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      # next build 的 rewrites 目标占位 — 本 workflow 不起后端, 前端 smoke
+      # 也不调 /api/*, 所以任何值都行
+      API_BASE_URL: http://localhost:8000
+      CI: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright chromium
+        run: pnpm exec playwright install chromium --with-deps
+
+      - name: Build Next
+        run: pnpm build
+
+      - name: Start Next in background
+        run: |
+          nohup pnpm start --port 3000 > /tmp/next-start.log 2>&1 &
+          echo $! > /tmp/next.pid
+          # poll 60s 等 ready
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:3000 > /dev/null; then
+              echo "next ready after ${i}×2=$((i*2))s"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::next server 60s 内未起, 日志如下"
+          cat /tmp/next-start.log
+          exit 1
+
+      - name: Run Playwright e2e (smoke + v8-routes)
+        run: pnpm exec playwright test --project chromium-desktop
+
+      - name: Dump Next server log on failure
+        if: failure()
+        run: |
+          echo "=== Next server log ==="
+          cat /tmp/next-start.log || echo "(no log)"
+
+      - name: Upload Playwright report + test-results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_number }}
+          path: |
+            web/playwright-report/
+            web/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Stop Next
+        if: always()
+        run: |
+          if [ -f /tmp/next.pid ]; then
+            kill "$(cat /tmp/next.pid)" 2>/dev/null || true
+          fi
