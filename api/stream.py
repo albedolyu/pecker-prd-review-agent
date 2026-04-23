@@ -18,6 +18,10 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
 
+from logger import get_logger
+
+log = get_logger("sse_stream")
+
 
 # ============================================================
 # Milestone 定义 (进度 0% → 100%)
@@ -182,5 +186,8 @@ async def sse_review_pipeline(
             task.cancel()
             try:
                 await task
-            except (asyncio.CancelledError, Exception):
-                pass
+            except asyncio.CancelledError:
+                pass  # 取消是预期路径, 不用日志
+            except Exception as e:
+                # 主评审 task 异常结束 — 保留运维可见性, 不吞错
+                log.warning(f"SSE pipeline 主任务异常: {type(e).__name__}: {str(e)[:100]}")

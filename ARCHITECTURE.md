@@ -74,6 +74,26 @@ flowchart TD
     F --> A
 ```
 
+## Codename ↔ Code Identifier Mapping
+
+**代码里用英文 `dim_key` 做 programmatic identifier,文档 / UI / 口语沟通用中文鸟名 codename。**
+新人 debug 时: 日志里看到 `[织布鸟]` 时对应 grep `dim_key=="structure"`;反之亦然。
+
+| Codename (中) | `dim_key` / 模块名 | 模型 | 核心职责 | 主要代码入口 |
+|---|---|---|---|---|
+| 织布鸟 | `structure` | sonnet | 结构层 — BMAD 格式 / 信息密度 / 覆盖率 / 自洽 / 可追溯 | `review/worker.py`, `review/dimensions.py` |
+| 猫头鹰 | `quality` | sonnet | 质量层 — 逻辑自洽 / 边界 / 异常 / 唯一性等 | `review/worker.py`, `review/dimensions.py` |
+| 渡鸦 | `ai_coding` | opus | AI Coding 友好度 — 伪代码 / 字段映射 / 可追溯链路 | `review/worker.py`, `review/dimensions.py` |
+| 鸬鹚 | `data_quality` | sonnet | 数据质量 — 字段口径 / schema 一致性 | `review/worker.py`, `review/dimensions.py` |
+| 苍鹰 | Goshawk (advisor) | opus | 终审交叉校验 — false positive / additional / conflict | `goshawk_advisor.py` |
+| 鸮鹦 | Kakapo | — | 知识库园丁 — 断链 / 孤立页 / stale / duplicate 扫描 + 修复 | `kakapo_dream.py` |
+| 伯劳 | Shrike | — | 6 道质量门禁 — 报告完整性 / 编号一致 / wiki 质量 / 安全扫描 / 格式 / 依据可靠性 | `shrike_review.py` |
+
+命名约定:
+- **代码标识符(稳定契约)**: `dim_key` 在 `_DEFAULT_REVIEW_DIMENSIONS` 是 key;worker 路由 / 日志 / JSON schema 都用这个
+- **Codename (用户可见)**: mermaid 图 / ARCHITECTURE / 前端 UI 文案 / 用户 / PM 沟通用中文鸟名
+- 不要反过来: 不要在 JSON / 配置 / 文件名里用中文鸟名(会破坏跨平台可移植性)
+
 ## File Mapping
 
 | Node / Responsibility | File | Key Function |

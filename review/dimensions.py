@@ -314,7 +314,15 @@ def get_wiki_keywords(workspace=None):
     return _loaded_wiki_keywords
 
 
-# 信鸽反馈历史文件路径（延迟解析，避免在 import 时读不到 WORKSPACE 环境变量）
-def _get_rule_perf_history_path():
-    workspace = os.environ.get("WORKSPACE", os.path.join(os.path.dirname(os.path.dirname(__file__)), "workspace"))
+# 信鸽反馈历史文件路径.
+# 优先用显式传入的 workspace 参数(多租户并发安全);
+# 无参时回退到 os.environ["WORKSPACE"](单进程 CLI 兼容)。
+# 注: FastAPI 并发路径必须传参,否则 2 个并发 review 会互污染 rule_perf 查询,
+# 这是 2026-04-23 定位的并发 bug 的修复点。
+def _get_rule_perf_history_path(workspace=None):
+    if not workspace:
+        workspace = os.environ.get(
+            "WORKSPACE",
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), "workspace"),
+        )
     return os.path.join(workspace, "output", "rule_performance_history.json")

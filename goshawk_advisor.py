@@ -204,10 +204,14 @@ def _build_advisor_user_message(prd_content, worker_results, wiki_pages=None):
     return "\n\n".join(parts)
 
 
-def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=DEFAULT_MODEL):
+def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=DEFAULT_MODEL, deadline=None):
     """
     苍鹰交叉校验主函数
     含指数退避重试 + tool_use 检测 + 催促重试 + 文本兜底
+
+    deadline: 可选, time.monotonic() 绝对时间戳. 内部每个 retry 分支前检查剩余时间,
+        不够做一次 ~8s 的 API call + sleep 时主动跳过,返回当前最好结果 + 标注
+        result["truncated_by_deadline"]=True. 防止外层 wait_for 超时时内层还在 sleep.
     """
     if client is None:
         client = _make_client()
@@ -219,6 +223,24 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
 
     import time
 
+    _deadline_hit = False
+    # 估单次 retry 分支最坏耗时: sleep 2-2.5s + API call 5-30s Opus
+    _MIN_BUDGET_PER_RETRY = 8.0
+
+    def _time_left():
+        if deadline is None:
+            return float("inf")
+        return max(0.0, deadline - time.monotonic())
+
+    def _can_afford_retry():
+        nonlocal _deadline_hit
+        left = _time_left()
+        if left < _MIN_BUDGET_PER_RETRY:
+            _deadline_hit = True
+            log.warning(f"苍鹰剩余 {left:.1f}s < {_MIN_BUDGET_PER_RETRY}s, 跳过 retry 分支")
+            return False
+        return True
+
     def _call(msgs):
         return client.create(
             model=model,
@@ -229,17 +251,22 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
             tool_choice={"type": "any"},
         )
 
-    # 指数退避重试
+    # 指数退避重试 (API 级异常)
     max_retries = 2
     response = None
+    last_exc = None
     for attempt in range(max_retries + 1):
         try:
             response = _call(messages)
             break
         except Exception as e:
+            last_exc = e
             if attempt == max_retries:
                 raise
             delay = 2 ** (attempt + 1) + random.uniform(0, 1)
+            # deadline 感知: 剩余时间不够再做一轮就主动放弃
+            if not _can_afford_retry():
+                raise
             print(f"  终审 API 异常 (第{attempt + 1}次)，{delay:.1f}s 后重试: {str(e)[:60]}")
             time.sleep(delay)
 
@@ -248,7 +275,7 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
     has_tool = any(block.type == "tool_use" for block in response.content)
     empty_retry_used = False
 
-    if not has_tool:
+    if not has_tool and _can_afford_retry():
         print("  终审未调用 tool，催促重试...")
         text_parts = "\n".join(block.text for block in response.content if block.type == "text")
         followup_msgs = messages + [
@@ -264,9 +291,9 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
                 result = result2
                 response = response2
                 has_tool = True
-        except Exception:
-            pass
-    elif _is_empty_advisor_submission(response):
+        except Exception as e:
+            log.warning(f"苍鹰催促 retry 失败: {str(e)[:80]}")
+    elif _is_empty_advisor_submission(response) and _can_afford_retry():
         # 苍鹰调了 tool 但三数组全空 — 同 worker 空提交 bug,给一次复核机会
         # cost: 仅 sonnet 一次额外调用,比 worker 层更值得 (苍鹰本就是关键交叉校验)
         log.warning("苍鹰首轮空提交(无误报/漏报/冲突),re-prompt 复核")
@@ -314,6 +341,9 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
         result["verdict"] = "EMPTY_APPROVAL"  # tool 调了,但显式"三无"
     result["model_used"] = model
     result["empty_retry_used"] = empty_retry_used
+    # deadline 触发过 retry skip → 上层应知道这是降级终审,不是完整结果
+    if _deadline_hit:
+        result["truncated_by_deadline"] = True
     # 保存 usage 供成本归因 (CC cost-tracker querySource 模式)
     result["usage"] = {
         "input_tokens": response.usage.get("input_tokens", 0) if hasattr(response.usage, 'get') else getattr(response.usage, 'input_tokens', 0),
@@ -331,12 +361,19 @@ async def advisor_review_async(client, prd_content, worker_results, wiki_pages=N
     继续推进到 Phase 3。用户能看到 Phase 4 报告但没有苍鹰加持(降级)。
     """
     import asyncio
+    import time
     from agent_config import GOSHAWK_TIMEOUT
     loop = asyncio.get_running_loop()
+    # 内层感知的 deadline: 比外层 wait_for 提前 3s,给内层主动 degrade 留窗口
+    deadline = time.monotonic() + max(GOSHAWK_TIMEOUT - 3, GOSHAWK_TIMEOUT * 0.9)
     try:
         return await asyncio.wait_for(
             loop.run_in_executor(
-                None, lambda: advisor_review(client, prd_content, worker_results, wiki_pages, model)
+                None,
+                lambda: advisor_review(
+                    client, prd_content, worker_results, wiki_pages, model,
+                    deadline=deadline,
+                ),
             ),
             timeout=GOSHAWK_TIMEOUT,
         )

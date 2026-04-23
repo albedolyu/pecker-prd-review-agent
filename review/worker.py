@@ -335,8 +335,8 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
             items = _extract_items_from_response(response2)
             if _has_tool_use(response2):
                 response = response2
-        except Exception:
-            pass
+        except Exception as e:
+            log.warning(f"[{_cn_label(dim_key)}] 催促重试失败: {str(e)[:80]}")
 
         if not items and text:
             items = _parse_items_from_text(text)

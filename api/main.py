@@ -47,11 +47,24 @@ async def lifespan(app: FastAPI):
         if not shutil.which("claude"):
             errors.append("找不到 claude CLI,请先 `npm install -g @anthropic-ai/claude-code && claude login`")
 
-    if not os.environ.get("PECKER_SIGNATURE_SECRET"):
-        errors.append("PECKER_SIGNATURE_SECRET 未设置 — 需要至少 32 字符的随机串防止 ReviewResult 篡改")
+    warnings = []
 
-    if not os.environ.get("PECKER_JWT_SECRET"):
-        errors.append("PECKER_JWT_SECRET 未设置 — 需要至少 32 字符的随机串签发登录 cookie")
+    def _check_secret(name: str, required_min=16, recommended_min=32):
+        val = os.environ.get(name, "")
+        if not val:
+            errors.append(f"{name} 未设置 — 用 `bash scripts/gen-secrets.sh` 生成")
+        elif len(val) < required_min:
+            errors.append(
+                f"{name} 长度 {len(val)} 不足 {required_min} 字符(强度过低) — "
+                f"用 `bash scripts/gen-secrets.sh` 重新生成"
+            )
+        elif len(val) < recommended_min:
+            warnings.append(
+                f"{name} 长度 {len(val)} < {recommended_min} 推荐值, 生产环境建议重新生成"
+            )
+
+    _check_secret("PECKER_SIGNATURE_SECRET")
+    _check_secret("PECKER_JWT_SECRET")
 
     if errors:
         print("\n[FastAPI 启动失败]", file=sys.stderr)
@@ -59,6 +72,12 @@ async def lifespan(app: FastAPI):
             print(f"  ✗ {e}", file=sys.stderr)
         print("\n请检查 .env 文件后重试。", file=sys.stderr)
         raise RuntimeError("FastAPI 启动前置检查失败")
+
+    if warnings:
+        print("\n[FastAPI 启动警告]", file=sys.stderr)
+        for w in warnings:
+            print(f"  ⚠ {w}", file=sys.stderr)
+        print("", file=sys.stderr)
 
     print("[FastAPI] 启动完成,所有前置检查通过")
     print(f"[FastAPI] 并发上限: {os.environ.get('PECKER_MAX_CONCURRENT', '2')}")

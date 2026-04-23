@@ -26,20 +26,22 @@ from review.worker import _run_worker_async, _run_worker_sync
 log = get_logger("parallel")
 
 
-async def _single_round_async(client, prd_content, wiki_pages, model_tiers, wiki_path=None, diff_context=None, on_worker_done=None):
+async def _single_round_async(client, prd_content, wiki_pages, model_tiers, wiki_path=None, diff_context=None, on_worker_done=None, workspace=None):
     """单轮并行评审（内部函数），返回 workers, merged_items, usage
 
     Args:
         on_worker_done: 可选 callback,签名为 (dim_key: str, result: dict) -> None
             每个 worker 完成时(成功或失败)都会调用,让上层(FastAPI SSE)感知进度。
             默认 None,保持向后兼容,CLI 现有流程零影响。
+        workspace: 显式工作区路径(FastAPI 并发路径必传,否则 rule_perf_history 会
+            从 os.environ["WORKSPACE"] 读,并发下会互污染)。CLI 模式为 None 回退读 env。
     """
     dimensions = get_review_dimensions()
 
     # 读一次 rule performance history，传给所有 worker（避免 4 次 I/O）
     rule_perf_history = None
     try:
-        with open(_get_rule_perf_history_path(), "r", encoding="utf-8") as f:
+        with open(_get_rule_perf_history_path(workspace), "r", encoding="utf-8") as f:
             rule_perf_history = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         pass
@@ -139,7 +141,7 @@ async def _single_round_async(client, prd_content, wiki_pages, model_tiers, wiki
     return workers, merged, total_input, total_output
 
 
-async def parallel_review(client, prd_content, wiki_pages, model_tiers, voting_rounds=1, wiki_path=None, diff_context=None, on_worker_done=None):
+async def parallel_review(client, prd_content, wiki_pages, model_tiers, voting_rounds=1, wiki_path=None, diff_context=None, on_worker_done=None, workspace=None):
     """
     并行执行 4 个评审维度的 worker，合并结果
     - client: anthropic.Anthropic 实例
@@ -149,13 +151,15 @@ async def parallel_review(client, prd_content, wiki_pages, model_tiers, voting_r
     - voting_rounds: 评审轮次，1=单次（默认），>=2 时启用多数投票
     - on_worker_done: 可选 callback (dim_key, result_dict) -> None,
       每个 worker 完成时调用,给 FastAPI SSE 层推进度。默认 None 保持 CLI 兼容。
+    - workspace: 显式工作区路径,FastAPI 并发路径必传(否则 rule_perf_history
+      会从 os.environ["WORKSPACE"] 读,多并发下互污染). CLI 模式 None 回退 env.
     返回: {"workers": [...], "merged_items": [...], "total_usage": {...}}
     """
     if voting_rounds <= 1:
         # 单轮评审，保持原有行为
         workers, merged, total_input, total_output = await _single_round_async(
             client, prd_content, wiki_pages, model_tiers, wiki_path, diff_context,
-            on_worker_done=on_worker_done,
+            on_worker_done=on_worker_done, workspace=workspace,
         )
         return {
             "workers": workers,
@@ -180,7 +184,7 @@ async def parallel_review(client, prd_content, wiki_pages, model_tiers, voting_r
         log.info(f"[majority_vote] 开始第 {round_idx + 1}/{voting_rounds} 轮评审")
         workers, merged, inp, out = await _single_round_async(
             client, prd_content, wiki_pages, model_tiers, wiki_path, diff_context,
-            on_worker_done=on_worker_done,
+            on_worker_done=on_worker_done, workspace=workspace,
         )
         all_rounds_merged.append(merged)
         last_workers = workers
@@ -202,14 +206,17 @@ async def parallel_review(client, prd_content, wiki_pages, model_tiers, voting_r
     }
 
 
-def _single_round_sync(client, prd_content, wiki_pages, model_tiers, wiki_path=None, diff_context=None):
-    """单轮顺序评审（内部函数），返回 workers, merged_items, usage"""
+def _single_round_sync(client, prd_content, wiki_pages, model_tiers, wiki_path=None, diff_context=None, workspace=None):
+    """单轮顺序评审（内部函数），返回 workers, merged_items, usage
+
+    workspace: 显式工作区路径,FastAPI 并发路径必传(见 _single_round_async 注释).
+    """
     dimensions = get_review_dimensions()
 
     # 读一次 rule performance history，传给所有 worker（避免 4 次 I/O）
     rule_perf_history = None
     try:
-        with open(_get_rule_perf_history_path(), "r", encoding="utf-8") as f:
+        with open(_get_rule_perf_history_path(workspace), "r", encoding="utf-8") as f:
             rule_perf_history = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         pass
@@ -270,15 +277,17 @@ def _single_round_sync(client, prd_content, wiki_pages, model_tiers, wiki_path=N
     return workers, merged, total_input, total_output
 
 
-def parallel_review_sync(client, prd_content, wiki_pages, model_tiers, voting_rounds=1, wiki_path=None, diff_context=None):
+def parallel_review_sync(client, prd_content, wiki_pages, model_tiers, voting_rounds=1, wiki_path=None, diff_context=None, workspace=None):
     """
     同步版本：顺序执行 4 个 worker（给不方便用 async 的场景）
     接口和返回值与 parallel_review 一致
     - voting_rounds: 评审轮次，1=单次（默认），>=2 时启用多数投票
+    - workspace: 显式工作区,FastAPI 并发路径必传(见 parallel_review docstring)
     """
     if voting_rounds <= 1:
         workers, merged, total_input, total_output = _single_round_sync(
-            client, prd_content, wiki_pages, model_tiers, wiki_path, diff_context
+            client, prd_content, wiki_pages, model_tiers, wiki_path, diff_context,
+            workspace=workspace,
         )
         return {
             "workers": workers,
@@ -302,7 +311,8 @@ def parallel_review_sync(client, prd_content, wiki_pages, model_tiers, voting_ro
 
         log.info(f"[majority_vote] 开始第 {round_idx + 1}/{voting_rounds} 轮评审")
         workers, merged, inp, out = _single_round_sync(
-            client, prd_content, wiki_pages, model_tiers, wiki_path, diff_context
+            client, prd_content, wiki_pages, model_tiers, wiki_path, diff_context,
+            workspace=workspace,
         )
         all_rounds_merged.append(merged)
         last_workers = workers

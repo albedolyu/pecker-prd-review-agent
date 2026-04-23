@@ -167,7 +167,8 @@ async def precheck(
     if cached and (_time.time() - cached["ts"]) < _WIKI_CACHE_TTL:
         wiki_scan = cached["result"]
     else:
-        wiki_scan = _scan_wiki_for_prd(req.prd_content, wiki_path)
+        # wiki 扫描含 os.listdir + 多个 read_text, 放线程池避免阻塞 event loop
+        wiki_scan = await asyncio.to_thread(_scan_wiki_for_prd, req.prd_content, wiki_path)
         _wiki_scan_cache[cache_key] = {"result": wiki_scan, "ts": _time.time()}
 
     # 调 Claude 做 gap 分析
@@ -251,8 +252,10 @@ async def run_review(
     # 预算卡: 超限直接 429 阻止新评审
     budget_status = check_budget(get_project_root())
 
-    # 注入 WORKSPACE env var(parallel_review 延迟解析会读)
-    os.environ["WORKSPACE"] = str(get_project_root() / req.workspace)
+    # 绝对路径作为 workspace 显式参数下传给 parallel_review, 不再写 os.environ.
+    # 历史上用 env var 传递会让 2 个并发 review 互污染 rule_perf_history 查询
+    # (dimensions._get_rule_perf_history_path 已改为优先读参数,env 作 CLI 回退).
+    ws_abs_path = str(get_project_root() / req.workspace)
 
     emitter = ReviewProgressEmitter()
     client = get_client()
@@ -270,8 +273,7 @@ async def run_review(
         from event_store import EventStore
         import uuid
         review_id = f"rev_{int(_pipeline_start)}_{uuid.uuid4().hex[:6]}"
-        ws_path = str(get_project_root() / req.workspace)
-        evt = EventStore(workspace=ws_path, review_id=review_id)
+        evt = EventStore(workspace=ws_abs_path, review_id=review_id)
         evt.append("review_started", {
             "prd_name": req.prd_name,
             "mode": req.mode,
@@ -300,7 +302,10 @@ async def run_review(
                 loop = asyncio.get_running_loop()
                 result = await loop.run_in_executor(
                     None,
-                    functools.partial(parallel_review_sync, client, enhanced_prd, req.wiki_pages, quick_tiers),
+                    functools.partial(
+                        parallel_review_sync, client, enhanced_prd,
+                        req.wiki_pages, quick_tiers, workspace=ws_abs_path,
+                    ),
                 )
             else:
                 def _on_worker_done(dim, r):
@@ -325,7 +330,7 @@ async def run_review(
 
                 result = await parallel_review(
                     client, enhanced_prd, req.wiki_pages, MODEL_TIERS,
-                    on_worker_done=_on_worker_done,
+                    on_worker_done=_on_worker_done, workspace=ws_abs_path,
                 )
 
             items = result.get("merged_items", [])
@@ -660,10 +665,13 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
     pending = len(items) - len(decisions)
 
     # Step 3: P0.1 — 决策回流到 rule_performance_history
+    # 这两个函数含同步文件 I/O (open/json.dump), 放线程池避免阻塞 event loop
     workspace = req.review_result.get("workspace", "")
     if workspace and decisions:
         try:
-            _update_rule_perf_from_decisions(items, decisions, workspace)
+            await asyncio.to_thread(
+                _update_rule_perf_from_decisions, items, decisions, workspace,
+            )
         except Exception as e:
             log.warning(f"[决策回流] 写入失败,不阻塞确认流程: {e}")
 
@@ -671,7 +679,9 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
     reviewer = req.review_result.get("reviewer", "unknown")
     if workspace and decisions:
         try:
-            _save_eval_ground_truth(items, decisions, workspace, reviewer)
+            await asyncio.to_thread(
+                _save_eval_ground_truth, items, decisions, workspace, reviewer,
+            )
         except Exception as e:
             log.warning(f"[ground_truth] 保存失败,不阻塞确认流程: {e}")
 
