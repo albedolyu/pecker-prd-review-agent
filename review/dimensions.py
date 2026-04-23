@@ -14,6 +14,7 @@ parallel_review.py re-export 这些符号,现有调用方无需改动 import 路
 """
 
 import os
+from functools import lru_cache
 
 import yaml
 
@@ -216,11 +217,6 @@ def _validate_review_dimensions_yaml(yaml_content, source_path):
         ) from e
 
 
-# 运行时加载的维度配置（首次使用时初始化）
-_loaded_dimensions = None
-_loaded_wiki_keywords = None
-
-
 def load_review_dimensions(workspace=None):
     """从 YAML 加载评审维度配置，支持 workspace 级覆盖 → 全局 fallback → 硬编码默认值。
     返回 (dimensions_dict, wiki_keywords_dict)"""
@@ -298,20 +294,23 @@ def load_review_dimensions(workspace=None):
     return dimensions, wiki_keywords
 
 
+@lru_cache(maxsize=8)
+def _cached_load(workspace=None):
+    """lru_cache 按 workspace 参数做键缓存, 替代 2026-04-23 前的模块 global
+    (_loaded_dimensions / _loaded_wiki_keywords). 避免 CLI 多 workspace 切换
+    时第二次复用第一次的配置。maxsize=8 对内测规模够用。
+    """
+    return load_review_dimensions(workspace)
+
+
 def get_review_dimensions(workspace=None):
-    """获取评审维度配置（带缓存），首次调用时从 YAML 加载"""
-    global _loaded_dimensions, _loaded_wiki_keywords
-    if _loaded_dimensions is None:
-        _loaded_dimensions, _loaded_wiki_keywords = load_review_dimensions(workspace)
-    return _loaded_dimensions
+    """获取评审维度配置(带 lru_cache 按 workspace 缓存)."""
+    return _cached_load(workspace)[0]
 
 
 def get_wiki_keywords(workspace=None):
-    """获取 wiki 关键词配置（带缓存），首次调用时从 YAML 加载"""
-    global _loaded_dimensions, _loaded_wiki_keywords
-    if _loaded_wiki_keywords is None:
-        _loaded_dimensions, _loaded_wiki_keywords = load_review_dimensions(workspace)
-    return _loaded_wiki_keywords
+    """获取 wiki 关键词配置(带 lru_cache 按 workspace 缓存)."""
+    return _cached_load(workspace)[1]
 
 
 # 信鸽反馈历史文件路径.

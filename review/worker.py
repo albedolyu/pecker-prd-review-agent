@@ -40,6 +40,119 @@ log = get_logger("parallel")
 
 
 # ============================================================
+# _worker_core 的两个抽出 helpers (2026-04-23 #1 refactor):
+# prepare_context 负责 dim/model/prompt/tool schema 构建 (L242-289);
+# postprocess_items 负责 items 过滤/维度校正/越界/截断 (L389-420).
+# retry 逻辑仍内联, closure state (_call / current_turn / empty_retry_used)
+# 抽出来反而增加参数复杂度。
+# ============================================================
+
+
+def _prepare_worker_context(
+    dim_key: str,
+    model_tiers: Dict[str, str],
+    rule_perf_history: Optional[Dict[str, Any]],
+    wiki_path: Optional[str],
+    wiki_pages: Dict[str, str],
+    prd_content: str,
+    diff_context: Optional[str] = None,
+) -> Dict[str, Any]:
+    """构建单 worker 所需的上下文: dim 配置 / model 选择 / system+messages /
+    维度约束后的 tool schema / cache monitor / 各种 hash 指纹.
+
+    返回字典(避免 NamedTuple 导入开销), 字段供 _worker_core 解构使用。
+    """
+    from agent_config import EFFORT_TOKENS
+    from cache_monitor import PromptCacheMonitor
+    import hashlib as _hl
+
+    dimensions = get_review_dimensions()
+    wiki_keywords = get_wiki_keywords()
+    dim = dimensions[dim_key]
+    model = model_tiers.get(dim["model"], model_tiers["sonnet"])
+
+    effort = dim.get("effort", "medium")
+    max_tokens = EFFORT_TOKENS.get(effort, 8192)
+
+    cache_monitor = PromptCacheMonitor()
+    workspace_dir = os.path.dirname(wiki_path) if wiki_path else None
+    dynamic_system = _build_worker_system(dim_key, rule_perf_history, dimensions, workspace=workspace_dir)
+    messages = _build_worker_messages(prd_content, wiki_pages, dim_key, wiki_path, wiki_keywords, diff_context)
+
+    # system prompt 分静态/动态两段(CC DYNAMIC_BOUNDARY 模式), 静态段打 cache_control
+    system_blocks = [
+        {"type": "text", "text": _WORKER_SHARED_RULES, "cache_control": {"type": "ephemeral"}},
+        {"type": "text", "text": dynamic_system},
+    ]
+
+    # prompt 指纹日志(CC firstChangedMessageIndex 模式)
+    static_hash = _hl.md5(_WORKER_SHARED_RULES.encode()).hexdigest()[:8]
+    dynamic_hash = _hl.md5(dynamic_system.encode()).hexdigest()[:8]
+    msg_hash = _hl.md5(json.dumps(messages, ensure_ascii=False).encode()).hexdigest()[:8]
+    log.info(f"[{_cn_label(dim_key)}] prompt_hash static={static_hash} dynamic={dynamic_hash} msg={msg_hash}")
+
+    # 正向工具白名单: dimension 字段 schema const 约束为自身维度名
+    dim_constrained_tool = json.loads(json.dumps(SUBMIT_REVIEW_ITEMS_TOOL))
+    dim_constrained_tool["input_schema"]["properties"]["dimension"] = {
+        "type": "string",
+        "const": dim["name"],
+        "description": f"评审维度(必须填 '{dim['name']}')",
+    }
+
+    return {
+        "dim": dim,
+        "model": model,
+        "max_tokens": max_tokens,
+        "system_blocks": system_blocks,
+        "messages": messages,
+        "dim_constrained_tool": dim_constrained_tool,
+        "cache_monitor": cache_monitor,
+    }
+
+
+def _postprocess_items(
+    items: List[Dict[str, Any]],
+    dim: Dict[str, Any],
+    dim_key: str,
+) -> List[Dict[str, Any]]:
+    """items 后处理: 过滤非 dict / 维度校正 / 规则越界标注 / MAX_ITEMS 截断.
+
+    纯函数, 可独立单测. 入参 dim 是 dimensions[dim_key] 配置, 包含 name/checklist.
+    """
+    from agent_config import MAX_ITEMS_PER_WORKER
+
+    # 过滤非 dict (模型偶尔返回字符串数组而非对象数组)
+    items = [item for item in items if isinstance(item, dict)]
+
+    # 强制校正维度名 (防止模型绕过 schema const)
+    for item in items:
+        if item.get("dimension") and item["dimension"] != dim["name"]:
+            log.warning(f"[{_cn_label(dim_key)}] 维度越界: {item.get('dimension')} → {dim['name']}")
+        item["dimension"] = dim["name"]
+
+    # P1.3: 规则越界硬校验 — checklist 里定义的 rule_id 才算本维度合法
+    valid_rule_ids = {r["rule_id"] for r in dim.get("checklist", [])}
+    for item in items:
+        rid = item.get("rule_id", "")
+        if rid and valid_rule_ids and rid not in valid_rule_ids:
+            log.warning(f"[{_cn_label(dim_key)}] 规则越界: {rid} 不在 {dim_key} checklist 中")
+            item["cross_boundary"] = True
+            # 2026-04-16 harness audit 修复: 原先改 confidence, 下游只读
+            # confidence_score, 让惩罚静默失效. 统一成 confidence_score.
+            current = item.get("confidence_score", 0.85)
+            item["confidence_score"] = max(0.0, round(current - 0.3, 2))
+
+    # 2a: Tool Result 截断 — 单 worker 输出上限(CC tool result truncation 模式)
+    if len(items) > MAX_ITEMS_PER_WORKER:
+        log.warning(f"[{_cn_label(dim_key)}] Worker 输出 {len(items)} 条, 截断到 {MAX_ITEMS_PER_WORKER}")
+        # 按 severity(must 优先) + confidence(高优先) 排序, 保留 top N
+        items.sort(key=lambda x: (0 if x.get("severity") == "must" else 1, -x.get("confidence_score", 0)))
+        items = items[:MAX_ITEMS_PER_WORKER]
+
+    return items
+
+
+# ============================================================
 # 结构化输出 Tool Schema
 # ============================================================
 
@@ -245,48 +358,19 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
     """
     # 3a: telemetry — 记录 worker 开始时间
     start_time = time.time()
-    dimensions = get_review_dimensions()
-    wiki_keywords = get_wiki_keywords()
-    dim = dimensions[dim_key]
-    model = model_tiers.get(dim["model"], model_tiers["sonnet"])
 
-    # Pattern 20: Effort-Aware Prompt Adaptation — 从 dim config 读 effort level
-    from agent_config import EFFORT_TOKENS
-    effort = dim.get("effort", "medium")
-    max_tokens = EFFORT_TOKENS.get(effort, 8192)
-
-    # Pattern 18: 每个 worker 独立的 cache monitor 实例(线程安全)
-    from cache_monitor import PromptCacheMonitor
-    cache_monitor = PromptCacheMonitor()
-    # 从 wiki_path 反推 workspace(wiki_path 总是 workspace/wiki),注入真实依据清单防幻觉
-    workspace_dir = os.path.dirname(wiki_path) if wiki_path else None
-    dynamic_system = _build_worker_system(dim_key, rule_perf_history, dimensions, workspace=workspace_dir)
-    messages = _build_worker_messages(prd_content, wiki_pages, dim_key, wiki_path, wiki_keywords, diff_context)
-
-    # CC 模式：system prompt 分静态/动态两段（参考 prompts.ts:560 的 DYNAMIC_BOUNDARY）
-    # 静态段（共享规则）打 cache_control，4 个 worker 共享缓存
-    # 动态段（维度规则 + 反馈注入）不缓存
-    system_blocks = [
-        {"type": "text", "text": _WORKER_SHARED_RULES, "cache_control": {"type": "ephemeral"}},
-        {"type": "text", "text": dynamic_system},
-    ]
-
-    # prompt 指纹日志 (CC firstChangedMessageIndex 模式)
-    # server-side prompt cache 自动匹配 hash,这里记录 hash 方便调试缓存命中
-    import hashlib as _hl
-    static_hash = _hl.md5(_WORKER_SHARED_RULES.encode()).hexdigest()[:8]
-    dynamic_hash = _hl.md5(dynamic_system.encode()).hexdigest()[:8]
-    msg_hash = _hl.md5(json.dumps(messages, ensure_ascii=False).encode()).hexdigest()[:8]
-    log.info(f"[{_cn_label(dim_key)}] prompt_hash static={static_hash} dynamic={dynamic_hash} msg={msg_hash}")
-
-    # 正向工具白名单: tool_choice 里标注维度名,让 submit_review_items 的
-    # dimension 字段被 schema 约束为只能填自己的维度名 (CC allowedTools 模式)
-    dim_constrained_tool = json.loads(json.dumps(SUBMIT_REVIEW_ITEMS_TOOL))
-    dim_constrained_tool["input_schema"]["properties"]["dimension"] = {
-        "type": "string",
-        "const": dim["name"],
-        "description": f"评审维度(必须填 '{dim['name']}')",
-    }
+    # 上下文构建抽到 _prepare_worker_context (见本文件前部定义)
+    ctx = _prepare_worker_context(
+        dim_key, model_tiers, rule_perf_history, wiki_path, wiki_pages,
+        prd_content, diff_context,
+    )
+    dim = ctx["dim"]
+    model = ctx["model"]
+    max_tokens = ctx["max_tokens"]
+    system_blocks = ctx["system_blocks"]
+    messages = ctx["messages"]
+    dim_constrained_tool = ctx["dim_constrained_tool"]
+    cache_monitor = ctx["cache_monitor"]
 
     def _call(msgs, use_compact_tool=False):
         # Pattern 17: followup 催促重试时用精简版 tool schema
@@ -386,35 +470,8 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
             if items:
                 log.info(f"[{_cn_label(dim_key)}] 文本兜底解析出 {len(items)} 条改进项")
 
-    # 过滤非 dict 元素（模型偶尔返回字符串数组而非对象数组）
-    items = [item for item in items if isinstance(item, dict)]
-
-    # 强制校正维度名 (防止模型绕过 schema const 约束)
-    for item in items:
-        if item.get("dimension") and item["dimension"] != dim["name"]:
-            log.warning(f"[{_cn_label(dim_key)}] 维度越界: {item.get('dimension')} → {dim['name']}")
-        item["dimension"] = dim["name"]
-
-    # P1.3: Worker 规则越界硬校验 — checklist 里定义的 rule_id 才是本维度的合法范围
-    valid_rule_ids = {r["rule_id"] for r in dim.get("checklist", [])}
-    for item in items:
-        rid = item.get("rule_id", "")
-        if rid and valid_rule_ids and rid not in valid_rule_ids:
-            log.warning(f"[{_cn_label(dim_key)}] 规则越界: {rid} 不在 {dim_key} checklist 中")
-            item["cross_boundary"] = True
-            # 2026-04-16 harness audit 修复: 原先改的是 confidence 字段,
-            # 下游(scorer/merge/verify)全部只读 confidence_score,导致越界惩罚静默失效。
-            # 统一成 confidence_score,让惩罚真的作用到下游加权。
-            current = item.get("confidence_score", 0.85)
-            item["confidence_score"] = max(0.0, round(current - 0.3, 2))
-
-    # 2a: Tool Result 截断 — 单 worker 输出上限 (CC tool result truncation 模式)
-    from agent_config import MAX_ITEMS_PER_WORKER
-    if len(items) > MAX_ITEMS_PER_WORKER:
-        log.warning(f"[{_cn_label(dim_key)}] Worker 输出 {len(items)} 条,截断到 {MAX_ITEMS_PER_WORKER}")
-        # 按 severity (must 优先) + confidence (高优先) 排序,保留 top N
-        items.sort(key=lambda x: (0 if x.get("severity") == "must" else 1, -x.get("confidence_score", 0)))
-        items = items[:MAX_ITEMS_PER_WORKER]
+    # items 后处理抽到 _postprocess_items (纯函数, 可独立单测)
+    items = _postprocess_items(items, dim, dim_key)
 
     # 提取 worker 发现的关键规则 ID（供 scratchpad 跨 worker 共享）
     found_rule_ids = list(set(item.get("rule_id", "") for item in items if item.get("rule_id")))
