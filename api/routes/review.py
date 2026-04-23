@@ -102,6 +102,9 @@ class PrecheckResponse(BaseModel):
     weak: List[str]
     gaps: List[str]
     wiki_pages: Dict[str, str]  # 页面标题 → 内容
+    # 2026-04-23 C: prompt injection 扫描结果 (warn-only, 不阻塞评审)
+    # 结构: {risk: bool, hit_count: int, unique_tags: int?, hits: [{tag, line, excerpt}]}
+    injection_scan: Optional[Dict[str, Any]] = None
 
 
 def _scan_wiki_for_prd(prd_content: str, wiki_path: Path) -> Dict[str, Any]:
@@ -206,12 +209,22 @@ async def precheck(
         # 预检失败不阻塞流程,返回本地 wiki 扫描结果
         llm_result = {"strong": [], "weak": [], "gaps": [f"预检失败: {str(e)[:100]}"]}
 
+    # 2026-04-23 C: 扫 PRD + raw_materials 里的 prompt injection pattern
+    from prompt_injection_scanner import scan_inputs
+    injection_scan = scan_inputs(req.prd_content, req.raw_materials)
+    if injection_scan.get("risk"):
+        log.warning(
+            f"[precheck][{req.workspace}] 检测到 prompt injection 风险: "
+            f"{injection_scan['hit_count']} 处命中 {injection_scan.get('unique_tags')} 种 pattern"
+        )
+
     # 合并本地 + LLM 结果
     return PrecheckResponse(
         strong=wiki_scan["strong"] + llm_result.get("strong", []),
         weak=wiki_scan["weak"] + llm_result.get("weak", []),
         gaps=llm_result.get("gaps", []),
         wiki_pages=wiki_scan["wiki_pages"],
+        injection_scan=injection_scan,
     )
 
 
@@ -274,11 +287,20 @@ async def run_review(
         import uuid
         review_id = f"rev_{int(_pipeline_start)}_{uuid.uuid4().hex[:6]}"
         evt = EventStore(workspace=ws_abs_path, review_id=review_id)
+        # 2026-04-23 C: injection scan 写到 review_started event 做事后审计
+        from prompt_injection_scanner import scan_inputs
+        _inj = scan_inputs(req.prd_content, req.raw_materials, req.user_notes)
+        if _inj.get("risk"):
+            log.warning(
+                f"[review][{req.workspace}] prompt injection risk on run: "
+                f"{_inj['hit_count']} hits / {_inj.get('unique_tags')} tags"
+            )
         evt.append("review_started", {
             "prd_name": req.prd_name,
             "mode": req.mode,
             "reviewer": req.reviewer,
             "wiki_pages_count": len(req.wiki_pages),
+            "injection_scan": _inj,
         })
 
         # 1. 构建增强 PRD
@@ -295,6 +317,15 @@ async def run_review(
 
         # 2. 并行评审 (semaphore 保护)
         async with review_semaphore:
+            # Per-tool-call trace callback (2026-04-23 B 优化):
+            # 每次 worker / goshawk 里的 client.create 返回后会调用, trace 写
+            # EventStore 的 tool_call_done 事件, 给 stability_metrics 聚合用.
+            def _on_tool_call(trace):
+                try:
+                    evt.append("tool_call_done", trace)
+                except Exception:
+                    pass
+
             if req.mode == "quick":
                 # 快速模式:全 sonnet,不显示 per-worker 进度细节
                 quick_tiers = {k: MODEL_TIERS["sonnet"] for k in MODEL_TIERS}
@@ -305,6 +336,7 @@ async def run_review(
                     functools.partial(
                         parallel_review_sync, client, enhanced_prd,
                         req.wiki_pages, quick_tiers, workspace=ws_abs_path,
+                        on_tool_call=_on_tool_call,
                     ),
                 )
             else:
@@ -331,6 +363,7 @@ async def run_review(
                 result = await parallel_review(
                     client, enhanced_prd, req.wiki_pages, MODEL_TIERS,
                     on_worker_done=_on_worker_done, workspace=ws_abs_path,
+                    on_tool_call=_on_tool_call,
                 )
 
             items = result.get("merged_items", [])
@@ -369,7 +402,8 @@ async def run_review(
                 evt.append("final_reviewer_started", {"items_count": len(items)})
                 try:
                     goshawk_result = await advisor_review_async(
-                        client, enhanced_prd, items, req.wiki_pages
+                        client, enhanced_prd, items, req.wiki_pages,
+                        on_tool_call=_on_tool_call,
                     )
                     from goshawk_advisor import apply_advisor_result
                     items = apply_advisor_result(items, goshawk_result, wiki_pages=req.wiki_pages, client=client)

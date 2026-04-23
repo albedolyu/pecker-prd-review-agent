@@ -204,7 +204,7 @@ def _build_advisor_user_message(prd_content, worker_results, wiki_pages=None):
     return "\n\n".join(parts)
 
 
-def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=DEFAULT_MODEL, deadline=None):
+def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=DEFAULT_MODEL, deadline=None, on_tool_call=None):
     """
     苍鹰交叉校验主函数
     含指数退避重试 + tool_use 检测 + 催促重试 + 文本兜底
@@ -212,6 +212,9 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
     deadline: 可选, time.monotonic() 绝对时间戳. 内部每个 retry 分支前检查剩余时间,
         不够做一次 ~8s 的 API call + sleep 时主动跳过,返回当前最好结果 + 标注
         result["truncated_by_deadline"]=True. 防止外层 wait_for 超时时内层还在 sleep.
+    on_tool_call: 可选 callback(trace_dict), 记录 per-tool-call trace.
+        kind ∈ {goshawk_initial, goshawk_retry (指数退避), goshawk_prompt_followup
+        (催促), goshawk_empty_retry_followup (空提交复检)}.
     """
     if client is None:
         client = _make_client()
@@ -227,8 +230,9 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
     # 估单次 retry 分支最坏耗时: sleep 2-2.5s + API call 5-30s Opus
     coord = DeadlineCoordinator(deadline=deadline, min_per_retry=8.0)
 
-    def _call(msgs):
-        return client.create(
+    def _call(msgs, call_kind="goshawk_initial"):
+        _t0 = time.time()
+        resp = client.create(
             model=model,
             max_tokens=4096,
             system=GOSHAWK_SYSTEM_PROMPT,
@@ -236,6 +240,28 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
             tools=[SUBMIT_ADVISOR_REVIEW_TOOL],
             tool_choice={"type": "any"},
         )
+        _t1 = time.time()
+        if on_tool_call is not None:
+            try:
+                usage = resp.usage if hasattr(resp, "usage") else {}
+                # goshawk 用的 client 有的返回 dict 有的返回 obj, 做兼容取值
+                def _u(k):
+                    if hasattr(usage, "get"):
+                        return usage.get(k, 0)
+                    return getattr(usage, k, 0)
+                on_tool_call({
+                    "dim_key": "goshawk",
+                    "kind": call_kind,
+                    "model": model,
+                    "duration_ms": int((_t1 - _t0) * 1000),
+                    "input_tokens": _u("input_tokens"),
+                    "output_tokens": _u("output_tokens"),
+                    "cache_read_tokens": _u("cache_read_input_tokens"),
+                    "use_compact_tool": False,
+                })
+            except Exception:
+                pass
+        return resp
 
     # 指数退避重试 (API 级异常)
     max_retries = 2
@@ -243,7 +269,7 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
     last_exc = None
     for attempt in range(max_retries + 1):
         try:
-            response = _call(messages)
+            response = _call(messages, call_kind=("goshawk_initial" if attempt == 0 else "goshawk_retry"))
             break
         except Exception as e:
             last_exc = e
@@ -271,7 +297,7 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
         ]
         time.sleep(2 + random.uniform(0, 0.5))
         try:
-            response2 = _call(followup_msgs)
+            response2 = _call(followup_msgs, call_kind="goshawk_prompt_followup")
             result2 = _extract_advisor_result(response2)
             has_tool2 = any(block.type == "tool_use" for block in response2.content)
             if has_tool2:
@@ -299,7 +325,7 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
         ]
         time.sleep(2 + random.uniform(0, 0.5))
         try:
-            response2 = _call(followup_msgs)
+            response2 = _call(followup_msgs, call_kind="goshawk_empty_retry_followup")
             result2 = _extract_advisor_result(response2)
             # 任一数组非空 → 采用 retry 结果;仍全空 → 保留首次 (confidence 可能已被修正)
             if any(result2.get(k) for k in ("flagged_as_false_positive",
@@ -340,7 +366,7 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
     return result
 
 
-async def advisor_review_async(client, prd_content, worker_results, wiki_pages=None, model=DEFAULT_MODEL):
+async def advisor_review_async(client, prd_content, worker_results, wiki_pages=None, model=DEFAULT_MODEL, on_tool_call=None):
     """苍鹰交叉校验异步版本（在线程池中执行同步逻辑）
 
     Phase G #9: 加 GOSHAWK_TIMEOUT 保护。Opus via Claude CLI 可能跑 10+ 分钟,
@@ -359,7 +385,7 @@ async def advisor_review_async(client, prd_content, worker_results, wiki_pages=N
                 None,
                 lambda: advisor_review(
                     client, prd_content, worker_results, wiki_pages, model,
-                    deadline=deadline,
+                    deadline=deadline, on_tool_call=on_tool_call,
                 ),
             ),
             timeout=GOSHAWK_TIMEOUT,

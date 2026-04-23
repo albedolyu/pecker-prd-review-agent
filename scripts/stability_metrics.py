@@ -75,6 +75,9 @@ def _parse_session(path: Path) -> Optional[Dict[str, Any]]:
         None,
     )
 
+    # 2026-04-23 B: tool_call_done 事件聚合 (per-tool-call trace)
+    tool_calls = [e for e in events if e.get("type") == "tool_call_done"]
+
     ts_start = meta.get("ts", "")
     status = "unknown"
     items_count = 0
@@ -107,6 +110,7 @@ def _parse_session(path: Path) -> Optional[Dict[str, Any]]:
         "items_count": items_count,
         "cost_usd": cost_usd,
         "duration_ms": duration_ms,
+        "tool_calls": tool_calls,  # 供下游 per-tool 聚合, 非空 list
     }
 
 
@@ -160,6 +164,34 @@ def compute_metrics(runs: List[Dict[str, Any]]) -> Dict[str, Any]:
         k = max(0, min(len(vals) - 1, int(len(vals) * pct)))
         return vals[k]
 
+    # 2026-04-23 B: per-tool-call breakdown (按 dim_key + kind 聚合)
+    tool_breakdown: Dict[str, Dict[str, Any]] = {}  # "{dim_key}/{kind}" → aggr
+    for r in runs:
+        for tc in (r.get("tool_calls") or []):
+            key = f"{tc.get('dim_key', '?')}/{tc.get('kind', '?')}"
+            bucket = tool_breakdown.setdefault(key, {
+                "count": 0,
+                "total_duration_ms": 0,
+                "total_input_tokens": 0,
+                "total_output_tokens": 0,
+                "total_cache_read_tokens": 0,
+            })
+            bucket["count"] += 1
+            bucket["total_duration_ms"] += int(tc.get("duration_ms", 0) or 0)
+            bucket["total_input_tokens"] += int(tc.get("input_tokens", 0) or 0)
+            bucket["total_output_tokens"] += int(tc.get("output_tokens", 0) or 0)
+            bucket["total_cache_read_tokens"] += int(tc.get("cache_read_tokens", 0) or 0)
+
+    # retry 占比: 非 initial 的调用次数 / total 调用数
+    total_tool_calls = sum(b["count"] for b in tool_breakdown.values())
+    retry_kinds = {"prompt_followup", "empty_retry_followup", "goshawk_retry",
+                   "goshawk_prompt_followup", "goshawk_empty_retry_followup"}
+    retry_calls = sum(
+        b["count"] for k, b in tool_breakdown.items()
+        if k.split("/", 1)[-1] in retry_kinds
+    )
+    retry_rate = round(retry_calls / total_tool_calls, 4) if total_tool_calls else 0.0
+
     return {
         "total_runs": total,
         "completed": status_counts["completed"],
@@ -176,6 +208,11 @@ def compute_metrics(runs: List[Dict[str, Any]]) -> Dict[str, Any]:
         "by_reviewer": _by("reviewer"),
         "by_workspace": _by("workspace"),
         "by_mode": _by("mode"),
+        # 2026-04-23 B: per-tool-call 颗粒度
+        "total_tool_calls": total_tool_calls,
+        "retry_tool_calls": retry_calls,
+        "retry_rate": retry_rate,
+        "tool_breakdown": tool_breakdown,
     }
 
 
@@ -203,6 +240,19 @@ def render_text(metrics: Dict[str, Any], days: Optional[int]) -> str:
         lines.append(f"Top workspace: {list(metrics['by_workspace'].items())[:5]}")
     if metrics["by_reviewer"]:
         lines.append(f"Top reviewer: {list(metrics['by_reviewer'].items())[:5]}")
+
+    # per-tool breakdown (2026-04-23 B)
+    if metrics.get("total_tool_calls"):
+        lines.append(f"\nTool 调用颗粒度: 总 {metrics['total_tool_calls']} 次, "
+                     f"retry {metrics['retry_calls'] if 'retry_calls' in metrics else metrics.get('retry_tool_calls', 0)} "
+                     f"次 (retry_rate {metrics['retry_rate']:.1%})")
+        breakdown = metrics.get("tool_breakdown", {})
+        # 按 count 倒序
+        top = sorted(breakdown.items(), key=lambda kv: -kv[1]["count"])[:10]
+        for key, b in top:
+            avg_dur = b["total_duration_ms"] / b["count"] if b["count"] else 0
+            lines.append(f"  {key}: {b['count']} 次, avg {avg_dur:.0f}ms, "
+                         f"in={b['total_input_tokens']} out={b['total_output_tokens']}")
     return "\n".join(lines)
 
 

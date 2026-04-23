@@ -349,12 +349,17 @@ def _parse_items_from_text(text):
 # ============================================================
 
 
-def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_perf_history=None, wiki_path=None, diff_context=None) -> WorkerResult:
+def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_perf_history=None, wiki_path=None, diff_context=None, on_tool_call=None) -> WorkerResult:
     """Worker 核心逻辑（sync），返回首次 API 响应和处理后的 items 列表。
     async 版本通过 run_in_executor 包装此函数。
 
     返回 review.types.WorkerResult (TypedDict): dimension/items/usage/cost_usd/
     model_used/telemetry; 运行时仍是普通 dict, TypedDict 只给 IDE/mypy 静态检查。
+
+    on_tool_call: 可选 callback(trace_dict) -> None. 每次 client.create 成功后调用,
+    trace 含 {dim_key, kind=initial/prompt_followup/empty_retry_followup, model,
+    duration_ms, input_tokens, output_tokens, cache_read}. 给 FastAPI SSE /
+    EventStore 记 per-tool-call 粒度. CLI 模式 None 跳过, 零影响.
     """
     # 3a: telemetry — 记录 worker 开始时间
     start_time = time.time()
@@ -372,7 +377,7 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
     dim_constrained_tool = ctx["dim_constrained_tool"]
     cache_monitor = ctx["cache_monitor"]
 
-    def _call(msgs, use_compact_tool=False):
+    def _call(msgs, use_compact_tool=False, call_kind="initial"):
         # Pattern 17: followup 催促重试时用精简版 tool schema
         tool_to_use = dim_constrained_tool
         if use_compact_tool:
@@ -387,6 +392,7 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
         tools_json = json.dumps([tool_to_use], ensure_ascii=False)
         cache_monitor.snapshot(system_text, tools_json, model, dim_key=dim_key)
 
+        _t0 = time.time()
         resp = client.create(
             model=model,
             max_tokens=max_tokens,  # Pattern 20: effort-aware
@@ -396,9 +402,26 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
             tool_choice={"type": "any"},
             retry_policy="worker",
         )
+        _t1 = time.time()
 
         # Pattern 18: check after API response
         cache_monitor.check(resp.usage)
+
+        # Per-tool-call trace (2026-04-23 B): 给 EventStore 记细粒度 tool 调用
+        if on_tool_call is not None:
+            try:
+                on_tool_call({
+                    "dim_key": dim_key,
+                    "kind": call_kind,
+                    "model": model,
+                    "duration_ms": int((_t1 - _t0) * 1000),
+                    "input_tokens": resp.usage.get("input_tokens", 0),
+                    "output_tokens": resp.usage.get("output_tokens", 0),
+                    "cache_read_tokens": resp.usage.get("cache_read_input_tokens", 0),
+                    "use_compact_tool": use_compact_tool,
+                })
+            except Exception:
+                pass  # callback 异常不影响主流程
 
         return resp
 
@@ -421,7 +444,7 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
         time.sleep(2 + random.uniform(0, 0.5))
         try:
             # Pattern 17: followup 用精简版 tool schema 节省 token
-            response2 = _call(followup_msgs, use_compact_tool=True)
+            response2 = _call(followup_msgs, use_compact_tool=True, call_kind="prompt_followup")
             items = _extract_items_from_response(response2)
             if _has_tool_use(response2):
                 response = response2
@@ -451,7 +474,7 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
         ]
         time.sleep(2 + random.uniform(0, 0.5))
         try:
-            response2 = _call(followup_msgs, use_compact_tool=True)
+            response2 = _call(followup_msgs, use_compact_tool=True, call_kind="empty_retry_followup")
             retry_items = _extract_items_from_response(response2)
             if retry_items:
                 items = retry_items
@@ -515,14 +538,14 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
     }
 
 
-async def _run_worker_async(client, dim_key, prd_content, wiki_pages, model_tiers, rule_perf_history=None, wiki_path=None, diff_context=None) -> WorkerResult:
+async def _run_worker_async(client, dim_key, prd_content, wiki_pages, model_tiers, rule_perf_history=None, wiki_path=None, diff_context=None, on_tool_call=None) -> WorkerResult:
     """异步包装：在线程池中执行 _worker_core，带超时保护"""
     from agent_config import WORKER_TIMEOUT
     loop = asyncio.get_running_loop()
     try:
         return await asyncio.wait_for(
             loop.run_in_executor(
-                None, lambda: _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_perf_history, wiki_path, diff_context)
+                None, lambda: _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_perf_history, wiki_path, diff_context, on_tool_call)
             ),
             timeout=WORKER_TIMEOUT,
         )
@@ -540,6 +563,6 @@ async def _run_worker_async(client, dim_key, prd_content, wiki_pages, model_tier
         }
 
 
-def _run_worker_sync(client, dim_key, prd_content, wiki_pages, model_tiers, rule_perf_history=None, wiki_path=None, diff_context=None) -> WorkerResult:
+def _run_worker_sync(client, dim_key, prd_content, wiki_pages, model_tiers, rule_perf_history=None, wiki_path=None, diff_context=None, on_tool_call=None) -> WorkerResult:
     """同步包装：直接调用 _worker_core"""
-    return _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_perf_history, wiki_path, diff_context)
+    return _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_perf_history, wiki_path, diff_context, on_tool_call)
