@@ -294,23 +294,40 @@ def load_review_dimensions(workspace=None):
     return dimensions, wiki_keywords
 
 
-@lru_cache(maxsize=8)
-def _cached_load(workspace=None):
-    """lru_cache 按 workspace 参数做键缓存, 替代 2026-04-23 前的模块 global
-    (_loaded_dimensions / _loaded_wiki_keywords). 避免 CLI 多 workspace 切换
-    时第二次复用第一次的配置。maxsize=8 对内测规模够用。
+_DEFAULT_WS_KEY = "<default>"
+
+
+def _resolve_workspace_key(workspace):
+    """把 workspace 参数解析成 lru_cache 的稳定 key.
+
+    关键: 调用方不传 workspace 时不能直接用 None 做 key, 否则所有 None 调用
+    都命中同一 cache entry, CLI 切 os.environ["WORKSPACE"] 后仍返回第一次
+    的配置. 这里把 None 显式解析成 env 里的实际 workspace 路径(没设则用
+    _DEFAULT_WS_KEY 占位)作为 cache key, 让 lru_cache 按真实路径分桶.
     """
-    return load_review_dimensions(workspace)
+    if workspace is not None:
+        return workspace
+    return os.environ.get("WORKSPACE", "") or _DEFAULT_WS_KEY
+
+
+@lru_cache(maxsize=8)
+def _cached_load(workspace_key):
+    """按 workspace_key(已 resolve) 缓存 YAML 加载结果. workspace_key 是 str,
+    _DEFAULT_WS_KEY 代表"无 workspace 上下文 / 硬编码 fallback"分支.
+    替代 2026-04-23 前的模块 global (_loaded_dimensions / _loaded_wiki_keywords).
+    """
+    actual = None if workspace_key == _DEFAULT_WS_KEY else workspace_key
+    return load_review_dimensions(actual)
 
 
 def get_review_dimensions(workspace=None):
     """获取评审维度配置(带 lru_cache 按 workspace 缓存)."""
-    return _cached_load(workspace)[0]
+    return _cached_load(_resolve_workspace_key(workspace))[0]
 
 
 def get_wiki_keywords(workspace=None):
     """获取 wiki 关键词配置(带 lru_cache 按 workspace 缓存)."""
-    return _cached_load(workspace)[1]
+    return _cached_load(_resolve_workspace_key(workspace))[1]
 
 
 # 信鸽反馈历史文件路径.
