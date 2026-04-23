@@ -1,4 +1,4 @@
-.PHONY: help install dev-api dev-web test test-py test-web lint kb-lint build secrets check-env eval-consistency clean
+.PHONY: help install dev-api dev-web test test-py test-web test-e2e-local lint kb-lint build secrets check-env eval-consistency clean
 
 help:  ## 列出所有命令
 	@echo "Pecker 常用命令 (运行 make <target>):"
@@ -23,6 +23,9 @@ test-py:  ## 只跑 Python 单测
 
 test-web:  ## 只跑前端单测
 	cd web && pnpm test
+
+test-e2e-local:  ## 本地 e2e (用系统 Chrome 绕 Windows headless-shell 坏掉的问题). 需手动先起 pnpm dev
+	cd web && pnpm exec playwright test --project chrome-local
 
 lint:  ## ESLint + doc_coherence
 	cd web && pnpm run lint

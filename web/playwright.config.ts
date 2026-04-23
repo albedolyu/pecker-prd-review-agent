@@ -40,6 +40,19 @@ export default defineConfig({
         viewport: { width: 1440, height: 900 },
       },
     },
+    // 本地备选: Windows 某些机器上 chromium_headless_shell-1217 因
+    // VC++ redistributable 缺失 / EDR 拦截 无法 spawn (winldd 报 "应用程序
+    // 无法正常启动"). 此 project 用系统装的 Google Chrome 绕开, 仅本地用:
+    //   pnpm exec playwright test --project chrome-local
+    // CI 仍用 chromium-desktop (Ubuntu 无此问题).
+    {
+      name: "chrome-local",
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1440, height: 900 },
+        channel: "chrome",
+      },
+    },
   ],
 
   // 视觉回归阈值:像素差异超过 5% 失败
