@@ -16,6 +16,7 @@ import re
 import time
 from datetime import datetime
 
+from io_utils import try_read_json
 from logger import get_logger
 from review.dimensions import (
     _cn_label,
@@ -137,10 +138,8 @@ def _build_worker_system(dim_key, rule_perf_history=None, dimensions=None, works
 def _build_feedback_section(dim_key, rule_perf_history=None, dimensions=None):
     """从已加载的 history 中筛选当前维度的高发问题规则"""
     if rule_perf_history is None:
-        try:
-            with open(_get_rule_perf_history_path(), "r", encoding="utf-8") as f:
-                rule_perf_history = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError, OSError):
+        rule_perf_history = try_read_json(_get_rule_perf_history_path(), default=None)
+        if rule_perf_history is None:
             return ""
 
     if not isinstance(rule_perf_history, dict):

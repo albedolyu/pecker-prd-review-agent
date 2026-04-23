@@ -495,17 +495,9 @@ def _update_rule_perf_from_decisions(
 
     无 rule_id 的 item 无法归因到具体规则,跳过。
     """
-    workspace_dir = str(get_project_root() / workspace)
-    history_path = os.path.join(workspace_dir, "output", "rule_performance_history.json")
-
-    # 读已有历史
-    history_data: Dict[str, Any] = {}
-    if os.path.isfile(history_path):
-        try:
-            with open(history_path, "r", encoding="utf-8") as f:
-                history_data = json.load(f)
-        except (json.JSONDecodeError, OSError):
-            history_data = {}
+    from rule_perf_store import RulePerformanceHistoryStore
+    store = RulePerformanceHistoryStore(get_project_root() / workspace)
+    history_data: Dict[str, Any] = store.load()
 
     # 统计日志用计数器
     total_decisions = len(decisions)
@@ -570,11 +562,9 @@ def _update_rule_perf_from_decisions(
 
         updated_rules += 1
 
-    # 写回
+    # 写回 (store.save 内部处理 mkdir + atomic write)
     if updated_rules > 0:
-        os.makedirs(os.path.dirname(history_path), exist_ok=True)
-        with open(history_path, "w", encoding="utf-8") as f:
-            json.dump(history_data, f, ensure_ascii=False, indent=2)
+        store.save(history_data)
 
     log.info(
         f"[决策回流] 本次评审 {total_decisions} 条决策中 "

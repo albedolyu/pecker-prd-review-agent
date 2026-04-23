@@ -755,19 +755,13 @@ def _append_rule_history(outcomes, workspace, prd_name=None):
     每次评估后，把每条有规则 ID 的结局写入历史文件，
     并更新累计统计和噪声标记。
     """
-    history_path = os.path.join(workspace, "output", "rule_performance_history.json")
+    from rule_perf_store import RulePerformanceHistoryStore
+    store = RulePerformanceHistoryStore(workspace)
     today = datetime.now().strftime("%Y-%m-%d")
     prd_label = prd_name or "unknown"
 
     # 读取已有历史
-    history_data = {}
-    if os.path.isfile(history_path):
-        raw = _read_file_safe(history_path)
-        if raw:
-            try:
-                history_data = json.loads(raw)
-            except json.JSONDecodeError:
-                history_data = {}
+    history_data = store.load()
 
     updated_rules = set()
     for o in outcomes:
@@ -828,30 +822,12 @@ def _append_rule_history(outcomes, workspace, prd_name=None):
     if not updated_rules:
         return
 
-    # 确保输出目录存在
-    os.makedirs(os.path.dirname(history_path), exist_ok=True)
-
-    # 原子写: 先写 .tmp 再 os.replace,跨平台且零依赖
-    import tempfile as _tempfile
-    _fd, _tmp = _tempfile.mkstemp(
-        prefix=".rule_history_", suffix=".tmp",
-        dir=os.path.dirname(history_path),
-    )
-    try:
-        with os.fdopen(_fd, "w", encoding="utf-8") as f:
-            json.dump(history_data, f, ensure_ascii=False, indent=2)
-        os.replace(_tmp, history_path)
-    except Exception:
-        if os.path.exists(_tmp):
-            try:
-                os.unlink(_tmp)
-            except OSError:
-                pass
-        raise
+    # store.save 内部已做 mkdir + tempfile + os.replace 原子写
+    store.save(history_data)
 
     # 打印高噪声规则警告
     noisy_rules = [rid for rid in updated_rules if history_data[rid]["is_noisy"]]
-    print(f"\n[历史] 已追加 {len(updated_rules)} 条规则的历史记录 → {history_path}")
+    print(f"\n[历史] 已追加 {len(updated_rules)} 条规则的历史记录 → {store.path}")
     if noisy_rules:
         for rid in sorted(noisy_rules):
             rate = history_data[rid]["rejection_rate"]

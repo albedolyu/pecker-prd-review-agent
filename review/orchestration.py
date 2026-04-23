@@ -14,6 +14,7 @@ import asyncio
 import json
 import time
 
+from io_utils import try_read_json
 from logger import get_logger
 from review.aggregation import majority_vote, merge_and_deduplicate
 from review.dimensions import (
@@ -39,12 +40,7 @@ async def _single_round_async(client, prd_content, wiki_pages, model_tiers, wiki
     dimensions = get_review_dimensions()
 
     # 读一次 rule performance history，传给所有 worker（避免 4 次 I/O）
-    rule_perf_history = None
-    try:
-        with open(_get_rule_perf_history_path(workspace), "r", encoding="utf-8") as f:
-            rule_perf_history = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        pass
+    rule_perf_history = try_read_json(_get_rule_perf_history_path(workspace), default=None)
 
     # 错峰启动: Windows 下 4 个 claude CLI 子进程同时启动会触发 Node.js libuv assertion
     # (UV_HANDLE_CLOSING / 0xC0000409 STATUS_STACK_BUFFER_OVERRUN),给每个 worker 加 stagger
@@ -214,12 +210,7 @@ def _single_round_sync(client, prd_content, wiki_pages, model_tiers, wiki_path=N
     dimensions = get_review_dimensions()
 
     # 读一次 rule performance history，传给所有 worker（避免 4 次 I/O）
-    rule_perf_history = None
-    try:
-        with open(_get_rule_perf_history_path(workspace), "r", encoding="utf-8") as f:
-            rule_perf_history = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        pass
+    rule_perf_history = try_read_json(_get_rule_perf_history_path(workspace), default=None)
 
     workers = []
     all_items = []

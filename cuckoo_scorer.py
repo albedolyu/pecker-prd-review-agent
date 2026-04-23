@@ -519,18 +519,13 @@ def update_rule_performance_history(workspace, rule_metrics, prd_name=None):
     if not rule_metrics:
         return 0
 
-    history_path = os.path.join(workspace, "output", "rule_performance_history.json")
+    from rule_perf_store import RulePerformanceHistoryStore
+    store = RulePerformanceHistoryStore(workspace)
     today = datetime.now().strftime("%Y-%m-%d")
     prd_label = prd_name or "unknown"
 
     # 读取已有历史
-    history_data = {}
-    if os.path.isfile(history_path):
-        try:
-            with open(history_path, "r", encoding="utf-8") as f:
-                history_data = json.load(f)
-        except (json.JSONDecodeError, IOError):
-            history_data = {}
+    history_data = store.load()
 
     updated = 0
     for rid, m in rule_metrics.items():
@@ -582,10 +577,7 @@ def update_rule_performance_history(workspace, rule_metrics, prd_name=None):
     if updated == 0:
         return 0
 
-    os.makedirs(os.path.dirname(history_path), exist_ok=True)
-    with open(history_path, "w", encoding="utf-8") as f:
-        json.dump(history_data, f, ensure_ascii=False, indent=2)
-
+    store.save(history_data)
     return updated
 
 
