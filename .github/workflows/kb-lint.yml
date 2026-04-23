@@ -66,6 +66,7 @@ jobs:
 
       - name: Render PR comment (pull_request only)
         if: github.event_name == 'pull_request'
+        continue-on-error: true
         run: |
           python scripts/_render_kb_comment.py coherence.json > kb-comment.md
           echo "---comment preview---"
@@ -73,6 +74,7 @@ jobs:
 
       - name: Post sticky comment on PR
         if: github.event_name == 'pull_request'
+        continue-on-error: true  # sticky-comment action 失败不应让 warn-only 破功
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: kb-lint
