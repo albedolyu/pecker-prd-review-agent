@@ -26,6 +26,12 @@
 | [RULE_PERF_CLEANUP.md](RULE_PERF_CLEANUP.md) | 数据清洗 | workspace-对外投资 的 rule_performance_history 15 条规则诊断，7 条疑似污染的清洗脚本规格 + 防污染机制 |
 | [SPLIT_PLAN.md](SPLIT_PLAN.md) | 重构规划（✅ 2026-04-19 已实施） | `parallel_review.py`（1223 → 78 行 facade）按职责拆 6 模块完成：`review/{dimensions,prompting,worker,orchestration,evidence_verify,aggregation}.py`，对外 import 零改动 |
 
+### 规则演进 · 实测留档
+
+| 文档 | 类型 | 描述 |
+|---|---|---|
+| [RC-009_NEW_RULE_EFFECT.md](RC-009_NEW_RULE_EFFECT.md) | 规则升级 A/B 实测 | RC-009 从"字段映射一致性"扩到"物理表定义完整性"，风鸟诉前调解 PRD 实测命中 +70% / 0% 假阳性 |
+
 ### 交付 / 部署 / PM
 
 | 文档 | 类型 | 描述 |
