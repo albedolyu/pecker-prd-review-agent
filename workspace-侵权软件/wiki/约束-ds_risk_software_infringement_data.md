@@ -1,8 +1,13 @@
 ---
+
 source: prd/侵权软件需求文档-v1.0-原始.md
 created: 2026-04-12
 updated: 2026-04-12
 tags: [domain/数据契约, status/已验证]
+sources: 0
+title: ds_risk_software_infringement_data
+scope: workspace
+category: constraint
 ---
 
 # 约束-ds_risk_software_infringement_data

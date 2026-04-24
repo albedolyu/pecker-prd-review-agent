@@ -55,3 +55,24 @@
   - 风险扫描数据属性（数据大类、副标题、风险等级）
   - NEW 标签显示天数
   - entid 关联目标企业表名
+
+## [2026-04-24] auto_fix | fix_frontmatter=11
+
+## [2026-04-24 16:29] consolidation | 鸮鹦自动整理
+
+### 修复 frontmatter (11)
+- `决策-侵权软件PRD评审发现.md` (补充: sources)
+- `决策-侵权软件评审发现.md` (补充: sources)
+- `场景-企业主页侵权软件.md` (补充: sources)
+- `场景-企业主页侵权软件模块.md` (补充: sources)
+- `场景-风险扫描侵权软件.md` (补充: sources)
+- `实体-风鸟平台.md` (补充: sources)
+- `概念-riskbird_status枚举.md` (补充: sources)
+- `概念-侵权软件.md` (补充: sources)
+- `竞品-企查查-侵权软件.md` (补充: sources)
+- `约束-ds_risk_software_infringement_data.md` (补充: sources)
+- `约束-ds_risk_software_infringement_data表结构.md` (补充: sources)
+
+## [2026-04-24] rebuild_index | pages=11
+
+## [2026-04-24] review_done | reviewer=default prd=未准入境需求文档-v1.0 items=10 retracted=0

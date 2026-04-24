@@ -1,9 +1,12 @@
 {
   "unlocked": {
-    "first_peck": "2026-04-12"
+    "first_peck": "2026-04-12",
+    "eagle_eye": "2026-04-24",
+    "perfect_sync": "2026-04-24",
+    "full_flock": "2026-04-24"
   },
   "stats": {
-    "total_reviews": 1,
-    "total_items": 0
+    "total_reviews": 2,
+    "total_items": 10
   }
 }

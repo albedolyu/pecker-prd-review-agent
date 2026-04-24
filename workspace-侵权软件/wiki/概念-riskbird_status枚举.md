@@ -1,8 +1,13 @@
 ---
+
 source: 侵权软件需求文档-v1.0-原始.md
 created: 2026-04-12
 updated: 2026-04-12
 tags: [domain/侵权软件, status/已验证]
+sources: 0
+title: riskbird_status枚举
+scope: workspace
+category: concept
 ---
 
 # riskbird_status 枚举定义
