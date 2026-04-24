@@ -37,6 +37,7 @@
 | 文档 | 类型 | 描述 |
 |---|---|---|
 | [ui-v8-delivery.md](ui-v8-delivery.md) | 前端交付 | Web UI v8 设计交付（对应根目录 `design-handoff-v8.md`） |
+| [dev-setup.md](dev-setup.md) | 开发环境指南 | make 启动 + 5 大常见坑（next proxy socket hang up / Windows Playwright spawn / 登录 401 / SSE 断连 / Claude CLI 未登录）+ 全链路 curl 验证 |
 | [deployment.md](deployment.md) | 部署指南 | Docker Compose / GHCR 镜像 / 生产环境配置 |
 | [cloudflare-tunnel-setup.md](cloudflare-tunnel-setup.md) | Tunnel 配置 | `pecker-preview.*` 同源路径分流，PM 内测用 |
 | [pm-preview-guide.md](pm-preview-guide.md) | PM 内测指南 | 给非工程 PM 的登录 / 跑 review / 反馈流程 |
