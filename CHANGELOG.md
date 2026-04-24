@@ -149,7 +149,6 @@ recent_window=20 把它们全部纳入,稀释不掉。
 
 **新增可重复工具:**
 - `scripts/archive_unhealthy_sessions.py` —— 按 4 类指纹自动识别 + dry-run/confirm + --all 跨 workspace
-- `_archive/README.md` —— 解释归档逻辑给后来人
 
 **STATUS.md 数据对比:**
 

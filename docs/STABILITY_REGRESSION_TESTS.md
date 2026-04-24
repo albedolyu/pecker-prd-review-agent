@@ -7,7 +7,7 @@
 
 ## 一、测试矩阵
 
-每个漏洞对应 1-2 个针对性 test，放在 `tests/test_worker_failure_handling.py`（新文件）。
+每个漏洞对应 1-2 个针对性 test，放在 `tests/test_worker_failure_classify.py`（新文件）。
 
 ### Test 1 — 全员失败应该发 `review_failed`（漏洞 A）
 
@@ -145,7 +145,7 @@ def test_consistency_improvement_after_fix():
       - name: Install deps
         run: pip install -r requirements.txt && pip install ".[dev]"
       - name: Run stability gate
-        run: python -m pytest tests/test_worker_failure_handling.py -v
+        run: python -m pytest tests/test_worker_failure_classify.py -v
 ```
 
 一致性回归 test 因为需要真实 LLM 调用,不进 CI,用 `pytest -m "eval and slow"` 手动跑。
@@ -156,7 +156,7 @@ def test_consistency_improvement_after_fix():
 
 修复合并前用下列 checklist 验证:
 
-- [ ] Test 1-4 全部 pass（`pytest tests/test_worker_failure_handling.py`）
+- [ ] Test 1-4 全部 pass（`pytest tests/test_worker_failure_classify.py`）
 - [ ] Test 5 至少不 fail（audit log 修复后转为 pass）
 - [ ] 手动配额耗尽场景：4 个 worker 全 error 时,UI 显示"评审失败"面板而非自动跳 Phase 3
 - [ ] 手动 quota 重置后：跑 3 次劳动仲裁 consistency,整体一致性分 ≥ 50%,0-items run 占比 ≤ 10%

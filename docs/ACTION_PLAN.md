@@ -86,7 +86,7 @@ P0 修完后稳定性真正好转,再做这批。
 
 ### P1-6 review_memory / review_fixer 单测
 - **工作量**: 0.5 天
-- **改动**: `tests/test_review_memory.py` + `tests/test_review_fixer.py`
+- **改动**: `tests/test_review_fixer.py` + `tests/test_review_fixer_infer.py` (memory 逻辑已合入 review_fixer,不单独立 test_review_memory)
 - **依赖**: 无
 
 ### P1-7 `_update_rule_perf_from_decisions` 单测

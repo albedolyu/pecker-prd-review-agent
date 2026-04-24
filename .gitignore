@@ -56,3 +56,8 @@ workspace*/knowledge/backend_call_graph.json
 
 # Docker Compose 本地夹具(每个开发者的本地部署拓扑可能不同 · 如 api 容器化 vs 宿主机 uvicorn)
 docker-compose.override.yml
+
+# STATUS.md 由 CI 每次 push 自动生成 (scripts/generate_status.py) + upload
+# artifact. 仓库里跟踪会永远落后真实状态 (2026-04-22 的版本躺在 main 上而数据
+# 早已 608+ passed 个测试). 改为 CI artifact-only 作为唯一真相来源, 仓库不再跟踪.
+STATUS.md
