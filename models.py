@@ -22,7 +22,65 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Optional
+
+
+# ============================================================
+# PM 决策反馈 (2026-04-24 T2: reject 7 分类 + delta 分档)
+# ============================================================
+
+class RejectReason(str, Enum):
+    """PM 驳回原因 7 分类。spec: docs/pm-reject-reason-schema.md"""
+    GOOD_ISSUE = "good_issue"             # 实际是好问题 (PM 手滑 / 改主意)
+    FALSE_POSITIVE = "false_positive"     # 误报, PRD 确实没这问题
+    KNOWN_TRADEOFF = "known_tradeoff"     # 已知取舍, 业务允许
+    WIKI_MISSING = "wiki_missing"         # 知识库缺上下文导致误判
+    RULE_TOO_STRICT = "rule_too_strict"   # 规则太严, 不适用本 PRD
+    IMPL_DETAIL = "impl_detail"           # 实现细节, 不该 PRD 管
+    MODEL_NOISE = "model_noise"           # 模型噪音, 无业务意义
+
+
+# EMA impact_score 的 reject delta — 按 reason 分档, 只惩罚"规则问题"类
+# 规则精度问题 (false_positive/rule_too_strict) 强惩罚
+# 模型/scope 问题 (model_noise/impl_detail) 中等
+# 非规则问题 (wiki_missing/known_tradeoff) 弱惩罚
+# PM 手滑 (good_issue) 正向微调
+REJECT_DELTA_BY_REASON = {
+    RejectReason.FALSE_POSITIVE.value: -0.5,
+    RejectReason.RULE_TOO_STRICT.value: -0.5,
+    RejectReason.MODEL_NOISE.value: -0.3,
+    RejectReason.IMPL_DETAIL.value: -0.3,
+    RejectReason.WIKI_MISSING.value: -0.1,
+    RejectReason.KNOWN_TRADEOFF.value: -0.1,
+    RejectReason.GOOD_ISSUE.value: 0.3,
+}
+
+
+def reject_delta_for_reason(reason_category: str) -> float:
+    """按 reason 分档返回 reject delta。未知 reason 走 -0.3 保守默认 (model_noise 等价)。"""
+    return REJECT_DELTA_BY_REASON.get(reason_category, -0.3)
+
+
+@dataclass
+class PMDecision:
+    """PM 单条决策 (渐进迁移, 当前代码仍用 dict, 此 dataclass 为后续替换目标类型)"""
+    item_id: str
+    action: str                                       # "accept" | "reject" | "edit"
+    reason_category: str = ""                         # RejectReason value, 仅 reject 时有效
+    reason_note: str = ""                             # 可选自由文本补充
+    edited_content: dict = field(default_factory=dict)   # action=edit 时的修改后内容
+
+    @classmethod
+    def from_dict(cls, item_id: str, d: dict) -> PMDecision:
+        """从 dict 构造。兼容老字段: 旧 `reason` 自由文本映射到 `reason_note`。"""
+        return cls(
+            item_id=item_id,
+            action=d.get("action", ""),
+            reason_category=d.get("reason_category", ""),
+            reason_note=d.get("reason_note", d.get("reason", "")),
+            edited_content=d.get("edited_content", {}),
+        )
 
 
 # ============================================================

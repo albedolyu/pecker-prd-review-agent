@@ -583,6 +583,8 @@ def _update_rule_perf_from_decisions(
             continue  # 没有 rule_id 无法归因,跳过
         has_rule_id += 1
         action = decision.get("action", "")
+        # 2026-04-24 T2: reject 7 分类, 缺失默认 model_noise (兼容老 payload 不阻塞)
+        reason_category = decision.get("reason_category", "model_noise")
 
         # 初始化规则条目
         if rule_id not in history_data:
@@ -602,6 +604,11 @@ def _update_rule_perf_from_decisions(
             entry["stats"]["confirmed"] += 1
         elif action == "reject":
             entry["stats"]["rejected"] += 1
+            # 2026-04-24 T2: 按 reason 分桶, 让 scripts/rule_lifecycle 能区分
+            # "50% reject 但 90% 是 rule_too_strict → 改写规则"
+            # vs "90% 是 false_positive → 规则降级"
+            reject_by_reason = entry["stats"].setdefault("reject_by_reason", {})
+            reject_by_reason[reason_category] = reject_by_reason.get(reason_category, 0) + 1
         elif action == "edit":
             entry["stats"]["confirmed"] += 1  # 编辑 = 认可问题
 
@@ -617,7 +624,9 @@ def _update_rule_perf_from_decisions(
         elif action == "edit":
             delta = 0.7
         elif action == "reject":
-            delta = -0.5
+            # 2026-04-24 T2: 按 reason 分档, 不让 wiki_missing 把好规则打成 noisy
+            from models import reject_delta_for_reason
+            delta = reject_delta_for_reason(reason_category)
         else:
             delta = 0.0
         import time as _time
@@ -672,6 +681,9 @@ def _save_eval_ground_truth(
             "location": item.get("location", ""),
             "severity": item.get("severity", ""),
             "action": action,
+            # 2026-04-24 T2: 7 分类 reason, 让 calibration_runner 按 reason 切分布
+            "reason_category": decision.get("reason_category", ""),
+            "reason_note": (decision.get("reason_note", "") or decision.get("reason", ""))[:200],
             "is_true_positive": action in ("accept", "edit"),
         })
 
