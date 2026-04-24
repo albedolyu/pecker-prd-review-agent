@@ -238,6 +238,8 @@ class ReviewRequest(BaseModel):
     user_notes: str = ""
     workspace: str
     prd_name: str = "unknown"
+    # reviewer 字段保留供前端 draft 兼容, 但后端统一以 JWT 里的 user["reviewer"] 为准,
+    # 不信任这里的值(2026-04-24 P1 修复: 防 alice 登录后在 body 里写 bob 伪造署名).
     reviewer: str = "unknown"
     mode: str = Field("standard", pattern="^(standard|quick)$")
     wiki_pages: Dict[str, str] = Field(default_factory=dict)
@@ -298,7 +300,7 @@ async def run_review(
         evt.append("review_started", {
             "prd_name": req.prd_name,
             "mode": req.mode,
-            "reviewer": req.reviewer,
+            "reviewer": user["reviewer"],  # 2026-04-24 P1: 审计用 JWT 认证过的 reviewer, 非前端 body
             "wiki_pages_count": len(req.wiki_pages),
             "injection_scan": _inj,
         })
@@ -449,8 +451,9 @@ async def run_review(
         result["cost_breakdown"] = cost_breakdown
 
         # 预算卡: append 本次实际成本到 logs/daily_cost_*.jsonl
+        # 2026-04-24 P1: 成本归因用 JWT 里的 reviewer, 防前端 body 改 reviewer 伪造成本
         try:
-            record_review_cost(get_project_root(), total_cost, req.reviewer)
+            record_review_cost(get_project_root(), total_cost, user["reviewer"])
         except Exception as _e:
             log.warning(f"[budget] record_review_cost 失败,不阻塞: {_e}")
 
@@ -468,8 +471,10 @@ async def run_review(
         }
 
         # 包装成 Opaque Handle (A14)
+        # 2026-04-24 P1: reviewer 来自 JWT 认证, 不是 body. 绑入 HMAC v2 签名里,
+        # 防前端把 review_result 提交 confirm 时伪造 reviewer 换人归因.
         review_result_handle = ReviewResult.create(
-            reviewer=req.reviewer,
+            reviewer=user["reviewer"],
             workspace=req.workspace,
             prd_name=req.prd_name,
             mode=req.mode,

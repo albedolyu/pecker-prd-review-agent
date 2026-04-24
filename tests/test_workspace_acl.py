@@ -23,8 +23,16 @@ from api.workspace_acl import can_access_workspace, require_workspace_access
 
 @pytest.fixture
 def ws_dir(tmp_path):
-    """临时 workspace 目录。"""
+    """临时 workspace 目录 (名字非 workspace-sample, 新默认 fail-closed)。"""
     d = tmp_path / "workspace-test"
+    d.mkdir()
+    return d
+
+
+@pytest.fixture
+def sample_ws_dir(tmp_path):
+    """白名单公开 workspace (workspace-sample 特殊, 无 ACL 时视为公开)。"""
+    d = tmp_path / "workspace-sample"
     d.mkdir()
     return d
 
@@ -33,11 +41,29 @@ def _write_acl(ws: Path, payload: dict):
     (ws / ".pecker_acl.json").write_text(json.dumps(payload), encoding="utf-8")
 
 
-def test_no_acl_file_is_public(ws_dir, monkeypatch):
-    """无 .pecker_acl.json 视为公开 — 向后兼容现有 workspace-sample 等 demo。"""
+def test_no_acl_file_fails_closed_for_business_workspace(ws_dir, monkeypatch):
+    """2026-04-24 反转: 业务 workspace 无 ACL 文件 → fail-closed (仅 admin 可访问).
+
+    之前是"无 ACL = 公开" 向后兼容, 但 9 个业务 workspace 没一个配 ACL,
+    任何登录用户横向访问 — 反转后强制需要显式配 ACL 或被拒.
+    """
     monkeypatch.delenv("PECKER_ADMIN_USERS", raising=False)
-    assert can_access_workspace(ws_dir, {"reviewer": "alice", "readonly": False}) is True
-    assert can_access_workspace(ws_dir, {"reviewer": "bob", "readonly": False}) is True
+    assert can_access_workspace(ws_dir, {"reviewer": "alice", "readonly": False}) is False
+    assert can_access_workspace(ws_dir, {"reviewer": "bob", "readonly": False}) is False
+
+
+def test_no_acl_file_is_public_for_workspace_sample(sample_ws_dir, monkeypatch):
+    """workspace-sample 白名单: 无 ACL 时视为公开 (demo 用)."""
+    monkeypatch.delenv("PECKER_ADMIN_USERS", raising=False)
+    assert can_access_workspace(sample_ws_dir, {"reviewer": "alice"}) is True
+    assert can_access_workspace(sample_ws_dir, {"reviewer": "bob"}) is True
+
+
+def test_admin_bypasses_fail_closed_default(ws_dir, monkeypatch):
+    """业务 workspace 无 ACL 但 admin 仍能访问 (运维应急 / 补 ACL 用)。"""
+    monkeypatch.setenv("PECKER_ADMIN_USERS", "root,opsguy")
+    assert can_access_workspace(ws_dir, {"reviewer": "root"}) is True
+    assert can_access_workspace(ws_dir, {"reviewer": "opsguy"}) is True
 
 
 def test_acl_owner_can_access(ws_dir, monkeypatch):

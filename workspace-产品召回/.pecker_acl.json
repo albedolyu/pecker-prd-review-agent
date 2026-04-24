@@ -1,0 +1,5 @@
+{
+  "owner": "albedolyu",
+  "readers": [],
+  "_note": "业务 workspace. 2026-04-24 初始化. owner 可读写, readers 按需添加, admin 绕过 ACL."
+}

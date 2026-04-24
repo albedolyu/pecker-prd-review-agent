@@ -1,4 +1,4 @@
-.PHONY: help install dev-api dev-web test test-py test-web test-e2e-local lint kb-lint build secrets check-env eval-consistency clean
+.PHONY: help install dev-api dev-web test test-py test-web test-e2e-local lint kb-lint build secrets check-env eval-consistency init-acl clean
 
 help:  ## 列出所有命令
 	@echo "Pecker 常用命令 (运行 make <target>):"
@@ -37,6 +37,15 @@ kb-lint:  ## 知识库一致性扫描 (Kakapo + doc_coherence)
 
 build:  ## 前端生产构建
 	cd web && pnpm build
+
+init-acl:  ## 为新 workspace 写 .pecker_acl.json (用法 WS=workspace-xxx OWNER=alice [READERS=bob,carol])
+	@if [ -z "$(WS)" ] || [ -z "$(OWNER)" ]; then \
+		echo "用法: make init-acl WS=workspace-xxx OWNER=alice [READERS=bob,carol]"; \
+		exit 1; \
+	fi
+	@if [ ! -d "$(WS)" ]; then echo "workspace 不存在: $(WS)"; exit 1; fi
+	@python -c "import json, sys; readers = [r.strip() for r in '$(READERS)'.split(',') if r.strip()]; json.dump({'owner': '$(OWNER)', 'readers': readers, '_note': 'Initialized by make init-acl'}, open('$(WS)/.pecker_acl.json', 'w'), ensure_ascii=False, indent=2)"
+	@echo "✓ 写入 $(WS)/.pecker_acl.json (owner=$(OWNER), readers=$(READERS))"
 
 secrets:  ## 生成新的 SIGNATURE_SECRET / JWT_SECRET 到 stdout (`make secrets >> .env` 追加)
 	bash scripts/gen-secrets.sh

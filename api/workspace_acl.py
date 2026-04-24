@@ -3,12 +3,15 @@
 约定:
 - workspace 根目录下放 `.pecker_acl.json`:
     {"owner": "alice", "readers": ["bob", "carol"]}
-- 无 .pecker_acl.json → 公开(所有已登录用户可读,保持向后兼容,用于 workspace-sample 等 demo)
+- 无 .pecker_acl.json:
+    * workspace-sample 白名单: 视为公开(demo 用)
+    * 其他 workspace: **fail-closed** 只有 admin 可访问 (2026-04-24 反转, 之前是公开,
+      导致"代码实现但 zero deployment" 漏洞 — 9 个业务 workspace 0 个配 ACL 时任何
+      登录用户都能横向访问)
 - PECKER_ADMIN_USERS 环境变量(逗号分隔)列出的用户 bypass 所有 ACL
 - owner + readers 都算可读; 只有 owner 和 admin 可写(后续扩展,当前依赖 require_writer 的只读/非只读二分)
 
-这是 MVP 实现,够挡"登录用户之间误看他人业务 PRD"这类内测场景的威胁。
-敏感 workspace 需管理员手动 drop `.pecker_acl.json` 开启 ACL。
+新建 workspace 务必同时生成 ACL: `make init-acl WS=workspace-xxx OWNER=albedolyu READERS=bob,carol`
 """
 from __future__ import annotations
 
@@ -21,6 +24,10 @@ from fastapi import HTTPException, status
 
 
 _ACL_FILENAME = ".pecker_acl.json"
+
+# 白名单: 无 ACL 文件但仍视为公开的 workspace. demo / 脱敏样本专用.
+# 添加新 public workspace 前先考虑是否真的没有敏感数据 (PRD 原文 / 内部业务逻辑).
+_PUBLIC_FALLBACK_WORKSPACES = frozenset({"workspace-sample"})
 
 
 def _admin_users() -> Set[str]:
@@ -61,7 +68,9 @@ def can_access_workspace(workspace_dir: Path, user: dict) -> bool:
 
     acl = _load_acl(workspace_dir)
     if acl is None:
-        return True  # 无 acl = 公开(backward compat)
+        # 2026-04-24 反转默认: 无 ACL 文件时 fail-closed, 除非 workspace 在白名单里 (demo).
+        # 之前无 ACL = 所有登录用户可读, 是"实现了但没部署"的漏洞.
+        return workspace_dir.name in _PUBLIC_FALLBACK_WORKSPACES
 
     owner = (acl.get("owner") or "").strip()
     readers = {r.strip() for r in (acl.get("readers") or []) if isinstance(r, str)}
