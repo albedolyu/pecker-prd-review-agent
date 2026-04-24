@@ -31,31 +31,92 @@ log = get_logger("parallel")
 _META_WIKI_FILENAMES = frozenset({"log.md", "index.md", "README.md", "TOC.md"})
 
 
-def _is_pecker_generated(wiki_file_path):
-    """判断 wiki 文件是否为 pecker 自动生成(frontmatter 标 sources: 0)。
+_VALID_AUTHORITY = frozenset({"canonical", "trusted", "contextual", "generated"})
 
-    2026-04-24 发现的自回归偏见(autoregressive bias):
-    pecker 的 "C 类回写 wiki" 步骤(post_review.py)会把"待确定⚠️"的 C 类
-    evidence 自动提炼成 wiki 页,打 status/已验证 标签,frontmatter 里 sources: 0。
-    这些文件本质是 pecker 上次评审的输出缓存,不是 PM 维护的权威知识。
 
-    如果把这些自生成 wiki 作为"下次评审 A 类依据验证的权威源",就形成了
-    "pecker 用自己的输出验证自己的输出"的循环,A 类依据失去验证意义。
+def _parse_wiki_frontmatter(wiki_file_path):
+    """读取 wiki 文件 YAML frontmatter 并解析成 dict。
 
-    实测 workspace-侵权软件: 11 个业务 md 全部同一秒批量创建(14:16:00),
-    全部标 sources: 0, 但每次 evidence_verify 都被当作权威源模糊匹配。
+    容错策略:
+    - 文件读失败 (OSError, 编码异常) → 返回 {}
+    - 没有 frontmatter 包围块 (---) → 返回 {}
+    - 逐行 key: value 解析 (不用 YAML 库以保持轻量 + 不引入依赖)
 
-    本函数识别自生成文件,让上游过滤后再判断 sparse / 模糊匹配。
+    只处理 frontmatter 里的 scalar 字段 (string / number),list/dict 字段当 string 截取,
+    这对 authority/owner/sources/last_verified/verified_by 这种 scalar 足够。
     """
     try:
         with open(wiki_file_path, "r", encoding="utf-8", errors="replace") as f:
-            head = f.read(800)  # 只读 frontmatter, 足够
+            head = f.read(1500)  # frontmatter 一般在 1k 内, 1500 足够兜底
     except OSError:
-        return False
-    # 匹配 YAML frontmatter 里 "sources: 0" (允许前后有空白)
-    if re.search(r'^sources:\s*0\s*$', head, re.MULTILINE):
-        return True
-    return False
+        return {}
+    m = re.match(r'^\s*---\s*\n(.*?)\n---', head, re.DOTALL)
+    if not m:
+        return {}
+    fm = {}
+    for line in m.group(1).split("\n"):
+        kv = line.split(":", 1)
+        if len(kv) == 2:
+            fm[kv[0].strip()] = kv[1].strip()
+    return fm
+
+
+def _wiki_authority_tier(wiki_file_path):
+    """返回 wiki 文件的 authority tier: 'canonical' | 'trusted' | 'contextual' | 'generated'。
+
+    优先级:
+    1. IOError / 无 frontmatter → 'contextual' (保留老 _is_pecker_generated 返回 False 语义,
+       让文件仍进 wiki_index,只是不作强依据; 不用 'generated' 避免把读错的合理文件挡掉)
+    2. sources == 0 → 'generated' (硬性约束,不信任矛盾声明如"sources:0 但 authority:canonical")
+    3. 显式 authority 字段合法 → 原样返回
+    4. 冷启动映射: 有 verified_by → 'trusted', 否则 'contextual'
+
+    spec: docs/wiki-frontmatter-v2.md
+
+    2026-04-24 发现的自回归偏见(autoregressive bias):
+    pecker 的 "C 类回写 wiki" 步骤(post_review.py)会把"待确定⚠️"的 C 类
+    evidence 自动提炼成 wiki 页, frontmatter 里 sources: 0。把这些自生成 wiki 作为
+    下次评审 A 类依据的权威源, 形成 "pecker 用自己的输出验证自己的输出" 的循环。
+    本函数通过 tier 分级替代原 binary 判断, 让 generated 层自动过滤,
+    同时给 PM 手工 promote 到 trusted/canonical 留口子。
+    """
+    fm = _parse_wiki_frontmatter(wiki_file_path)
+
+    # IOError / 无 frontmatter 兜底 — 保留老接口语义 (文件仍进 wiki_index)
+    if not fm:
+        return "contextual"
+
+    # 硬性约束: **显式** sources: 0 强制 generated (即使写了 authority: canonical)
+    # 注意只有 sources 字段 explicitly present 且解析成 0 才触发 —
+    # 缺失 sources 字段 / 非整数 (如 list 格式) 走默认映射, 与老 `_is_pecker_generated`
+    # 的 `^sources:\s*0\s*$` 正则行为等价 (只认明确的 "sources: 0")
+    sources_raw = fm.get("sources")
+    if sources_raw is not None:
+        try:
+            if int(sources_raw) == 0:
+                return "generated"
+        except (ValueError, TypeError):
+            pass  # 非整数 → 视为 non-zero, 走下面默认映射
+
+    # 显式 authority 合法 → 信任
+    explicit = fm.get("authority", "").strip()
+    if explicit in _VALID_AUTHORITY:
+        return explicit
+
+    # 冷启动默认映射
+    verified_by = fm.get("verified_by", "").strip()
+    if verified_by:
+        return "trusted"
+    return "contextual"
+
+
+def _is_pecker_generated(wiki_file_path):
+    """向后兼容的 binary 接口 — 内部走 `_wiki_authority_tier`。
+
+    3 个调用点保持不变 (evidence_verify.py:_is_wiki_sparse / _build_wiki_index /
+    tests/test_evidence_verify_wiki_sparse.py), 避免一次改太多。
+    """
+    return _wiki_authority_tier(wiki_file_path) == "generated"
 
 
 def _is_wiki_sparse(wiki_dir, min_business_files=3):

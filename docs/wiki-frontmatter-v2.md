@@ -67,7 +67,8 @@ verified_by: PM | 研发 | 数据                     # 可选,但 trusted/canon
 
 | 条件 | 默认 authority |
 |---|---|
-| `sources == 0` | `generated` |
+| **显式** `sources: 0` | `generated` (硬性约束, 即使写了 `authority: canonical` 也降到 generated) |
+| `sources` 字段缺失 / 非整数 (如 list) | 走下面默认映射 (不强制 generated, 保留老 `_is_pecker_generated` 正则 `^sources:\s*0\s*$` 行为等价) |
 | `sources >= 1` 且 `verified_by` 字段空 | `contextual` |
 | `sources >= 1` 且 `verified_by` 有值 且 `last_verified` 在 90 天内 | `trusted` |
 | 全部其他情况 | `contextual` (安全默认) |
