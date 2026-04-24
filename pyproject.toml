@@ -21,6 +21,10 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    # tests/test_stream_disconnect.py 等文件用 @pytest.mark.asyncio + async def,
+    # 缺这个 plugin 在 CI (fresh install) 会报 "async def functions are not natively supported".
+    # 本地 pip 偶然装过所以本地绿, CI 每次 fresh install 暴露 — 必须写到 dev extras 固定下来.
+    "pytest-asyncio>=0.23",
 ]
 
 [project.scripts]
