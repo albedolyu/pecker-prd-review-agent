@@ -369,6 +369,34 @@ async def run_review(
                 )
 
             items = result.get("merged_items", [])
+
+            # 2026-04-24 T0: API flow 统一走 verify_evidence,与 CLI (run_session.py:276) 对齐.
+            # 之前 API 只靠 goshawk `_verify_wiki_evidence` 侧查代替, 少了:
+            #   (1) B 类 rule_id 在 review-rules/ 的硬查
+            #   (2) A 类 caveat + confidence × 0.7 降权 (2026-04-24 e3ea5c3 改进)
+            #   (3) sparse/rich 模式切换 (模板/新业务 PRD 场景)
+            # 现在统一 pipeline, 让 Web 用户也享受 evidence_verify 治理改进.
+            try:
+                from review.evidence_verify import verify_evidence, summarize_verification
+                verified = verify_evidence(items, ws_abs_path)
+                items = [i for i in verified if i.get("status") != "RETRACTED"]
+                v_sum = summarize_verification(verified)
+                evt.append("evidence_verify_done", {
+                    "total": v_sum.get("total", 0),
+                    "verified": v_sum.get("verified", 0),
+                    "caveat": v_sum.get("caveat", 0),
+                    "retracted": v_sum.get("retracted", 0),
+                    "reliability": v_sum.get("reliability", 0.0),
+                })
+                emitter.emit("evidence_verify_done", data={
+                    "retracted": v_sum.get("retracted", 0),
+                    "caveat": v_sum.get("caveat", 0),
+                })
+            except Exception as _ev_err:
+                # 失败不阻塞: items 不变, 行为等同本次修复前 (goshawk 侧查兜底)
+                log.warning(f"[evidence_verify] API flow 失败回退到跳过模式: {_ev_err}")
+                evt.append("evidence_verify_skipped", {"reason": str(_ev_err)[:200]})
+
             # Pattern 21: workers 全部完成后 checkpoint
             evt.append("checkpoint", {"workers_done": len(result.get("workers", [])), "items_count": len(items)})
 
