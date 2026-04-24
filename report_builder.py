@@ -31,7 +31,10 @@ def build_actionable_report(items, prd_content, prd_name, reviewer="", peck_scor
         f"**生成时间**: {date_str}",
         f"**审阅人**: {reviewer}" if reviewer else "",
         f"**啄伤度**: {peck_score}" if peck_score is not None else "",
-        f"**改进项总数**: {len(items)} 条（must: {sum(1 for i in items if i.get('severity')=='must')}, should: {sum(1 for i in items if i.get('severity')=='should')}）",
+        f"**改进项总数**: {len(items)} 条（"
+        f"must: {sum(1 for i in items if i.get('severity')=='must')}, "
+        f"should: {sum(1 for i in items if i.get('severity')=='should')}, "
+        f"could: {sum(1 for i in items if i.get('severity')=='could')}）",
         "",
         "---",
         "",
@@ -42,17 +45,29 @@ def build_actionable_report(items, prd_content, prd_name, reviewer="", peck_scor
 
     for section_name, section_items in section_groups.items():
         must_count = sum(1 for i in section_items if i.get("severity") == "must")
-        should_count = len(section_items) - must_count
+        could_count = sum(1 for i in section_items if i.get("severity") == "could")
+        should_count = len(section_items) - must_count - could_count
 
         lines.append(f"## {section_name}")
         lines.append(f"")
-        lines.append(f"改进项: {len(section_items)} 条 (must: {must_count}, should: {should_count})")
+        section_summary = f"改进项: {len(section_items)} 条 (must: {must_count}, should: {should_count}"
+        if could_count:
+            section_summary += f", could: {could_count}"
+        section_summary += ")"
+        lines.append(section_summary)
         lines.append("")
 
         for item in section_items:
             item_id = item.get("id", "?")
             severity = item.get("severity", "should")
-            severity_badge = "**[必须]**" if severity == "must" else "[建议]"
+            if severity == "must":
+                severity_badge = "**[必须]**"
+            elif severity == "could":
+                # facet of primary, 苍鹰冲突合并保留的同源条 (2026-04-24)
+                facet_of = item.get("facet_of", "")
+                severity_badge = f"[补充·{facet_of}]" if facet_of else "[补充]"
+            else:
+                severity_badge = "[建议]"
             rule_id = item.get("rule_id", "")
             issue = item.get("issue", "")
             suggestion = item.get("suggestion", "")

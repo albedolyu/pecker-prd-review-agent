@@ -760,13 +760,16 @@ def apply_advisor_result(review_items, advisor_result, wiki_pages=None, client=N
         items.append(new_item)
         print(f'  终审：所有编辑都没看到这个?补充 {new_id} (confidence={meta_confidence}).')
 
-    # 3. 处理冲突调解
+    # 3. 处理冲突调解 — facet 保留模式 (2026-04-24)
+    # 老语义: 被合并项 MERGED_BY_ADVISOR 直接从 active_items 过滤,丢失同主因下的具体 facet
+    # 新语义: 被合并项 status=MERGED_BY_ADVISOR + severity=could + facet_of=primary_id, 不过滤
+    # 动机: 模板型 PRD 上苍鹰过激合并 (一个宏观问题吞 3+ 章节 facet),漏给 PM 同源具体面
     for resolution in advisor_result.get("conflict_resolutions", []):
         conflict_ids = resolution.get("items", [])
         if len(conflict_ids) < 2:
             continue
 
-        # 保留第一个，合并其余到第一个
+        # 保留第一个为 primary，其余降为 could 级 facet
         primary_id = conflict_ids[0]
         if primary_id not in items_by_id:
             continue
@@ -776,11 +779,17 @@ def apply_advisor_result(review_items, advisor_result, wiki_pages=None, client=N
             f"冲突调解：{resolution['resolution']}（理由：{resolution['reason']}）"
         )
 
-        # 将其余冲突项标记为合并
+        # 将其余冲突项保留为 could 级 facet (不过滤,链回 primary)
         for cid in conflict_ids[1:]:
             if cid in items_by_id:
-                items_by_id[cid]["status"] = "MERGED_BY_ADVISOR"
-                items_by_id[cid]["advisor_note"] = f"已合并至 {primary_id}"
+                facet = items_by_id[cid]
+                facet["status"] = "MERGED_BY_ADVISOR"   # 保留状态名做审计追溯
+                facet["severity"] = "could"              # 降级,与 must/should 区分
+                facet["facet_of"] = primary_id           # 链回主条,前端可呈现"X 的同源 facet"
+                facet["provenance"] = "facet_of_advisor"
+                facet["advisor_note"] = (
+                    f"作为 {primary_id} 的同源 facet 保留 (位置/依据可能不同)"
+                )
 
     # Side Query L1-L3: wiki 标题验证 (仅在有 wiki_pages 时执行)
     if wiki_pages:
@@ -805,12 +814,12 @@ def apply_advisor_result(review_items, advisor_result, wiki_pages=None, client=N
     for item in items:
         item["gate_log"] = _build_gate_log(item, advisor_result, fp_map, conflict_map)
 
-    # 过滤掉被移除和被合并的（但保留在返回结构中做审计）
+    # 过滤掉被移除的（MERGED_BY_ADVISOR 不再过滤,改为 could 级 facet 保留,见上方 conflict_resolutions 处理）
     # 注意: RESTORED_BY_SANITY_CHECK 的 item 不会被过滤
     active_items = [
         item
         for item in items
-        if item.get("status") not in ("REMOVED_BY_ADVISOR", "MERGED_BY_ADVISOR")
+        if item.get("status") != "REMOVED_BY_ADVISOR"
     ]
 
     # 附加 sanity check telemetry 到第一个 active item(供上层消费)

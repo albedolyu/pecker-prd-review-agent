@@ -36,7 +36,7 @@ class ReviewItem:
     location: str
     issue: str
     suggestion: str
-    severity: str              # "must" | "should"
+    severity: str              # "must" | "should" | "could" (could = 苍鹰冲突合并保留的同源 facet)
     evidence_type: str         # "A" | "B" | "C"
     evidence_content: str
     dimension: str = ""        # 评审维度名，如 "结构层"
@@ -44,6 +44,7 @@ class ReviewItem:
     advisor_note: str = ""
     retract_reason: str = ""
     source: str = ""           # "苍鹰补充" 等
+    facet_of: str = ""         # 当 status=MERGED_BY_ADVISOR 时,指向 primary item id (could 级 facet)
 
     @classmethod
     def from_dict(cls, d: dict) -> ReviewItem:

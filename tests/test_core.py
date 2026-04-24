@@ -905,20 +905,53 @@ class TestApplyAdvisorResult:
         assert "R-007" not in ids
 
     def test_conflict_resolution_merges(self):
-        """R-001 R-002 冲突，苍鹰合并：R-002 获得 MERGED_BY_ADVISOR 状态，从活跃列表移除"""
+        """R-001 R-002 冲突: R-002 保留为 could 级 facet,链 facet_of=R-001 (2026-04-24 facet 保留)"""
         from goshawk_advisor import apply_advisor_result
         items = [_make_review_item("R-001"), _make_review_item("R-002")]
         advisor = _make_advisor_result(
             conflict_resolutions=[{
                 "items": ["R-001", "R-002"],
-                "resolution": "保留 R-001，R-002 重复",
+                "resolution": "保留 R-001，R-002 同源",
                 "reason": "两条描述同一问题",
             }]
         )
         result = apply_advisor_result(items, advisor)
         ids = [r["id"] for r in result]
-        assert "R-002" not in ids   # 被合并，移出活跃列表
+        # 老语义已废弃: 不再从活跃列表移除被合并的
         assert "R-001" in ids
+        assert "R-002" in ids   # 保留为 facet,不过滤
+        r002 = next(r for r in result if r["id"] == "R-002")
+        assert r002["severity"] == "could"          # 降到 facet 级
+        assert r002["facet_of"] == "R-001"           # 链回 primary
+        assert r002["status"] == "MERGED_BY_ADVISOR"  # 审计痕迹保留
+        assert r002["provenance"] == "facet_of_advisor"
+        assert "R-001" in r002["advisor_note"]
+
+    def test_conflict_resolution_multi_facet(self):
+        """3 条冲突: R-001 primary, R-002 R-003 都成 could facet (避免 1 个宏观问题吞 N 个章节)"""
+        from goshawk_advisor import apply_advisor_result
+        items = [
+            _make_review_item("R-001", severity="must"),
+            _make_review_item("R-002", severity="must"),
+            _make_review_item("R-003", severity="should"),
+        ]
+        advisor = _make_advisor_result(
+            conflict_resolutions=[{
+                "items": ["R-001", "R-002", "R-003"],
+                "resolution": "保留 R-001，R-002/R-003 同源 facet",
+                "reason": "三条描述跨章节同一类问题",
+            }]
+        )
+        result = apply_advisor_result(items, advisor)
+        ids = [r["id"] for r in result]
+        assert ids == ["R-001", "R-002", "R-003"]    # 三条都保留
+        r001 = next(r for r in result if r["id"] == "R-001")
+        assert r001["severity"] == "must"             # primary 不动
+        assert "facet_of" not in r001                  # primary 不带 facet_of
+        for fid in ("R-002", "R-003"):
+            f = next(r for r in result if r["id"] == fid)
+            assert f["severity"] == "could"
+            assert f["facet_of"] == "R-001"
 
     def test_empty_advisor_no_changes(self):
         """空苍鹰结果，改进项数量和内容不变"""
