@@ -27,12 +27,82 @@ log = get_logger("parallel")
 # ============================================================
 
 
+# 元文件(不算"业务 wiki 内容"),用于 _is_wiki_sparse 判定
+_META_WIKI_FILENAMES = frozenset({"log.md", "index.md", "README.md", "TOC.md"})
+
+
+def _is_pecker_generated(wiki_file_path):
+    """判断 wiki 文件是否为 pecker 自动生成(frontmatter 标 sources: 0)。
+
+    2026-04-24 发现的自回归偏见(autoregressive bias):
+    pecker 的 "C 类回写 wiki" 步骤(post_review.py)会把"待确定⚠️"的 C 类
+    evidence 自动提炼成 wiki 页,打 status/已验证 标签,frontmatter 里 sources: 0。
+    这些文件本质是 pecker 上次评审的输出缓存,不是 PM 维护的权威知识。
+
+    如果把这些自生成 wiki 作为"下次评审 A 类依据验证的权威源",就形成了
+    "pecker 用自己的输出验证自己的输出"的循环,A 类依据失去验证意义。
+
+    实测 workspace-侵权软件: 11 个业务 md 全部同一秒批量创建(14:16:00),
+    全部标 sources: 0, 但每次 evidence_verify 都被当作权威源模糊匹配。
+
+    本函数识别自生成文件,让上游过滤后再判断 sparse / 模糊匹配。
+    """
+    try:
+        with open(wiki_file_path, "r", encoding="utf-8", errors="replace") as f:
+            head = f.read(800)  # 只读 frontmatter, 足够
+    except OSError:
+        return False
+    # 匹配 YAML frontmatter 里 "sources: 0" (允许前后有空白)
+    if re.search(r'^sources:\s*0\s*$', head, re.MULTILINE):
+        return True
+    return False
+
+
+def _is_wiki_sparse(wiki_dir, min_business_files=3):
+    """判断 workspace 的 wiki 目录是否缺少业务上下文。
+
+    模板型 / 新业务 / 跨部门引用 PRD 的 workspace 通常没填充 wiki 内容,
+    A 类依据(强制 wiki 页面引用)在这种 workspace 上 100% 被 retract,
+    导致 evidence_verify 过度剔除合理 items(2026-04-24 侵权软件模板 PRD
+    实测 5/7 条 A 类被撤)。
+
+    判定规则:**真实业务 md** 文件数量 < min_business_files(默认 3)视为 sparse。
+    真实业务 md = 不是元文件(log/index/README/TOC) + 不是 pecker 自生成(sources: 0)。
+
+    2026-04-24 新增 pecker 自生成过滤: 避免"pecker 自己写了 11 个 wiki 然后判 rich"
+    的循环误判(autoregressive bias)。
+
+    Args:
+        wiki_dir: wiki 目录绝对路径
+        min_business_files: 认定 "有业务上下文" 的最小业务 md 数量
+
+    Returns:
+        True 表示 sparse(走宽松模式), False 表示 rich(维持严格校验)
+    """
+    if not os.path.isdir(wiki_dir):
+        return True
+    md_files = glob_module.glob(os.path.join(wiki_dir, "*.md"))
+    business_files = [
+        f for f in md_files
+        if os.path.basename(f) not in _META_WIKI_FILENAMES
+        and not _is_pecker_generated(f)  # 剔除 pecker 自回归生成的
+    ]
+    return len(business_files) < min_business_files
+
+
 def _build_wiki_index(wiki_dir):
-    """构建 wiki 文件索引（一次 glob，多次复用）"""
+    """构建 wiki 文件索引（一次 glob，多次复用）。
+
+    2026-04-24 新增 pecker 自生成过滤:pecker 上次评审的 C 类回写文件
+    (`sources: 0`)不应作为本次 A 类依据的验证权威(自回归偏见)。
+    """
     if not os.path.isdir(wiki_dir):
         return {}
     index = {}
     for wiki_file in glob_module.glob(os.path.join(wiki_dir, "*.md")):
+        # 剔除 pecker 自动生成的 wiki,防自回归
+        if _is_pecker_generated(wiki_file):
+            continue
         basename = os.path.basename(wiki_file)
         index[basename] = wiki_file
     return index
@@ -209,6 +279,17 @@ def verify_evidence(items, workspace):
     rules_dir = os.path.join(workspace, "review-rules")
     wiki_index = _build_wiki_index(wiki_dir)
 
+    # 2026-04-24 P0 修复: 模板型 / 新业务 workspace 的 wiki 稀疏时走宽松模式,
+    # 不对 A 类依据做硬 retract, 改 verified_with_caveat + 保留 item 继续下游.
+    # 之前逻辑在 workspace-侵权软件 这种无 wiki 上下文场景下 100% retract A 类,
+    # 导致 evidence_verify 裁剪过度 (实测 5/7 条 A 类被撤, pipeline 80% 吞没率).
+    wiki_sparse = _is_wiki_sparse(wiki_dir)
+    if wiki_sparse:
+        log.info(
+            f"[verify] workspace 无 wiki 上下文 ({wiki_dir} 业务 md 文件 < 3), "
+            f"A 类依据走宽松模式: 不 retract, 标 verified_with_caveat"
+        )
+
     verified = []
     for item in items:
         ev_type = item.get("evidence_type", "")
@@ -222,13 +303,29 @@ def verify_evidence(items, workspace):
         }
 
         if ev_type == "A":
-            # A 类:检查 wiki/ 中是否存在对应页面
-            if not _find_wiki_page(ev_content, wiki_dir, wiki_index):
-                retract_reason = f"A 类依据验证失败:wiki 中未找到相关页面「{ev_content}」"
-                v_status = "retracted"
-                v_reason = retract_reason
+            if wiki_sparse:
+                # 宽松模式: 无 wiki 上下文 workspace 不对 A 类硬撤回
+                v_status = "verified_with_caveat"
+                v_reason = (
+                    "A 类依据: workspace 无 wiki 上下文(业务 md 文件 < 3), "
+                    "跳过 wiki 页面强查 — 走 evidence_weak 降级, 不 retract"
+                )
+                v_details["found"] = None
+                v_details["reason_code"] = "A_wiki_sparse_relaxed"
+            elif not _find_wiki_page(ev_content, wiki_dir, wiki_index):
+                # 2026-04-24 P0 放宽: wiki 未命中不再 retract, 改降权保留.
+                # 原逻辑粗暴 retract,等于把"证据链弱"等同"item 错",
+                # 会把合理 item 一并抹杀(侵权软件模板 PRD 实测 4 条 A 类被撤).
+                # 新逻辑: confidence × 0.7 降权保留,让 PM 自己判断.
+                v_status = "verified_with_caveat"
+                v_reason = (
+                    "A 类依据: wiki 未找到匹配页面, 降权保留 "
+                    "(证据链弱但 item 可能仍有效, 由 PM 复核)"
+                )
                 v_details["found"] = False
-                v_details["reason_code"] = "A_missing_wiki_page"
+                v_details["reason_code"] = "A_wiki_page_not_found_weak"
+                old_conf = item.get("confidence_score", 0.8)
+                item["confidence_score"] = round(old_conf * 0.7, 2)
             else:
                 v_details["found"] = True
 
