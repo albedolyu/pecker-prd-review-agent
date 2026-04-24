@@ -112,12 +112,12 @@
 
 ### 2.3 `funnel_stage_after_evidence_verify`
 
-**emit 位置** (注意 flow 不对称):
-- **CLI** (`run_session.py:276`) 有 full `verify_evidence` → 在此后 emit
-- **API** (`api/routes/review.py`) **不跑 full verify_evidence**,evidence 验证由 goshawk 内 `_verify_wiki_evidence` 侧查代替 → API 流跳过此 stage,直接从 `after_dedup` 接到 `after_goshawk`
-- 飞书 (`feishu_bot.py:184`) 跑 verify_evidence,按 CLI 方式处理
+**emit 位置** (2026-04-24 T0 commit 8f57f46 后 API/CLI 统一):
+- **CLI** (`run_session.py:276`) verify_evidence 在此
+- **API** (`api/routes/review.py` 约 L373,T0 插入点) verify_evidence 在此
+- 飞书 (`feishu_bot.py:184`) verify_evidence 在此
 
-**第一期落地**: CLI flow 先打通 full 5 层,API flow 4 层即可 (合规原因见 sprint T3 第二版修订说明)
+三条 flow 都能 emit 完整 5 层 funnel。
 
 ```json
 {
