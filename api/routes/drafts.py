@@ -17,10 +17,23 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from api.deps import get_current_user, get_project_root
+from api.workspace_acl import is_admin
 
 router = APIRouter(tags=["drafts"])
 
 _DRAFT_TTL_DAYS = 3
+
+
+def _require_self_or_admin(user: dict, reviewer: str) -> None:
+    """防横向越权:登录用户只能读/写/删自己的草稿,admin 可跨人(运维恢复)。
+
+    URL 里的 reviewer 就是文件名来源,不校验会让 alice 能请求 bob 的草稿拿到 PRD 原文。
+    """
+    if (user or {}).get("reviewer", "") != reviewer and not is_admin(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="无权访问他人草稿",
+        )
 
 
 class DraftPayload(BaseModel):
@@ -61,6 +74,7 @@ async def get_draft(
     user: dict = Depends(get_current_user),
 ):
     """读草稿。不存在或过期返回 404。"""
+    _require_self_or_admin(user, reviewer)
     path = _draft_path(project_root, reviewer)
     if not path.is_file():
         raise HTTPException(status_code=404, detail="无草稿")
@@ -96,6 +110,7 @@ async def save_draft(
     user: dict = Depends(get_current_user),
 ):
     """保存/覆盖草稿。原子写 (tempfile + os.replace)。"""
+    _require_self_or_admin(user, reviewer)
     path = _draft_path(project_root, reviewer)
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -132,6 +147,7 @@ async def delete_draft(
     user: dict = Depends(get_current_user),
 ):
     """删除草稿。文件不存在也返回成功(幂等)。"""
+    _require_self_or_admin(user, reviewer)
     path = _draft_path(project_root, reviewer)
     if path.is_file():
         try:

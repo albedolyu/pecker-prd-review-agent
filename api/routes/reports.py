@@ -25,6 +25,16 @@ def _safe_reviewer(reviewer: str) -> str:
     return re.sub(r'[\\/:*?"<>|\s]+', '_', (reviewer or "unknown").strip())[:20] or "unknown"
 
 
+def _safe_prd_name(name: str) -> str:
+    """清洗 prd_name,防路径穿越。前端传的 prd_name 直接拼入 filename,
+    不 sanitize 会让 `../../etc/passwd` 之类的字符串写到 workspace 外面。
+
+    规则: 去掉路径分隔符/通配符/. 以及首尾空白,截 50 字符,空值回退 unknown。
+    """
+    safe = re.sub(r'[\\/:*?"<>|\s\.]+', '_', (name or "unknown").strip())[:50]
+    return safe.strip("_") or "unknown"
+
+
 class SaveReviewRequest(BaseModel):
     prd_name: str
     report_markdown: str = Field(..., description="完整的评审报告 markdown")
@@ -97,8 +107,9 @@ async def save_to_wiki(
 
     import time
     rev_safe = _safe_reviewer(user["reviewer"])
+    prd_safe = _safe_prd_name(req.prd_name)
     date_tag = time.strftime("%Y%m%d")
-    filename = f"评审记录-{req.prd_name}-{rev_safe}-{date_tag}.md"
+    filename = f"评审记录-{prd_safe}-{rev_safe}-{date_tag}.md"
     report_path = wiki_dir / filename
 
     # 前缀 frontmatter

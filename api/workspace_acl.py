@@ -28,6 +28,12 @@ def _admin_users() -> Set[str]:
     return {u.strip() for u in raw.split(",") if u.strip()}
 
 
+def is_admin(user: dict) -> bool:
+    """判断当前用户是否管理员。drafts/reports 等跨人读端点借此做 bypass。"""
+    reviewer = (user or {}).get("reviewer", "").strip()
+    return bool(reviewer) and reviewer in _admin_users()
+
+
 def _load_acl(workspace_dir: Path) -> Optional[dict]:
     """读 .pecker_acl.json; 无文件或解析失败返回 None (视为公开)。"""
     acl_path = workspace_dir / _ACL_FILENAME

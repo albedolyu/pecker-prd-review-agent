@@ -36,18 +36,44 @@ def _canonical_items_bytes(items: List[Dict[str, Any]]) -> bytes:
     return json.dumps(items, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
-def compute_signature(review_id: str, items: List[Dict[str, Any]]) -> str:
-    """对 (review_id + items) 计算 HMAC-SHA256 hex digest。"""
+# 签名格式版本。v1 只签 (review_id, items); v2 起把 workspace/reviewer 一起绑入,
+# 防止前端把一份 review_result 搬到别人 workspace 或冒充他人 reviewer 去 confirm。
+# 未来再扩字段时递增版本号,老 review_result 因版本 prefix 不同直接 verify 失败。
+_SIGNATURE_VERSION = b"v2"
+
+
+def compute_signature(
+    review_id: str,
+    workspace: str,
+    reviewer: str,
+    items: List[Dict[str, Any]],
+) -> str:
+    """对 (version | review_id | workspace | reviewer | items) 计算 HMAC-SHA256 hex digest。
+
+    workspace / reviewer 绑入签名:挡住"同 review_id+items 改 workspace 提交"的伪造。
+    """
     h = hmac.new(_signature_secret(), digestmod=hashlib.sha256)
+    h.update(_SIGNATURE_VERSION)
+    h.update(b"|")
     h.update(review_id.encode("utf-8"))
+    h.update(b"|")
+    h.update((workspace or "").encode("utf-8"))
+    h.update(b"|")
+    h.update((reviewer or "").encode("utf-8"))
     h.update(b"|")
     h.update(_canonical_items_bytes(items))
     return h.hexdigest()
 
 
-def verify_signature(review_id: str, items: List[Dict[str, Any]], signature: str) -> bool:
+def verify_signature(
+    review_id: str,
+    workspace: str,
+    reviewer: str,
+    items: List[Dict[str, Any]],
+    signature: str,
+) -> bool:
     """恒时比较,防定时攻击。"""
-    expected = compute_signature(review_id, items)
+    expected = compute_signature(review_id, workspace, reviewer, items)
     return hmac.compare_digest(expected, signature)
 
 
@@ -102,7 +128,7 @@ class ReviewResult(BaseModel):
         """后端评审完成后调用,自动生成 review_id + signature。"""
         import uuid
         review_id = f"rev_{int(time.time())}_{uuid.uuid4().hex[:8]}"
-        sig = compute_signature(review_id, merged_items)
+        sig = compute_signature(review_id, workspace, reviewer, merged_items)
 
         worker_infos = [
             ReviewWorkerInfo(
@@ -149,12 +175,14 @@ def verify_review_result(rr: Dict[str, Any]) -> None:
     """
     signature = rr.get("signature", "")
     review_id = rr.get("review_id", "")
+    workspace = rr.get("workspace", "")
+    reviewer = rr.get("reviewer", "")
     items = rr.get("items", [])
     if not signature or not review_id:
         raise HTTPException(status_code=400, detail="review_result 缺少 signature 或 review_id")
 
-    if not verify_signature(review_id, items, signature):
+    if not verify_signature(review_id, workspace, reviewer, items, signature):
         raise HTTPException(
             status_code=403,
-            detail="review_result signature 验证失败 — items 可能被前端篡改",
+            detail="review_result signature 验证失败 — items/workspace/reviewer 可能被前端篡改",
         )

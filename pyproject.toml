@@ -32,11 +32,21 @@ pecker-advisor = "goshawk_advisor:main"
 pecker-gate = "shrike_review:main"
 
 [tool.setuptools]
+# 顶层单文件模块
 py-modules = [
     "run_session", "api_adapter", "agent_config", "tools", "security",
     "context_manager", "parallel_review", "feedback", "easter_eggs",
     "goshawk_advisor", "kakapo_dream", "cuckoo_eval", "shrike_review",
     "post_review", "wiki_lock", "models", "logger",
+]
+# 子 package(pip install . / wheel 发布时必须显式列出,否则 api/review/clients 全丢)
+# 踩坑记录 2026-04-24: py-modules 只认顶层 .py,子目录得走 packages 键
+# 注意: tools 是顶层 tools.py 单文件,仍在 py-modules 里,不要塞到这里
+packages = [
+    "api",
+    "api.routes",
+    "review",
+    "clients",
 ]
 
 [tool.pytest.ini_options]

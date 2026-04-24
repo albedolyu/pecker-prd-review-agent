@@ -677,8 +677,8 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
     # Step 1: 验证 opaque handle signature
     verify_review_result(req.review_result)
 
-    # ACL: workspace 取自已签名的 review_result(signature 不覆盖 workspace,但 review_id 唯一性
-    # + items 签名已挡住了"换一份 review 结果"的攻击; 这里只挡"换 workspace 写 rule_perf"的情况)
+    # ACL: workspace/reviewer 已绑入 signature v2 (2026-04-24 收紧), 这里用于 ACL 二道防线 —
+    # signature 挡前端篡改, ACL 挡"合法用户误写他人 workspace"(如 admin 共享 cookie 场景)
     _ws_name = (req.review_result.get("workspace") or "").strip()
     if _ws_name:
         _ws_dir = get_workspace_dir(_ws_name)
