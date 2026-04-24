@@ -8,6 +8,11 @@ __pycache__/
 .venv/
 .pytest_cache/
 
+# setuptools / pip build 产物 (本地跑 pip install . 时会生成)
+build/
+dist/
+.tmp-pytest/
+
 # 运行时产物
 output/
 logs/

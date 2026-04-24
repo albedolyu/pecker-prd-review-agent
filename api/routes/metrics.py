@@ -12,7 +12,6 @@
 from __future__ import annotations
 
 import os
-import sys
 from pathlib import Path
 from typing import Any, Dict
 
@@ -21,12 +20,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from api.budget_gate import budget_status_snapshot
 from api.deps import get_current_user, get_project_root
 
-
-# 复用 stability_metrics 模块 (scripts 不是 package, 要 sys.path 注入)
-_SCRIPTS_DIR = Path(__file__).parent.parent.parent / "scripts"
-if str(_SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(_SCRIPTS_DIR))
-from stability_metrics import (  # noqa: E402
+# scripts 已作为 package 声明在 pyproject.toml (2026-04-24 修复), 走标准 import
+# 路径, 不再需要 sys.path 黑魔法 — 之前的 "parent.parent.parent" 在 pip install
+# 后 __file__ 指向 site-packages 完全找不到 scripts 目录
+from scripts.stability_metrics import (
     _filter_by_days,
     _iter_session_files,
     _parse_session,

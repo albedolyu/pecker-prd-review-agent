@@ -36,21 +36,72 @@ pecker-advisor = "goshawk_advisor:main"
 pecker-gate = "shrike_review:main"
 
 [tool.setuptools]
-# 顶层单文件模块
+# 顶层单文件模块 — 全加是防回归策略: 任何顶层 .py 都可能被子包 import,
+# 漏一个就炸 (2026-04-24 二次外部 review 抓到 io_utils/config/stability_metrics
+# 漏装,原因就是只列了主入口; 从此改全列 + 由 tests/test_package_discovery.py
+# 做真装真 import 兜底)
 py-modules = [
-    "run_session", "api_adapter", "agent_config", "tools", "security",
-    "context_manager", "parallel_review", "feedback", "easter_eggs",
-    "goshawk_advisor", "kakapo_dream", "cuckoo_eval", "shrike_review",
-    "post_review", "wiki_lock", "models", "logger",
+    "agent_config",
+    "api_adapter",
+    "cache_monitor",
+    "calibrate_confidence",
+    "content_loader",
+    "context_manager",
+    "cuckoo_eval",
+    "cuckoo_parser",
+    "cuckoo_scorer",
+    "dashboard",
+    "deadline_coordinator",
+    "easter_eggs",
+    "event_store",
+    "exceptions",
+    "feedback",
+    "feedback_cmd",
+    "feishu_bot",
+    "feishu_client",
+    "goshawk_advisor",
+    "interactive_io",
+    "io_utils",
+    "kakapo_dream",
+    "logger",
+    "merge_reviews",
+    "migrate_memory_to_wiki",
+    "models",
+    "parallel_review",
+    "post_review",
+    "prd_diff",
+    "promote_c_to_wiki",
+    "prompt_injection_scanner",
+    "register_repo",
+    "registry",
+    "report_builder",
+    "review_fixer",
+    "review_memory",
+    "router",
+    "rule_perf_decay",
+    "rule_perf_store",
+    "run_parallel_test",
+    "run_session",
+    "security",
+    "session_setup",
+    "shrike_review",
+    "tool_runtime",
+    "tools",
+    "wiki_consolidation",
+    "wiki_lock",
+    "wiki_log",
 ]
-# 子 package(pip install . / wheel 发布时必须显式列出,否则 api/review/clients 全丢)
-# 踩坑记录 2026-04-24: py-modules 只认顶层 .py,子目录得走 packages 键
-# 注意: tools 是顶层 tools.py 单文件,仍在 py-modules 里,不要塞到这里
+# 子 package (pip install . / wheel 发布时必须显式列出,否则 api/review/clients
+# /config/scripts 全丢) — 2026-04-24 二次外部 review: agent_config 导入 config,
+# api.routes.metrics 导入 scripts.stability_metrics, 缺任何一个 fresh install
+# 都会 ModuleNotFoundError
 packages = [
     "api",
     "api.routes",
     "review",
     "clients",
+    "config",
+    "scripts",
 ]
 
 [tool.pytest.ini_options]
