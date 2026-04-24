@@ -264,6 +264,19 @@ def run_parallel_review(client, workspace, wiki_path, prd_content, prd_files, wi
         "items_count": len(result.get("merged_items", [])),
     })
 
+    # T3 2026-04-24: funnel stage N0/N1 (CLI path) — 失败不阻塞
+    _funnel_stages = {}
+    try:
+        from review.funnel_telemetry import compute_worker_raw_stage, compute_dedup_stage
+        _worker_raw = compute_worker_raw_stage(result.get("workers", []))
+        evt.append("funnel_stage_worker_raw", _worker_raw)
+        _funnel_stages["N0_worker_raw"] = _worker_raw["count"]
+        _after_dedup = compute_dedup_stage(_worker_raw["count"], result.get("merged_items", []))
+        evt.append("funnel_stage_after_dedup", _after_dedup)
+        _funnel_stages["N1_after_dedup"] = _after_dedup["count"]
+    except Exception as _fn_err:
+        print(f"  [funnel] N0/N1 emit 失败不阻塞: {_fn_err}")
+
     # 打印 worker 结果
     for w in result["workers"]:
         if "error" in w and w["error"]:
@@ -276,6 +289,16 @@ def run_parallel_review(client, workspace, wiki_path, prd_content, prd_files, wi
     verified = verify_evidence(result["merged_items"], workspace)
     retracted = [i for i in verified if i.get("status") == "RETRACTED"]
     verification_summary = summarize_verification(verified)
+
+    # T3 2026-04-24: funnel stage N2 (after_evidence_verify)
+    try:
+        from review.funnel_telemetry import compute_evidence_verify_stage, get_wiki_telemetry
+        wiki_tele = get_wiki_telemetry(workspace)
+        _after_ev = compute_evidence_verify_stage(verification_summary, wiki_tele)
+        evt.append("funnel_stage_after_evidence_verify", _after_ev)
+        _funnel_stages["N2_after_evidence_verify"] = _after_ev["count"]
+    except Exception as _fn_err2:
+        print(f"  [funnel] N2 emit 失败不阻塞: {_fn_err2}")
     if retracted:
         print(f"  [依据验证] {len(retracted)} 条因依据不足被撤回")
     if verification_summary["caveat"] > 0:
@@ -304,6 +327,7 @@ def run_parallel_review(client, workspace, wiki_path, prd_content, prd_files, wi
         "peck_score": peck,
         "usage": result["total_usage"],
         "event_store": evt,  # 供 run_goshawk_review 继续追加 final_reviewer_* 事件
+        "_funnel_stages": _funnel_stages,  # T3: 给 run_goshawk_review 继续填 N3
     }
 
 
@@ -345,6 +369,21 @@ def run_goshawk_review(client, workspace, wiki_path, parallel_result, model, sys
         updated_items = apply_advisor_result(parallel_result["items"], goshawk_result)
         parallel_result["items"] = updated_items
         parallel_result["goshawk"] = goshawk_result
+
+        # T3 2026-04-24: funnel stage N3 (after_goshawk) + summary (CLI 无 PM, N4 留空)
+        try:
+            from review.funnel_telemetry import compute_goshawk_stage, compute_funnel_summary
+            stages = parallel_result.setdefault("_funnel_stages", {})
+            _after_g = compute_goshawk_stage(updated_items, goshawk_result)
+            if evt:
+                evt.append("funnel_stage_after_goshawk", _after_g)
+            stages["N3_after_goshawk"] = _after_g["count"]
+            # CLI 没 Phase 3, summary 直接发
+            _summary = compute_funnel_summary(stages)
+            if evt:
+                evt.append("funnel_summary", _summary)
+        except Exception as _fn_err3:
+            print(f"  [funnel] N3/summary emit 失败不阻塞: {_fn_err3}")
 
         fp_count = len(goshawk_result.get("flagged_as_false_positive", []))
         add_count = len(goshawk_result.get("additional_findings", []))

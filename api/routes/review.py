@@ -370,6 +370,21 @@ async def run_review(
 
             items = result.get("merged_items", [])
 
+            # T3 2026-04-24: funnel stage N0 (worker_raw) + N1 (after_dedup)
+            # 失败不阻塞主 flow (try/except 包, log.warning 后继续)
+            _funnel_stages = {}  # 收集各 stage count, 最后 funnel_summary 用
+            try:
+                from review.funnel_telemetry import compute_worker_raw_stage, compute_dedup_stage
+                _worker_raw = compute_worker_raw_stage(result.get("workers", []))
+                evt.append("funnel_stage_worker_raw", _worker_raw)
+                _funnel_stages["N0_worker_raw"] = _worker_raw["count"]
+
+                _after_dedup = compute_dedup_stage(_worker_raw["count"], items)
+                evt.append("funnel_stage_after_dedup", _after_dedup)
+                _funnel_stages["N1_after_dedup"] = _after_dedup["count"]
+            except Exception as _fn_err:
+                log.warning(f"[funnel] N0/N1 emit 失败不阻塞: {_fn_err}")
+
             # 2026-04-24 T0: API flow 统一走 verify_evidence,与 CLI (run_session.py:276) 对齐.
             # 之前 API 只靠 goshawk `_verify_wiki_evidence` 侧查代替, 少了:
             #   (1) B 类 rule_id 在 review-rules/ 的硬查
@@ -378,16 +393,22 @@ async def run_review(
             # 现在统一 pipeline, 让 Web 用户也享受 evidence_verify 治理改进.
             try:
                 from review.evidence_verify import verify_evidence, summarize_verification
+                from review.funnel_telemetry import (
+                    compute_evidence_verify_stage, get_wiki_telemetry,
+                )
                 verified = verify_evidence(items, ws_abs_path)
                 items = [i for i in verified if i.get("status") != "RETRACTED"]
                 v_sum = summarize_verification(verified)
-                evt.append("evidence_verify_done", {
-                    "total": v_sum.get("total", 0),
-                    "verified": v_sum.get("verified", 0),
-                    "caveat": v_sum.get("caveat", 0),
-                    "retracted": v_sum.get("retracted", 0),
-                    "reliability": v_sum.get("reliability", 0.0),
-                })
+
+                # T3: funnel stage N2 (after_evidence_verify) — 用扩展后的 v_sum + wiki telemetry
+                try:
+                    wiki_tele = get_wiki_telemetry(ws_abs_path)
+                    _after_ev = compute_evidence_verify_stage(v_sum, wiki_tele)
+                    evt.append("funnel_stage_after_evidence_verify", _after_ev)
+                    _funnel_stages["N2_after_evidence_verify"] = _after_ev["count"]
+                except Exception as _fn_err2:
+                    log.warning(f"[funnel] N2 emit 失败不阻塞: {_fn_err2}")
+
                 emitter.emit("evidence_verify_done", data={
                     "retracted": v_sum.get("retracted", 0),
                     "caveat": v_sum.get("caveat", 0),
@@ -439,6 +460,15 @@ async def run_review(
                     items = apply_advisor_result(items, goshawk_result, wiki_pages=req.wiki_pages, client=client)
                     result["merged_items"] = items
                     result["goshawk"] = goshawk_result
+
+                    # T3 2026-04-24: funnel stage N3 (after_goshawk)
+                    try:
+                        from review.funnel_telemetry import compute_goshawk_stage
+                        _after_g = compute_goshawk_stage(items, goshawk_result)
+                        evt.append("funnel_stage_after_goshawk", _after_g)
+                        _funnel_stages["N3_after_goshawk"] = _after_g["count"]
+                    except Exception as _fn_err3:
+                        log.warning(f"[funnel] N3 emit 失败不阻塞: {_fn_err3}")
                     # Round 8: 把 goshawk verdict + retry 信号持久化到 jsonl,
                     # 让 STATUS 能聚合 SILENT/EMPTY_APPROVAL/REVIEWED 分布
                     emitter.emit("final_reviewer_done", data={
@@ -512,6 +542,16 @@ async def run_review(
             goshawk_summary=result.get("goshawk"),
             cost_breakdown=cost_breakdown,
         )
+
+        # T3 2026-04-24: funnel_summary — PM decision (N4) 在 confirm_review 走另一条 path, 这里
+        # 先发无 N4 的 summary, 只覆盖 N0-N3. confirm_review 里会再发 funnel_stage_after_pm_decision,
+        # 聚合时 scripts/funnel_report.py 会把 N4 合并进 summary.
+        try:
+            from review.funnel_telemetry import compute_funnel_summary
+            _summary = compute_funnel_summary(_funnel_stages)
+            evt.append("funnel_summary", _summary)
+        except Exception as _fn_err4:
+            log.warning(f"[funnel] summary emit 失败不阻塞: {_fn_err4}")
 
         # Pattern 21: review 完成事件(带 result 摘要 + 预算状态,给运维/前端 visibility)
         _budget_after = budget_status_snapshot(get_project_root())
@@ -758,6 +798,20 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
             )
         except Exception as e:
             log.warning(f"[ground_truth] 保存失败,不阻塞确认流程: {e}")
+
+    # Step 5: T3 2026-04-24 — funnel stage N4 (after_pm_decision) 写回对应 review_id 的 jsonl
+    # 失败不阻塞 confirm (反正已 return 的前提)
+    review_id = req.review_result.get("review_id", "")
+    if workspace and review_id and decisions:
+        try:
+            from event_store import EventStore
+            from review.funnel_telemetry import compute_pm_decision_stage
+            ws_abs = str(get_project_root() / workspace)
+            evt = EventStore(workspace=ws_abs, review_id=review_id)
+            pm_stage = compute_pm_decision_stage(decisions)
+            evt.append("funnel_stage_after_pm_decision", pm_stage)
+        except Exception as e:
+            log.warning(f"[funnel] N4 emit 失败不阻塞: {e}")
 
     return {
         "status": "confirmed",

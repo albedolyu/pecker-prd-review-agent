@@ -464,6 +464,7 @@ def summarize_verification(items):
     retracted_count = 0
     caveat_count = 0
     by_code = Counter()
+    down_by_code = Counter()   # T3 2026-04-24: caveat 细分, 供 funnel_stage_after_evidence_verify 消费
     for item in items:
         vs = item.get("verification_status", "")
         if vs == "verified":
@@ -471,6 +472,8 @@ def summarize_verification(items):
         elif vs == "verified_with_caveat":
             verified_count += 1
             caveat_count += 1
+            down_code = item.get("verification_details", {}).get("reason_code", "unknown")
+            down_by_code[down_code] += 1
         elif vs == "retracted":
             retracted_count += 1
             code = item.get("verification_details", {}).get("reason_code", "unknown")
@@ -482,6 +485,8 @@ def summarize_verification(items):
         "verified": verified_count,
         "retracted": retracted_count,
         "caveat": caveat_count,
+        "downgraded": caveat_count,                       # T3 alias, caveat = downgraded (语义一致)
         "retracted_by_reason_code": dict(by_code),
+        "downgraded_by_reason_code": dict(down_by_code),  # T3 新增
         "reliability": round(reliability, 3),
     }
