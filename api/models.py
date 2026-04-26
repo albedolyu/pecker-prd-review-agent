@@ -17,10 +17,10 @@ import hmac
 import json
 import os
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import HTTPException
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 def _signature_secret() -> bytes:
@@ -156,16 +156,53 @@ class ReviewResult(BaseModel):
         )
 
 
+# 2026-04-26 audit wave2 P1-A: reason_category 收敛到 RejectReason 7 种枚举.
+# 当前 web/ 0 处使用此字段(前端尚未接 reason dropdown), 严校 zero risk.
+# 列字面量确保 Pydantic 校验失败时 422 错误清晰提示有效值列表.
+_VALID_REJECT_REASONS = frozenset({
+    "good_issue", "false_positive", "known_tradeoff", "wiki_missing",
+    "rule_too_strict", "impl_detail", "model_noise",
+})
+
+
 class ConfirmRequest(BaseModel):
     """Phase 3 用户确认后提交的 payload,用于生成最终报告。
 
     必须带原始 review_result(含 signature),后端先验证再处理 decisions。
+
+    decisions 形态约定 (后端 _update_rule_perf_from_decisions / _save_eval_ground_truth 消费):
+    - action: "accept" | "reject" | "edit" (必填)
+    - reason_category: RejectReason 7 种字面之一 (仅 reject 时有效, 缺失走 model_noise 默认)
+    - reason_note / reason: 自由文本 (可选, 兼容老 payload 'reason' 字段)
+    - edited_content: action=edit 时的修改内容 (可选)
     """
     review_result: Dict[str, Any]  # 原样回传,含 signature 字段
     decisions: Dict[str, Dict[str, Any]] = Field(
         ...,
-        description="{item_id: {action: accept/reject/edit, reason: str}}",
+        description="{item_id: {action: accept/reject/edit, reason_category?: RejectReason, ...}}",
     )
+
+    @field_validator("decisions")
+    @classmethod
+    def _validate_reason_category_enum(cls, v: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+        """硬校 reason_category 必须是 RejectReason 7 种之一 (P1-A audit fix).
+
+        缺失此字段允许 (走默认 model_noise). 老 payload 'reason' 自由文本也允许 (映射到 reason_note).
+        非空但非枚举值 → 422.
+        """
+        bad = []
+        for item_id, decision in v.items():
+            if not isinstance(decision, dict):
+                continue
+            rc = decision.get("reason_category")
+            if rc and rc not in _VALID_REJECT_REASONS:
+                bad.append(f"{item_id}: reason_category={rc!r}")
+        if bad:
+            raise ValueError(
+                f"reason_category 必须是 RejectReason 7 种之一 ({', '.join(sorted(_VALID_REJECT_REASONS))}), "
+                f"实际收到: {bad}"
+            )
+        return v
 
 
 def verify_review_result(rr: Dict[str, Any]) -> None:

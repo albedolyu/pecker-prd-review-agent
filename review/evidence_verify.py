@@ -110,8 +110,13 @@ def _wiki_authority_tier(wiki_file_path):
         return explicit
 
     # 冷启动默认映射
+    # 2026-04-26 P1-D audit fix: 拒绝占位串提权.
+    # `verified_by: TBD/-/待定/?` 等 placeholder 不应判 trusted, 老逻辑 truthy 检查太宽.
     verified_by = fm.get("verified_by", "").strip()
-    if verified_by:
+    _PLACEHOLDER_VERIFIED_BY = frozenset({
+        "tbd", "TBD", "Tbd", "待定", "待", "未知", "-", "?", "??", "???", "n/a", "N/A", "nil", "null",
+    })
+    if verified_by and verified_by not in _PLACEHOLDER_VERIFIED_BY and len(verified_by) >= 2:
         return "trusted"
     return "contextual"
 

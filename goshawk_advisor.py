@@ -516,7 +516,14 @@ def _verify_wiki_evidence(item, wiki_pages):
         escalation_count += 1
 
         # 精确匹配 or 模糊匹配(页面名可能是 "约束-接口命名规范" 而引用写 "接口命名规范")
-        found = any(ref == title or ref in title or title in ref for title in wiki_titles)
+        # 2026-04-26 P1-C audit fix: 模糊匹配最小长度 4, 避免 "API"/"PRD"/"DDL" 等 3 字短词
+        # 误命中所有含此前缀的页面 (引用 [[API_v3_迁移指南]] 不应匹页面 [[API]])
+        _MIN_FUZZY_LEN = 4
+        found = any(
+            ref == title
+            or (len(ref) >= _MIN_FUZZY_LEN and (ref in title or title in ref))
+            for title in wiki_titles
+        )
         if not found:
             # L2: 降级为 C 类 + advisor_note
             item["evidence_type"] = "C"

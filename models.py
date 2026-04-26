@@ -152,68 +152,11 @@ class ParallelResult:
 # goshawk_advisor.py
 # ============================================================
 
-@dataclass
-class FalsePositive:
-    """苍鹰标记的误报条目"""
-    item_id: str               # 如 "R-003"
-    reason: str
-    recommendation: str        # "降级为 should" | "移除"
-
-    @classmethod
-    def from_dict(cls, d: dict) -> FalsePositive:
-        return cls(item_id=d["item_id"], reason=d["reason"], recommendation=d["recommendation"])
-
-
-@dataclass
-class AdditionalFinding:
-    """苍鹰补充的漏报条目（最多 3 条）"""
-    location: str
-    issue: str
-    severity: str              # "must" | "should"
-    evidence: str
-
-    @classmethod
-    def from_dict(cls, d: dict) -> AdditionalFinding:
-        return cls(
-            location=d.get("location", ""),
-            issue=d.get("issue", ""),
-            severity=d.get("severity", "should"),
-            evidence=d.get("evidence", ""),
-        )
-
-
-@dataclass
-class ConflictResolution:
-    """苍鹰的冲突调解结果"""
-    items: list[str]           # 冲突的改进项编号列表，如 ["R-005", "R-007"]
-    resolution: str
-    reason: str
-
-    @classmethod
-    def from_dict(cls, d: dict) -> ConflictResolution:
-        return cls(items=d.get("items", []), resolution=d["resolution"], reason=d["reason"])
-
-
-@dataclass
-class AdvisorResult:
-    """advisor_review() 的完整返回值"""
-    flagged_as_false_positive: list[FalsePositive]
-    additional_findings: list[AdditionalFinding]
-    conflict_resolutions: list[ConflictResolution]
-    confidence: float          # 0.0 ~ 1.0
-    verdict: str = "REVIEWED"
-    model_used: str = ""
-
-    @classmethod
-    def from_dict(cls, d: dict) -> AdvisorResult:
-        return cls(
-            flagged_as_false_positive=[FalsePositive.from_dict(x) for x in d.get("flagged_as_false_positive", [])],
-            additional_findings=[AdditionalFinding.from_dict(x) for x in d.get("additional_findings", [])],
-            conflict_resolutions=[ConflictResolution.from_dict(x) for x in d.get("conflict_resolutions", [])],
-            confidence=d.get("confidence", 0.0),
-            verdict=d.get("verdict", "REVIEWED"),
-            model_used=d.get("model_used", ""),
-        )
+# 2026-04-26 audit wave2 P2-D: 删 4 个 dataclass 死代码 (FalsePositive / AdditionalFinding /
+# ConflictResolution / AdvisorResult). 全仓 grep 确认无 .py / .json / .jsonl import,
+# 实际 _extract_advisor_result 直接返 dict, 这些 dataclass 从未被使用.
+# 同时还和 goshawk_advisor.py 的实际 schema (e.g. AdditionalFinding 4 字段 vs schema 7 字段) drift.
+# 保留 dict 是当前 source of truth.
 
 
 # ============================================================
