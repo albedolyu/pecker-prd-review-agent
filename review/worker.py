@@ -115,11 +115,15 @@ def _postprocess_items(
     dim: Dict[str, Any],
     dim_key: str,
 ) -> List[Dict[str, Any]]:
-    """items 后处理: 过滤非 dict / 维度校正 / 规则越界标注 / MAX_ITEMS 截断.
+    """items 后处理: 过滤非 dict / 维度校正 / 规则越界标注 / MAX_ITEMS 软上限截断.
 
     纯函数, 可独立单测. 入参 dim 是 dimensions[dim_key] 配置, 包含 name/checklist.
+
+    2026-04-26 sprint Day3 P0-2: 截断从硬上限 (15) 改软上限 (15 * 1.5 = 22 默认).
+    实测 sampling noise: 同 PRD 同 codebase N0 浮动 8-18, 17%~100% 命中硬截断 → 14.5% overlap.
+    软上限让常见量级 (8-22) 全保留, 仅在异常多产 (>22) 时截. 越界时 + WORKER_SEED 确定排序.
     """
-    from agent_config import MAX_ITEMS_PER_WORKER
+    from agent_config import MAX_ITEMS_PER_WORKER, WORKER_SOFT_CAP_MULTIPLIER, WORKER_SEED
 
     # 过滤非 dict (模型偶尔返回字符串数组而非对象数组)
     items = [item for item in items if isinstance(item, dict)]
@@ -142,12 +146,31 @@ def _postprocess_items(
             current = item.get("confidence_score", 0.85)
             item["confidence_score"] = max(0.0, round(current - 0.3, 2))
 
-    # 2a: Tool Result 截断 — 单 worker 输出上限(CC tool result truncation 模式)
-    if len(items) > MAX_ITEMS_PER_WORKER:
-        log.warning(f"[{_cn_label(dim_key)}] Worker 输出 {len(items)} 条, 截断到 {MAX_ITEMS_PER_WORKER}")
+    # 2026-04-26 P0-2: 软上限截断 — 大部分 PRD 不会触发, sampling noise 在边界处消失
+    soft_cap = max(MAX_ITEMS_PER_WORKER, int(MAX_ITEMS_PER_WORKER * WORKER_SOFT_CAP_MULTIPLIER))
+    if len(items) > soft_cap:
+        log.warning(
+            f"[{_cn_label(dim_key)}] Worker 输出 {len(items)} 条 > soft_cap {soft_cap}, "
+            f"截断 (base={MAX_ITEMS_PER_WORKER} × {WORKER_SOFT_CAP_MULTIPLIER})"
+        )
         # 按 severity(must 优先) + confidence(高优先) 排序, 保留 top N
-        items.sort(key=lambda x: (0 if x.get("severity") == "must" else 1, -x.get("confidence_score", 0)))
-        items = items[:MAX_ITEMS_PER_WORKER]
+        # WORKER_SEED 非空时 tie-break 用 hash(seed + rule_id + issue), 让 consistency_eval 可复现
+        if WORKER_SEED:
+            import hashlib
+            def _seed_key(item):
+                # 主序: severity + confidence (业务排序保留)
+                # 次序: hash(seed + rule_id + issue 前 50 字), 让相同输入 deterministic
+                hash_input = f"{WORKER_SEED}|{item.get('rule_id', '')}|{(item.get('issue', '') or '')[:50]}"
+                tie = hashlib.md5(hash_input.encode("utf-8", errors="replace")).hexdigest()
+                return (
+                    0 if item.get("severity") == "must" else 1,
+                    -item.get("confidence_score", 0),
+                    tie,
+                )
+            items.sort(key=_seed_key)
+        else:
+            items.sort(key=lambda x: (0 if x.get("severity") == "must" else 1, -x.get("confidence_score", 0)))
+        items = items[:soft_cap]
 
     return items
 

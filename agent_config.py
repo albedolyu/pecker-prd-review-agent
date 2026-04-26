@@ -33,6 +33,8 @@ from config import (  # noqa: F401
     # 断路器 + 截断 + token 追踪
     MAX_CONSECUTIVE_WORKER_FAILURES,
     MAX_ITEMS_PER_WORKER,
+    WORKER_SOFT_CAP_MULTIPLIER,    # 2026-04-26 P0-2: 软上限倍数 (默认 1.5)
+    WORKER_SEED,                    # 2026-04-26 P0-2: consistency_eval 可复现用
     COMPACT_THRESHOLD,
     MAX_WIKI_CHARS,
     # CC deep patterns (Round 3)

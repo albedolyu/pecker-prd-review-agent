@@ -84,7 +84,13 @@ EVIDENCE_RELIABILITY_THRESHOLD = 0.80
 MAX_CONSECUTIVE_WORKER_FAILURES = int(os.environ.get("PECKER_MAX_WORKER_FAILURES", "2"))
 
 # 单个 worker 最大输出 items 数 (CC tool result truncation 模式)
+# 2026-04-26 sprint Day3 P0-2: 改为 "软上限" 抑制 sampling noise.
+#   旧硬截 15: 实测 N0 浮动 8-18, 17%~100% 命中截断, 不同次跑选不同 top 15 → 14.5% overlap
+#   新软上限 = MAX_ITEMS * 1.5 (默认 22): 大多数次跑都低于此, 截断仅在异常多产时触发
+#   越界时 + WORKER_SEED 确定性排序 (consistency_eval 可复现)
 MAX_ITEMS_PER_WORKER = int(os.environ.get("PECKER_MAX_ITEMS_PER_WORKER", "15"))
+WORKER_SOFT_CAP_MULTIPLIER = float(os.environ.get("PECKER_WORKER_SOFT_CAP_MULTIPLIER", "1.5"))
+WORKER_SEED = os.environ.get("PECKER_WORKER_SEED", "")  # 空字符串 = 不启 seed; 非空 = 排序 tie-break 用 hash
 
 # Token 估算: prompt 超过此阈值触发 compact 钩子 (CC token_count tracking)
 COMPACT_THRESHOLD = int(os.environ.get("PECKER_COMPACT_THRESHOLD", "80000"))
