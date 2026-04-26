@@ -73,6 +73,35 @@ _STRONG_ASSERTION_EN = re.compile(
 # 严格匹配三种 tag, 中间允许空白; group(1) = tag 本身
 _MARKER_PATTERN = re.compile(r"\^\[\s*(verified|inferred|ambiguous)\s*\]")
 
+
+# ---------------------------------------------------------------------------
+# 假阳白名单 — 启发式收紧 (2026-04-26)
+# ---------------------------------------------------------------------------
+
+# Rule A: UI 通用能力短句 — "支持 X 切换/导出/筛选/反馈/..." 整句只有动词+对象
+# 不含具体值/数字/路径/英文标识符, 不算事实断言.
+# 规则: 整句以「支持」开头 + 含至少一个 UI 动作动词 + 不含具体值标记 + 长度 <= 20 中文字符.
+# 具体值标记 = 数字 / ASCII 字母 / 引号 / 反引号 / 等号 / 冒号 / 路径分隔符.
+_UI_ACTION_VERBS = (
+    "切换|导出|筛选|反馈|查询|删除|排序|过滤|展示|跳转|搜索|输入|"
+    "上传|下载|关闭|打开|预览|编辑|新增|添加|分享|订阅|查看"
+)
+# 含动作动词的子串检测; 配合「整句以支持开头 + 整句无具体值 + 长度受限」联合用
+_UI_ACTION_CONTAINS = re.compile(r"(?:" + _UI_ACTION_VERBS + r")")
+# 整句以「支持」开头 + 仅含中文 + 长度 <= 20
+_UI_CAPABILITY_FULLMATCH = re.compile(r"^支持[\u4e00-\u9fa5]{1,20}$")
+# 排除: 句中含具体值 (数字 / ASCII / 标点) — 即便结尾是动作动词也不跳过.
+_HAS_CONCRETE_VALUE = re.compile(r"[0-9A-Za-z`\"'=:/\\(\)（）「」『』【】]")
+
+# Rule B: 工具自述行白名单 — 鸮鹦/啄木鸟自动生成的 placeholder
+# 这类句子是工具元信息, 不是业务断言.
+_TOOL_SELF_DESCRIPTION = re.compile(
+    r"鸮鹦|啄木鸟自动|本页面由.{0,12}自动"
+)
+
+# 列表 bullet 前缀剥离: "- xxx" / "* xxx" / "> xxx" / "1. xxx"
+_LIST_BULLET_PREFIX = re.compile(r"^\s*(?:[-*>]+|\d+\.)\s+")
+
 # 句末断句符:
 # - 中文「。！？」一律切
 # - 英文「!?」一律切
@@ -175,7 +204,28 @@ def _is_strong_assertion(sentence: str) -> bool:
     - 中文关键词 (是/等于/支持/必须/采用/使用/为) + 实词
     - 数字断言 (5 张/天, 10%)
     - 英文 is/are/must/equals + 实词
+
+    白名单 (跳过):
+    - Rule A: UI 通用能力短句 ("支持 X 切换/导出/筛选/...") 只动词+对象, 无具体值
+    - Rule B: 工具自述行 (鸮鹦/啄木鸟自动创建 placeholder)
     """
+    # 整句 strip + 剥离列表 bullet 前缀, 用于白名单 fullmatch
+    naked = _LIST_BULLET_PREFIX.sub("", sentence.strip())
+    # 顺手剥末尾断句符, 让 fullmatch 不被句末「。！？.」干扰
+    naked = naked.rstrip("。！？.!?")
+
+    # Rule A: UI 通用能力整句白名单 — "支持 X 切换/导出/..." 不含具体值
+    # 三条件: 整句「支持」开头 + 仅纯中文短语 + 含至少一个 UI 动作动词
+    if (
+        _UI_CAPABILITY_FULLMATCH.match(naked)
+        and not _HAS_CONCRETE_VALUE.search(naked)
+        and _UI_ACTION_CONTAINS.search(naked)
+    ):
+        return False
+    # Rule B: 工具自述行白名单 (子串匹配, 因句子可能含其他描述性内容)
+    if _TOOL_SELF_DESCRIPTION.search(sentence):
+        return False
+
     if _STRONG_ASSERTION_NUMERIC.search(sentence):
         return True
     if _STRONG_ASSERTION_EN.search(sentence):
