@@ -28,18 +28,35 @@ dimensions:
         - "等"、"相关"、"类似"等模糊指代（开发无法据此实现）
         fail 条件：≥5 处模糊指代或≥3 段纯背景堆砌。severity: should
 
-      V-04 功能需求列表（FR）完整性：
-        检查项：PRD 是否有 FR 列表（FR-01, FR-02...）？每个 FR 是否覆盖了文档中描述的所有核心功能？
-        方法：列出 PRD 中描述了但 FR 列表未覆盖的功能点。
-        fail 条件：有功能描述但无对应 FR 编号。severity: must
+      V-04 功能清单完整性：
+        # 2026-04-26 sprint Day3 REWRITE: 原 "FR 列表完整性" 假设 FR-XX 命名过强,
+        # 实际很多团队不用 FR 编号 (用 PRD-001/REQ-1 / 1.1 章节号 / bullet 列表). 改为通用版.
+        检查项：PRD 是否有"功能清单"或等价的可寻址结构? 每条功能能被开发独立查到?
+        - 接受任何编号体系 (FR-01 / PRD-001 / REQ-1 / 1.1 章节 / bullet)
+        - 接受 markdown table / 编号列表 / 章节嵌套 任一组织方式
+        - 关键: 每条功能要有"位置标识符" (编号或章节号), 让代码 review 能精确引用
+        fail 条件：(a) PRD 描述了功能但没编号或位置标识, 开发难以引用追踪;
+        或 (b) 有清单但漏了文档中描述的功能点。severity: must
 
       V-05 信息自洽性：
-        检查项：PRD 内部引用是否自洽？
-        具体检查：
-        - 字段名在不同章节是否一致（如 A 章叫"仲裁机构"，B 章叫"仲裁委员会"）
-        - 枚举值在不同位置是否一致（如筛选项和数据源定义的枚举值是否匹配）
-        - 规则描述是否矛盾（如 A 处说"默认按时间降序"，B 处说"按发布日期升序"）
-        fail 条件：发现任何不一致。severity: must
+        # 2026-04-26 sprint Day3 REWRITE: 实测 P=0.33 / reject 67%, 模板化命名差异被误报多.
+        # 此规则是 sprint 核心卖点 (跨章节一致性), 必须保留 must, 但 prompt 加精度提示.
+        检查项：PRD 内部引用是否**语义自洽**？只报"语义对立矛盾", **不报**纯命名差异。
+
+        必须报 (语义矛盾):
+        - 同一概念两处描述对立 (A 章"按时间降序", B 章"按发布日期升序" — 顺序对立)
+        - 字段引用与数据源定义矛盾 (A 章"按地区筛选"但 DDL 无地区字段)
+        - 枚举值跨章节不同 (筛选 [禁售/限售/警告] vs 数据源 [禁售/限售/告警] — 后者有"告警"非"警告")
+        - 同一规则的具体值矛盾 (A 处 "默认 20 条", B 处 "默认 10 条")
+        - 流程步骤跨章节顺序矛盾
+
+        **不报**(模板化命名差异):
+        - 大小写差异 (App_name vs app_name) — 除非业务上区分大小写
+        - 同义词命名 (仲裁机构 vs 仲裁委员会, 通常上下文可推) — 除非该术语有官方定义
+        - 标点/空格差异 (App-name vs App name)
+        - 简繁体差异 (规则 vs 規則)
+
+        fail 条件：发现 ≥1 处**语义对立**矛盾。severity: must
 
       V-06 章节完整性：
         检查项：对照以下必要章节清单，检查 PRD 是否缺少：
@@ -226,14 +243,44 @@ dimensions:
     rules: |
       RC-009~RC-010，逐条检查：
 
-      RC-009 物理表定义一致性（must）：PRD 中引用的每张物理表(如 ds_risk_court_mediation)须有完整声明,缺任一要素即 fail:
-        a) 字段名与 DDL 一致(字段映射表/JOIN 说明里的列名,原规则保留);
-        b) 字段类型/长度(VARCHAR(20) / INT / TIMESTAMP 等),PRD 未声明即 fail,禁止"含糊类字段";
-        c) 可空性 / NOT NULL / 默认值(重要字段须明示);
-        d) 索引与唯一约束(用作筛选/排序/JOIN 键的字段须标注是否有索引);
+      EV-04 AI 特性 eval 集计划（must, experimental, 仅 AI/ML PRD 触发）：
+        # 2026-04-26 sprint Day3 ADD: AI Coding 失败模式高发, AI 特性 PRD 没 eval 计划等于
+        # 跑出来没人能验对错. 触发条件确保非 AI PRD 不被误报.
+        触发条件: PRD 提到以下任一关键词时强检:
+        - AI / LLM / 大模型 / 机器学习 / ML / 深度学习
+        - 推荐 / 排序 / 分类 / 评分 / 预测 / 生成 (业务上是 AI 算法生成的)
+        - 智能 (限定: 智能匹配/智能搜索/智能推荐, 不含"智能手机/智能合约"等无关用法)
+
+        触发后必须包含 3 项 (缺任一即 fail):
+        (a) **评估集来源**: golden set 大小 (如 "100 条人工标注样例") + 标注方式 + 谁负责标注
+        (b) **主要指标**: precision / recall / accuracy / F1 / NDCG / 业务转化率 任一可量化指标 +
+            目标值 (如 "Precision >=0.8" 或 "v1 baseline 0.5 → v2 提到 0.65")
+        (c) **回归测试触发**: 何时跑回归 (上线前必跑 / 模型升级触发 / 月度回归), 失败如何处理
+
+        fail 条件: 触发关键词出现但缺 a/b/c 任一项。severity: must
+
+        反例 (PM 写得对, 不要报):
+        - 描述了 AI 推荐, 同章节注明 "评估集详见 [eval/recall_v2_goldenset.md] (200 条人工标注), 主指标 NDCG@5 >=0.7, 上线前回归"
+        - 描述了 AI 分类, 注明 "复用现有 sklearn baseline (eval/classifier_v3.ipynb), 月度回归"
+
+        # status: experimental, 1 周后看 reject_by_reason 决定升 active 或降级
+
+      RC-009 物理表定义一致性（must, 仅数据 PRD 触发）：
+        # 2026-04-26 sprint Day3 REWRITE: 加触发条件, 配置类/迁移类/UI-only PRD 不应被强制
+        触发条件: PRD 包含以下任一时才检查:
+        - 引用了具体物理表名 (如 ds_risk_court_mediation, t_xxx)
+        - 提到 DDL / 字段映射 / 数据库 schema
+        - 包含字段映射表或 SQL/伪代码片段
+
+        触发后逐条检查 (5 子项, 缺任一即 fail):
+        a) 字段名与 DDL 一致 (字段映射表/JOIN 说明里的列名);
+        b) 字段类型/长度 (VARCHAR(20) / INT / TIMESTAMP), 不允许"含糊类字段";
+        c) 可空性 / NOT NULL / 默认值 (重要字段须明示);
+        d) 索引与唯一约束 (用作筛选/排序/JOIN 键的字段须标注是否有索引);
         e) 跨表字段须标注 JOIN 来源 + 优先级。
+
         注意: 评审 agent 不连真实数据库查 schema, 仅基于 PRD 正文 + wiki 引用内部自洽判断。
-        PRD 里完全没 DDL 片段也是 fail (除非明确引用了 wiki 里既有的表定义)。
+        非数据 PRD (纯 UI / 流程 / 业务规则 / 配置变更等) 此规则跳过, 不应触发 fail。
       RC-010 数值类字段标注来源（must）：数值类字段（分页数/导出上限/阈值）须标注来源或标注 TBD；跨表字段须说明空值降级处理。
     checklist:
       - rule_id: "RC-009"
@@ -244,3 +291,8 @@ dimensions:
         name: "数值类字段标注来源"
         enabled: true
         owner: data_quality
+      - rule_id: "EV-04"
+        name: "AI 特性 eval 集计划"
+        enabled: true
+        owner: data_quality
+        status: experimental    # 2026-04-26 sprint Day3 加, AI Coding PRD 必检
