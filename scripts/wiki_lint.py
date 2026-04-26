@@ -30,6 +30,7 @@ from review.evidence_verify import (
     _parse_wiki_frontmatter,
     _wiki_authority_tier,
 )
+from review.claim_provenance import lint_wiki_claims
 
 
 # 过期阈值 (docs/wiki-frontmatter-v2.md 第二节)
@@ -161,17 +162,124 @@ def build_markdown_report(results):
     return "\n".join(lines)
 
 
+def scan_claim_provenance(ws_paths):
+    """对每个 workspace 的 wiki 跑 claim-level provenance lint.
+
+    只扫 generated/contextual tier 的 wiki (canonical/trusted 由 PM 校对).
+    返回 {ws_name: [(file_path, [ClaimLintWarning, ...]), ...]}.
+
+    spec: obsidian-wiki inline marker (^[verified]/^[inferred]/^[ambiguous]).
+    """
+    out: dict[str, list[tuple[str, list]]] = {}
+    for ws in ws_paths:
+        ws_name = os.path.basename(ws)
+        wiki_dir = os.path.join(ws, "wiki")
+        if not os.path.isdir(wiki_dir):
+            out[ws_name] = []
+            continue
+        files: list[tuple[str, list]] = []
+        for p in glob.glob(os.path.join(wiki_dir, "*.md")):
+            if os.path.basename(p) in _META_WIKI_FILENAMES:
+                continue
+            tier = _wiki_authority_tier(p)
+            if tier not in ("generated", "contextual"):
+                continue
+            warns = lint_wiki_claims(p, authority=tier)
+            if warns:
+                files.append((p, warns))
+        out[ws_name] = files
+    return out
+
+
+def build_claim_report(claim_results):
+    """生成 claim-level provenance lint 的 markdown 报告.
+
+    格式:
+    - workspace × file × warning_count 表
+    - 附 sample 5 条
+    """
+    lines = ["# Claim-level provenance lint 报告", "",
+             f"**生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}", "",
+             "扫描所有 generated/contextual tier 的 wiki, 检查 untagged 强断言句",
+             "(参考 obsidian-wiki ^[verified]/^[inferred]/^[ambiguous] 语法).", "",
+             "## workspace × file × warning_count", "",
+             "| workspace | file | warnings |",
+             "|---|---|---:|"]
+
+    total = 0
+    samples: list[str] = []
+    for ws_name, files in sorted(claim_results.items()):
+        for fp, warns in files:
+            n = len(warns)
+            total += n
+            rel = os.path.relpath(fp)
+            lines.append(f"| {ws_name} | `{os.path.basename(fp)}` | {n} |")
+            if len(samples) < 5:
+                for w in warns[: max(1, 5 - len(samples))]:
+                    if len(samples) >= 5:
+                        break
+                    samples.append(f"- `{rel}:{w.line}` — {w.reason}: {w.claim_text[:80]}")
+
+    if total == 0:
+        lines.append("| (无) | - | 0 |")
+
+    lines.append(f"\n**合计 untagged 强断言**: {total} 条\n")
+
+    if samples:
+        lines.append("## Sample warnings (前 5 条)\n")
+        lines.extend(samples)
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Wiki frontmatter v2 lint (warn-only)")
     parser.add_argument("--workspace", help="指定 workspace (不加则扫全部 workspace-*)")
     parser.add_argument("--format", choices=("markdown", "json"), default="markdown")
     parser.add_argument("--root", default=".", help="项目根 (默认 cwd)")
+    parser.add_argument(
+        "--check-claims",
+        action="store_true",
+        help="启用 claim-level provenance lint (扫 untagged 强断言, 参考 obsidian-wiki)",
+    )
     args = parser.parse_args()
 
     root = os.path.abspath(args.root)
     ws_paths = find_workspaces(root, args.workspace)
     if not ws_paths:
         print(f"[wiki_lint] 没找到 workspace ({args.workspace or 'workspace-*'}) in {root}")
+        return 0
+
+    # claim-level provenance 模式: 单独走 lint_wiki_claims
+    if args.check_claims:
+        claim_results = scan_claim_provenance(ws_paths)
+        if args.format == "json":
+            out = {
+                ws_name: [
+                    {
+                        "file": os.path.relpath(fp),
+                        "warnings": [
+                            {"line": w.line, "reason": w.reason, "claim": w.claim_text}
+                            for w in warns
+                        ],
+                    }
+                    for fp, warns in files
+                ]
+                for ws_name, files in claim_results.items()
+            }
+            text = json.dumps(out, ensure_ascii=False, indent=2)
+        else:
+            text = build_claim_report(claim_results)
+
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+        except (AttributeError, OSError):
+            pass
+        try:
+            print(text)
+        except UnicodeEncodeError:
+            print(text.encode("ascii", errors="replace").decode("ascii"))
         return 0
 
     results = {os.path.basename(ws): lint_workspace(ws) for ws in ws_paths}
