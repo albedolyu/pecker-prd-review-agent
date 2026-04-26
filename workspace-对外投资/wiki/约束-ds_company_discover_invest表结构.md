@@ -8,6 +8,8 @@ sources: 0
 title: ds_company_discover_invest表结构
 scope: workspace
 category: constraint
+authority: generated
+owner: pecker-auto
 ---
 
 # 约束-ds_company_discover_invest 表结构

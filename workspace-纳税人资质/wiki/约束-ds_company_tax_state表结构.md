@@ -3,6 +3,8 @@ source: 纳税人资质需求文档-v1.0.md
 created: 2026-04-12
 updated: 2026-04-12
 tags: [domain/技术约束, domain/数据, status/待验证]
+authority: contextual
+owner: albedolyu
 ---
 
 # 约束：ds_company_tax_state 表结构

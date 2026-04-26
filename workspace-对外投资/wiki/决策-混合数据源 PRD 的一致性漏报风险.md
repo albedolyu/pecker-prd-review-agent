@@ -10,6 +10,8 @@ category: decision
 extracted_from: 对外投资基线v3
 extracted_reviewer: default
 content_hash: 4034d7acce57b9a3a5ce606128d4b52e
+authority: contextual
+owner: albedolyu
 ---
 
 # 混合数据源 PRD 的一致性漏报风险

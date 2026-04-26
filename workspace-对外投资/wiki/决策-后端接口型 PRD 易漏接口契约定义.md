@@ -10,6 +10,8 @@ category: decision
 extracted_from: 评审对外投资 PRD
 extracted_reviewer: xinshu
 content_hash: 1987861e9996717d84d85addc139fdf0
+authority: contextual
+owner: albedolyu
 ---
 
 # 后端接口型 PRD 易漏接口契约定义

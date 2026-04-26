@@ -10,6 +10,8 @@ category: constraint
 extracted_from: 对外投资基线v8
 extracted_reviewer: default
 content_hash: d11bf8a99979552022c024d7090a85ab
+authority: contextual
+owner: albedolyu
 ---
 
 # 投资数据源和 API 基础约定

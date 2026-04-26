@@ -3,6 +3,8 @@ source: 纳税人资质需求文档-v1.0.md
 created: 2026-04-12
 updated: 2026-04-12
 tags: [domain/税务, status/已验证]
+authority: contextual
+owner: albedolyu
 ---
 
 # stype 枚举映射（纳税人资格类型）

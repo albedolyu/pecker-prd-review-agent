@@ -3,6 +3,8 @@ source: PRD评审-2026-04-12
 created: 2026-04-12
 updated: 2026-04-12
 tags: [domain/风控, status/待验证]
+authority: contextual
+owner: albedolyu
 ---
 
 # 决策：riskbird_status 过滤规则（待确认）

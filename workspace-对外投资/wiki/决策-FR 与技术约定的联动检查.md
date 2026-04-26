@@ -10,6 +10,8 @@ category: decision
 extracted_from: 对外投资基线v4
 extracted_reviewer: default
 content_hash: 86523e4772e47b9ce3f92464c3219b90
+authority: contextual
+owner: albedolyu
 ---
 
 # FR 与技术约定的联动检查

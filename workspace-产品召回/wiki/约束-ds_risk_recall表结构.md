@@ -3,6 +3,8 @@ source: 产品召回需求文档-v1.0-原始.md §2.0/§2.1
 created: 2026-04-12
 updated: 2026-04-12
 tags: [domain/技术约束, status/已验证]
+authority: contextual
+owner: albedolyu
 ---
 
 # 约束：ds_risk_recall 表结构

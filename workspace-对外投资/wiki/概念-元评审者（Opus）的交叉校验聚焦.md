@@ -10,6 +10,8 @@ category: concept
 extracted_from: 对外投资基线v8
 extracted_reviewer: default
 content_hash: 58878abd1c363ef6b15be0ec536856cb
+authority: contextual
+owner: albedolyu
 ---
 
 # 元评审者（Opus）的交叉校验聚焦

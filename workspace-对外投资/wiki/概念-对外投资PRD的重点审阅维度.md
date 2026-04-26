@@ -10,6 +10,8 @@ category: concept
 extracted_from: 对外投资
 extracted_reviewer: 
 content_hash: 1747239e4711fd2dd4b10e7fab0d6199
+authority: contextual
+owner: albedolyu
 ---
 
 # 对外投资PRD的重点审阅维度

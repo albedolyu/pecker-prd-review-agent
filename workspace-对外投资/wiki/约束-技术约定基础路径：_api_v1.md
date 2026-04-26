@@ -10,6 +10,8 @@ category: constraint
 extracted_from: 评审对外投资 PRD
 extracted_reviewer: xinshu
 content_hash: 89bf549fbed1b76f4dbaa40cfc636a34
+authority: contextual
+owner: albedolyu
 ---
 
 # 技术约定基础路径：/api/v1

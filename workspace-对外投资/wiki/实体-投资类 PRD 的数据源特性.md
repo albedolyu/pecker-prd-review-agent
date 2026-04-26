@@ -10,6 +10,8 @@ category: entity
 extracted_from: 对外投资基线v4
 extracted_reviewer: default
 content_hash: f162838fc244582036aed25e87c5fe55
+authority: contextual
+owner: albedolyu
 ---
 
 # 投资类 PRD 的数据源特性

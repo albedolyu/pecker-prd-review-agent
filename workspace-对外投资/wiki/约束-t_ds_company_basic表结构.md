@@ -8,6 +8,8 @@ sources: 0
 title: t_ds_company_basic表结构
 scope: workspace
 category: constraint
+authority: generated
+owner: pecker-auto
 ---
 
 # 约束-t_ds_company_basic表结构

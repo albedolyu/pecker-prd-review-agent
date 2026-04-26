@@ -10,6 +10,8 @@ category: concept
 extracted_from: 对外投资基线v3
 extracted_reviewer: default
 content_hash: 68facb6e4ee2840edf35f60f383e90cf
+authority: contextual
+owner: albedolyu
 ---
 
 # default 审阅人的 must 级关注维度

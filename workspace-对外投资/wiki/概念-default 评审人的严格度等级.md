@@ -10,6 +10,8 @@ category: concept
 extracted_from: 对外投资基线v8
 extracted_reviewer: default
 content_hash: 7074b64861279e5a25e42f079d3e17e6
+authority: contextual
+owner: albedolyu
 ---
 
 # default 评审人的严格度等级

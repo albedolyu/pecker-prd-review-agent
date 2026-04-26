@@ -10,6 +10,8 @@ category: concept
 extracted_from: 评审对外投资 PRD
 extracted_reviewer: xinshu
 content_hash: 102866875c12e9e6b45e011b7e20ce71
+authority: contextual
+owner: albedolyu
 ---
 
 # xinshu 评审偏好：结构严谨性优先

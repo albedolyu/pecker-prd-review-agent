@@ -8,6 +8,8 @@ sources: 0
 title: ds_invest_alpha表结构
 scope: workspace
 category: constraint
+authority: generated
+owner: pecker-auto
 ---
 
 # 约束-ds_invest_alpha 表结构
