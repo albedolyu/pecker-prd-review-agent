@@ -1,5 +1,7 @@
 # 风鸟领域规则草案 (10 条) — 2026-04-27
 
+> **状态更新 2026-04-27**: FN-01 / FN-03 / FN-09 已升 **experimental** 进 review-dimensions.yaml (commit feat(rules) 升 active 第一波). 其他 7 条仍为草稿.
+>
 > 状态: **草稿**, 不进 review-dimensions.yaml. 等 PM 审 → 升 active 再合并.
 > 起源: Pecker 当前 21 条规则全是通用 PRD 评审, 0 条风鸟领域规则. 今天 implement 3 工况实验印证通用 V-02/D-01 (跨表字段类型一致性) 拉开 lineage_quality +2. 加深风鸟领域规则后预期 +5+.
 > 沉淀来源: workspace-劳动仲裁/wiki + workspace-纳税人资质/wiki + workspace-fengniao-mediation/wiki + workspace-侵权软件/wiki + 风鸟代码库 wiki + workspace-劳动仲裁/output/review_items_20260427_default.json + CLAUDE.md.
@@ -23,11 +25,11 @@
 
 ---
 
-## FN-01 ds_risk_* 三段过滤约定
+## FN-01 ds_risk_* 三段过滤约定 ✅ 已升 active (experimental, 2026-04-27)
 
 **dimension**: data_quality
 **severity**: must
-**status**: experimental
+**status**: experimental (在 review-dimensions.yaml 中)
 **trigger_when**: PRD 引用任一 `ds_risk_*` 物理表 (即关键字 `ds_risk_` 出现且后接表名).
 **description**: 风鸟所有 `ds_risk_*` 表对外查询必须三段过滤 `entid > 0 AND data_status = 0 AND riskbird_status = 0`, PRD 必须显式写出该 WHERE 条件或显式声明跳过原因.
 
@@ -68,11 +70,11 @@
 
 ---
 
-## FN-03 风鸟鉴权与基础路径硬约定
+## FN-03 风鸟鉴权与基础路径硬约定 ✅ 已升 active (experimental, 2026-04-27)
 
 **dimension**: ai_coding
 **severity**: must
-**status**: experimental
+**status**: experimental (在 review-dimensions.yaml 中)
 **trigger_when**: PRD 含「技术约定」「鉴权」「Authorization」「API 接口」「base path」任一关键词章节.
 **description**: 风鸟后端硬约定 Apache Shiro + JWT (Bearer Token) 鉴权, 移动端基础路径以模块前缀 (如 `/login/*`, `/query/*`, `/user/*`). PRD 不应再写 TBD/待技术确认, AI Coding 凭此一次性产出客户端调用与服务端路由.
 
@@ -201,11 +203,11 @@
 
 ---
 
-## FN-09 移动端 (uni-app) 与 Web 端必显式对齐
+## FN-09 移动端 (uni-app) 与 Web 端必显式对齐 ✅ 已升 active (experimental, 2026-04-27)
 
 **dimension**: structure
 **severity**: must
-**status**: experimental
+**status**: experimental (在 review-dimensions.yaml 中)
 **trigger_when**: PRD 同时含「移动端」「H5」「uni-app」「小程序」 + Web 端页面定义.
 **description**: 风鸟前端 uni-app 跨平台 + Native/WebView 混合架构. PRD 移动端章节不能仅写「复用 Web 端」「与 Web 端保持一致」, 必须显式列出移动端筛选 / 搜索 / 字段差异, 且明确该页面走原生还是 WebView 容器.
 
