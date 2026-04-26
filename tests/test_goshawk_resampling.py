@@ -47,7 +47,7 @@ class TestAggregate:
         assert _aggregate_advisor_results([], 4) is None
 
     def test_unanimous_fp_kept_with_full_frequency(self):
-        """4/4 都标 R-001 误报 → 保留, frequency=1.0."""
+        """4/4 都标 R-001 误报 → 保留, frequency=1.0, retention_kind=unanimous."""
         from goshawk_advisor import _aggregate_advisor_results
         results = [_make_result(flagged=[_fp("R-001")]) for _ in range(4)]
         agg = _aggregate_advisor_results(results, n_samples=4)
@@ -56,9 +56,10 @@ class TestAggregate:
         assert fp["item_id"] == "R-001"
         assert fp["verdict_distribution"]["frequency"] == 1.0
         assert fp["verdict_distribution"]["appearances"] == 4
+        assert fp["verdict_distribution"]["retention_kind"] == "unanimous"
 
     def test_majority_fp_kept_at_threshold(self):
-        """N=4, threshold=2. 2/4 同意 → 保留."""
+        """N=4, threshold=2. 2/4 同意 → 保留 retention_kind=majority."""
         from goshawk_advisor import _aggregate_advisor_results
         results = [
             _make_result(flagged=[_fp("R-001")]),
@@ -68,10 +69,12 @@ class TestAggregate:
         ]
         agg = _aggregate_advisor_results(results, n_samples=4)
         assert len(agg["flagged_as_false_positive"]) == 1
-        assert agg["flagged_as_false_positive"][0]["verdict_distribution"]["frequency"] == 0.5
+        fp = agg["flagged_as_false_positive"][0]
+        assert fp["verdict_distribution"]["frequency"] == 0.5
+        assert fp["verdict_distribution"]["retention_kind"] == "majority"
 
-    def test_minority_fp_filtered(self):
-        """N=4, threshold=2. 1/4 同意 → 过滤."""
+    def test_minority_fp_kept_with_label(self):
+        """DAR (2026-04-26): N=4, 1/4 同意 → 仍保留 retention_kind=minority (老逻辑过滤)."""
         from goshawk_advisor import _aggregate_advisor_results
         results = [
             _make_result(flagged=[_fp("R-001")]),
@@ -79,6 +82,17 @@ class TestAggregate:
             _make_result(),
             _make_result(),
         ]
+        agg = _aggregate_advisor_results(results, n_samples=4)
+        # DAR: 不再过滤 minority, 而是标 retention_kind 让 PM 看
+        assert len(agg["flagged_as_false_positive"]) == 1
+        fp = agg["flagged_as_false_positive"][0]
+        assert fp["verdict_distribution"]["frequency"] == 0.25
+        assert fp["verdict_distribution"]["retention_kind"] == "minority"
+
+    def test_zero_appearance_filtered(self):
+        """从未出现的 item 不保留."""
+        from goshawk_advisor import _aggregate_advisor_results
+        results = [_make_result() for _ in range(4)]   # 4 次都没 fp
         agg = _aggregate_advisor_results(results, n_samples=4)
         assert agg["flagged_as_false_positive"] == []
 
@@ -164,6 +178,30 @@ class TestAggregate:
         agg = _aggregate_advisor_results(results, n_samples=4)
         assert agg["n_samples"] == 4
         assert agg["n_samples_succeeded"] == 3
+
+
+# ============================================================
+# DAR retention_kind 边界 (2026-04-26 新增)
+# ============================================================
+
+class TestRetentionKind:
+    @pytest.mark.parametrize("count,n,expected", [
+        (0, 4, "filtered"),
+        (1, 4, "minority"),    # ceil(4/2)=2, count<2 → minority
+        (2, 4, "majority"),    # = threshold
+        (3, 4, "majority"),
+        (4, 4, "unanimous"),
+        (1, 3, "minority"),    # ceil(3/2)=2, count<2 → minority
+        (2, 3, "majority"),
+        (3, 3, "unanimous"),
+        (1, 2, "majority"),    # ceil(2/2)=1, count==1 → majority (n=2 时 minority 不存在)
+        (2, 2, "unanimous"),
+        (1, 1, "unanimous"),   # 单次 = unanimous
+    ])
+    def test_retention_kind_edge_cases(self, count, n, expected):
+        from goshawk_advisor import _retention_kind
+        assert _retention_kind(count, n) == expected, \
+            f"count={count}, n={n} 应返 {expected}"
 
 
 # ============================================================
