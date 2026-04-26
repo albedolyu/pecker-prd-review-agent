@@ -465,6 +465,149 @@ def _extract_advisor_result(response):
     }
 
 
+def _aggregate_advisor_results(results, n_samples):
+    """N 个 advisor_review 结果 + 频次聚合, 给每条 finding 加 verdict_distribution.
+
+    Sprint #2 (LLM-as-Verifier 借鉴, 2026-04-26):
+    Anthropic API 不暴露 logprobs (audit feasibility 报告确认), 用蒙特卡洛重采样近似.
+
+    保守策略 (多数同意才保留, 抑 sampling noise):
+    - flagged_as_false_positive: 同 item_id 出现 ≥ ceil(n/2) 次才保留
+    - additional_findings: 取第一次有补充的, 不重采避免 N 倍漏报上限
+    - conflict_resolutions: 同 frozen items set 出现 ≥ ceil(n/2) 次才保留
+      (印证 sprint Day3 实证: 同 PRD 两轮 merged_to_facet 4→9 浮动 125%)
+    - confidence: N 次平均
+    - verdict: 多数
+
+    每条保留 finding 加 verdict_distribution: {appearances, frequency, n_samples}
+    """
+    from math import ceil
+    from collections import Counter
+
+    if not results:
+        return None
+    threshold = ceil(n_samples / 2)
+
+    # 聚合 flagged_as_false_positive
+    fp_counter = {}
+    for r in results:
+        for fp in r.get("flagged_as_false_positive", []) or []:
+            iid = fp.get("item_id", "")
+            if not iid:
+                continue
+            if iid not in fp_counter:
+                fp_counter[iid] = [0, fp]
+            fp_counter[iid][0] += 1
+
+    aggregated_fps = []
+    for iid, (count, fp) in fp_counter.items():
+        if count >= threshold:
+            fp_with_dist = dict(fp)
+            fp_with_dist["verdict_distribution"] = {
+                "appearances": count,
+                "frequency": round(count / len(results), 3),
+                "n_samples": n_samples,
+            }
+            aggregated_fps.append(fp_with_dist)
+
+    # additional_findings: 取第一次有补充的 (避免 N 倍 MAX_ADDITIONAL_FINDINGS)
+    aggregated_additional = []
+    for r in results:
+        adds = r.get("additional_findings", []) or []
+        if adds:
+            aggregated_additional = adds
+            break
+
+    # 聚合 conflict_resolutions
+    conflict_counter = {}
+    for r in results:
+        for cr in r.get("conflict_resolutions", []) or []:
+            items_key = tuple(sorted(cr.get("items", []) or []))
+            if not items_key:
+                continue
+            if items_key not in conflict_counter:
+                conflict_counter[items_key] = [0, cr]
+            conflict_counter[items_key][0] += 1
+
+    aggregated_conflicts = []
+    for items_key, (count, cr) in conflict_counter.items():
+        if count >= threshold:
+            cr_with_dist = dict(cr)
+            cr_with_dist["verdict_distribution"] = {
+                "appearances": count,
+                "frequency": round(count / len(results), 3),
+                "n_samples": n_samples,
+            }
+            aggregated_conflicts.append(cr_with_dist)
+
+    # 苍鹰 conflict 上限 (P0-2.5 maxItems=3) 在聚合后仍然适用 — 多数同意通过的也截 top 3
+    if len(aggregated_conflicts) > MAX_CONFLICT_RESOLUTIONS:
+        aggregated_conflicts.sort(key=lambda c: -c["verdict_distribution"]["frequency"])
+        aggregated_conflicts = aggregated_conflicts[:MAX_CONFLICT_RESOLUTIONS]
+
+    confidences = [r.get("confidence", 0.0) for r in results]
+    avg_conf = sum(confidences) / len(confidences) if confidences else 0.0
+    verdict_counts = Counter(r.get("verdict", "REVIEWED") for r in results)
+
+    return {
+        "flagged_as_false_positive": aggregated_fps,
+        "additional_findings": aggregated_additional,
+        "conflict_resolutions": aggregated_conflicts,
+        "confidence": round(avg_conf, 3),
+        "verdict": verdict_counts.most_common(1)[0][0] if verdict_counts else "REVIEWED",
+        "model_used": results[0].get("model_used", ""),
+        "n_samples": n_samples,
+        "n_samples_succeeded": len(results),
+    }
+
+
+def advisor_review_with_resampling(
+    client, prd_content, worker_results, wiki_pages=None, model=None,
+    n_samples=1, deadline=None, on_tool_call=None,
+):
+    """苍鹰 N 次重采样 + 频次聚合 wrapper (Sprint #2 LLM-as-Verifier).
+
+    n_samples=1 → 等价 advisor_review 老路径, 不引 noise (默认行为, 兼容老 caller)
+    n_samples >= 2 → 并行 N 次 advisor_review + 频次聚合, 每条 finding 加 verdict_distribution
+
+    并行策略:
+    - 用 ThreadPoolExecutor (CLI subprocess thread-safe)
+    - max_workers = min(n_samples, 4) 避免压栈 PECKER_MAX_CONCURRENT
+    - 单次失败 skip 不整体阻塞, 全失败 fallback 到 advisor_review 单次
+
+    Args:
+        n_samples: 默认 1 (等价老行为). 推荐 4 (audit feasibility 估算). 上限不限,
+                   但 8+ 串行 wallclock ~80s 不建议.
+
+    Returns: 与 advisor_review 同 schema, 加 verdict_distribution per finding +
+        n_samples / n_samples_succeeded 字段.
+    """
+    if n_samples <= 1:
+        return advisor_review(client, prd_content, worker_results, wiki_pages, model,
+                              deadline, on_tool_call)
+
+    import concurrent.futures
+    results = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(n_samples, 4)) as pool:
+        futures = [
+            pool.submit(advisor_review, client, prd_content, worker_results, wiki_pages,
+                        model, deadline, on_tool_call)
+            for _ in range(n_samples)
+        ]
+        for f in concurrent.futures.as_completed(futures):
+            try:
+                results.append(f.result())
+            except Exception as e:
+                log.warning(f"[goshawk_resample] 1 次采样失败 skip: {e}")
+
+    if not results:
+        log.warning(f"[goshawk_resample] 全 {n_samples} 次失败, fallback 到单次 advisor_review")
+        return advisor_review(client, prd_content, worker_results, wiki_pages, model,
+                              deadline, on_tool_call)
+
+    return _aggregate_advisor_results(results, n_samples)
+
+
 def _is_empty_advisor_submission(response) -> bool:
     """苍鹰调了 submit_advisor_review 但三个数组都空。
 
