@@ -184,9 +184,18 @@ def main():
             }
             for ws, (dist, warnings) in results.items()
         }
-        print(json.dumps(out, ensure_ascii=False, indent=2))
+        text = json.dumps(out, ensure_ascii=False, indent=2)
     else:
-        print(build_markdown_report(results))
+        text = build_markdown_report(results)
+
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+    except (AttributeError, OSError):
+        pass
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        print(text.encode("ascii", errors="replace").decode("ascii"))
 
     return 0   # warn-only, 永远 0 退出
 

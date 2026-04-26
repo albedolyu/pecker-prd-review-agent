@@ -298,7 +298,14 @@ def main():
             f.write(report)
         print(f"[calibration] 报告写入 {args.out_file}")
     else:
-        print(report)
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+        except (AttributeError, OSError):
+            pass
+        try:
+            print(report)
+        except UnicodeEncodeError:
+            print(report.encode("ascii", errors="replace").decode("ascii"))
     return 0
 
 

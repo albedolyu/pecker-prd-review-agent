@@ -359,7 +359,14 @@ def main():
             f.write(out_text)
         print(f"[funnel_report] 报告写入 {args.out_file}")
     else:
-        print(out_text)
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+        except (AttributeError, OSError):
+            pass
+        try:
+            print(out_text)
+        except UnicodeEncodeError:
+            print(out_text.encode("ascii", errors="replace").decode("ascii"))
     return 0
 
 

@@ -141,6 +141,7 @@ def main():
     parser.add_argument("--dry-run", action="store_true", default=True)
     parser.add_argument("--apply", action="store_true",
                         help="Phase 1 禁用, 报 error 提示先审 dry-run")
+    parser.add_argument("--out-file", help="写 markdown 到文件 (默认 stdout)")
     args = parser.parse_args()
 
     if args.apply:
@@ -156,7 +157,17 @@ def main():
         return 0
 
     results = {os.path.basename(ws): scan_workspace(ws) for ws in ws_paths}
-    print(build_report(results))
+    text = build_report(results)
+    if args.out_file:
+        with open(args.out_file, "w", encoding="utf-8") as f:
+            f.write(text)
+        print(f"[wiki_migrate] 报告写入 {args.out_file}")
+    else:
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+        except (AttributeError, OSError):
+            pass
+        print(text)
     return 0
 
 
