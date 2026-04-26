@@ -78,6 +78,19 @@ dimensions:
         fail 条件：(a) 无验收标准章节, 或 (b) 有章节但每条 FR 都没对应验收, 或 (c) 验收陈述均为"用户能用"等不可判定语句。
         severity: must
         # 2026-04-26 sprint Day3 实验上线: AI Coding 失败模式高发, 没 DoD 跑出来没人能验对错. status=experimental, 1 周后看数据决定升 active 或降级.
+
+      FN-09 移动端 (uni-app) 与 Web 端必显式对齐（must, experimental）：
+        # 2026-04-27 风鸟领域规则第一波: 风鸟全部 PRD 都跨端 + uni-app 混合架构 + "复用 Web 端" 顽固痼疾.
+        # 与 V-05/V-07 (一致性矛盾检测) 协同 — V-05/V-07 反方向查矛盾, FN-09 正方向查"显式对齐"缺失.
+        触发条件: PRD 同时含「移动端」「H5」「uni-app」「小程序」 + Web 端页面定义.
+        触发后逐条检查 (5 子项, 缺任一即 fail):
+        a) PRD 移动端章节不出现「复用 Web 端」「与 X 保持一致」「全都和立案信息 UI 保持一致」等未点明对象的隐式引用 (引用必须有具体章节号或锚点)
+        b) PRD 显式标注每个移动端页面是「原生」还是「WebView」(走 pages/tools/webview 容器还是原生白名单)
+        c) 移动端筛选维度与 Web 端筛选维度的差异在 PRD 中被列举 (如 Web 用案由/仲裁机构, 移动用省份/年份/公告类型) 而非笼统「移动端简化」
+        d) 移动端不提供搜索框时, PRD 显式说明用什么交互替代 (筛选组合 / 历史关键词 / 不需要)
+        e) 移动端字段映射的数据源 (area_code 映射省份, publish_date 提取年份等) 在 PRD 中显式给出
+        fail 条件: 命中触发条件后任一子项缺失。severity: must
+        注意: 请先看通用 V-05/V-07 是否已捕获同问题. 仅当通用规则未覆盖"显式对齐"维度时报 FN-09. 防止双倍 fail.
     checklist:
       - rule_id: "V-02"
         name: "文档版本与变更追踪"
@@ -104,6 +117,11 @@ dimensions:
         enabled: true
         owner: structure
         status: experimental    # 2026-04-26 sprint Day3 加, 1 周后看 reject_by_reason 决定升 active
+      - rule_id: "FN-09"
+        name: "移动端 (uni-app) 与 Web 端必显式对齐"
+        enabled: true
+        owner: structure
+        status: experimental    # 2026-04-27 风鸟领域规则第一波 — 跨端"复用 Web 端"顽固痼疾
 
   quality:
     name: "质量层"
@@ -204,6 +222,19 @@ dimensions:
       RC-015 非常规逻辑有示例（should）：非常规逻辑（继承/降级/空值）须有具体示例覆盖。
       # 2026-04-26 sprint Day3: 删 RC-014 (与 RC-008 内容重复, RC-014 实测 total=15 P=0.33 大概率重复触发拉低精度)
       # 2026-04-26 sprint Day3: RC-008 删尾段"非常规逻辑..." (与 RC-015 完全重叠, 让 RC-015 独家)
+
+      FN-03 风鸟鉴权与基础路径硬约定（must, experimental）：
+        # 2026-04-27 风鸟领域规则第一波: 风鸟 90% PRD 涉及接口, R-008 实测鉴权 TBD 反复出现.
+        # 与 RC-004 (技术约定节存在) 协同 — RC-004 查"有没有", FN-03 查"值是不是 Bearer JWT".
+        触发条件: PRD 含「技术约定」「鉴权」「Authorization」「API 接口」「base path」任一关键词章节.
+        触发后逐条检查 (5 子项, 缺任一即 fail):
+        a) PRD 鉴权方式明确写为 "Authorization: Bearer {token}" 或显式引用 wiki 页 [[concepts/JWT认证流程]]
+        b) PRD 鉴权章节不含 "TBD" / "待技术确认" / "待补充" 字样
+        c) PRD 列出每个接口的认证要求 (是 / 否 / 可选), 并与移动端硬约定一致 (/login/* /pay/wxNotify 不需鉴权; 详情查询类必须鉴权)
+        d) PRD 接口路径以模块前缀开头 (如 /api/v1/<module>/* 或与 wiki 既有模块前缀一致), 不出现 /xxx/* 占位符
+        e) 401 / Token 过期处理方案与风鸟规范一致 (跳转登录 + Refresh Token 续期, 不另起方案)
+        fail 条件: 命中触发条件后任一子项缺失。severity: must
+        注意: 请先看通用 RC-004 是否已捕获. 仅当 RC-004 已通过但具体值不符合风鸟硬约定时才报 FN-03. 防止双倍 fail.
     checklist:
       - rule_id: "RC-004"
         name: "技术约定节存在"
@@ -234,6 +265,11 @@ dimensions:
         name: "非常规逻辑有示例"
         enabled: true
         owner: ai_coding
+      - rule_id: "FN-03"
+        name: "风鸟鉴权与基础路径硬约定"
+        enabled: true
+        owner: ai_coding
+        status: experimental    # 2026-04-27 风鸟领域规则第一波 — 鉴权 TBD 顽固痼疾, R-008 实测
 
   data_quality:
     name: "数据质量"
@@ -282,6 +318,19 @@ dimensions:
         注意: 评审 agent 不连真实数据库查 schema, 仅基于 PRD 正文 + wiki 引用内部自洽判断。
         非数据 PRD (纯 UI / 流程 / 业务规则 / 配置变更等) 此规则跳过, 不应触发 fail。
       RC-010 数值类字段标注来源（must）：数值类字段（分页数/导出上限/阈值）须标注来源或标注 TBD；跨表字段须说明空值降级处理。
+
+      FN-01 ds_risk_* 三段过滤约定（must, experimental）：
+        # 2026-04-27 风鸟领域规则第一波: 风鸟 80% PRD 涉及 ds_risk_*, 三段过滤是平台级硬约定.
+        # 与 RC-009 (物理表定义一致性) 协同 — RC-009 查 DDL 完整, FN-01 查 WHERE 条件硬约定.
+        触发条件: PRD 引用任一 ds_risk_* 物理表 (即关键字 ds_risk_ 出现且后接表名).
+        触发后逐条检查 (5 子项, 缺任一即 fail):
+        a) PRD 中查询 SQL / 伪代码包含 entid > 0 (或等价的 entid 非空过滤)
+        b) PRD 中查询 SQL / 伪代码包含 data_status = 0 (或显式声明本场景不需要 data_status 过滤并给出原因)
+        c) PRD 中查询 SQL / 伪代码包含 riskbird_status = 0 (或显式声明本场景不需要 riskbird_status 过滤并给出原因)
+        d) data_status 和 riskbird_status 都给出完整枚举值表 (如 0/1/2/3 各代表什么)
+        e) 默认排序字段在 DDL 里有索引 (PRD 文本提到该字段索引存在或 wiki 引用确认)
+        fail 条件: 命中触发条件后任一子项缺失。severity: must
+        注意: 请先看 RC-009 是否已经覆盖具体子项. 仅当 RC-009 已通过但 WHERE 条件未写或不符合三段约定时报 FN-01. 防止双倍 fail.
     checklist:
       - rule_id: "RC-009"
         name: "物理表定义一致性"
@@ -296,3 +345,8 @@ dimensions:
         enabled: true
         owner: data_quality
         status: experimental    # 2026-04-26 sprint Day3 加, AI Coding PRD 必检
+      - rule_id: "FN-01"
+        name: "ds_risk_* 三段过滤约定"
+        enabled: true
+        owner: data_quality
+        status: experimental    # 2026-04-27 风鸟领域规则第一波 — 平台级硬 WHERE 条件
