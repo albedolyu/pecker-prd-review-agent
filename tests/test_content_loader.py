@@ -6,6 +6,8 @@ import os
 import sys
 from unittest.mock import patch, MagicMock
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from content_loader import (
@@ -57,6 +59,12 @@ class TestLoadPRDContent:
 
 
 class TestLoadWikiPages:
+    @pytest.fixture(autouse=True)
+    def _disable_external_canonical(self, monkeypatch):
+        # 修法 C 后 load_wiki_pages 会自动合外挂 canonical wiki (PM 机器默认存在),
+        # 单测要的是纯 workspace 行为, 所以强制 env="" disable 外挂.
+        monkeypatch.setenv("PECKER_EXTERNAL_CANONICAL_WIKI", "")
+
     def test_missing_dir_returns_empty(self, tmp_path):
         assert load_wiki_pages(str(tmp_path / "nonexistent")) == {}
 
@@ -80,6 +88,56 @@ class TestLoadWikiPages:
         (tmp_path / "note.md").write_text("note", encoding="utf-8")
         pages = load_wiki_pages(str(tmp_path))
         assert list(pages.keys()) == ["note"]
+
+
+class TestExternalCanonicalWiki:
+    """修法 C 新增: 验证 PECKER_EXTERNAL_CANONICAL_WIKI default + merge 语义."""
+
+    def test_env_empty_string_disables_external(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("PECKER_EXTERNAL_CANONICAL_WIKI", "")
+        (tmp_path / "local.md").write_text("local", encoding="utf-8")
+        pages = load_wiki_pages(str(tmp_path))
+        assert pages == {"local": "local"}
+
+    def test_env_nonexistent_path_skipped(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("PECKER_EXTERNAL_CANONICAL_WIKI", str(tmp_path / "nope"))
+        (tmp_path / "local.md").write_text("local", encoding="utf-8")
+        pages = load_wiki_pages(str(tmp_path))
+        assert pages == {"local": "local"}
+
+    def test_external_merged_workspace_overrides(self, tmp_path, monkeypatch):
+        ext = tmp_path / "ext_wiki"
+        ext.mkdir()
+        (ext / "external_only.md").write_text("EXT_ONLY", encoding="utf-8")
+        (ext / "shared.md").write_text("EXT_SHARED", encoding="utf-8")
+
+        ws = tmp_path / "ws_wiki"
+        ws.mkdir()
+        (ws / "shared.md").write_text("WS_SHARED", encoding="utf-8")
+        (ws / "ws_only.md").write_text("WS_ONLY", encoding="utf-8")
+
+        monkeypatch.setenv("PECKER_EXTERNAL_CANONICAL_WIKI", str(ext))
+        pages = load_wiki_pages(str(ws))
+        # 外挂 + workspace 都加载, key 冲突 workspace 赢 (本地 override)
+        assert set(pages.keys()) == {"external_only", "shared", "ws_only"}
+        assert pages["shared"] == "WS_SHARED"
+        assert pages["external_only"] == "EXT_ONLY"
+        assert pages["ws_only"] == "WS_ONLY"
+
+    def test_external_skips_index_log_scratchpad(self, tmp_path, monkeypatch):
+        ext = tmp_path / "ext_wiki"
+        ext.mkdir()
+        (ext / "index.md").write_text("idx", encoding="utf-8")
+        (ext / "log.md").write_text("log", encoding="utf-8")
+        (ext / "_scratchpad.md").write_text("sc", encoding="utf-8")
+        (ext / "real.md").write_text("real", encoding="utf-8")
+
+        ws = tmp_path / "ws_wiki"
+        ws.mkdir()
+
+        monkeypatch.setenv("PECKER_EXTERNAL_CANONICAL_WIKI", str(ext))
+        pages = load_wiki_pages(str(ws))
+        assert pages == {"real": "real"}
 
 
 class TestSanitizeBranchName:
