@@ -269,143 +269,244 @@ def _render_html(rule_data, session_data, achievements, prd_name=None,
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
   :root {{
-    --bg: #1a1a12;
-    --card: #252518;
-    --border: #3a3a28;
-    --text: #d4cdb0;
-    --text-dim: #8a8470;
-    --accent: #6b8f3c;
-    --accent2: #a67c3d;
-    --accent3: #8b5e3c;
-    --danger: #a05040;
-    --success: #5a8a3a;
+    /* 现代深色 — 2026-04-26 重设计 */
+    --bg-base: #0b1020;
+    --bg-radial: radial-gradient(1200px 600px at 20% 0%, rgba(56,189,248,0.08), transparent 60%),
+                 radial-gradient(900px 500px at 90% 100%, rgba(167,139,250,0.06), transparent 60%);
+    --surface-1: rgba(22, 27, 46, 0.6);
+    --surface-2: rgba(28, 34, 56, 0.75);
+    --border: rgba(255,255,255,0.08);
+    --border-strong: rgba(255,255,255,0.14);
+    --text: #e6e8ee;
+    --text-dim: #8b93a7;
+    --text-faint: #5a6178;
+
+    --primary: #38bdf8;       /* sky */
+    --primary-soft: rgba(56,189,248,0.15);
+    --secondary: #a78bfa;     /* violet */
+    --secondary-soft: rgba(167,139,250,0.15);
+    --tertiary: #34d399;      /* emerald */
+    --tertiary-soft: rgba(52,211,153,0.15);
+    --danger: #f87171;        /* red */
+    --danger-soft: rgba(248,113,113,0.15);
+    --warning: #fbbf24;       /* amber */
   }}
   * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  html {{ scroll-behavior: smooth; }}
   body {{
-    font-family: "PingFang SC", "Microsoft YaHei", -apple-system, sans-serif;
-    background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg-base);
+    background-image: var(--bg-radial);
+    background-attachment: fixed;
     color: var(--text);
     min-height: 100vh;
-    padding: 24px;
+    padding: 32px 24px 64px;
+    font-feature-settings: "tnum", "ss01";
+    -webkit-font-smoothing: antialiased;
+  }}
+  .container {{
+    max-width: 1280px;
+    margin: 0 auto;
   }}
   .header {{
-    text-align: center;
-    margin-bottom: 32px;
-    padding-bottom: 20px;
-    border-bottom: 2px solid var(--border);
+    margin-bottom: 40px;
+    padding-bottom: 28px;
+    border-bottom: 1px solid var(--border);
+  }}
+  .header .eyebrow {{
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--primary);
+    margin-bottom: 12px;
   }}
   .header h1 {{
-    font-size: 28px;
+    font-size: 30px;
     font-weight: 700;
-    color: var(--accent);
-    margin-bottom: 6px;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, #fff 0%, #c7d2fe 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
   }}
   .header .subtitle {{
     color: var(--text-dim);
-    font-size: 14px;
+    font-size: 13px;
+    font-weight: 500;
   }}
   .stats-row {{
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 16px;
-    margin-bottom: 28px;
+    margin-bottom: 32px;
   }}
   .stat-card {{
-    background: var(--card);
+    position: relative;
+    background: var(--surface-1);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 18px 20px;
-    text-align: center;
+    border-radius: 14px;
+    padding: 20px 22px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+    overflow: hidden;
   }}
+  .stat-card::before {{
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, transparent 60%, var(--primary-soft) 100%);
+    opacity: 0;
+    transition: opacity 220ms ease;
+    pointer-events: none;
+  }}
+  .stat-card:hover {{
+    transform: translateY(-2px);
+    border-color: var(--border-strong);
+    background: var(--surface-2);
+  }}
+  .stat-card:hover::before {{ opacity: 1; }}
   .stat-card .num {{
-    font-size: 32px;
+    font-size: 36px;
     font-weight: 700;
-    color: var(--accent);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, var(--primary) 0%, #818cf8 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
   }}
   .stat-card .label {{
-    font-size: 13px;
+    font-size: 12px;
     color: var(--text-dim);
-    margin-top: 4px;
+    margin-top: 8px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
   }}
   .chart-grid {{
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 24px;
-    margin-bottom: 28px;
+    gap: 20px;
+    margin-bottom: 32px;
   }}
   .chart-card {{
-    background: var(--card);
+    background: var(--surface-1);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px;
+    border-radius: 16px;
+    padding: 24px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: border-color 220ms ease;
   }}
-  .chart-card.full-width {{
-    grid-column: 1 / -1;
-  }}
+  .chart-card:hover {{ border-color: var(--border-strong); }}
+  .chart-card.full-width {{ grid-column: 1 / -1; }}
   .chart-card h3 {{
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--text);
-    margin-bottom: 14px;
-    padding-left: 10px;
-    border-left: 3px solid var(--accent);
+    margin-bottom: 18px;
+    letter-spacing: -0.01em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }}
+  .chart-card h3::before {{
+    content: "";
+    width: 4px;
+    height: 16px;
+    background: linear-gradient(180deg, var(--primary), var(--secondary));
+    border-radius: 2px;
   }}
   .chart-wrap {{
     position: relative;
     width: 100%;
-    max-height: 320px;
+    height: 300px;
   }}
+  .chart-card.full-width .chart-wrap {{ height: 320px; }}
   .no-data {{
-    color: var(--text-dim);
-    font-style: italic;
+    color: var(--text-faint);
+    font-style: normal;
     text-align: center;
-    padding: 40px 0;
-    font-size: 14px;
+    padding: 60px 0;
+    font-size: 13px;
+    letter-spacing: 0.02em;
   }}
   .ach-section {{
-    background: var(--card);
+    background: var(--surface-1);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px;
+    border-radius: 16px;
+    padding: 24px;
     margin-bottom: 24px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
   }}
   .ach-section h3 {{
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 600;
-    margin-bottom: 12px;
-    padding-left: 10px;
-    border-left: 3px solid var(--accent2);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    letter-spacing: -0.01em;
+  }}
+  .ach-section h3::before {{
+    content: "";
+    width: 4px;
+    height: 16px;
+    background: linear-gradient(180deg, var(--secondary), var(--tertiary));
+    border-radius: 2px;
   }}
   .ach-badge {{
-    display: inline-block;
-    background: var(--accent2);
-    color: #fff;
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 13px;
-    margin: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--secondary-soft);
+    color: #ddd6fe;
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    margin: 4px 4px 0 0;
+    border: 1px solid rgba(167,139,250,0.25);
+    transition: transform 150ms ease;
+  }}
+  .ach-badge:hover {{
+    transform: translateY(-1px);
+    border-color: rgba(167,139,250,0.45);
   }}
   .ach-badge small {{
-    opacity: 0.7;
+    opacity: 0.6;
+    font-weight: 400;
   }}
   .footer {{
     text-align: center;
-    color: var(--text-dim);
+    color: var(--text-faint);
     font-size: 12px;
-    padding-top: 16px;
+    padding-top: 24px;
     border-top: 1px solid var(--border);
+    letter-spacing: 0.02em;
   }}
-  @media (max-width: 768px) {{
-    .chart-grid {{ grid-template-columns: 1fr; }}
-    .stats-row {{ grid-template-columns: 1fr 1fr; }}
+  @media (max-width: 900px) {{
+    body {{ padding: 20px 16px 48px; }}
+    .chart-grid {{ grid-template-columns: 1fr; gap: 16px; }}
+    .stats-row {{ grid-template-columns: repeat(2, 1fr); }}
+    .header h1 {{ font-size: 24px; }}
+    .stat-card .num {{ font-size: 28px; }}
+  }}
+  @media (max-width: 480px) {{
+    .stats-row {{ grid-template-columns: 1fr; }}
   }}
 </style>
 </head>
 <body>
+<div class="container">
 
 <div class="header">
+  <div class="eyebrow">啄木鸟 · Quality Dashboard</div>
   <h1>{title}</h1>
-  <div class="subtitle">生成时间: {now}</div>
+  <div class="subtitle">生成时间 {now}</div>
 </div>
 
 <div class="stats-row">
@@ -459,24 +560,63 @@ def _render_html(rule_data, session_data, achievements, prd_name=None,
 </div>
 
 <div class="footer">
-  啄木鸟 PRD 评审系统 &mdash; 质量趋势仪表盘
+  啄木鸟 PRD 评审系统 · Quality Dashboard
 </div>
 
+</div><!-- /container -->
+
 <script>
-  // 配色
+  // 现代配色 — 2026-04-26 重设计
   const COLORS = {{
-    green: '#6b8f3c',
-    greenLight: 'rgba(107,143,60,0.3)',
-    brown: '#a67c3d',
-    brownLight: 'rgba(166,124,61,0.3)',
-    red: '#a05040',
-    redLight: 'rgba(160,80,64,0.3)',
-    text: '#d4cdb0',
-    grid: 'rgba(58,58,40,0.6)',
+    primary: '#38bdf8',     primarySoft: 'rgba(56,189,248,0.15)',
+    secondary: '#a78bfa',   secondarySoft: 'rgba(167,139,250,0.15)',
+    tertiary: '#34d399',    tertiarySoft: 'rgba(52,211,153,0.15)',
+    danger: '#f87171',      dangerSoft: 'rgba(248,113,113,0.15)',
+    warning: '#fbbf24',
+    text: '#e6e8ee',
+    textDim: '#8b93a7',
+    grid: 'rgba(255,255,255,0.06)',
+    gridStrong: 'rgba(255,255,255,0.10)',
+  }};
+  // chart 8 色调色板 (柔和不刺眼)
+  const PALETTE = [
+    '#38bdf8', '#a78bfa', '#34d399', '#fbbf24',
+    '#f472b6', '#22d3ee', '#fb923c', '#818cf8',
+  ];
+
+  Chart.defaults.color = COLORS.textDim;
+  Chart.defaults.borderColor = COLORS.grid;
+  Chart.defaults.font.family = "-apple-system,'Inter','PingFang SC',sans-serif";
+  Chart.defaults.font.size = 11;
+  Chart.defaults.plugins.tooltip = {{
+    backgroundColor: 'rgba(11,16,32,0.95)',
+    titleColor: COLORS.text,
+    bodyColor: COLORS.text,
+    borderColor: COLORS.gridStrong,
+    borderWidth: 1,
+    padding: 12,
+    cornerRadius: 8,
+    titleFont: {{ size: 12, weight: '600' }},
+    bodyFont: {{ size: 12 }},
+    boxPadding: 6,
+  }};
+  Chart.defaults.plugins.legend.labels = {{
+    padding: 14,
+    usePointStyle: true,
+    pointStyle: 'circle',
+    font: {{ size: 11, weight: '500' }},
   }};
 
-  Chart.defaults.color = COLORS.text;
-  Chart.defaults.borderColor = COLORS.grid;
+  // 渐变填充 helper
+  function gradientFill(ctx, color1, color2) {{
+    const chart = ctx.chart;
+    const {{ ctx: c, chartArea }} = chart;
+    if (!chartArea) return color1;
+    const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+    g.addColorStop(0, color1);
+    g.addColorStop(1, color2);
+    return g;
+  }}
 
   // ---- 图1: 啄伤度趋势折线图 ----
   const trendLabels = {trend_labels};
@@ -490,48 +630,59 @@ def _render_html(rule_data, session_data, achievements, prd_name=None,
         datasets: [{{
           label: '啄伤度 (%)',
           data: trendScores,
-          borderColor: COLORS.green,
-          backgroundColor: COLORS.greenLight,
+          borderColor: COLORS.primary,
+          backgroundColor: (ctx) => gradientFill(ctx, 'rgba(56,189,248,0.30)', 'rgba(56,189,248,0)'),
           fill: true,
-          tension: 0.35,
-          pointRadius: 5,
-          pointBackgroundColor: COLORS.green,
+          tension: 0.4,
+          pointRadius: 0,
+          pointHoverRadius: 6,
+          pointHoverBackgroundColor: COLORS.primary,
+          pointHoverBorderColor: '#fff',
+          pointHoverBorderWidth: 2,
+          borderWidth: 2.5,
         }}, {{
           label: '触发次数',
           data: trendTotals,
-          borderColor: COLORS.brown,
+          borderColor: COLORS.secondary,
           backgroundColor: 'transparent',
-          borderDash: [5, 5],
-          tension: 0.35,
-          pointRadius: 3,
+          borderDash: [4, 4],
+          tension: 0.4,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: COLORS.secondary,
+          borderWidth: 2,
           yAxisID: 'y1',
         }}]
       }},
       options: {{
         responsive: true,
         maintainAspectRatio: false,
+        interaction: {{ mode: 'index', intersect: false }},
         plugins: {{
-          legend: {{ position: 'top' }},
+          legend: {{ position: 'top', align: 'end' }},
           tooltip: {{
             callbacks: {{
               label: function(ctx) {{
-                if (ctx.datasetIndex === 0) return '啄伤度: ' + ctx.parsed.y + '%';
-                return '触发: ' + ctx.parsed.y + ' 次';
+                if (ctx.datasetIndex === 0) return '  啄伤度  ' + ctx.parsed.y + '%';
+                return '  触发  ' + ctx.parsed.y + ' 次';
               }}
             }}
           }}
         }},
         scales: {{
           y: {{
-            beginAtZero: true,
-            max: 100,
-            title: {{ display: true, text: '啄伤度 (%)' }},
+            beginAtZero: true, max: 100,
+            title: {{ display: true, text: '啄伤度 %', color: COLORS.textDim, font: {{ size: 11 }} }},
+            grid: {{ color: COLORS.grid }},
+            ticks: {{ stepSize: 25 }},
           }},
           y1: {{
-            position: 'right',
-            beginAtZero: true,
-            title: {{ display: true, text: '触发次数' }},
+            position: 'right', beginAtZero: true,
+            title: {{ display: true, text: '触发次数', color: COLORS.textDim, font: {{ size: 11 }} }},
             grid: {{ drawOnChartArea: false }},
+          }},
+          x: {{
+            grid: {{ color: COLORS.grid }},
           }}
         }}
       }}
@@ -550,35 +701,39 @@ def _render_html(rule_data, session_data, achievements, prd_name=None,
         datasets: [{{
           label: '有效确认',
           data: ruleConfirmed,
-          backgroundColor: COLORS.green,
-          borderRadius: 4,
+          backgroundColor: COLORS.tertiary,
+          hoverBackgroundColor: '#10b981',
+          borderRadius: 6,
+          borderSkipped: false,
         }}, {{
           label: '被驳回',
           data: ruleRejected,
-          backgroundColor: COLORS.red,
-          borderRadius: 4,
+          backgroundColor: COLORS.danger,
+          hoverBackgroundColor: '#ef4444',
+          borderRadius: 6,
+          borderSkipped: false,
         }}]
       }},
       options: {{
         responsive: true,
         maintainAspectRatio: false,
-        plugins: {{
-          legend: {{ position: 'top' }},
-        }},
+        plugins: {{ legend: {{ position: 'top', align: 'end' }} }},
         scales: {{
           x: {{
-            ticks: {{ maxRotation: 45, font: {{ size: 11 }} }},
+            grid: {{ display: false }},
+            ticks: {{ maxRotation: 45, font: {{ size: 10 }} }},
           }},
           y: {{
             beginAtZero: true,
-            title: {{ display: true, text: '次数' }},
+            grid: {{ color: COLORS.grid }},
+            title: {{ display: true, text: '次数', color: COLORS.textDim, font: {{ size: 11 }} }},
           }}
         }}
       }}
     }});
   }}
 
-  // ---- 图3: Reviewer 工作量 ----
+  // ---- 图3: Reviewer 工作量 (现代环图) ----
   const reviewerLabels = {reviewer_labels};
   const reviewerValues = {reviewer_values};
   if (reviewerLabels.length > 0) {{
@@ -588,19 +743,18 @@ def _render_html(rule_data, session_data, achievements, prd_name=None,
         labels: reviewerLabels,
         datasets: [{{
           data: reviewerValues,
-          backgroundColor: [
-            COLORS.green, COLORS.brown, COLORS.red,
-            '#5a7a8a', '#8a6a9a', '#6a8a6a', '#9a8a5a',
-          ],
-          borderColor: '#252518',
-          borderWidth: 2,
+          backgroundColor: PALETTE,
+          borderColor: 'rgba(11,16,32,0.9)',
+          borderWidth: 3,
+          hoverOffset: 8,
         }}]
       }},
       options: {{
         responsive: true,
         maintainAspectRatio: false,
+        cutout: '62%',
         plugins: {{
-          legend: {{ position: 'bottom', labels: {{ padding: 16 }} }},
+          legend: {{ position: 'bottom', labels: {{ padding: 14, boxWidth: 8, boxHeight: 8 }} }},
         }}
       }}
     }});
@@ -609,34 +763,41 @@ def _render_html(rule_data, session_data, achievements, prd_name=None,
   // ---- 图4: rule impact_score 时序 (feedback loop 调节轨迹) ----
   const impactSeries = {impact_series};
   if (impactSeries.length > 0) {{
-    const palette = [COLORS.green, COLORS.brown, COLORS.red,
-                     '#5a7a8a', '#8a6a9a', '#6a8a6a', '#9a8a5a', '#a06a7a'];
     new Chart(document.getElementById('impactChart'), {{
       type: 'line',
       data: {{
-        datasets: impactSeries.map((s, i) => ({{
-          label: s.rule_id,
-          data: s.data,
-          borderColor: palette[i % palette.length],
-          backgroundColor: palette[i % palette.length] + '33',
-          tension: 0.15,
-          pointRadius: 3,
-        }})),
+        datasets: impactSeries.map((s, i) => {{
+          const color = PALETTE[i % PALETTE.length];
+          return {{
+            label: s.rule_id,
+            data: s.data,
+            borderColor: color,
+            backgroundColor: color + '20',
+            tension: 0.3,
+            pointRadius: 0,
+            pointHoverRadius: 5,
+            pointHoverBackgroundColor: color,
+            pointHoverBorderColor: '#fff',
+            pointHoverBorderWidth: 2,
+            borderWidth: 2,
+          }};
+        }}),
       }},
       options: {{
         responsive: true,
         maintainAspectRatio: false,
-        plugins: {{
-          legend: {{ position: 'top', labels: {{ padding: 12 }} }},
-        }},
+        interaction: {{ mode: 'nearest', intersect: false }},
+        plugins: {{ legend: {{ position: 'top', align: 'end' }} }},
         scales: {{
           x: {{
             type: 'timeseries',
+            grid: {{ color: COLORS.grid }},
             ticks: {{ maxRotation: 45, font: {{ size: 10 }} }},
           }},
           y: {{
             min: 0, max: 1,
-            title: {{ display: true, text: 'impact_score (0=弱 1=强)' }},
+            grid: {{ color: COLORS.grid }},
+            title: {{ display: true, text: 'impact_score (0=弱 → 1=强)', color: COLORS.textDim, font: {{ size: 11 }} }},
           }}
         }}
       }}
