@@ -52,6 +52,15 @@ dimensions:
         - [ ] 分页规格
         - [ ] 异常/空态处理（四态 UI 或等价描述）
         fail 条件：缺少上述任意一个章节且未注明"不适用"。severity: must
+
+      EV-01 验收标准存在性（must, experimental）：
+        检查项：PRD 必须包含"完成定义"或"验收标准"章节，并满足：
+        - 每条核心 FR 至少有一组 (输入条件 → 期望产出) 描述, 不接受"功能可用"等定性陈述
+        - AI 评审可见: 章节标题含"验收"/"DoD"/"Definition of Done"/"Done When"/"通过条件"/"成功标准" 任一关键词
+        - 至少 1 条验收标准能被开发独立判定 pass/fail (不依赖 PM 主观)
+        fail 条件：(a) 无验收标准章节, 或 (b) 有章节但每条 FR 都没对应验收, 或 (c) 验收陈述均为"用户能用"等不可判定语句。
+        severity: must
+        # 2026-04-26 sprint Day3 实验上线: AI Coding 失败模式高发, 没 DoD 跑出来没人能验对错. status=experimental, 1 周后看数据决定升 active 或降级.
     checklist:
       - rule_id: "V-02"
         name: "文档版本与变更追踪"
@@ -73,6 +82,11 @@ dimensions:
         name: "章节完整性"
         enabled: true
         owner: structure
+      - rule_id: "EV-01"
+        name: "验收标准存在性"
+        enabled: true
+        owner: structure
+        status: experimental    # 2026-04-26 sprint Day3 加, 1 周后看 reject_by_reason 决定升 active
 
   quality:
     name: "质量层"
@@ -99,7 +113,8 @@ dimensions:
         - "适当"/"合理"（如"适当截断长文本"——多少字截断？）
         - "参考"（如"参考现有模块"——哪个模块的哪个功能？）
         每处歧义必须引用原文位置。
-        fail 条件：≥3 处影响开发实现的歧义。severity: must
+        fail 条件：≥5 处影响开发实现的歧义。severity: should
+        # 2026-04-26 sprint Day3: must → should + 阈值 3→5 (实测 P=0.25 / reject 75%, 模板词敏感)
 
       V-09 边界条件覆盖：
         检查项：对 PRD 中每个功能点，检查是否覆盖了以下边界场景：
@@ -167,10 +182,11 @@ dimensions:
       RC-005 四态 UI 规范已定义（must）：PRD 必须定义加载中/请求失败/筛选无结果/空数据四种 UI 状态的文案与样式。
       RC-006 图片路径使用相对路径（should）：PRD 中引用的图片应使用相对路径，避免绝对路径导致协作问题。
       RC-007 复杂联动逻辑有伪代码（should）：复杂联动逻辑、非结构化文本处理等必须有伪代码或流程描述。
-      RC-008 筛选追溯完整（must）：筛选/查询逻辑须从用户操作追溯到 WHERE 条件，中间无断点；非常规逻辑（继承/降级/空值）需有具体示例覆盖。
+      RC-008 筛选追溯完整（must）：筛选/查询逻辑须从用户操作追溯到 WHERE 条件，中间无断点。
       RC-013 伪代码字段可追溯（must）：伪代码中每个字段均可在 DDL 中找到；跨表字段标注 JOIN 来源。
-      RC-014 筛选逻辑追溯到 WHERE（must）：筛选/查询逻辑从用户操作追溯到 WHERE 条件，中间无断点。
       RC-015 非常规逻辑有示例（should）：非常规逻辑（继承/降级/空值）须有具体示例覆盖。
+      # 2026-04-26 sprint Day3: 删 RC-014 (与 RC-008 内容重复, RC-014 实测 total=15 P=0.33 大概率重复触发拉低精度)
+      # 2026-04-26 sprint Day3: RC-008 删尾段"非常规逻辑..." (与 RC-015 完全重叠, 让 RC-015 独家)
     checklist:
       - rule_id: "RC-004"
         name: "技术约定节存在"
@@ -196,10 +212,7 @@ dimensions:
         name: "伪代码字段可追溯"
         enabled: true
         owner: ai_coding
-      - rule_id: "RC-014"
-        name: "筛选逻辑追溯到 WHERE"
-        enabled: true
-        owner: ai_coding
+      # 2026-04-26 sprint Day3: 删 RC-014 (与 RC-008 重复). 老 review_items 引用 RC-014 仍能解析, 后处理不会破.
       - rule_id: "RC-015"
         name: "非常规逻辑有示例"
         enabled: true
