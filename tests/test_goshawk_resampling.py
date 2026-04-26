@@ -380,3 +380,54 @@ class TestSummarizeResampleTelemetry:
         tel = summarize_resample_telemetry(result)
         assert tel["minority_kept"] == 0
         assert tel["retention_kind_dist"] == {"unanimous": 1}
+
+
+# ============================================================
+# P0 防回归: model=None 透传 bug (2026-04-26 修法 C 暴露; 2026-04-27 re-add
+# 因 cherry-pick 漏拉测试代码导致 main 上 0 collected)
+# ============================================================
+#
+# 历史 bug: 修法 C (commit fa4fcfe) 落地后真业务跑发现 advisor_review_default
+# 默认 model=None, 透传到 advisor_review_with_resampling -> advisor_review
+# -> client.create -> claude_cli._map_model(None) 返 None -> cmd 含 None
+# -> subprocess.run 报 'expected str, bytes or os.PathLike object, not NoneType'.
+# 苍鹰 4/4 重采样 + 1 fallback 全崩, 14.3s 全异常重试, DAR 0 emit, $3.52 / 0 价值.
+#
+# 单测 906 passed 没抓到 — Agent F 的 mock 都在 advisor_review 内部, 没下到
+# subprocess argv 层. 加这两个测试防回归, 默认值 / 兜底层各一道锁.
+
+
+class TestModelNoneProtection:
+    """advisor_review_default + _with_resampling 默认 model 必须是 DEFAULT_MODEL,
+    + claude_cli._map_model(None) 必须 fallback, 双保险防 None 进 subprocess argv.
+    """
+
+    def test_advisor_review_default_signature_uses_default_model(self):
+        import inspect
+        from goshawk_advisor import (
+            advisor_review_default,
+            advisor_review_with_resampling,
+            DEFAULT_MODEL,
+        )
+        sig1 = inspect.signature(advisor_review_default)
+        assert sig1.parameters["model"].default == DEFAULT_MODEL, (
+            "advisor_review_default 默认 model 必须是 DEFAULT_MODEL "
+            "(防 None 透传到 subprocess argv)"
+        )
+        sig2 = inspect.signature(advisor_review_with_resampling)
+        assert sig2.parameters["model"].default == DEFAULT_MODEL, (
+            "advisor_review_with_resampling 默认 model 必须是 DEFAULT_MODEL"
+        )
+
+    def test_claude_cli_map_model_none_fallbacks_to_sonnet(self):
+        """P0 第二把锁: _map_model(None / '') 必须返 alias 而非 None."""
+        from clients.claude_cli import ClaudeCodeCLIClient
+        cc = ClaudeCodeCLIClient.__new__(ClaudeCodeCLIClient)  # 不跑 __init__ 避真去找 cli bin
+        assert cc._map_model(None) == "sonnet"
+        assert cc._map_model("") == "sonnet"
+        # 已知别名仍按原逻辑
+        assert cc._map_model("claude-opus-4-7") == "opus"
+        assert cc._map_model("claude-sonnet-4-6") == "sonnet"
+        assert cc._map_model("claude-haiku-4-5") == "haiku"
+        # 含义不明的 model id 仍透传 (兼容 _create_once 直接给 CLI)
+        assert cc._map_model("custom-model-id") == "custom-model-id"
