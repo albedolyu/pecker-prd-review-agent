@@ -245,6 +245,30 @@ SUBMIT_REVIEW_ITEMS_TOOL = {
                         "severity": {"type": "string", "enum": ["must", "should"]},
                         "evidence_type": {"type": "string", "enum": ["A", "B", "C"]},
                         "evidence_content": {"type": "string", "description": "依据内容"},
+                        # 2026-04-26 CaRR (Chaining the Evidence) 借鉴 arXiv 2601.06021:
+                        # 复杂 finding 可选给多跳 evidence chain, 每跳必须有 claim + citation,
+                        # 让下游 evidence_verifier 检查推理链完整性. 简单 finding 留空数组.
+                        "evidence_chain": {
+                            "type": "array",
+                            "description": (
+                                "可选: 复杂 finding 的多跳证据链 (CaRR). 每跳给 claim + citation. "
+                                "建议复杂 finding (跨多章节 / 多 wiki 页面 / 涉及推理) 给 chain. "
+                                "简单 finding 留空数组. 不强制. 留空时 evidence_content 单条引用即可."
+                            ),
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "hop_idx": {"type": "integer", "description": "跳序号 1, 2, 3..."},
+                                    "claim": {"type": "string", "description": "本跳推理结论"},
+                                    "citation": {
+                                        "type": "string",
+                                        "description": "PRD 章节号 (如 '第 3.2 节') 或 [[wiki 页面]] 引用",
+                                    },
+                                },
+                                "required": ["hop_idx", "claim", "citation"],
+                            },
+                            "default": [],
+                        },
                     },
                     "required": ["rule_id", "location", "issue", "suggestion", "severity", "evidence_type", "evidence_content"],
                 },

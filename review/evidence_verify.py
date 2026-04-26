@@ -378,6 +378,91 @@ def _llm_nli_score(client, item, wiki_pages, n_samples=4, model="claude-haiku-4-
     }
 
 
+def _verify_evidence_chain(chain, wiki_dir=None, wiki_index=None, prd_content=None):
+    """CaRR 借鉴 (arXiv 2601.06021): 检查 evidence_chain 多跳完整性 (2026-04-26).
+
+    每跳 = {hop_idx, claim, citation}. citation 应该是:
+    - PRD 章节号: "第 3.2 节" / "3.2" / "L120-L150"
+    - wiki 页面引用: "[[页面名]]"
+    - 表/字段名: "ds_xxx.field_y"
+
+    Returns:
+        (passed: bool, signal: dict)
+        signal = {
+            "chain_length": int,
+            "broken_hops": [hop_idx, ...],   # citation 找不到的 hop
+            "completeness": 0.0-1.0,         # 通过的 hop 比例
+            "method": "wiki" | "prd_section" | "mixed" | "no_chain",
+        }
+
+    chain 缺失或空 → passed=True, completeness=1.0 (不强制), method="no_chain"
+    所有跳通过 → passed=True, completeness=1.0
+    部分通过 → passed=True (软强制不 fail), completeness < 1.0
+    """
+    signal = {
+        "chain_length": 0,
+        "broken_hops": [],
+        "completeness": 1.0,
+        "method": "no_chain",
+    }
+    if not chain or not isinstance(chain, list):
+        return True, signal
+
+    signal["chain_length"] = len(chain)
+    methods_used = set()
+    broken = []
+
+    for hop in chain:
+        if not isinstance(hop, dict):
+            broken.append(hop.get("hop_idx", "?") if isinstance(hop, dict) else "?")
+            continue
+        hop_idx = hop.get("hop_idx", -1)
+        citation = (hop.get("citation") or "").strip()
+        claim = (hop.get("claim") or "").strip()
+        if not citation or not claim:
+            broken.append(hop_idx)
+            continue
+
+        # 判断 citation 类型
+        if "[[" in citation and "]]" in citation:
+            # wiki 引用
+            methods_used.add("wiki")
+            if wiki_dir is None and wiki_index is None:
+                # 没 wiki context, 无法验证, 视为通过 (软强制)
+                continue
+            found, _sig = _find_wiki_page_with_signal(citation, wiki_dir or "", wiki_index)
+            if not found:
+                broken.append(hop_idx)
+        elif re.search(r'\d+(\.\d+)?', citation):
+            # 看像 PRD 章节号
+            methods_used.add("prd_section")
+            if prd_content:
+                # 提取章节号 (如 "第 3.2 节" → "3.2") 在 PRD 文本里搜
+                section_match = re.search(r'(\d+(?:\.\d+)*)', citation)
+                if section_match:
+                    section_id = section_match.group(1)
+                    if section_id not in prd_content:
+                        broken.append(hop_idx)
+            # 没 prd_content 视为通过 (软强制)
+        else:
+            # 其他形式 (表名 / 字段名 等), 不强求验证
+            methods_used.add("other")
+
+    signal["broken_hops"] = broken
+    if signal["chain_length"] > 0:
+        signal["completeness"] = round(
+            (signal["chain_length"] - len(broken)) / signal["chain_length"], 3
+        )
+
+    if len(methods_used) == 1:
+        signal["method"] = methods_used.pop()
+    elif len(methods_used) > 1:
+        signal["method"] = "mixed"
+
+    # 软强制: 即使部分跳 broken 也不 fail, 让 PM 看到 completeness 自行判断
+    return True, signal
+
+
 def _find_rule_reference(evidence_content, rules_dir):
     """检查规则编号是否在 review-rules 目录中存在"""
     if not os.path.isdir(rules_dir):
@@ -493,7 +578,7 @@ def _verify_b_class_semantic(item, rules_dir):
 # ============================================================
 
 
-def verify_evidence(items, workspace, client=None, wiki_pages=None):
+def verify_evidence(items, workspace, client=None, wiki_pages=None, prd_content=None):
     """
     验证每条改进项的依据是否可回溯
 
@@ -501,20 +586,24 @@ def verify_evidence(items, workspace, client=None, wiki_pages=None):
     - item["status"]: "VERIFIED" / "RETRACTED"  (向后兼容,run_session.py:336 的过滤仍有效)
     - item["verification_status"]: "verified" / "verified_with_caveat" / "retracted"  (细粒度)
     - item["verification_reason"]: 详细原因(成功/失败都有)
-    - item["verification_details"]: {evidence_type, target, found, [match_signal], [nli_score]}
+    - item["verification_details"]: {evidence_type, target, found, [match_signal], [nli_score], [chain_signal]}
     - item["retract_reason"]: 向后兼容(同 verification_reason)
 
     2026-04-26 Sprint #6 EvidenceRL 升级:
     A 类命中分支 client + wiki_pages 都非 None 时, 调 _llm_nli_score 加 entail/contradict 连续分,
-    写到 verification_details. 失败 / client=None 不影响主流程, 老 caller (cuckoo_eval / feishu_bot
-    / review_fixer / cuckoo_scorer / run_session) 不传 client 走 100% 等价老逻辑.
+    写到 verification_details. 失败 / client=None 不影响主流程, 老 caller 不传 client 走 100% 等价老逻辑.
+
+    2026-04-26 Sprint #B CaRR 借鉴 (arXiv 2601.06021):
+    item.evidence_chain 字段 (worker tool schema 新加, 可选) 给多跳证据链, 本函数检查 chain 完整性
+    写到 v_details.chain_signal. 软强制: 即使部分跳 broken 也不 retract, 让 PM 看 completeness.
+    需要 prd_content 才能验证 PRD 章节号 citation, 不传则只验 wiki citation.
 
     Args:
         items: 改进项列表
         workspace: 工作目录路径
-        client: (可选) LLM client, 提供时 A 类命中调 NLI 给连续 score.
-                老 caller 不传 → NLI 跳过, 行为与升级前完全一致.
-        wiki_pages: (可选) {page_title: page_content} dict, NLI 用. 不传则即使 client 给了也 skip.
+        client: (可选) LLM client, A 类命中时调 NLI
+        wiki_pages: (可选) {page_title: page_content} dict, NLI 用
+        prd_content: (可选) PRD 全文字符串, evidence_chain 验证 PRD 章节号 citation 用
 
     Returns:
         验证后的 items 列表(失败的标记 RETRACTED)
@@ -626,6 +715,25 @@ def verify_evidence(items, workspace, client=None, wiki_pages=None):
                 v_status = "verified_with_caveat"
                 v_reason = "C 类依据已标注待确定,需人工确认"
                 v_details["reason_code"] = "C_pending_confirm"
+
+        # 2026-04-26 CaRR: 检查 evidence_chain 完整性 (软强制, 不 fail).
+        # item.evidence_chain 字段 worker 可选输出 (review/worker.py SUBMIT_REVIEW_ITEMS_TOOL),
+        # 缺失时跳过. 检查通过/部分通过 → 写 v_details.chain_signal 让 PM 看 completeness.
+        chain = item.get("evidence_chain", []) or []
+        if chain:
+            try:
+                _chain_passed, chain_signal = _verify_evidence_chain(
+                    chain, wiki_dir=wiki_dir, wiki_index=wiki_index, prd_content=prd_content,
+                )
+                v_details["chain_signal"] = chain_signal
+                # completeness < 0.5 时给 v_reason 加注但不改 status
+                if chain_signal["completeness"] < 0.5 and chain_signal["chain_length"] > 0:
+                    v_reason = (v_reason or "") + (
+                        f"; CaRR chain completeness={chain_signal['completeness']} "
+                        f"({len(chain_signal['broken_hops'])}/{chain_signal['chain_length']} 跳 citation 找不到)"
+                    )
+            except Exception as _chain_err:
+                log.warning(f"[verify] evidence_chain check 失败 skip: {_chain_err}")
 
         # 写入 item(保留旧字段 + 新字段)
         if retract_reason:
