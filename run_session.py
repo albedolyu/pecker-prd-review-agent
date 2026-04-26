@@ -341,7 +341,10 @@ def run_parallel_review(client, workspace, wiki_path, prd_content, prd_files, wi
 @log_agent_call("苍鹰 meta 评审")
 def run_goshawk_review(client, workspace, wiki_path, parallel_result, model, system_blocks, messages, session_file, turn_cb, prd_content, wiki_pages):
     """Phase 2.5: 苍鹰交叉校验。prd_content / wiki_pages 由 main() 预读传入。"""
-    from goshawk_advisor import advisor_review, apply_advisor_result, format_advisor_report
+    # 修法 C (2026-04-26): 默认走 advisor_review_default → 内部 advisor_review_with_resampling
+    # 让 sprint #2 (LLM-as-Verifier 多次重采样) + DAR (少数派保留) + sprint #6 (NLI) 真在
+    # production 跑. PM 可 PECKER_GOSHAWK_RESAMPLE=1 紧急回退老单次行为.
+    from goshawk_advisor import advisor_review_default, apply_advisor_result, format_advisor_report, summarize_resample_telemetry
     from easter_eggs import get_phase_line
 
     phase_line = get_phase_line("phase2.5")
@@ -364,7 +367,7 @@ def run_goshawk_review(client, workspace, wiki_path, parallel_result, model, sys
         evt.append("final_reviewer_started", {"items_count": len(parallel_result.get("items", []))})
 
     try:
-        goshawk_result = advisor_review(
+        goshawk_result = advisor_review_default(
             client, prd_content, parallel_result["items"], wiki_pages,
         )
         elapsed = _time.time() - t_start
@@ -395,13 +398,16 @@ def run_goshawk_review(client, workspace, wiki_path, parallel_result, model, sys
               f"信心度 {goshawk_result.get('confidence', 0):.0%}")
 
         if evt:
-            evt.append("final_reviewer_done", {
+            _final_evt = {
                 "false_positive": fp_count,
                 "additional": add_count,
                 "verdict": goshawk_result.get("verdict", "UNKNOWN"),
                 "confidence": goshawk_result.get("confidence", 0.0),
                 "empty_retry_used": goshawk_result.get("empty_retry_used", False),
-            })
+            }
+            # 修法 C: 多轮采样时附带 DAR retention_kind 分布 + n_samples (单轮时为空 dict)
+            _final_evt.update(summarize_resample_telemetry(goshawk_result))
+            evt.append("final_reviewer_done", _final_evt)
 
         goshawk_report = format_advisor_report(goshawk_result)
         messages.append({"role": "user", "content": f"苍鹰交叉校验已完成：\n{goshawk_report}\n\n请结合苍鹰的审核意见，进入 Phase 3 交互确认。"})

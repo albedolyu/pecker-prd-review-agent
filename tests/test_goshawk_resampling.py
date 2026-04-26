@@ -267,3 +267,116 @@ class TestResamplingWrapper:
             )
         # fallback 第 5 次返回的结果
         assert result.get("verdict") == "FALLBACK"
+
+
+# ============================================================
+# 修法 C (2026-04-26): production default 入口测试
+# ============================================================
+
+class TestAdvisorReviewDefault:
+    """advisor_review_default 是 run_session/api/routes 的 production caller,
+    必须保证默认走 resampling, env=1/0 能 opt-out 老单次行为.
+    """
+
+    def test_default_no_env_uses_4_samples(self, monkeypatch):
+        """没设 env → 默认 4 次采样."""
+        monkeypatch.delenv("PECKER_GOSHAWK_RESAMPLE", raising=False)
+        from goshawk_advisor import advisor_review_default
+        with patch("goshawk_advisor.advisor_review") as mock_ar:
+            mock_ar.return_value = _make_result()
+            advisor_review_default(client=None, prd_content="prd", worker_results=[])
+            assert mock_ar.call_count == 4
+
+    def test_env_1_opts_out_to_single(self, monkeypatch):
+        """PECKER_GOSHAWK_RESAMPLE=1 → 紧急回退老路径单次."""
+        monkeypatch.setenv("PECKER_GOSHAWK_RESAMPLE", "1")
+        from goshawk_advisor import advisor_review_default
+        with patch("goshawk_advisor.advisor_review") as mock_ar:
+            mock_ar.return_value = _make_result()
+            advisor_review_default(client=None, prd_content="prd", worker_results=[])
+            assert mock_ar.call_count == 1
+
+    def test_env_0_treated_as_single(self, monkeypatch):
+        """0 当 alias 也走单次, 防 PM 习惯写 0 disable."""
+        monkeypatch.setenv("PECKER_GOSHAWK_RESAMPLE", "0")
+        from goshawk_advisor import advisor_review_default
+        with patch("goshawk_advisor.advisor_review") as mock_ar:
+            mock_ar.return_value = _make_result()
+            advisor_review_default(client=None, prd_content="prd", worker_results=[])
+            assert mock_ar.call_count == 1
+
+    def test_env_8_uses_8_samples(self, monkeypatch):
+        """显式覆写也 OK."""
+        monkeypatch.setenv("PECKER_GOSHAWK_RESAMPLE", "8")
+        from goshawk_advisor import advisor_review_default
+        with patch("goshawk_advisor.advisor_review") as mock_ar:
+            mock_ar.return_value = _make_result()
+            advisor_review_default(client=None, prd_content="prd", worker_results=[])
+            assert mock_ar.call_count == 8
+
+    def test_env_garbage_falls_back_to_default(self, monkeypatch):
+        """非法 int → 默认 4 (容错), warn 不阻塞."""
+        monkeypatch.setenv("PECKER_GOSHAWK_RESAMPLE", "not_an_int")
+        from goshawk_advisor import advisor_review_default
+        with patch("goshawk_advisor.advisor_review") as mock_ar:
+            mock_ar.return_value = _make_result()
+            advisor_review_default(client=None, prd_content="prd", worker_results=[])
+            assert mock_ar.call_count == 4
+
+    def test_output_schema_compatible_with_advisor_review(self, monkeypatch):
+        """关键: 出参 schema 跟 advisor_review 一致, caller 不需要 adapter."""
+        monkeypatch.setenv("PECKER_GOSHAWK_RESAMPLE", "1")
+        from goshawk_advisor import advisor_review_default
+        sample = _make_result(flagged=[_fp("R-001")], confidence=0.9, verdict="REVIEWED")
+        with patch("goshawk_advisor.advisor_review", return_value=sample):
+            r = advisor_review_default(client=None, prd_content="prd", worker_results=[])
+        # 老 caller 用的关键 key 全在
+        assert "flagged_as_false_positive" in r
+        assert "additional_findings" in r
+        assert "conflict_resolutions" in r
+        assert "confidence" in r
+        assert "verdict" in r
+
+
+class TestSummarizeResampleTelemetry:
+    """summarize_resample_telemetry 把 DAR retention_kind 分布抽出来,
+    让 caller 写到 session jsonl, PM 可聚合 minority/majority/unanimous 占比.
+    """
+
+    def test_single_run_returns_empty_dict(self):
+        """单轮 (n_samples 缺失 / =1) → 老行为, 不动 telemetry."""
+        from goshawk_advisor import summarize_resample_telemetry
+        assert summarize_resample_telemetry({"flagged_as_false_positive": []}) == {}
+        assert summarize_resample_telemetry({"n_samples": 1}) == {}
+
+    def test_multi_run_extracts_retention_kind_dist(self):
+        from goshawk_advisor import summarize_resample_telemetry
+        result = {
+            "n_samples": 4,
+            "n_samples_succeeded": 4,
+            "flagged_as_false_positive": [
+                {"item_id": "R-001", "verdict_distribution": {"retention_kind": "unanimous"}},
+                {"item_id": "R-002", "verdict_distribution": {"retention_kind": "minority"}},
+            ],
+            "conflict_resolutions": [
+                {"items": ["R-003", "R-004"], "verdict_distribution": {"retention_kind": "majority"}},
+            ],
+        }
+        tel = summarize_resample_telemetry(result)
+        assert tel["n_samples"] == 4
+        assert tel["n_samples_succeeded"] == 4
+        assert tel["retention_kind_dist"] == {"unanimous": 1, "minority": 1, "majority": 1}
+        assert tel["minority_kept"] == 1
+
+    def test_no_minority_returns_zero(self):
+        from goshawk_advisor import summarize_resample_telemetry
+        result = {
+            "n_samples": 4,
+            "flagged_as_false_positive": [
+                {"item_id": "R-001", "verdict_distribution": {"retention_kind": "unanimous"}},
+            ],
+            "conflict_resolutions": [],
+        }
+        tel = summarize_resample_telemetry(result)
+        assert tel["minority_kept"] == 0
+        assert tel["retention_kind_dist"] == {"unanimous": 1}

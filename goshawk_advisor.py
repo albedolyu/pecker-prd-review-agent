@@ -644,6 +644,120 @@ def advisor_review_with_resampling(
     return _aggregate_advisor_results(results, n_samples)
 
 
+# ============================================================
+# Production default 入口 (修法 C, 2026-04-26)
+# ============================================================
+#
+# 默认 production caller (run_session / api routes) 走 resampling 路径,
+# 让 sprint #2 (LLM-as-Verifier 多次重采样) + DAR (Diversity-Aware Retention 少数派
+# 保留) 真在线上跑. PM 可通过 env opt-out 紧急回退.
+#
+#   PECKER_GOSHAWK_RESAMPLE 默认 4   → 4 次采样 + DAR 频次聚合
+#   PECKER_GOSHAWK_RESAMPLE = 1      → 等价老 advisor_review (单次, 紧急回退)
+#   PECKER_GOSHAWK_RESAMPLE = 0      → 同 1, opt-out 别名
+#
+# 设计取舍: 默认 4 来自 audit feasibility 报告 (8+ 串行 wallclock ~80s 不划算).
+# 改 env 数字仅影响新 session, 已跑的 session jsonl telemetry 字段不变.
+
+DEFAULT_GOSHAWK_N_SAMPLES = 4
+
+
+def _resolve_n_samples() -> int:
+    """读取 PECKER_GOSHAWK_RESAMPLE env, 兜底默认值 + 容忍非法输入."""
+    raw = os.getenv("PECKER_GOSHAWK_RESAMPLE", str(DEFAULT_GOSHAWK_N_SAMPLES)).strip()
+    if raw in ("", "0"):
+        return 1   # 0 / 空 → 单次 (老路径), 兼容 architect 建议的 opt-out 语义
+    try:
+        n = int(raw)
+        return max(1, n)
+    except ValueError:
+        log.warning(f"[goshawk] PECKER_GOSHAWK_RESAMPLE={raw!r} 不是 int, 用默认 {DEFAULT_GOSHAWK_N_SAMPLES}")
+        return DEFAULT_GOSHAWK_N_SAMPLES
+
+
+def advisor_review_default(client, prd_content, worker_results, wiki_pages=None, model=None,
+                            deadline=None, on_tool_call=None):
+    """Production 同步入口 (CLI 用). 默认走 resampling, env 可 opt-out.
+
+    出参 schema 与 advisor_review 完全一致, 多采样时额外携带:
+      - n_samples / n_samples_succeeded
+      - 每条 finding 的 verdict_distribution (含 retention_kind)
+    单次 (n=1) 等价 advisor_review, 不引 sampling noise.
+    """
+    n_samples = _resolve_n_samples()
+    return advisor_review_with_resampling(
+        client, prd_content, worker_results, wiki_pages, model,
+        n_samples=n_samples, deadline=deadline, on_tool_call=on_tool_call,
+    )
+
+
+async def advisor_review_default_async(client, prd_content, worker_results, wiki_pages=None,
+                                        model=DEFAULT_MODEL, on_tool_call=None):
+    """Production 异步入口 (Web API 用). 包同步 default 到 thread + 复用
+    advisor_review_async 的 GOSHAWK_TIMEOUT 保护.
+    """
+    import asyncio
+    import time
+    from agent_config import GOSHAWK_TIMEOUT
+    loop = asyncio.get_running_loop()
+    deadline = time.monotonic() + max(GOSHAWK_TIMEOUT - 3, GOSHAWK_TIMEOUT * 0.9)
+    try:
+        return await asyncio.wait_for(
+            loop.run_in_executor(
+                None,
+                lambda: advisor_review_default(
+                    client, prd_content, worker_results, wiki_pages, model,
+                    deadline=deadline, on_tool_call=on_tool_call,
+                ),
+            ),
+            timeout=GOSHAWK_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        log.warning(f"苍鹰交叉校验超时({GOSHAWK_TIMEOUT}s),跳过终审,直接用 worker 合并结果")
+        return {
+            "flagged_as_false_positive": [],
+            "additional_findings": [],
+            "conflict_resolutions": [],
+            "confidence": 0.0,
+            "verdict": "TIMEOUT",
+            "model_used": model,
+        }
+
+
+def summarize_resample_telemetry(goshawk_result) -> dict:
+    """从 advisor_review_default 返回结果提取 DAR/sprint #2 telemetry.
+
+    用于 caller 把多轮采样的 retention_kind 分布 / n_samples 写到 session jsonl,
+    PM 后续可以聚合"unanimous / majority / minority"占比验证 DAR 落地效果.
+
+    单轮 (n_samples=1) 时返回空 dict, 老路径 telemetry 不变. 多轮时返回:
+      {
+        "n_samples": 4,
+        "n_samples_succeeded": 4,
+        "retention_kind_dist": {"unanimous": 2, "majority": 1, "minority": 1},
+        "minority_kept": 1,
+      }
+    """
+    n_samples = goshawk_result.get("n_samples")
+    if not n_samples or n_samples <= 1:
+        return {}
+
+    from collections import Counter
+    dist = Counter()
+    for bucket in ("flagged_as_false_positive", "conflict_resolutions"):
+        for f in goshawk_result.get(bucket, []) or []:
+            kind = (f.get("verdict_distribution") or {}).get("retention_kind")
+            if kind:
+                dist[kind] += 1
+
+    return {
+        "n_samples": n_samples,
+        "n_samples_succeeded": goshawk_result.get("n_samples_succeeded", n_samples),
+        "retention_kind_dist": dict(dist),
+        "minority_kept": dist.get("minority", 0),
+    }
+
+
 def _is_empty_advisor_submission(response) -> bool:
     """苍鹰调了 submit_advisor_review 但三个数组都空。
 

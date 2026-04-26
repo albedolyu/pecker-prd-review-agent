@@ -281,7 +281,10 @@ async def run_review(
         _pipeline_start = _time.time()
 
         from parallel_review import parallel_review, parallel_review_sync
-        from goshawk_advisor import advisor_review_async
+        # 修法 C (2026-04-26): 默认走 advisor_review_default_async → 内部 advisor_review_with_resampling
+        # 让 sprint #2 多次重采样 + DAR 少数派保留 + sprint #6 NLI 真在 web 路径生效.
+        # PM 可 PECKER_GOSHAWK_RESAMPLE=1 紧急回退老单次行为.
+        from goshawk_advisor import advisor_review_default_async
         from agent_config import MODEL_TIERS
 
         # Pattern 21: Session Event Sourcing — JSONL 追加写入事件溯源
@@ -458,7 +461,7 @@ async def run_review(
                 emitter.emit("final_reviewer_started")
                 evt.append("final_reviewer_started", {"items_count": len(items)})
                 try:
-                    goshawk_result = await advisor_review_async(
+                    goshawk_result = await advisor_review_default_async(
                         client, enhanced_prd, items, req.wiki_pages,
                         on_tool_call=_on_tool_call,
                     )
@@ -477,18 +480,20 @@ async def run_review(
                         log.warning(f"[funnel] N3 emit 失败不阻塞: {_fn_err3}")
                     # Round 8: 把 goshawk verdict + retry 信号持久化到 jsonl,
                     # 让 STATUS 能聚合 SILENT/EMPTY_APPROVAL/REVIEWED 分布
-                    emitter.emit("final_reviewer_done", data={
+                    # 修法 C (2026-04-26): 附带 DAR retention_kind / n_samples 分布
+                    from goshawk_advisor import summarize_resample_telemetry
+                    _resample_dim = summarize_resample_telemetry(goshawk_result)
+                    _final_evt = {
                         "false_positive": len(goshawk_result.get("flagged_as_false_positive", [])),
                         "additional": len(goshawk_result.get("additional_findings", [])),
                         "verdict": goshawk_result.get("verdict", "UNKNOWN"),
-                    })
-                    evt.append("final_reviewer_done", {
-                        "false_positive": len(goshawk_result.get("flagged_as_false_positive", [])),
-                        "additional": len(goshawk_result.get("additional_findings", [])),
-                        "verdict": goshawk_result.get("verdict", "UNKNOWN"),
-                        "confidence": goshawk_result.get("confidence", 0.0),
-                        "empty_retry_used": goshawk_result.get("empty_retry_used", False),
-                    })
+                    }
+                    _final_evt.update(_resample_dim)
+                    emitter.emit("final_reviewer_done", data=_final_evt)
+                    _final_evt_full = dict(_final_evt)
+                    _final_evt_full["confidence"] = goshawk_result.get("confidence", 0.0)
+                    _final_evt_full["empty_retry_used"] = goshawk_result.get("empty_retry_used", False)
+                    evt.append("final_reviewer_done", _final_evt_full)
                 except Exception as e:
                     emitter.emit("final_reviewer_done", data={"error": str(e)[:200]})
                     evt.append("final_reviewer_done", {"error": str(e)[:200]})
