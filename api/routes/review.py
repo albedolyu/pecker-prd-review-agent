@@ -398,7 +398,11 @@ async def run_review(
                 )
                 # 2026-04-26 P1-B: 包 asyncio.to_thread 避免阻塞 event loop (与 L174/786/796 一致).
                 # verify_evidence 内部 glob wiki + per-file open + parse, 同步执行会暂停 SSE 心跳.
-                verified = await asyncio.to_thread(verify_evidence, items, ws_abs_path)
+                # 2026-04-26 Sprint #6 step 2: 注入 client + req.wiki_pages 启用 LLM NLI 升级.
+                # NLI 内部 try/except 失败不破 main flow.
+                verified = await asyncio.to_thread(
+                    verify_evidence, items, ws_abs_path, client, req.wiki_pages,
+                )
                 items = [i for i in verified if i.get("status") != "RETRACTED"]
                 v_sum = summarize_verification(verified)
 

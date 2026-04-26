@@ -285,8 +285,11 @@ def run_parallel_review(client, workspace, wiki_path, prd_content, prd_files, wi
             print(f"  [{w['dimension_name']}] 发现 {len(w['items'])} 条改进项")
 
     # 依据验证
+    # 2026-04-26 Sprint #6 step 2: 注入 client + wiki_pages 启用 LLM NLI 升级.
+    # client + wiki_pages 都从 main 顶层传到本函数 scope, 直接用. 失败 NLI 自动 skip 主流程不破.
     from parallel_review import summarize_verification
-    verified = verify_evidence(result["merged_items"], workspace)
+    verified = verify_evidence(result["merged_items"], workspace,
+                               client=client, wiki_pages=wiki_pages)
     retracted = [i for i in verified if i.get("status") == "RETRACTED"]
     verification_summary = summarize_verification(verified)
 
