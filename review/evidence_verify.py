@@ -180,38 +180,202 @@ def _build_wiki_index(wiki_dir):
     return index
 
 
-def _find_wiki_page(evidence_content, wiki_dir, wiki_index=None):
-    """在 wiki 目录中搜索依据提到的页面"""
-    if not os.path.isdir(wiki_dir):
-        return False
+def _find_wiki_page_with_signal(evidence_content, wiki_dir, wiki_index=None):
+    """`_find_wiki_page` 的扩展版, 同时返回匹配信号 dict (供 LLM NLI 消费).
 
-    # 从依据内容中提取 [[页面名]] 格式的引用
+    Sprint #6 EvidenceRL 升级 (2026-04-26):
+    输出连续匹配信号取代 binary, 让下游 EMA delta 能区分"精确引用"vs"模糊关键词命中".
+
+    Returns:
+        tuple (found: bool, signal: dict)
+        signal = {
+            "method": "ref_exact" | "ref_substring" | "keyword" | "no_match",
+            "matched_pages": [basename, ...],   # 最多前 3 个匹配页面
+            "ref_count": int,                    # [[ref]] 引用数
+            "keyword_count": int,                # 兜底关键词搜数
+        }
+    """
+    signal = {
+        "method": "no_match",
+        "matched_pages": [],
+        "ref_count": 0,
+        "keyword_count": 0,
+    }
+
+    if not os.path.isdir(wiki_dir):
+        return False, signal
+
     page_refs = re.findall(r"\[\[(.+?)\]\]", evidence_content)
+    signal["ref_count"] = len(page_refs)
 
     if page_refs:
-        # 有明确的页面引用，检查文件是否存在
+        # 有明确 [[ref]] 引用
         for ref in page_refs:
             for basename in (wiki_index or {}):
+                if ref == basename or ref == basename.replace(".md", ""):
+                    signal["matched_pages"].append(basename)
+                    signal["method"] = "ref_exact"
+                    return True, signal
+            for basename in (wiki_index or {}):
                 if ref in basename:
-                    return True
+                    signal["matched_pages"].append(basename)
+                    signal["method"] = "ref_substring"
+                    return True, signal
             if not wiki_index:
                 pattern = os.path.join(wiki_dir, f"*{ref}*")
-                if glob_module.glob(pattern):
-                    return True
-        return False
+                matches = glob_module.glob(pattern)
+                if matches:
+                    signal["matched_pages"] = [os.path.basename(m) for m in matches[:3]]
+                    signal["method"] = "ref_substring"
+                    return True, signal
+        return False, signal
 
-    # 模糊搜索用索引代替 glob
+    # 模糊关键词兜底
     all_basenames = list(wiki_index.keys()) if wiki_index else [
         os.path.basename(f) for f in glob_module.glob(os.path.join(wiki_dir, "*.md"))
     ]
     cn_keywords = re.findall(r'[\u4e00-\u9fff]{2,4}', evidence_content)
     en_keywords = [w for w in re.findall(r'[a-zA-Z_-]+', evidence_content) if len(w) > 2]
     keywords = cn_keywords + en_keywords
+    signal["keyword_count"] = len(keywords)
+
     for basename in all_basenames:
         for kw in keywords[:5]:
             if kw in basename:
-                return True
-    return False
+                signal["matched_pages"].append(basename)
+                signal["method"] = "keyword"
+                return True, signal
+    return False, signal
+
+
+def _find_wiki_page(evidence_content, wiki_dir, wiki_index=None):
+    """向后兼容 wrapper — 仅返 bool. 7 个 caller 不用改.
+
+    Sprint #6 后内部走 `_find_wiki_page_with_signal`, signal dict 在 verify_evidence
+    主入口才被消费 (写入 v_details + 可选 LLM NLI 升级).
+    """
+    found, _signal = _find_wiki_page_with_signal(evidence_content, wiki_dir, wiki_index)
+    return found
+
+
+def _llm_nli_score(client, item, wiki_pages, n_samples=4, model="claude-haiku-4-5-20251001"):
+    """Sprint #6 EvidenceRL: 用 LLM 三选一判 evidence 与 wiki 的支持度 (entail/contradict/neutral).
+
+    Anthropic API 不暴露 token logprobs, 用蒙特卡洛重采样近似 (N=4 默认 + temperature=0.7).
+    比 logprobs 公式精度粗 (95% CI ±25%), 但够替代 binary 信号给 EMA 用.
+
+    设计 (来自 audit feasibility 调研):
+    - 拒 hedging: prompt 强制非 entail 时给 ≥ 30 字理由, 否则采样无效
+    - 失败采样静默 skip (network/parse error), 不影响分母
+    - 失败回 default `{entail=0, contradict=0, neutral=1, max_signal=0}` 让 caller 知道 NLI 没生效
+
+    Args:
+        client: 有 .create() 方法的 LLM client (`clients/claude_cli.py:ClaudeCodeCLIClient` 兼容)
+        item: review item dict, 必须含 "issue" + "evidence_content"
+        wiki_pages: dict {page_title: page_content}, 从 verify_evidence 上层传入
+        n_samples: 重采样次数, 默认 4 (单 PRD 评审 ~5s 串行 / ~2s 并行)
+        model: 默认 haiku-4-5 (~1.2s/call)
+
+    Returns:
+        {
+            "entail_score": 0.0-1.0,
+            "contradict_score": 0.0-1.0,
+            "neutral_score": 0.0-1.0,
+            "max_signal": 0.0-1.0 (entail vs contradict 偏向强度, 越大越确定),
+            "n_samples_succeeded": int (有效采样数, < n_samples 说明部分失败),
+        }
+    """
+    default = {
+        "entail_score": 0.0,
+        "contradict_score": 0.0,
+        "neutral_score": 1.0,
+        "max_signal": 0.0,
+        "n_samples_succeeded": 0,
+    }
+    if not client or not wiki_pages or not item:
+        return default
+
+    issue = (item.get("issue") or "").strip()
+    evidence = (item.get("evidence_content") or "").strip()
+    if not issue or not evidence:
+        return default
+
+    # 提取 [[ref]] 找对应 wiki 内容 (限前 3 页 / 每页 1500 字防超 token)
+    page_refs = re.findall(r"\[\[(.+?)\]\]", evidence)
+    relevant_pages = []
+    for ref in page_refs:
+        for title, content in wiki_pages.items():
+            if ref in title or title in ref or ref == title.replace(".md", ""):
+                relevant_pages.append((title, (content or "")[:1500]))
+                break
+        if len(relevant_pages) >= 3:
+            break
+
+    if not relevant_pages:
+        return default
+
+    wiki_block = "\n---\n".join(f"# {t}\n{c}" for t, c in relevant_pages)
+    system = (
+        "你判断 PRD 评审改进项的引用依据是否被给定 wiki 页面支持. "
+        "三选一: entail (wiki 明确支持改进项的论断) / contradict (wiki 与改进项矛盾) / neutral (wiki 未涉及). "
+        "如果不是 entail, 必须给 ≥ 30 字理由说明 wiki 哪部分矛盾或缺失. "
+        "禁用 hedging 措辞: '可能/也许/不确定/或许/大概' 出现即视为采样无效. "
+        "只输出 JSON 一行: "
+        '{"verdict": "entail|contradict|neutral", "reason": "<30字以上具体理由>"}'
+    )
+    user = f"# 改进项问题\n{issue}\n\n# 引用依据\n{evidence}\n\n# Wiki 相关页面\n{wiki_block}"
+
+    counts = {"entail": 0, "contradict": 0, "neutral": 0}
+    succeeded = 0
+    _HEDGING_WORDS = ("可能", "也许", "不确定", "或许", "大概", "应该是", "貌似", "看起来")
+
+    for _ in range(n_samples):
+        try:
+            resp = client.create(
+                model=model,
+                max_tokens=300,
+                system=system,
+                messages=[{"role": "user", "content": user}],
+                temperature=0.7,
+            )
+            text_parts = []
+            for block in resp.content:
+                if getattr(block, "type", "") == "text":
+                    text_parts.append(getattr(block, "text", ""))
+            text = "".join(text_parts)
+
+            v_match = re.search(r'"verdict"\s*:\s*"(entail|contradict|neutral)"', text)
+            if not v_match:
+                continue
+            verdict = v_match.group(1)
+
+            r_match = re.search(r'"reason"\s*:\s*"([^"]*)"', text)
+            reason = r_match.group(1) if r_match else ""
+
+            if any(h in reason for h in _HEDGING_WORDS):
+                continue   # hedging 拒
+            if verdict != "entail" and len(reason) < 30:
+                continue   # 非 entail 但理由不足, 拒
+
+            counts[verdict] += 1
+            succeeded += 1
+        except Exception:
+            continue
+
+    if succeeded == 0:
+        return default
+
+    entail = counts["entail"] / succeeded
+    contradict = counts["contradict"] / succeeded
+    neutral = counts["neutral"] / succeeded
+
+    return {
+        "entail_score": round(entail, 3),
+        "contradict_score": round(contradict, 3),
+        "neutral_score": round(neutral, 3),
+        "max_signal": round(abs(entail - contradict), 3),
+        "n_samples_succeeded": succeeded,
+    }
 
 
 def _find_rule_reference(evidence_content, rules_dir):
@@ -329,7 +493,7 @@ def _verify_b_class_semantic(item, rules_dir):
 # ============================================================
 
 
-def verify_evidence(items, workspace):
+def verify_evidence(items, workspace, client=None, wiki_pages=None):
     """
     验证每条改进项的依据是否可回溯
 
@@ -337,12 +501,20 @@ def verify_evidence(items, workspace):
     - item["status"]: "VERIFIED" / "RETRACTED"  (向后兼容,run_session.py:336 的过滤仍有效)
     - item["verification_status"]: "verified" / "verified_with_caveat" / "retracted"  (细粒度)
     - item["verification_reason"]: 详细原因(成功/失败都有)
-    - item["verification_details"]: {evidence_type, target, found}
+    - item["verification_details"]: {evidence_type, target, found, [match_signal], [nli_score]}
     - item["retract_reason"]: 向后兼容(同 verification_reason)
+
+    2026-04-26 Sprint #6 EvidenceRL 升级:
+    A 类命中分支 client + wiki_pages 都非 None 时, 调 _llm_nli_score 加 entail/contradict 连续分,
+    写到 verification_details. 失败 / client=None 不影响主流程, 老 caller (cuckoo_eval / feishu_bot
+    / review_fixer / cuckoo_scorer / run_session) 不传 client 走 100% 等价老逻辑.
 
     Args:
         items: 改进项列表
         workspace: 工作目录路径
+        client: (可选) LLM client, 提供时 A 类命中调 NLI 给连续 score.
+                老 caller 不传 → NLI 跳过, 行为与升级前完全一致.
+        wiki_pages: (可选) {page_title: page_content} dict, NLI 用. 不传则即使 client 给了也 skip.
 
     Returns:
         验证后的 items 列表(失败的标记 RETRACTED)
@@ -384,22 +556,42 @@ def verify_evidence(items, workspace):
                 )
                 v_details["found"] = None
                 v_details["reason_code"] = "A_wiki_sparse_relaxed"
-            elif not _find_wiki_page(ev_content, wiki_dir, wiki_index):
-                # 2026-04-24 P0 放宽: wiki 未命中不再 retract, 改降权保留.
-                # 原逻辑粗暴 retract,等于把"证据链弱"等同"item 错",
-                # 会把合理 item 一并抹杀(侵权软件模板 PRD 实测 4 条 A 类被撤).
-                # 新逻辑: confidence × 0.7 降权保留,让 PM 自己判断.
-                v_status = "verified_with_caveat"
-                v_reason = (
-                    "A 类依据: wiki 未找到匹配页面, 降权保留 "
-                    "(证据链弱但 item 可能仍有效, 由 PM 复核)"
-                )
-                v_details["found"] = False
-                v_details["reason_code"] = "A_wiki_page_not_found_weak"
-                old_conf = item.get("confidence_score", 0.8)
-                item["confidence_score"] = round(old_conf * 0.7, 2)
             else:
-                v_details["found"] = True
+                # 2026-04-26 Sprint #6 EvidenceRL: 用 _find_wiki_page_with_signal 拿匹配方法 +
+                # 命中页面列表, 写到 v_details. method 区分 ref_exact / ref_substring / keyword.
+                _found, _match_signal = _find_wiki_page_with_signal(ev_content, wiki_dir, wiki_index)
+                if not _found:
+                    # 2026-04-24 P0 放宽: wiki 未命中不再 retract, 改降权保留.
+                    # 原逻辑粗暴 retract,等于把"证据链弱"等同"item 错",
+                    # 会把合理 item 一并抹杀(侵权软件模板 PRD 实测 4 条 A 类被撤).
+                    # 新逻辑: confidence × 0.7 降权保留,让 PM 自己判断.
+                    v_status = "verified_with_caveat"
+                    v_reason = (
+                        "A 类依据: wiki 未找到匹配页面, 降权保留 "
+                        "(证据链弱但 item 可能仍有效, 由 PM 复核)"
+                    )
+                    v_details["found"] = False
+                    v_details["reason_code"] = "A_wiki_page_not_found_weak"
+                    v_details["match_signal"] = _match_signal
+                    old_conf = item.get("confidence_score", 0.8)
+                    item["confidence_score"] = round(old_conf * 0.7, 2)
+                else:
+                    v_details["found"] = True
+                    v_details["match_signal"] = _match_signal
+                    # Sprint #6: 有 client + wiki_pages 时调 LLM NLI 给连续 entail/contradict 分,
+                    # 写到 v_details. 失败/client=None 跳过, 不影响主流程.
+                    if client is not None and wiki_pages:
+                        try:
+                            nli = _llm_nli_score(client, item, wiki_pages, n_samples=4)
+                            v_details["nli_score"] = nli
+                            # contradict 占主时降权 (entail-contradict 越负越拉低 confidence)
+                            # 不直接 retract, 让 PM 看到 contradict signal 自行决定
+                            if nli["contradict_score"] > nli["entail_score"]:
+                                v_details["reason_code"] = "A_nli_contradict_signal"
+                                old_conf = item.get("confidence_score", 0.85)
+                                item["confidence_score"] = round(old_conf * 0.7, 2)
+                        except Exception as _nli_err:
+                            log.warning(f"[verify] NLI score 失败, skip: {_nli_err}")
 
         elif ev_type == "B":
             # B 类:检查规则编号是否在 review-rules/ 中存在
