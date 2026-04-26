@@ -77,14 +77,29 @@ def compute_goshawk_stage(post_items, goshawk_result):
     因为这些 item 已被 apply_advisor_result 过滤掉不在 post_items 里.
     """
     fps = goshawk_result.get("flagged_as_false_positive", []) or []
-    removed_count = sum(1 for fp in fps if "移除" in (fp.get("recommendation", "") or ""))
-    merged_to_facet = sum(1 for i in post_items if i.get("status") == "MERGED_BY_ADVISOR")
-    added = sum(
-        1 for i in post_items
-        if i.get("provenance") == "meta_added" or i.get("source") == "苍鹰补充"
+    # 2026-04-26 P1-G: removed 关键词扩展 — 模型可能写 "移除"/"删除"/"删掉"
+    _REMOVED_KEYWORDS = ("移除", "删除", "删掉")
+    removed_count = sum(
+        1 for fp in fps
+        if any(kw in (fp.get("recommendation", "") or "") for kw in _REMOVED_KEYWORDS)
     )
-    fp_restored = sum(1 for i in post_items if i.get("status") == "RESTORED_BY_SANITY_CHECK")
-    kept = max(0, len(post_items) - merged_to_facet - added - fp_restored)
+
+    # 2026-04-26 P0-B: 用 explicit set 避免 double-count.
+    # 老逻辑用减法 (kept = total - merged - added - restored) 假设三类互斥,
+    # 但 RESTORED_BY_SANITY_CHECK 的 item 可能也带 provenance=meta_added (苍鹰补充被误标后又复活),
+    # 减法会双扣. 改为 set 排他归类: 一个 item 只属于一个桶.
+    merged_ids = {i["id"] for i in post_items if i.get("status") == "MERGED_BY_ADVISOR"}
+    fp_restored_ids = {i["id"] for i in post_items if i.get("status") == "RESTORED_BY_SANITY_CHECK"}
+    added_ids = {
+        i["id"] for i in post_items
+        if i.get("provenance") == "meta_added" or i.get("source") == "苍鹰补充"
+    }
+    # 优先级: restored > merged > added > kept (避免重叠 item 被多桶统计)
+    classified_ids = merged_ids | fp_restored_ids | added_ids
+    kept_count = sum(1 for i in post_items if i["id"] not in classified_ids)
+    merged_to_facet = len(merged_ids)
+    added = len(added_ids - merged_ids - fp_restored_ids)  # 扣除已归 merged/restored 的
+    fp_restored = len(fp_restored_ids)
 
     facet_links = [
         {"facet": i["id"], "primary": i.get("facet_of", "")}
@@ -98,7 +113,7 @@ def compute_goshawk_stage(post_items, goshawk_result):
             "merged_to_facet": merged_to_facet,
             "added": added,
             "false_positive_restored": fp_restored,
-            "kept_intact": kept,
+            "kept_intact": kept_count,
         },
         "facet_links": facet_links,
     }

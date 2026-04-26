@@ -396,13 +396,15 @@ async def run_review(
                 from review.funnel_telemetry import (
                     compute_evidence_verify_stage, get_wiki_telemetry,
                 )
-                verified = verify_evidence(items, ws_abs_path)
+                # 2026-04-26 P1-B: 包 asyncio.to_thread 避免阻塞 event loop (与 L174/786/796 一致).
+                # verify_evidence 内部 glob wiki + per-file open + parse, 同步执行会暂停 SSE 心跳.
+                verified = await asyncio.to_thread(verify_evidence, items, ws_abs_path)
                 items = [i for i in verified if i.get("status") != "RETRACTED"]
                 v_sum = summarize_verification(verified)
 
                 # T3: funnel stage N2 (after_evidence_verify) — 用扩展后的 v_sum + wiki telemetry
                 try:
-                    wiki_tele = get_wiki_telemetry(ws_abs_path)
+                    wiki_tele = await asyncio.to_thread(get_wiki_telemetry, ws_abs_path)
                     _after_ev = compute_evidence_verify_stage(v_sum, wiki_tele)
                     evt.append("funnel_stage_after_evidence_verify", _after_ev)
                     _funnel_stages["N2_after_evidence_verify"] = _after_ev["count"]

@@ -200,6 +200,27 @@ class TestPmDecisionStage:
         out = compute_pm_decision_stage(decisions)
         assert out["rejected_by_reason"] == {"model_noise": 1}
 
+    @pytest.mark.parametrize("reason_value", [
+        "good_issue", "false_positive", "known_tradeoff", "wiki_missing",
+        "rule_too_strict", "impl_detail", "model_noise",
+    ])
+    def test_all_seven_reject_reasons_bucketed(self, reason_value):
+        """P1-F 修: 全 7 种 RejectReason 都应被分桶, 不漏一个."""
+        decisions = {"R-001": {"action": "reject", "reason_category": reason_value}}
+        out = compute_pm_decision_stage(decisions)
+        assert out["rejected_by_reason"] == {reason_value: 1}, \
+            f"reason {reason_value} 应进 reject_by_reason 桶"
+
+    def test_reject_reason_enum_match_models(self):
+        """guardrail: parametrize 上面的 7 个值必须等于 RejectReason enum 7 个."""
+        from models import RejectReason
+        param_values = {
+            "good_issue", "false_positive", "known_tradeoff", "wiki_missing",
+            "rule_too_strict", "impl_detail", "model_noise",
+        }
+        enum_values = {r.value for r in RejectReason}
+        assert param_values == enum_values, "test 参数化的 7 个 reason 要与 RejectReason enum 完全一致"
+
     def test_pending_items(self):
         decisions = {
             "R-001": {"action": "accept"},

@@ -165,6 +165,31 @@ class TestWikiAuthorityTier:
         # 缺失 sources 时返回 False → 文件不是 pecker-generated → 进 wiki_index
         assert _wiki_authority_tier(str(p)) == "contextual"
 
+    def test_quoted_authority_double_quotes(self, tmp_path):
+        """P0-A 修: `authority: "canonical"` 应解析成 canonical (老逻辑保留引号导致降级)."""
+        p = _write_wiki(tmp_path, "x.md", [
+            'sources: 2',
+            'authority: "canonical"',
+            'verified_by: "数据"',
+        ])
+        assert _wiki_authority_tier(str(p)) == "canonical"
+
+    def test_quoted_authority_single_quotes(self, tmp_path):
+        p = _write_wiki(tmp_path, "x.md", [
+            "sources: 1",
+            "authority: 'trusted'",
+            "verified_by: 'PM'",
+        ])
+        assert _wiki_authority_tier(str(p)) == "trusted"
+
+    def test_quoted_sources_zero(self, tmp_path):
+        """`sources: "0"` quoted 仍触发 generated 强制."""
+        p = _write_wiki(tmp_path, "x.md", [
+            'sources: "0"',
+            'authority: canonical',
+        ])
+        assert _wiki_authority_tier(str(p)) == "generated"
+
     def test_pm_curated_without_sources_matches_legacy(self, tmp_path):
         """PM 手工维护但没显式声 sources 的文件 → 不该判成 generated (回归 test_evidence_verify_wiki_sparse 场景)."""
         p = _write_wiki(tmp_path, "pm.md", [

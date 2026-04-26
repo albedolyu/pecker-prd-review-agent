@@ -482,11 +482,12 @@ pytest tests/test_funnel_emit_resilience.py -v                                  
 **包注册** (per memory `feedback_verify_call_sites` Rule 4b):
 - `scripts/` 已在 `pyproject.toml` `[tool.setuptools] packages` 里,新增 .py 无需声明
 
-**验证命令**:
+**验证命令** (2026-04-26 更新, Phase 2 已启用):
 ```bash
 python scripts/wiki_lint.py                                             # 不 crash,贴统计表
 python scripts/wiki_migrate_v2.py --dry-run                             # 不改文件,贴分布表
-python scripts/wiki_migrate_v2.py --apply                               # 期望 exit 1 + "第一周只允许 dry-run"
+python scripts/wiki_migrate_v2.py --apply                               # 真改: 期望输出 "N applied, 0 failed"
+python scripts/wiki_migrate_v2.py --apply                               # 重跑: 期望 "0 applied, 0 skipped" (幂等)
 ```
 
 ---

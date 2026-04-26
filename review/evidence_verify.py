@@ -57,7 +57,13 @@ def _parse_wiki_frontmatter(wiki_file_path):
     for line in m.group(1).split("\n"):
         kv = line.split(":", 1)
         if len(kv) == 2:
-            fm[kv[0].strip()] = kv[1].strip()
+            # 2026-04-26 P0-A: 剥 YAML 引号风格 — `authority: "canonical"` 老逻辑解析成
+            # `'"canonical"'` 不在 _VALID_AUTHORITY set, 静默走 default 降级到 contextual.
+            # 修: strip 双/单引号后再放入 dict.
+            value = kv[1].strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+                value = value[1:-1]
+            fm[kv[0].strip()] = value
     return fm
 
 
