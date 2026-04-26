@@ -39,6 +39,7 @@ pecker-release/__pycache__/
 # workspace 产物中的会话和输出
 workspace*/output/
 workspace*/.sessions/
+workspace*/output_archive_*/
 
 # 真实业务 PRD 工作区（不入公共 repo · workspace-sample 是脱敏 demo,仍可入库）
 workspace-fengniao-mediation/
