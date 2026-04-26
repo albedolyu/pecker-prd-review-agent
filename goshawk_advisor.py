@@ -598,7 +598,7 @@ def _aggregate_advisor_results(results, n_samples):
 
 
 def advisor_review_with_resampling(
-    client, prd_content, worker_results, wiki_pages=None, model=None,
+    client, prd_content, worker_results, wiki_pages=None, model=DEFAULT_MODEL,
     n_samples=1, deadline=None, on_tool_call=None,
 ):
     """苍鹰 N 次重采样 + 频次聚合 wrapper (Sprint #2 LLM-as-Verifier).
@@ -675,7 +675,7 @@ def _resolve_n_samples() -> int:
         return DEFAULT_GOSHAWK_N_SAMPLES
 
 
-def advisor_review_default(client, prd_content, worker_results, wiki_pages=None, model=None,
+def advisor_review_default(client, prd_content, worker_results, wiki_pages=None, model=DEFAULT_MODEL,
                             deadline=None, on_tool_call=None):
     """Production 同步入口 (CLI 用). 默认走 resampling, env 可 opt-out.
 

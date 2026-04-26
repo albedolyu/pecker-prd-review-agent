@@ -184,8 +184,15 @@ _REVIEW_DIMENSIONS_SCHEMA = {
                             "properties": {
                                 "rule_id": {
                                     "type": "string",
-                                    "pattern": r"^(V|RC)-\d+$",
+                                    # 2026-04-27: 扩 EV- (experimental 验收标准类) + FN- (风鸟领域规则).
+                                    # EV-01/EV-04 已 active (sprint Day3), FN-01/03/09 升 active 第一波.
+                                    "pattern": r"^(V|RC|EV|FN)-\d+$",
                                 },
+                                "status": {
+                                    "type": "string",
+                                    "enum": ["active", "experimental", "inactive"],
+                                },
+                                "owner": {"type": "string"},
                                 "name": {"type": "string", "minLength": 1},
                                 "enabled": {"type": "boolean"},
                             },

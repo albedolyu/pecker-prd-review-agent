@@ -339,7 +339,9 @@ class ClaudeCodeCLIClient:
             return "sonnet"
         if "haiku" in m:
             return "haiku"
-        return model
+        # P0 兜底 (2026-04-26 hotfix re-landed 2026-04-27): None / 空 str 落到 sonnet,
+        # 防进 subprocess argv 引发 `expected str, bytes or os.PathLike object, not NoneType` 崩溃
+        return model or "sonnet"
 
     def _flatten_system(self, system):
         """system 支持 str 或 block list（cache_control 被忽略）"""
