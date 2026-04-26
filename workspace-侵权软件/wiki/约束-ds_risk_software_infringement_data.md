@@ -8,6 +8,8 @@ sources: 0
 title: ds_risk_software_infringement_data
 scope: workspace
 category: constraint
+authority: generated
+owner: pecker-auto
 ---
 
 # 约束-ds_risk_software_infringement_data

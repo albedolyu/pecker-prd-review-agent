@@ -2,19 +2,21 @@
 
 spec: docs/wiki-frontmatter-v2.md 第六节 (Phase 2)
 
-本阶段只支持 --dry-run, 不真改文件. 输出 "会改多少个文件, 新分布长啥样".
---apply 目前 error out (等 Phase 2 审完 dry-run 统计后才开).
+Phase 1 (默认): --dry-run 只输出会改什么, 不真改
+Phase 2 (2026-04-26 启用): --apply 真改 — 只追加缺失字段, 不动已有, 幂等
 
 用法:
   python scripts/wiki_migrate_v2.py --dry-run               # 默认, 贴分布
   python scripts/wiki_migrate_v2.py --dry-run --workspace workspace-侵权软件
-  python scripts/wiki_migrate_v2.py --apply                 # 本 Phase 禁用, exit 1
+  python scripts/wiki_migrate_v2.py --apply                 # 真改, 幂等
+  python scripts/wiki_migrate_v2.py --apply --workspace ... # 单 workspace 真改
 """
 from __future__ import annotations
 
 import argparse
 import glob
 import os
+import re
 import sys
 from collections import Counter
 from datetime import datetime
@@ -51,6 +53,50 @@ def propose_frontmatter_delta(path, owner_default="pecker-auto"):
     return current_tier, current_tier, new_fields
 
 
+def apply_frontmatter_delta(path, new_fields):
+    """**真改文件**: 在 frontmatter 闭合 `---` 前追加 new_fields 字段行.
+
+    幂等: new_fields 来自 propose_frontmatter_delta, 已确认这些字段在 fm 里没有.
+    安全策略:
+    - 只追加, 不重写已有字段 (避免误覆盖)
+    - 找不到 frontmatter 闭合 `---` 时, 跳过文件 + 返回 False (不创建)
+    - 写失败抛异常 (调用方 try/except 兜底)
+
+    Args:
+        path: wiki .md 文件
+        new_fields: {"authority": "generated", "owner": "pecker-auto", ...}
+
+    Returns:
+        True 修改成功, False 跳过 (无 frontmatter 或无 new_fields)
+    """
+    if not new_fields:
+        return False
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read()
+    except OSError:
+        return False
+
+    # 匹配前导 frontmatter: ^---\n...\n---  (DOTALL 让 . 跨行)
+    m = re.match(r'^(\s*---\s*\n)(.*?)(\n---)(.*)', content, re.DOTALL)
+    if not m:
+        return False  # 没 frontmatter, 不动
+
+    head_marker = m.group(1)   # "---\n"
+    fm_body = m.group(2)        # frontmatter 内容 (不含两端 ---)
+    end_marker = m.group(3)     # "\n---"
+    rest = m.group(4)           # 正文
+
+    # 拼追加行: 每个新字段一行 (key: value)
+    appended_lines = "\n".join(f"{k}: {v}" for k, v in new_fields.items())
+    new_fm_body = fm_body.rstrip() + "\n" + appended_lines
+
+    new_content = head_marker + new_fm_body + end_marker + rest
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(new_content)
+    return True
+
+
 def scan_workspace(ws_path):
     """扫一个 workspace, 返回 (files_to_change_count, dist_before, dist_after, changes_list)."""
     wiki_dir = os.path.join(ws_path, "wiki")
@@ -70,6 +116,7 @@ def scan_workspace(ws_path):
         if new_fields:
             changes.append({
                 "file": os.path.relpath(p),
+                "abs_path": os.path.abspath(p),   # apply 用绝对路径,不被 root/cwd 拼乱
                 "current_tier": current,
                 "proposed_tier": proposed,
                 "new_fields": new_fields,
@@ -135,20 +182,19 @@ def build_report(all_results):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Wiki frontmatter v2 migrate (Phase 1 dry-run only)")
+    parser = argparse.ArgumentParser(description="Wiki frontmatter v2 migrate (Phase 2 starts 2026-04-26)")
     parser.add_argument("--workspace", help="指定 workspace")
     parser.add_argument("--root", default=".")
-    parser.add_argument("--dry-run", action="store_true", default=True)
+    parser.add_argument("--dry-run", action="store_true", default=False,
+                        help="只输出会改什么, 不真改 (默认行为, 兼容历史)")
     parser.add_argument("--apply", action="store_true",
-                        help="Phase 1 禁用, 报 error 提示先审 dry-run")
+                        help="真改 wiki frontmatter (只追加缺失字段, 幂等)")
     parser.add_argument("--out-file", help="写 markdown 到文件 (默认 stdout)")
     args = parser.parse_args()
 
-    if args.apply:
-        print("[wiki_migrate] ERROR: Phase 1 只允许 --dry-run.")
-        print("先跑 --dry-run, 审完 canonical/trusted/contextual/generated 分布合理后再说 --apply.")
-        print("（spec: docs/wiki-frontmatter-v2.md 第六节 Phase 2）")
-        return 1
+    # 默认 dry-run (除非 --apply)
+    if not args.apply:
+        args.dry_run = True
 
     root = os.path.abspath(args.root)
     ws_paths = find_workspaces(root, args.workspace)
@@ -157,6 +203,30 @@ def main():
         return 0
 
     results = {os.path.basename(ws): scan_workspace(ws) for ws in ws_paths}
+
+    # --apply: 真写文件
+    if args.apply:
+        print(f"[wiki_migrate] APPLY 模式 — 开始改文件")
+        applied_count = 0
+        skipped_count = 0
+        failed_count = 0
+        for ws_name, (_count, _db, _da, changes) in results.items():
+            for ch in changes:
+                fpath = ch.get("abs_path") or ch["file"]
+                try:
+                    ok = apply_frontmatter_delta(fpath, ch["new_fields"])
+                    if ok:
+                        applied_count += 1
+                    else:
+                        skipped_count += 1
+                        print(f"  [skip] {ch['file']} (无 frontmatter 或空 new_fields)")
+                except Exception as e:
+                    failed_count += 1
+                    print(f"  [fail] {ch['file']}: {e}")
+        print(f"[wiki_migrate] 完成: {applied_count} applied, {skipped_count} skipped, {failed_count} failed")
+        return 0 if failed_count == 0 else 1
+
+    # --dry-run: 输出 markdown
     text = build_report(results)
     if args.out_file:
         with open(args.out_file, "w", encoding="utf-8") as f:

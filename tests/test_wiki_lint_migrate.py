@@ -181,11 +181,74 @@ class TestWikiMigrateDryRun:
         assert dist_before["contextual"] == 1
         assert dist_after == dist_before   # dry-run 冷启动不改 tier
 
-    def test_apply_disabled_returns_error_code(self, tmp_path, monkeypatch, capsys):
-        """--apply 直接 error, 不跑."""
+    def test_apply_writes_missing_fields(self, tmp_path):
+        """--apply 真改文件: 追加缺失字段, 不动已有."""
+        from wiki_migrate_v2 import apply_frontmatter_delta
+        wiki = tmp_path / "wiki"
+        wiki.mkdir()
+        p = wiki / "test.md"
+        # frontmatter 只有 sources, 缺 authority/owner
+        p.write_text("---\nsources: 0\n---\n\n# 正文不变\n", encoding="utf-8")
+
+        ok = apply_frontmatter_delta(str(p), {"authority": "generated", "owner": "pecker-auto"})
+        assert ok is True
+
+        new_content = p.read_text(encoding="utf-8")
+        # sources 还在, 新字段也追加, 正文未动
+        assert "sources: 0" in new_content
+        assert "authority: generated" in new_content
+        assert "owner: pecker-auto" in new_content
+        assert "# 正文不变" in new_content
+
+    def test_apply_idempotent(self, tmp_path):
+        """跑两次 propose+apply 不会 double-add (因为第二次 propose 会发现字段已存在)."""
+        from wiki_migrate_v2 import apply_frontmatter_delta, propose_frontmatter_delta
+        wiki = tmp_path / "wiki"
+        wiki.mkdir()
+        p = wiki / "test.md"
+        p.write_text("---\nsources: 0\n---\n\n正文\n", encoding="utf-8")
+
+        # 第一次 apply
+        _c, _p, fields1 = propose_frontmatter_delta(str(p))
+        apply_frontmatter_delta(str(p), fields1)
+
+        # 第二次 propose 应该返回空 new_fields (字段都已加)
+        _c2, _p2, fields2 = propose_frontmatter_delta(str(p))
+        assert fields2 == {}, f"第二次 propose 应返回空, 实际 {fields2}"
+
+    def test_apply_no_frontmatter_returns_false(self, tmp_path):
+        """没 frontmatter 的文件不动."""
+        from wiki_migrate_v2 import apply_frontmatter_delta
+        wiki = tmp_path / "wiki"
+        wiki.mkdir()
+        p = wiki / "plain.md"
+        p.write_text("# 没 frontmatter\n", encoding="utf-8")
+
+        ok = apply_frontmatter_delta(str(p), {"authority": "contextual"})
+        assert ok is False
+        assert p.read_text(encoding="utf-8") == "# 没 frontmatter\n"   # 未改
+
+    def test_main_apply_smoke(self, tmp_path, monkeypatch, capsys):
+        """--apply 在 tmp workspace 跑一遍, 退出码 0 + 文件被改."""
         from wiki_migrate_v2 import main
-        monkeypatch.setattr(sys, "argv", ["wiki_migrate_v2", "--apply"])
+        ws = tmp_path / "workspace-test"
+        wiki = ws / "wiki"
+        wiki.mkdir(parents=True)
+        p1 = wiki / "a.md"
+        p1.write_text("---\nsources: 0\n---\nA\n", encoding="utf-8")
+        p2 = wiki / "b.md"
+        p2.write_text("---\nsources: 1\n---\nB\n", encoding="utf-8")
+
+        monkeypatch.setattr(sys, "argv",
+                            ["wiki_migrate_v2", "--apply", "--workspace", "workspace-test",
+                             "--root", str(tmp_path)])
         ret = main()
-        assert ret == 1
-        captured = capsys.readouterr()
-        assert "Phase 1 只允许 --dry-run" in captured.out
+        assert ret == 0
+
+        # 两个文件都被加了 authority + owner
+        a_content = p1.read_text(encoding="utf-8")
+        b_content = p2.read_text(encoding="utf-8")
+        assert "authority: generated" in a_content
+        assert "authority: contextual" in b_content
+        assert "owner:" in a_content
+        assert "owner:" in b_content

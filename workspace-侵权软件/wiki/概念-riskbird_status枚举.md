@@ -8,6 +8,8 @@ sources: 0
 title: riskbird_status枚举
 scope: workspace
 category: concept
+authority: generated
+owner: pecker-auto
 ---
 
 # riskbird_status 枚举定义
