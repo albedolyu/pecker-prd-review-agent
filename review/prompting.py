@@ -146,9 +146,13 @@ def _build_feedback_section(dim_key, rule_perf_history=None, dimensions=None):
         return ""
 
     # 2. 提取当前维度涉及的规则编号
+    # 2026-04-27 P0-B: 扩 EV-/FN- (跟 dimensions.py 的 _REVIEW_DIMENSIONS_SCHEMA
+    # 第 189 行的 `^(V|RC|EV|FN)-\d+$` 校准). 老 regex 漏 EV/FN, 让 rule_perf
+    # 反馈循环里 EV-01/FN-XX 永远进不来, EV/FN 规则的 impact_score / 漏报率
+    # 历史无法注入 worker prompt.
     dims = dimensions or get_review_dimensions()
     dim_rules_text = dims[dim_key]["rules"]
-    dim_rule_ids = set(re.findall(r"(?:RC-\d+|V-\d+)", dim_rules_text))
+    dim_rule_ids = set(re.findall(r"(?:RC|V|EV|FN)-\d+", dim_rules_text))
     if not dim_rule_ids:
         return ""
 
@@ -279,6 +283,9 @@ def _build_real_refs_section(workspace):
         return ""
 
     # 1. 扫 review-rules/ 抽所有 rule_id
+    # 2026-04-27 P0-B: 扩 EV-/FN- (跟 schema regex 校准). 老逻辑漏 EV-01/FN-01/03/09,
+    # 真实清单里没出现 → 模型看不到合法 EV/FN id → 用幻觉 ID (DQ-XX/AC-XX)
+    # 试图绕开 prompt 第 326 行 "不在下表降级 C 类" 的兜底.
     rule_ids = set()
     rules_dir = os.path.join(workspace, "review-rules")
     if os.path.isdir(rules_dir):
@@ -289,7 +296,7 @@ def _build_real_refs_section(workspace):
                         fp = os.path.join(root, fn)
                         with open(fp, "r", encoding="utf-8") as f:
                             text = f.read()
-                        rule_ids.update(re.findall(r"(?:RC-\d+|V-\d+)", text))
+                        rule_ids.update(re.findall(r"(?:RC|V|EV|FN)-\d+", text))
                     except (OSError, UnicodeDecodeError):
                         continue
 
@@ -320,7 +327,8 @@ def _build_real_refs_section(workspace):
         "",
         "### 依据格式铁律（违反即 FAIL）",
         "",
-        "- **B 类**：`evidence_content` 必须包含 `RC-\\d+` 或 `V-\\d+` 格式的真实规则号（从下表选），禁止只写规则描述。",
+        # 2026-04-27 P0-B: 扩文本提示, 老版本只说 RC-/V- 让模型以为 EV-/FN- 不合法 → 用幻觉 ID 绕开
+        "- **B 类**：`evidence_content` 必须包含 `RC-\\d+` / `V-\\d+` / `EV-\\d+` / `FN-\\d+` 格式的真实规则号（从下表选），禁止只写规则描述。",
         "- **A 类**：`evidence_content` 必须包含 `[[页面名]]` 双方括号格式引用，**禁止使用《》书名号、「」、引号或其他符号**。页面名必须与下表精确一致。",
         "- **C 类**：竞品/行业/经验，必须在 `evidence_content` 里明确标注 `⚠️ 待确定` 或 `外部参考`，否则算 C 类违规。",
         "- **如果你想引用的规则/页面不在下表中**：降级为 C 类 + `⚠️ 待确定`，不要强行用 A/B 造假。",
