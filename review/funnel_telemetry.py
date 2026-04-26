@@ -203,19 +203,31 @@ def get_wiki_telemetry(workspace):
 
     放在这里 (而非 evidence_verify.py) 是因为它是 funnel 专用辅助, 没必要污染 evidence_verify
     的核心职责. 调用方在 emit 前后各一次, 用时才读.
+
+    2026-04-27 P0-A 修复: 走 content_loader.iter_wiki_files 同步外挂 canonical
+    wiki — 之前 glob workspace local 只看到 13 个 generated, 现在能看到 49 个
+    canonical, authority_distribution 不再空. wiki_mode 跟 _is_wiki_sparse 联动.
     """
     import os
-    import glob as glob_module
+    from content_loader import iter_wiki_files
     from review.evidence_verify import _wiki_authority_tier, _is_wiki_sparse, _META_WIKI_FILENAMES
 
     wiki_dir = os.path.join(workspace, "wiki")
-    if not os.path.isdir(wiki_dir):
+    md_files = iter_wiki_files(wiki_dir)
+    if not md_files:
         return {"mode": "sparse", "authority_distribution": {}}
 
-    dist: Counter[str] = Counter()
-    for p in glob_module.glob(os.path.join(wiki_dir, "*.md")):
-        if os.path.basename(p) in _META_WIKI_FILENAMES:
+    # 同 basename 去重 (workspace 优先, 跟 _build_wiki_index 一致), 防外挂 canonical
+    # 与 workspace 同名 page 重复计数 (e.g., PM 在 workspace 落地了一个 canonical 副本)
+    by_basename: dict[str, str] = {}
+    for p in md_files:
+        bn = os.path.basename(p)
+        if bn in _META_WIKI_FILENAMES:
             continue
+        by_basename[bn] = p  # 后到覆盖 (workspace local 在 iter 后部)
+
+    dist: Counter[str] = Counter()
+    for p in by_basename.values():
         dist[_wiki_authority_tier(p)] += 1
 
     mode = "sparse" if _is_wiki_sparse(wiki_dir) else "rich"

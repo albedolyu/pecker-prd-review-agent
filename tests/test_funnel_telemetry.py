@@ -296,6 +296,13 @@ class TestFunnelSummary:
 # ============================================================
 
 class TestGetWikiTelemetry:
+    @pytest.fixture(autouse=True)
+    def _disable_external_canonical(self, monkeypatch):
+        # 2026-04-27 P0-A: get_wiki_telemetry 现在走 iter_wiki_files (含外挂 canonical),
+        # 但本组测的是纯 workspace 行为. PM 机器默认外挂路径存在 → 测试被污染.
+        # 显式 env="" disable 外挂, 与 test_content_loader.TestLoadWikiPages 一致.
+        monkeypatch.setenv("PECKER_EXTERNAL_CANONICAL_WIKI", "")
+
     def test_missing_workspace(self, tmp_path):
         """wiki 目录不存在 → mode=sparse, distribution={}."""
         out = get_wiki_telemetry(str(tmp_path))

@@ -144,6 +144,11 @@ def _is_wiki_sparse(wiki_dir, min_business_files=3):
     2026-04-24 新增 pecker 自生成过滤: 避免"pecker 自己写了 11 个 wiki 然后判 rich"
     的循环误判(autoregressive bias)。
 
+    2026-04-27 P0-A 修复: 走 content_loader.iter_wiki_files 同步外挂 canonical wiki —
+    workspace 本身可能 sparse, 但外挂 49 个 canonical 在 worker prompt 已生效,
+    evidence_verify 也应认为 wiki rich. 否则 wiki_mode=sparse 触发宽松模式,
+    LLM NLI 永不触发 + 23 条 A 类被宽松降权掩盖真 fail.
+
     Args:
         wiki_dir: wiki 目录绝对路径
         min_business_files: 认定 "有业务上下文" 的最小业务 md 数量
@@ -151,9 +156,10 @@ def _is_wiki_sparse(wiki_dir, min_business_files=3):
     Returns:
         True 表示 sparse(走宽松模式), False 表示 rich(维持严格校验)
     """
-    if not os.path.isdir(wiki_dir):
+    from content_loader import iter_wiki_files
+    md_files = iter_wiki_files(wiki_dir)
+    if not md_files:
         return True
-    md_files = glob_module.glob(os.path.join(wiki_dir, "*.md"))
     business_files = [
         f for f in md_files
         if os.path.basename(f) not in _META_WIKI_FILENAMES
@@ -163,19 +169,25 @@ def _is_wiki_sparse(wiki_dir, min_business_files=3):
 
 
 def _build_wiki_index(wiki_dir):
-    """构建 wiki 文件索引（一次 glob，多次复用）。
+    """构建 wiki 文件索引(一次扫描, 多次复用)。
 
-    2026-04-24 新增 pecker 自生成过滤:pecker 上次评审的 C 类回写文件
-    (`sources: 0`)不应作为本次 A 类依据的验证权威(自回归偏见)。
+    2026-04-24 pecker 自生成过滤: pecker 上次评审的 C 类回写文件 (`sources: 0`)
+    不应作为本次 A 类依据的验证权威(自回归偏见)。
+
+    2026-04-27 P0-A 修复: 走 content_loader.iter_wiki_files 同步外挂 canonical
+    wiki — 让 49 个 canonical page 也进 index, 不再丢. workspace 本地 + 外挂同
+    basename 时 workspace 优先 (与 load_wiki_pages 语义一致).
     """
-    if not os.path.isdir(wiki_dir):
-        return {}
+    from content_loader import iter_wiki_files
+    md_files = iter_wiki_files(wiki_dir)
     index = {}
-    for wiki_file in glob_module.glob(os.path.join(wiki_dir, "*.md")):
+    for wiki_file in md_files:
         # 剔除 pecker 自动生成的 wiki,防自回归
         if _is_pecker_generated(wiki_file):
             continue
         basename = os.path.basename(wiki_file)
+        # 同 basename: 后到的覆盖 (iter_wiki_files 顺序: 外挂在先 / workspace 在后,
+        # workspace 自动覆盖外挂, 跟 load_wiki_pages 语义一致)
         index[basename] = wiki_file
     return index
 
@@ -468,8 +480,10 @@ def _find_rule_reference(evidence_content, rules_dir):
     if not os.path.isdir(rules_dir):
         return False
 
-    # 提取规则编号（如 RC-005, V-07, BMAD V-02 等）
-    rule_ids = re.findall(r"(?:RC-\d+|BMAD\s+V-\d+|V-\d+)", evidence_content)
+    # 提取规则编号（如 RC-005, V-07, EV-01, FN-09, BMAD V-02 等）
+    # 2026-04-27 P0-B: 扩 EV-/FN- 跟 schema regex 校准. 老 regex 漏 EV/FN, 让 worker
+    # 提交 EV-01/FN-09 的 B 类依据时被判 retracted (找不到), 强迫 worker 用 V-/RC- 幻觉绕过.
+    rule_ids = re.findall(r"(?:BMAD\s+V-\d+|(?:RC|V|EV|FN)-\d+)", evidence_content)
     if not rule_ids:
         # 没有明确规则编号，视为验证失败
         return False
@@ -510,7 +524,8 @@ def _verify_b_class_semantic(item, rules_dir):
         (passed: bool, note: str)
     """
     ev_content = item.get("evidence_content", "")
-    rule_ids = re.findall(r"(?:RC-\d+|V-\d+)", ev_content)
+    # 2026-04-27 P0-B: 扩 EV-/FN- 跟 schema regex 校准, 让 EV/FN 的 item 也走语义验证
+    rule_ids = re.findall(r"(?:RC|V|EV|FN)-\d+", ev_content)
     if not rule_ids or not os.path.isdir(rules_dir):
         return True, ""
 

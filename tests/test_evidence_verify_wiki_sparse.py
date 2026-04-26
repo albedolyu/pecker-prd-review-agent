@@ -35,6 +35,14 @@ from review.evidence_verify import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _disable_external_canonical(monkeypatch):
+    # 2026-04-27 P0-A: _is_wiki_sparse / _build_wiki_index 现在走 iter_wiki_files
+    # (含外挂 canonical), 但本文件测的是纯 workspace 行为. PM 机器默认外挂路径
+    # 存在 → 测试被污染. 显式 env="" disable 外挂.
+    monkeypatch.setenv("PECKER_EXTERNAL_CANONICAL_WIKI", "")
+
+
 # ============================================================
 # _is_wiki_sparse 判定
 # ============================================================

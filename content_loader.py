@@ -9,6 +9,14 @@ import re
 import subprocess
 from typing import Dict, List, Optional, Tuple
 
+# wiki 加载的元文件白名单 — 不计入业务 wiki 内容
+# (与 review.evidence_verify._META_WIKI_FILENAMES 保持语义一致, 但只在 wiki 模块内用,
+# 这里独立放是为了避免循环依赖: evidence_verify / funnel_telemetry 都要调
+# iter_wiki_files, 但都不能反向 import content_loader 之外的 review.* 符号)
+_WIKI_META_FILENAMES = frozenset({
+    "index.md", "log.md", "_scratchpad.md", "README.md", "TOC.md",
+})
+
 
 def load_prd_content(workspace: str) -> Tuple[Optional[str], List[str]]:
     """读取 workspace/prd/ 下所有 .md 文件,返回 (prd_content, prd_files)。
@@ -53,6 +61,57 @@ def _resolve_external_canonical_wiki() -> str:
     if candidate and os.path.isdir(candidate):
         return candidate
     return ""
+
+
+def iter_wiki_files(wiki_dir: str) -> List[str]:
+    """统一 wiki 文件枚举入口 — 返回所有 wiki 文件的绝对路径 list.
+
+    2026-04-27 P0-A 修法: 在此之前 evidence_verify 和 funnel_telemetry 都用
+    `glob(workspace/wiki/*.md)` 自己扫, 不读外挂 canonical wiki, 也不递归子目录.
+    导致即使 worker prompt 拿到 49 page (load_wiki_pages 已修), evidence_verify
+    仍按 13 个 local page 判 sparse, authority_distribution 空 dict.
+
+    本函数是 wiki 文件枚举的 single source of truth. caller (evidence_verify
+    / funnel_telemetry / load_wiki_pages) 各自决定怎么算 key (basename / 子路径)
+    + 怎么处理同名碰撞.
+
+    合并语义:
+      1. 先枚举外挂 canonical wiki (PECKER_EXTERNAL_CANONICAL_WIKI), os.walk 递归
+      2. 再枚举 workspace local wiki_dir, os.listdir 不递归 (workspace 一般是平铺)
+      3. 元文件 (index/log/_scratchpad/README/TOC) 跳过
+      4. 不在此处去重: caller 决定语义 (evidence_verify 用 basename 去重 +
+         workspace 优先; load_wiki_pages 用相对路径区分子目录同名)
+
+    Args:
+        wiki_dir: workspace/wiki 绝对路径. 不存在/不是目录时仅返回外挂部分.
+
+    Returns:
+        list of absolute file paths. 顺序: 先外挂 canonical (递归), 后 workspace local.
+        caller 关心顺序时记得后到的覆盖前到的.
+    """
+    paths: List[str] = []
+
+    # 1. 外挂 canonical (先加入, caller 同 key 应让 workspace 覆盖)
+    external_path = _resolve_external_canonical_wiki()
+    if external_path:
+        for root, _dirs, files in os.walk(external_path):
+            for wf in files:
+                if not wf.endswith(".md"):
+                    continue
+                if wf in _WIKI_META_FILENAMES:
+                    continue
+                paths.append(os.path.join(root, wf))
+
+    # 2. workspace local (后加入)
+    if os.path.isdir(wiki_dir):
+        for wf in os.listdir(wiki_dir):
+            if not wf.endswith(".md"):
+                continue
+            if wf in _WIKI_META_FILENAMES:
+                continue
+            paths.append(os.path.join(wiki_dir, wf))
+
+    return paths
 
 
 def load_wiki_pages(wiki_path: str) -> Dict[str, str]:
