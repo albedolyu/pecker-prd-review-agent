@@ -67,13 +67,24 @@ def load_wiki_pages(wiki_path: str) -> Dict[str, str]:
     wiki_pages: Dict[str, str] = {}
 
     # 先加载外挂 canonical (优先级低), workspace 内同名会覆盖
+    #
+    # P1 修法 (2026-04-26): 风鸟 wiki 是子目录结构 (api/ architecture/ concepts/ ...),
+    # 顶层只有 index.md / log.md (白名单 exclude), os.listdir 不递归会拿 0 page —
+    # calibration 数据 authority_distribution: {generated: 10, canonical: 0} 就是这个根因.
+    # 改用 os.walk 递归, key 用相对路径 (forward slash 归一) 避免子目录间同名碰撞.
     external_path = _resolve_external_canonical_wiki()
     if external_path:
-        for wf in os.listdir(external_path):
-            if wf.endswith(".md") and wf not in ("index.md", "log.md", "_scratchpad.md"):
-                wp = os.path.join(external_path, wf)
+        for root, _dirs, files in os.walk(external_path):
+            for wf in files:
+                if not wf.endswith(".md"):
+                    continue
+                if wf in ("index.md", "log.md", "_scratchpad.md"):
+                    continue
+                wp = os.path.join(root, wf)
+                rel = os.path.relpath(wp, external_path).replace(os.sep, "/")
+                key = rel[:-3]  # 去 .md 后缀
                 with open(wp, "r", encoding="utf-8", errors="replace") as f:
-                    wiki_pages[wf.replace(".md", "")] = f.read()
+                    wiki_pages[key] = f.read()
 
     # 再加载 workspace 内 wiki, 同名 key 覆盖外挂 (本地优先)
     if os.path.isdir(wiki_path):

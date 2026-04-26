@@ -140,6 +140,88 @@ class TestExternalCanonicalWiki:
         assert pages == {"real": "real"}
 
 
+class TestExternalCanonicalWikiRecursive:
+    """P1 防回归 (2026-04-26): 真读外挂 canonical wiki 路径,
+    验证子目录里的 page 真进 pool. 不 mock 文件系统 — 用 tmp_path 真创目录树.
+
+    背景: commit 6ce02bc 接通 PECKER_EXTERNAL_CANONICAL_WIKI 但 os.listdir 不递归,
+    风鸟 wiki 51 page 全在 api/ architecture/ concepts/ ... 子目录里, 顶层只有
+    index.md / log.md (白名单 exclude), 实际加载 0 page (calibration 数据
+    authority_distribution: {generated: 10, canonical: 0}).
+    """
+
+    def test_external_recurses_into_subdirs(self, tmp_path, monkeypatch):
+        # mock 风鸟 wiki 子目录结构: 51 个 .md 全在子目录里
+        ext = tmp_path / "external_canonical"
+        ext.mkdir()
+        # 顶层只有 index/log (会被 exclude)
+        (ext / "index.md").write_text("idx", encoding="utf-8")
+        (ext / "log.md").write_text("log", encoding="utf-8")
+        # 子目录: api/ (3) architecture/ (4) concepts/ (5) entities/ (10) modules/ (29)
+        for sub, count in [("api", 3), ("architecture", 4), ("concepts", 5),
+                            ("entities", 10), ("modules", 29)]:
+            (ext / sub).mkdir()
+            for i in range(count):
+                (ext / sub / f"page_{i}.md").write_text(
+                    f"---\nauthority: canonical\n---\n# {sub} page {i}\n",
+                    encoding="utf-8",
+                )
+
+        ws = tmp_path / "workspace_劳动仲裁"
+        wiki_dir = ws / "wiki"
+        wiki_dir.mkdir(parents=True)
+        # workspace local: 9 个平铺 contextual page
+        for i in range(9):
+            (wiki_dir / f"local_{i}.md").write_text(
+                f"---\nauthority: contextual\n---\n# local {i}\n",
+                encoding="utf-8",
+            )
+
+        monkeypatch.setenv("PECKER_EXTERNAL_CANONICAL_WIKI", str(ext))
+        pages = load_wiki_pages(str(wiki_dir))
+
+        # 51 外挂 canonical + 9 workspace local = 60
+        assert len(pages) >= 60, f"期望 >=60 page (51 ext + 9 ws), 实际 {len(pages)}"
+        # 抽样验证: 子目录的 page 真进 pool, 内容包含子目录信息
+        canonical_payload = [v for v in pages.values() if "authority: canonical" in v]
+        assert len(canonical_payload) >= 51, (
+            f"期望 51 canonical page, 实际 {len(canonical_payload)} — 说明子目录没递归"
+        )
+        # 抽样验证: 同名 page (e.g., page_0.md 出现在多个子目录) 不会被覆盖丢
+        page_0_payloads = [v for k, v in pages.items() if k.endswith("page_0")]
+        assert len(page_0_payloads) >= 5, (
+            f"期望 5 个 page_0.md (来自 5 个子目录), 实际 {len(page_0_payloads)} — "
+            "说明 key 命名没区分子目录, 同名互相覆盖"
+        )
+        # workspace local 仍然加载
+        local_keys = [k for k in pages if "local_" in k]
+        assert len(local_keys) == 9
+
+    def test_external_recurse_top_level_index_log_still_excluded(self, tmp_path, monkeypatch):
+        """子目录里的 index.md / log.md 也跳过, 防递归引入垃圾."""
+        ext = tmp_path / "external"
+        ext.mkdir()
+        (ext / "sub").mkdir()
+        (ext / "sub" / "index.md").write_text("sub-idx", encoding="utf-8")
+        (ext / "sub" / "log.md").write_text("sub-log", encoding="utf-8")
+        (ext / "sub" / "_scratchpad.md").write_text("sc", encoding="utf-8")
+        (ext / "sub" / "real_page.md").write_text("real", encoding="utf-8")
+
+        ws = tmp_path / "ws_wiki"
+        ws.mkdir()
+        monkeypatch.setenv("PECKER_EXTERNAL_CANONICAL_WIKI", str(ext))
+
+        pages = load_wiki_pages(str(ws))
+        real_keys = [k for k in pages if "real_page" in k]
+        assert len(real_keys) == 1, f"期望 1 个 real_page, 实际 {len(real_keys)}"
+        # 不应包含子目录 index/log/scratchpad — 取每个 key 的 basename 检查
+        for k in pages:
+            basename = k.replace("\\", "/").rsplit("/", 1)[-1]
+            assert basename not in ("index", "log", "_scratchpad"), (
+                f"子目录里的 index/log/scratchpad 应被 exclude, 但发现 key={k}"
+            )
+
+
 class TestSanitizeBranchName:
     def test_plain_ascii(self):
         assert sanitize_branch_name("feature-auth") == "feature-auth"
