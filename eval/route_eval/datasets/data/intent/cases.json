@@ -1,0 +1,300 @@
+{
+  "_metadata": {
+    "total": 55,
+    "distribution": {
+      "opus": 18,
+      "sonnet": 20,
+      "haiku": 12,
+      "reject": 5
+    },
+    "field_contract": {
+      "prd_name": "PRD 文件名 (有真实感, 不用 test1/test2)",
+      "user_instruction": "PM 真实会写的指令语言",
+      "expected_tier": "opus|sonnet|haiku|reject"
+    },
+    "labeling_principles": {
+      "opus": "复杂跨章节交叉 / AI Coding 友好度深度评估 / 多角色协议 / 涉及算法或架构评审",
+      "sonnet": "标准评审 / 常规 PRD / 中等复杂度",
+      "haiku": "lint / 格式检查 / 已评审 PRD 二次复核 / 不涉及内容语义",
+      "reject": "非 PRD 输入 (简历 / 合同 / 营销文案 / 咨询问题)"
+    },
+    "fallback_note": "全部 55 条由 PM 视角合理构造, 未从生产数据集采样. 路由模型上线前应跑实测对比验证."
+  },
+  "cases": [
+    {
+      "prd_name": "企业关联图谱 v3.0",
+      "user_instruction": "评审这份 PRD, 重点检查跨章节冲突 — 股权结构图谱与法人变更模块的实体定义是否一致, 找出所有需要 ETL 同步的字段不一致点",
+      "expected_tier": "opus"
+    },
+    {
+      "prd_name": "风火台 B 端推数 v2.5",
+      "user_instruction": "请深度检查这份 PRD 的 AI Coding 友好度, 对每个接口字段评估开发能否仅凭文档生成代码, 不需要读现有源码",
+      "expected_tier": "opus"
+    },
+    {
+      "prd_name": "司法风险扫描多端协议",
+      "user_instruction": "PRD 涉及 Web/H5/小程序/iOS/Android 五端的协议字段, 请验证五端协议字段命名/类型/枚举是否完全对齐, 列出所有不一致",
+      "expected_tier": "opus"
+    },
+    {
+      "prd_name": "企业搜索引擎 v4 — 模糊检索增强",
+      "user_instruction": "评审这份 PRD, 重点关注: (1) 检索意图分类与降级链 (2) 多模态字段 (人名/企业名/案号) 的精度差异 (3) 跨节点缓存一致性",
+      "expected_tier": "opus"
+    },
+    {
+      "prd_name": "企业图谱 GraphRAG 接入",
+      "user_instruction": "PRD 涉及 GraphRAG 检索 + 实体抽取 + 多跳推理, 请评审整体架构合理性, 指出哪些环节缺少 fallback 或会引入幻觉",
+      "expected_tier": "opus"
+    },
+    {
+      "prd_name": "企业风险评分模型 v2",
+      "user_instruction": "评审这份 PRD, 评分模型涉及 12 维度加权 + 时间衰减 + 行业修正系数, 请检查每个维度的口径定义是否清晰, 以及加权策略是否可由 AI Coding 实现",
+      "expected_tier": "opus"
+    },
+    {
+      "prd_name": "企业基础信息聚合 — 多数据源协议",
+      "user_instruction": "本 PRD 描述了 5 个上游数据源 (工商/司法/税务/海关/招投标) 的字段聚合规则, 请逐字段检查冲突解决策略和 SLA 降级方案",
+      "expected_tier": "opus"
+    },
+    {
+      "prd_name": "企业关联实体抽取规则 v3",
+      "user_instruction": "本 PRD 定义了 8 类实体抽取规则 (法人/股东/对外投资/分支机构/任职/竞品/合作方/客户), 请验证规则间是否有重叠或矛盾",
+      "expected_tier": "opus"
+    },
+    {
+      "prd_name": "反诈风险预警规则引擎",
+      "user_instruction": "评审这份 PRD, 风险规则涉及 30+ 条 must 规则 + 50+ 条 should 规则, 请检查规则间的优先级和冲突解决策略",
+      "expected_tier": "opus"
+    },
+    {
+      "prd_name": "企业全景报告生成模板",
+      "user_instruction": "本 PRD 描述了 LLM 报告生成 prompt 模板和章节结构, 请评审 prompt 工程是否合理, 是否能稳定输出符合 schema 的报告",
+      "expected_tier": "opus"
+    },
+    {
+      "prd_name": "司法文书 OCR + NER 流水线",
+      "user_instruction": "PRD 涉及 OCR + NER + 实体链接 + 关系抽取四阶段流水线, 请评审每阶段的指标定义和误差传递分析",
+      "expected_tier": "opus"
+    },
+    {
+      "prd_name": "企业订阅推送规则平台",
+      "user_instruction": "本 PRD 定义了订阅规则 DSL 语法 + 触发条件 + 推送渠道 + 频控策略, 请检查 DSL 表达力是否覆盖所有用户故事",
+      "expected_tier": "opus"
+    },
+    {
+      "prd_name": "企业关联图谱聚类算法",
+      "user_instruction": "PRD 涉及社区检测算法 (Louvain/Leiden) + 实体消歧 + 增量更新, 请评审算法选型理由和性能/精度 trade-off",
+      "expected_tier": "opus"
+    },
+    {
+      "prd_name": "企业风险归因解释生成",
+      "user_instruction": "本 PRD 要求对每个风险评分给出可解释的归因 (SHAP/LIME/规则路径), 请评审解释生成的 prompt + 评估指标",
+      "expected_tier": "opus"
+    },
+    {
+      "prd_name": "企业 vs 个人协议互通方案",
+      "user_instruction": "PRD 描述了企业账号与个人账号之间的协议 (权限/订阅/支付/积分), 请评审权限边界和数据隔离方案",
+      "expected_tier": "opus"
+    },
+    {
+      "prd_name": "供应链关联风险传导模型",
+      "user_instruction": "评审这份 PRD, 风险传导涉及多跳关联 (上下游 5 跳内) + 时间衰减 + 风险类型权重, 请检查算法和数据通路",
+      "expected_tier": "opus"
+    },
+    {
+      "prd_name": "跨境企业实体识别与合规检查",
+      "user_instruction": "PRD 涉及跨境实体识别 (境外母公司/VIE 结构) + 多司法辖区合规检查, 请评审合规规则覆盖度",
+      "expected_tier": "opus"
+    },
+    {
+      "prd_name": "AI 智能尽调报告生成系统",
+      "user_instruction": "本 PRD 涉及 Multi-Agent 编排 + 跨数据源 RAG + 多轮幻觉检测 + 报告 schema 校验, 请评审整体架构",
+      "expected_tier": "opus"
+    },
+    {
+      "prd_name": "企业基本信息查询 H5 改版",
+      "user_instruction": "评审这份 PRD",
+      "expected_tier": "sonnet"
+    },
+    {
+      "prd_name": "收藏夹分类管理",
+      "user_instruction": "请帮我评审这份 PRD",
+      "expected_tier": "sonnet"
+    },
+    {
+      "prd_name": "搜索历史记录持久化",
+      "user_instruction": "评审这份 PRD, 给出 must/should/could 分级建议",
+      "expected_tier": "sonnet"
+    },
+    {
+      "prd_name": "企业关注提醒消息中心",
+      "user_instruction": "请评审 PRD, 重点关注字段定义完整性",
+      "expected_tier": "sonnet"
+    },
+    {
+      "prd_name": "企业搜索热词推荐",
+      "user_instruction": "评审这份 PRD, 检查交互逻辑是否完整",
+      "expected_tier": "sonnet"
+    },
+    {
+      "prd_name": "企业详情页分享卡片",
+      "user_instruction": "请帮我评审一下分享卡片的 PRD",
+      "expected_tier": "sonnet"
+    },
+    {
+      "prd_name": "企业列表页排序与筛选",
+      "user_instruction": "评审 PRD, 检查筛选条件与排序规则是否清晰",
+      "expected_tier": "sonnet"
+    },
+    {
+      "prd_name": "个人中心页改版 v2",
+      "user_instruction": "请评审这份 PRD",
+      "expected_tier": "sonnet"
+    },
+    {
+      "prd_name": "企业搜索结果空态优化",
+      "user_instruction": "评审这份 PRD, 关注空态/异常态设计",
+      "expected_tier": "sonnet"
+    },
+    {
+      "prd_name": "企业认领流程改造",
+      "user_instruction": "请评审 PRD, 检查认领流程的状态机是否完整",
+      "expected_tier": "sonnet"
+    },
+    {
+      "prd_name": "反馈入口与表单优化",
+      "user_instruction": "评审这份 PRD",
+      "expected_tier": "sonnet"
+    },
+    {
+      "prd_name": "会员权益对比页 v2",
+      "user_instruction": "请帮我评审一下",
+      "expected_tier": "sonnet"
+    },
+    {
+      "prd_name": "企业搜索结果页广告位",
+      "user_instruction": "评审这份 PRD, 关注广告位的展示策略",
+      "expected_tier": "sonnet"
+    },
+    {
+      "prd_name": "登录注册流程简化",
+      "user_instruction": "请评审登录注册简化方案",
+      "expected_tier": "sonnet"
+    },
+    {
+      "prd_name": "付费订阅管理中心",
+      "user_instruction": "评审这份 PRD",
+      "expected_tier": "sonnet"
+    },
+    {
+      "prd_name": "企业风险订阅频次设置",
+      "user_instruction": "请评审订阅频次的 PRD",
+      "expected_tier": "sonnet"
+    },
+    {
+      "prd_name": "APP 启动页改造",
+      "user_instruction": "评审 PRD",
+      "expected_tier": "sonnet"
+    },
+    {
+      "prd_name": "企业 logo 上传规范",
+      "user_instruction": "请评审一下 PRD",
+      "expected_tier": "sonnet"
+    },
+    {
+      "prd_name": "企业评论与评分模块",
+      "user_instruction": "评审这份 PRD",
+      "expected_tier": "sonnet"
+    },
+    {
+      "prd_name": "分享卡片分享渠道扩展",
+      "user_instruction": "请评审分享渠道扩展 PRD",
+      "expected_tier": "sonnet"
+    },
+    {
+      "prd_name": "已评审 PRD 二次复核 — 劳动仲裁 v5.2",
+      "user_instruction": "这份 PRD 上周已评审过, 这次只检查格式和 markdown 排版",
+      "expected_tier": "haiku"
+    },
+    {
+      "prd_name": "仅做 markdown lint 检查",
+      "user_instruction": "帮我检查这份 PRD 的 markdown 格式, 不需要做内容评审",
+      "expected_tier": "haiku"
+    },
+    {
+      "prd_name": "段落标题层级检查",
+      "user_instruction": "检查 PRD 的标题层级是否规范 (h1/h2/h3 嵌套), 不评审内容",
+      "expected_tier": "haiku"
+    },
+    {
+      "prd_name": "术语用词统一性检查",
+      "user_instruction": "扫描全文术语用词是否统一, 例如「申请人/原告」是否混用, 不做语义评审",
+      "expected_tier": "haiku"
+    },
+    {
+      "prd_name": "链接有效性检查",
+      "user_instruction": "检查 PRD 中所有链接是否有效, 不做内容评审",
+      "expected_tier": "haiku"
+    },
+    {
+      "prd_name": "图表编号顺序检查",
+      "user_instruction": "检查 PRD 图/表编号是否按顺序递增, 不评审内容",
+      "expected_tier": "haiku"
+    },
+    {
+      "prd_name": "已通过审查 PRD 的 diff 复核",
+      "user_instruction": "这份 PRD 已通过完整审查, 这次只复核相对上版本的 diff 部分",
+      "expected_tier": "haiku"
+    },
+    {
+      "prd_name": "PRD 模板合规性扫描",
+      "user_instruction": "扫描 PRD 是否符合公司模板 (必填章节齐全), 不做语义评审",
+      "expected_tier": "haiku"
+    },
+    {
+      "prd_name": "已批准需求的 PRD 格式 lint",
+      "user_instruction": "需求已批准, 仅做发布前的格式 lint, 不做内容评审",
+      "expected_tier": "haiku"
+    },
+    {
+      "prd_name": "旧版 PRD 重新编排格式",
+      "user_instruction": "把旧版 PRD 的格式重新排版统一到新模板, 不做评审",
+      "expected_tier": "haiku"
+    },
+    {
+      "prd_name": "PRD 表格对齐检查",
+      "user_instruction": "扫描所有 markdown 表格的列对齐是否规范, 不做内容评审",
+      "expected_tier": "haiku"
+    },
+    {
+      "prd_name": "PRD 错别字快速扫",
+      "user_instruction": "扫一下错别字, 不做内容评审",
+      "expected_tier": "haiku"
+    },
+    {
+      "prd_name": "张三-产品经理简历 v2.pdf",
+      "user_instruction": "请评审这份 PRD",
+      "expected_tier": "reject"
+    },
+    {
+      "prd_name": "企业服务合同模板.docx",
+      "user_instruction": "评审一下这份合同",
+      "expected_tier": "reject"
+    },
+    {
+      "prd_name": "产品 H5 落地页营销文案",
+      "user_instruction": "帮我评审这份营销文案",
+      "expected_tier": "reject"
+    },
+    {
+      "prd_name": "PM 转岗后的 30/60/90 天计划",
+      "user_instruction": "评审一下我的计划",
+      "expected_tier": "reject"
+    },
+    {
+      "prd_name": "微信群里讨论的几个产品想法",
+      "user_instruction": "这是我的产品想法, 帮我评审",
+      "expected_tier": "reject"
+    }
+  ]
+}

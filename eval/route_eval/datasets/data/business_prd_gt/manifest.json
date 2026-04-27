@@ -1,0 +1,126 @@
+{
+  "_metadata": {
+    "description": "真实业务 PRD + ground truth, 3 个 workspace 覆盖结构层/AI Coding/跨章节冲突",
+    "version": "v1",
+    "created_at": "2026-04-27",
+    "fallback_note": "劳动仲裁直接复用 eval/test_cases/劳动仲裁_planted.json (10 must+2 non_issues, PM 已标注). 风鸟诉前调解 / 积分抵扣支付 暂无 planted GT, 从对应 workspace 历史 review_items 抽 must 项构造最小化 GT (>=5 条/PRD), 待 PM 后续标注完整版替换.",
+    "todo": [
+      "PM 补全 风鸟诉前调解 完整 GT (含 non_issues + 严重度分布 + 关键词)",
+      "PM 补全 积分抵扣支付 完整 GT (含 non_issues + 严重度分布 + 关键词)",
+      "PM 复核 劳动仲裁 _planted.json 是否需要更新到当前 PRD 版本"
+    ]
+  },
+  "entries": [
+    {
+      "workspace": "workspace-劳动仲裁",
+      "prd_path": "workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md",
+      "gt_path": "eval/test_cases/劳动仲裁_planted.json",
+      "gt_source": "planted_bugs",
+      "note": "10 must + 2 non_issues, PM 标注. 历史 baseline F1≈0.36 (Run 4), 本数据集是 capability 评测的主力."
+    },
+    {
+      "workspace": "workspace-fengniao-mediation",
+      "prd_path": "workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md",
+      "gt_path": null,
+      "gt_source": "inline_minimal",
+      "inline_ground_truth": [
+        {
+          "rule_id": "GT-FN-001",
+          "issue": "§2.1 Web UI 表格完全为空, 字段展示/筛选项/搜索项/导出均无内容, 开发无法实现",
+          "severity": "must",
+          "location": "2.1 Web UI",
+          "type": "缺失",
+          "keywords": ["Web UI", "表格", "为空", "字段", "筛选项"]
+        },
+        {
+          "rule_id": "GT-FN-002",
+          "issue": "§3 「立案信息ds表会新增一个字段以表明是否是诉前调解数据」未定义字段名/类型/取值语义/ES mapping",
+          "severity": "must",
+          "location": "3. 企业主页立案信息去除诉前调解数据",
+          "type": "缺失",
+          "keywords": ["新增字段", "字段名", "ES mapping", "tinyint", "默认值"]
+        },
+        {
+          "rule_id": "GT-FN-003",
+          "issue": "企业主页用新增标记字段过滤诉前调解, 查风险用 case_code 字符串包含「诉前调」过滤, 两套机制对同一数据可能产生不同展示",
+          "severity": "must",
+          "location": "3. 企业主页 vs 6.1 查风险",
+          "type": "不一致",
+          "keywords": ["过滤逻辑", "case_code", "标记字段", "字符串匹配", "不一致"]
+        },
+        {
+          "rule_id": "GT-FN-004",
+          "issue": "§4.1 PRD 列举了多种诉前调解案件混合模式 (单案号含裁判文书/两案号混合/多案号混合) 但未说明各模式在新分类下的归属规则",
+          "severity": "must",
+          "location": "4.1 司法案件样例",
+          "type": "歧义",
+          "keywords": ["案件模式", "归属规则", "混合案号", "粒度", "记录级"]
+        },
+        {
+          "rule_id": "GT-FN-005",
+          "issue": "§2.x 反复用「字段展示、筛选项、搜索项、导出，全都和立案信息UI保持一致」兜底, 但未在本 PRD 列出立案信息字段清单",
+          "severity": "must",
+          "location": "2.1 / 2.2 / 2.3 / 2.4",
+          "type": "缺失",
+          "keywords": ["立案信息", "字段清单", "兜底", "AI Coding"]
+        },
+        {
+          "rule_id": "GT-FN-006",
+          "issue": "企业主页读取 ds_risk_court_mediation 时, 各子章节均未声明 data_status=0 的有效性过滤条件",
+          "severity": "should",
+          "location": "第2节「企业主页增加诉前调解」",
+          "type": "缺失",
+          "keywords": ["data_status", "有效性过滤", "ds_risk_court_mediation"]
+        }
+      ]
+    },
+    {
+      "workspace": "workspace-points-payment",
+      "prd_path": "workspace-points-payment/prd/积分抵扣支付-v2.md",
+      "gt_path": null,
+      "gt_source": "inline_minimal",
+      "inline_ground_truth": [
+        {
+          "rule_id": "GT-PP-001",
+          "issue": "状态3 ASCII 原型显示 3 个档位 (¥1/¥5/全部兑换), 兑换弹窗交互细节文字写明 4 个档位 (¥1/¥5/¥10/全兑), 两处规格不一致",
+          "severity": "must",
+          "location": "状态3 ASCII 原型 + 兑换弹窗交互细节",
+          "type": "不一致",
+          "keywords": ["快捷档位", "ASCII 原型", "数量不一致", "实现歧义"]
+        },
+        {
+          "rule_id": "GT-PP-002",
+          "issue": "v2 核心交互依赖「积分即兑即用 (秒到账)」, 但现有积分中心兑换接口需 2-3 个工作日人工审核, 阻断后端开工",
+          "severity": "must",
+          "location": "风险与假设 → 待决策: 现有积分兑换审核机制",
+          "type": "阻断",
+          "keywords": ["即兑即用", "秒到账", "人工审核", "阻断", "前置依赖"]
+        },
+        {
+          "rule_id": "GT-PP-003",
+          "issue": "兑换后端接口契约未定义 (请求字段/响应字段/错误码/二次校验差异返回), AI 无法生成请求/响应代码",
+          "severity": "must",
+          "location": "核心规则 · 兑换与支付解耦 / 风险与假设 · 方案 A",
+          "type": "缺失",
+          "keywords": ["接口契约", "请求字段", "错误码", "AI Coding", "source=payment_checkout"]
+        },
+        {
+          "rule_id": "GT-PP-004",
+          "issue": "「假设」第4条说积分在支付成功回调中扣减, 但 v2 核心模型把兑换定义为独立 Phase 1 (即时扣减), 两处直接矛盾",
+          "severity": "must",
+          "location": "风险与假设 → 假设 (第4条)",
+          "type": "不一致",
+          "keywords": ["扣减时点", "支付回调", "Phase 1", "Phase 2", "兑换支付解耦"]
+        },
+        {
+          "rule_id": "GT-PP-005",
+          "issue": "积分抵扣引导行触发条件 (余额不足以支付订单) 缺少边界定义: 余额恰好等于订单金额时是否显示? 待支付订单部分扣减后余额变化是否实时刷新?",
+          "severity": "should",
+          "location": "v2 设计依据 / 积分抵扣引导行",
+          "type": "歧义",
+          "keywords": ["余额不足", "边界条件", "引导行", "实时刷新"]
+        }
+      ]
+    }
+  ]
+}

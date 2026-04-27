@@ -1,0 +1,15 @@
+{
+  "_metadata": {
+    "description": "侵权软件模板 PRD — 已知 sampling noise 大, 用于稳定性 (consistency) 校准而非 capability 评估",
+    "version": "v1",
+    "created_at": "2026-04-27",
+    "ref_memory": "pecker_template_prd_sampling_noise_2026_04_24 — 3 轮 worker overlap 14.5% (vs 真业务 76-84% baseline). 真根因: sampling noise 过大 + MAX_ITEMS 截断 + 后处理链 27→6 过滤过狠"
+  },
+  "entries": [
+    {
+      "workspace": "workspace-侵权软件",
+      "prd_path": "workspace-侵权软件/prd/侵权软件需求文档-v1.0-原始.md",
+      "note": "已知 sampling noise 大, 用于稳定性校准. 评测时不应用 capability 阈值 (recall/precision), 应跑 consistency >= 3 轮看 stable_rule_count / overlap_rate."
+    }
+  ]
+}

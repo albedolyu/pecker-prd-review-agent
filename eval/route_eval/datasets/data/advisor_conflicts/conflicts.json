@@ -1,0 +1,241 @@
+{
+  "_metadata": {
+    "current_count": 5,
+    "target_count": 15,
+    "todo": "PM 后补 10 条达到 N=15. 当前 5 条 ground_truth_resolution 全部 is_placeholder=true, 是基于真实 review_items 抽 worker_outputs + 合理猜测 resolution. PM 标注后请把 is_placeholder 改 false 并补充 conflict_severity_correct 的复核理由.",
+    "extraction_source": "5 条样本的 worker_outputs 抽自 workspace-{劳动仲裁,fengniao-mediation,points-payment}/output/review_items_*.json 的真实 worker 输出 (advisor_note 字段已剔除避免泄漏苍鹰决策结果)",
+    "schema_version": "v1",
+    "field_contract": {
+      "id": "样本 ID, ADVCONF-NNN",
+      "workspace": "对应 workspace 名",
+      "worker_outputs": "list[dict], 每项是 worker 提报的 review item, 至少含 id/dimension/issue/severity/rule_id/location",
+      "ground_truth_resolution": {
+        "merged": "list[str], 应保留的 item id (合并后)",
+        "dropped": "list[{id, reason}], 应丢弃的 item id 及理由",
+        "conflict_severity_correct": "must|should|could, 合并后的 severity 应该是什么"
+      },
+      "is_placeholder": "true=PM 未标注, false=PM 已标注"
+    }
+  },
+  "cases": [
+    {
+      "id": "ADVCONF-001",
+      "workspace": "workspace-劳动仲裁",
+      "scenario": "脱敏规则不一致 — 三 worker 不同维度报同一缺陷",
+      "worker_outputs": [
+        {
+          "id": "R-001",
+          "rule_id": "V-04",
+          "dimension": "结构层",
+          "location": "二、企业主页 / 1.4 脱敏规则",
+          "issue": "复姓+单字名脱敏结果歧义: 通用规则表述「姓+**」(固定两个星号), 但示例「欧阳修 → 欧阳*」只有一个星号, 规则与示例自相矛盾",
+          "severity": "must",
+          "evidence_type": "A"
+        },
+        {
+          "id": "R-004",
+          "rule_id": "V-08",
+          "dimension": "AI Coding 友好度",
+          "location": "二、企业主页 / 1.4 脱敏规则",
+          "issue": "脱敏规则字符数策略未明: AI 实现时无法判断应按字数填星还是固定双星, 需补全分支逻辑或统一示例",
+          "severity": "must",
+          "evidence_type": "A"
+        },
+        {
+          "id": "R-013",
+          "rule_id": "FN-01",
+          "dimension": "跨章节冲突",
+          "location": "二、企业主页 / 1.4 脱敏规则 (规则 vs 示例)",
+          "issue": "脱敏规则标题与示例直接矛盾, 复姓脱敏行为在两处不一致, 影响公告内容脱敏的级联实现",
+          "severity": "must",
+          "evidence_type": "A"
+        }
+      ],
+      "ground_truth_resolution": {
+        "merged": ["R-004"],
+        "dropped": [
+          {"id": "R-001", "reason": "与 R-004 同一缺陷 (脱敏规则与示例矛盾), R-004 给出更完整的修复策略 (按字数 vs 固定双星), 合并到 R-004"},
+          {"id": "R-013", "reason": "与 R-004 同一缺陷, R-013 角度是跨章节但本质问题相同, 合并避免重复追踪"}
+        ],
+        "conflict_severity_correct": "must",
+        "is_placeholder": true
+      }
+    },
+    {
+      "id": "ADVCONF-002",
+      "workspace": "workspace-fengniao-mediation",
+      "scenario": "Web UI 表格为空 — 五 worker 不同位置报同源缺陷, 部分 facet 不同部分汇总",
+      "worker_outputs": [
+        {
+          "id": "R-001",
+          "rule_id": "V-06",
+          "dimension": "结构层",
+          "location": "2.1 Web UI",
+          "issue": "企业主页诉前调解 Web UI 表格完全为空, 字段展示/筛选项/搜索项/导出均无内容",
+          "severity": "must"
+        },
+        {
+          "id": "R-002",
+          "rule_id": "V-06",
+          "dimension": "结构层",
+          "location": "2.2 移动端 UI",
+          "issue": "移动端 UI 三列截图位置全部为空, 未定义任何展示字段/筛选项/交互规格",
+          "severity": "could"
+        },
+        {
+          "id": "R-006",
+          "rule_id": "V-06",
+          "dimension": "结构层",
+          "location": "6.2.1/6.2.2 查风险",
+          "issue": "查风险查询条件章节缺失字段定义",
+          "severity": "must"
+        },
+        {
+          "id": "R-007",
+          "rule_id": "V-07",
+          "dimension": "AI Coding 友好度",
+          "location": "全文",
+          "issue": "横向汇总: 多处 UI 章节均未填充, AI 无法实现",
+          "severity": "must"
+        },
+        {
+          "id": "R-012",
+          "rule_id": "RC-005",
+          "dimension": "跨章节冲突",
+          "location": "全文",
+          "issue": "横向质量汇总: PRD 多处 UI 表格为空形成系统性缺失",
+          "severity": "must"
+        }
+      ],
+      "ground_truth_resolution": {
+        "merged": ["R-001", "R-002", "R-006"],
+        "dropped": [
+          {"id": "R-007", "reason": "横向汇总 (AI Coding 视角), 未提供超出 R-001/R-002/R-006 的新位置, 降级或合并"},
+          {"id": "R-012", "reason": "横向汇总 (跨章节视角), 未提供新信息, 合并避免冗余"}
+        ],
+        "conflict_severity_correct": "must",
+        "is_placeholder": true
+      }
+    },
+    {
+      "id": "ADVCONF-003",
+      "workspace": "workspace-points-payment",
+      "scenario": "快捷档位数量冲突 — 四 worker 同源重复, 一条最完整作权威",
+      "worker_outputs": [
+        {
+          "id": "R-001",
+          "rule_id": "V-04",
+          "dimension": "结构层",
+          "location": "状态3 ASCII 原型 + 兑换弹窗交互细节",
+          "issue": "ASCII 原型 3 档 vs 文字规格 4 档不一致, 实现歧义",
+          "severity": "must"
+        },
+        {
+          "id": "R-003",
+          "rule_id": "FN-02",
+          "dimension": "跨章节冲突",
+          "location": "状态3 vs 兑换弹窗",
+          "issue": "档位定义不一致, 跨段引用问题",
+          "severity": "must"
+        },
+        {
+          "id": "R-005",
+          "rule_id": "V-08",
+          "dimension": "AI Coding 友好度",
+          "location": "状态3 ASCII + 兑换弹窗 + 全兑文案 + dedupe",
+          "issue": "档位数量不一致 + 全兑文案是否拼金额未定义 + dedupe 规则缺失 (3 点冲突最全)",
+          "severity": "must"
+        },
+        {
+          "id": "R-007",
+          "rule_id": "RC-002",
+          "dimension": "结构层",
+          "location": "兑换弹窗交互细节",
+          "issue": "档位数量未明",
+          "severity": "should"
+        }
+      ],
+      "ground_truth_resolution": {
+        "merged": ["R-005"],
+        "dropped": [
+          {"id": "R-001", "reason": "与 R-005 同源, R-005 覆盖更广 (含全兑文案 + dedupe)"},
+          {"id": "R-003", "reason": "同源, R-005 是超集"},
+          {"id": "R-007", "reason": "同源 + severity 偏低, R-005 是 must 应作为权威"}
+        ],
+        "conflict_severity_correct": "must",
+        "is_placeholder": true
+      }
+    },
+    {
+      "id": "ADVCONF-004",
+      "workspace": "workspace-fengniao-mediation",
+      "scenario": "过滤逻辑不一致 — 三 worker 不同审视角度同一根因",
+      "worker_outputs": [
+        {
+          "id": "R-004",
+          "rule_id": "V-03",
+          "dimension": "前后矛盾",
+          "location": "3. 企业主页 vs 6.1 查风险",
+          "issue": "企业主页用新增标记字段过滤, 查风险用 case_code 字符串包含「诉前调」过滤, 两套机制可能产生不同展示",
+          "severity": "must"
+        },
+        {
+          "id": "R-014",
+          "rule_id": "RC-007",
+          "dimension": "AI Coding 友好度",
+          "location": "3 vs 6.1 (含 SQL 伪代码)",
+          "issue": "过滤机制不一致 + 多案号边界场景 (含诉前调案号 + 普通案号的混合记录) 判定逻辑未给出 SQL 伪代码",
+          "severity": "must"
+        },
+        {
+          "id": "R-016",
+          "rule_id": "RC-009",
+          "dimension": "数据一致性",
+          "location": "ES 索引使用",
+          "issue": "若两端共用同一 ES 索引, 应统一字段过滤; 当前两端独立可能引入数据漂移",
+          "severity": "should"
+        }
+      ],
+      "ground_truth_resolution": {
+        "merged": ["R-014"],
+        "dropped": [
+          {"id": "R-004", "reason": "与 R-014 同源, R-014 覆盖更广 (含 SQL 伪代码 + 多案号边界)"},
+          {"id": "R-016", "reason": "同源 + severity 偏低, 作为补充约束合并到 R-014"}
+        ],
+        "conflict_severity_correct": "must",
+        "is_placeholder": true
+      }
+    },
+    {
+      "id": "ADVCONF-005",
+      "workspace": "workspace-fengniao-mediation",
+      "scenario": "新增字段规格缺失 — 两 worker 不同维度同一缺陷, R-013 是超集",
+      "worker_outputs": [
+        {
+          "id": "R-003",
+          "rule_id": "V-06",
+          "dimension": "结构层",
+          "location": "3. 企业主页立案信息去除诉前调解数据",
+          "issue": "新增字段名/类型/取值/ES mapping 均未定义",
+          "severity": "must"
+        },
+        {
+          "id": "R-013",
+          "rule_id": "RC-006",
+          "dimension": "数据一致性",
+          "location": "3 + 历史回填 + ES 全量重跑",
+          "issue": "新增字段规格缺失 (字段名/类型/默认值/回填策略/ES mapping/全量重跑判断) 全方位未定义",
+          "severity": "must"
+        }
+      ],
+      "ground_truth_resolution": {
+        "merged": ["R-013"],
+        "dropped": [
+          {"id": "R-003", "reason": "R-013 是 R-003 的超集 (额外含历史回填规则 + ES 全量重跑判断)"}
+        ],
+        "conflict_severity_correct": "must",
+        "is_placeholder": true
+      }
+    }
+  ]
+}

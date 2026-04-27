@@ -1,0 +1,976 @@
+{
+  "_metadata": {
+    "total": 60,
+    "real_count": 30,
+    "fake_count": 30,
+    "construction_method_distribution": {
+      "real": 30,
+      "fake_ref": 8,
+      "fake_content": 8,
+      "paraphrase_only": 7,
+      "ungrounded_inference": 7
+    },
+    "field_contract": {
+      "id": "HAL-{REAL|FAKE-{REF|CONTENT}|PARA|INFER}-NNN",
+      "item": {
+        "issue": "...",
+        "evidence_content": "[[页]] ...",
+        "evidence_type": "B",
+        "topic": "..."
+      },
+      "wiki_pages": "dict[str, str], 每条 wiki 内容 <= 500 字符",
+      "is_hallucination": "true=应被判幻觉, false=真实依据",
+      "construction_method": "real|fake_ref|fake_content|paraphrase_only|ungrounded_inference",
+      "expected_verdict": "entail|contradict|neutral, NLI scorer 期望输出"
+    },
+    "fallback_note": "真依据 30 条非从 verified_with_caveat 反向构造, 是直接构造合理的 (PRD-issue + wiki-页) 对. 假依据按 4 种构造手法等量分布. wiki_pages 内容是最小化片段."
+  },
+  "cases": [
+    {
+      "id": "HAL-REAL-001",
+      "item": {
+        "issue": "复姓人员脱敏应按名字字数填星, 不应固定双星, [[脱敏规则.md]] 已明确",
+        "evidence_content": "[[脱敏规则.md]] 复姓脱敏: 欧阳修→欧阳*, 欧阳瑞瑞→欧阳**, 按名字字数填星",
+        "evidence_type": "B",
+        "topic": "脱敏规则"
+      },
+      "wiki_pages": {
+        "脱敏规则.md": "复姓脱敏: 欧阳修→欧阳*, 欧阳瑞瑞→欧阳**, 按名字字数填星"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-002",
+      "item": {
+        "issue": "企业主页与查风险对当事人搜索精度要求不同, 见 [[企业搜索.md]]",
+        "evidence_content": "[[企业搜索.md]] 当事人字段在企业主页支持精确+模糊搜索, 在查风险按人名/企业名分别处理",
+        "evidence_type": "B",
+        "topic": "企业搜索"
+      },
+      "wiki_pages": {
+        "企业搜索.md": "当事人字段在企业主页支持精确+模糊搜索, 在查风险按人名/企业名分别处理"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-003",
+      "item": {
+        "issue": "诉前调解 PRD 引用立案信息字段时应列清单, [[立案信息字段清单.md]] 给出完整 12 字段",
+        "evidence_content": "[[立案信息字段清单.md]] ds_risk_court_lian 表字段: case_code/case_name/case_type/court_name 等 12 字段",
+        "evidence_type": "B",
+        "topic": "立案信息字段"
+      },
+      "wiki_pages": {
+        "立案信息字段清单.md": "ds_risk_court_lian 表字段: case_code/case_name/case_type/court_name 等 12 字段"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-004",
+      "item": {
+        "issue": "新增字段需在 ES mapping 同步声明, [[ES_index_mapping.md]] 含历史字段示例",
+        "evidence_content": "[[ES_index_mapping.md]] ds_risk_court_lian 在 ES 中的 mapping: case_code keyword, open_time date",
+        "evidence_type": "B",
+        "topic": "ES mapping"
+      },
+      "wiki_pages": {
+        "ES_index_mapping.md": "ds_risk_court_lian 在 ES 中的 mapping: case_code keyword, open_time date"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-005",
+      "item": {
+        "issue": "企业主页章节漏写 data_status=0 过滤, [[data_status规约.md]] 已规定全模块统一",
+        "evidence_content": "[[data_status规约.md]] data_status=0 表示有效, =1 表示已删除, 主表/ent 表过滤须保持一致",
+        "evidence_type": "B",
+        "topic": "data_status"
+      },
+      "wiki_pages": {
+        "data_status规约.md": "data_status=0 表示有效, =1 表示已删除, 主表/ent 表过滤须保持一致"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-006",
+      "item": {
+        "issue": "case_code 字符串匹配「诉前调」存在歧义, [[案号识别正则.md]] 给出标准正则",
+        "evidence_content": "[[案号识别正则.md]] 诉前调解案号匹配: 含「诉前调」字样, 例 (2023)陕1024诉前调书348号",
+        "evidence_type": "B",
+        "topic": "案号正则"
+      },
+      "wiki_pages": {
+        "案号识别正则.md": "诉前调解案号匹配: 含「诉前调」字样, 例 (2023)陕1024诉前调书348号"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-007",
+      "item": {
+        "issue": "v2 PRD 状态3 ASCII 仅 3 档与标准 4 档不一致, [[积分兑换交互规范.md]] 是基线",
+        "evidence_content": "[[积分兑换交互规范.md]] 快捷档位: ¥1 / ¥5 / ¥10 / 全兑 4 档为标准 (2026 春季版)",
+        "evidence_type": "B",
+        "topic": "快捷档位"
+      },
+      "wiki_pages": {
+        "积分兑换交互规范.md": "快捷档位: ¥1 / ¥5 / ¥10 / 全兑 4 档为标准 (2026 春季版)"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-008",
+      "item": {
+        "issue": "v2 假设「秒到账」与现有 [[积分兑换流程.md]] 的 T+2 审核流程冲突",
+        "evidence_content": "[[积分兑换流程.md]] 积分兑换接口需 2-3 工作日人工审核, 余额 T+2 到账",
+        "evidence_type": "B",
+        "topic": "即兑即用"
+      },
+      "wiki_pages": {
+        "积分兑换流程.md": "积分兑换接口需 2-3 工作日人工审核, 余额 T+2 到账"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-009",
+      "item": {
+        "issue": "v2 新增 source=payment_checkout 在 [[积分流水规范.md]] 已收录",
+        "evidence_content": "[[积分流水规范.md]] 积分流水 source 字段枚举: rebate / activity / refund / payment_checkout (新增)",
+        "evidence_type": "B",
+        "topic": "source 标记"
+      },
+      "wiki_pages": {
+        "积分流水规范.md": "积分流水 source 字段枚举: rebate / activity / refund / payment_checkout (新增)"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-010",
+      "item": {
+        "issue": "v2 假设第4条要求「支付回调中扣减」与 [[支付架构.md]] Phase 1 扣减不符",
+        "evidence_content": "[[支付架构.md]] 兑换 (Phase 1) 与支付 (Phase 2) 解耦, 积分扣减在 Phase 1 完成",
+        "evidence_type": "B",
+        "topic": "Phase 隔离"
+      },
+      "wiki_pages": {
+        "支付架构.md": "兑换 (Phase 1) 与支付 (Phase 2) 解耦, 积分扣减在 Phase 1 完成"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-011",
+      "item": {
+        "issue": "劳动仲裁 PRD §4 全文未定义 UI 四态, [[前端 UI 状态规约.md]] 是必要约束",
+        "evidence_content": "[[前端 UI 状态规约.md]] 所有列表页必须定义: 加载中/请求失败/筛选无结果/空数据 四态",
+        "evidence_type": "B",
+        "topic": "UI 四态"
+      },
+      "wiki_pages": {
+        "前端 UI 状态规约.md": "所有列表页必须定义: 加载中/请求失败/筛选无结果/空数据 四态"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-012",
+      "item": {
+        "issue": "字段类型不一致已记录在 [[时间字段格式规约.md]], 前端需兜底处理",
+        "evidence_content": "[[时间字段格式规约.md]] open_time 字段在主表为 datetime, ent 表为 date, 类型不一致需前端兜底",
+        "evidence_type": "B",
+        "topic": "时间格式"
+      },
+      "wiki_pages": {
+        "时间字段格式规约.md": "open_time 字段在主表为 datetime, ent 表为 date, 类型不一致需前端兜底"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-013",
+      "item": {
+        "issue": "PRD §3.3 未说明非结构化脱敏方法, [[脱敏识别方法.md]] 给出标准 NER 方案",
+        "evidence_content": "[[脱敏识别方法.md]] 公告内容人名脱敏使用 NER 识别, 模型 base 是 bert-zh-name",
+        "evidence_type": "B",
+        "topic": "脱敏 NLP"
+      },
+      "wiki_pages": {
+        "脱敏识别方法.md": "公告内容人名脱敏使用 NER 识别, 模型 base 是 bert-zh-name"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-014",
+      "item": {
+        "issue": "PRD §3.7 写「切换从晚到早」与默认方向相同实为笔误, 见 [[列表排序约定.md]]",
+        "evidence_content": "[[列表排序约定.md]] 开庭公告默认按 open_time desc, 切换为 asc 由用户主动选择",
+        "evidence_type": "B",
+        "topic": "排序规则"
+      },
+      "wiki_pages": {
+        "列表排序约定.md": "开庭公告默认按 open_time desc, 切换为 asc 由用户主动选择"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-015",
+      "item": {
+        "issue": "§4.2 写「仲裁机构」与 §3.6/§4.3 「发布机构」三处不一致, [[司法机构命名.md]]",
+        "evidence_content": "[[司法机构命名.md]] 公告发布机构在筛选项/列表/详情页统一称「发布机构」, 不用「仲裁机构」",
+        "evidence_type": "B",
+        "topic": "机构名称"
+      },
+      "wiki_pages": {
+        "司法机构命名.md": "公告发布机构在筛选项/列表/详情页统一称「发布机构」, 不用「仲裁机构」"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-016",
+      "item": {
+        "issue": "§2.2 多处「A或B」未说明优先级, [[字段映射策略.md]] 已给出完整降级链",
+        "evidence_content": "[[字段映射策略.md]] ent 表与主表同名字段: ent 优先, 主表降级; 空值时跨表回退",
+        "evidence_type": "B",
+        "topic": "字段映射"
+      },
+      "wiki_pages": {
+        "字段映射策略.md": "ent 表与主表同名字段: ent 优先, 主表降级; 空值时跨表回退"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-017",
+      "item": {
+        "issue": "§5.2 数据导出仅一句话缺导出上限/格式/权限, [[数据导出规约.md]] 是基线",
+        "evidence_content": "[[数据导出规约.md]] 标准导出: 上限 10000 行, csv/xlsx, 需 PRD_DOWNLOAD 权限",
+        "evidence_type": "B",
+        "topic": "导出限制"
+      },
+      "wiki_pages": {
+        "数据导出规约.md": "标准导出: 上限 10000 行, csv/xlsx, 需 PRD_DOWNLOAD 权限"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-018",
+      "item": {
+        "issue": "§4.1 多案号混合记录归属规则未说明, [[司法案件案号粒度.md]] 已规定案号粒度",
+        "evidence_content": "[[司法案件案号粒度.md]] 一条 unique_id 含多案号时, 按案号粒度分类 (非记录级)",
+        "evidence_type": "B",
+        "topic": "混合案号"
+      },
+      "wiki_pages": {
+        "司法案件案号粒度.md": "一条 unique_id 含多案号时, 按案号粒度分类 (非记录级)"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-019",
+      "item": {
+        "issue": "§3.6 vs §4.3 排序方向矛盾, [[地区码排序规约.md]] 给出两处不同理由",
+        "evidence_content": "[[地区码排序规约.md]] area_code 排序: 列表页按数量降序, 筛选项按 code asc",
+        "evidence_type": "B",
+        "topic": "area_code 排序"
+      },
+      "wiki_pages": {
+        "地区码排序规约.md": "area_code 排序: 列表页按数量降序, 筛选项按 code asc"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-020",
+      "item": {
+        "issue": "§4.4 弹窗字段写「具体见 figma」无法独立支撑开发, 见 [[详情弹窗布局规约.md]]",
+        "evidence_content": "[[详情弹窗布局规约.md]] 详情弹窗字段必须在 PRD 列出, 不可仅引用 figma",
+        "evidence_type": "B",
+        "topic": "详情弹窗"
+      },
+      "wiki_pages": {
+        "详情弹窗布局规约.md": "详情弹窗字段必须在 PRD 列出, 不可仅引用 figma"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-021",
+      "item": {
+        "issue": "§3.1.1 处理逻辑未定义, [[多表过滤逻辑.md]] 规定 AND 语义",
+        "evidence_content": "[[多表过滤逻辑.md]] 主表与 ent 表 data_status 不一致时按 AND 过滤 (两表都 =0 才有效)",
+        "evidence_type": "B",
+        "topic": "data_status AND/OR"
+      },
+      "wiki_pages": {
+        "多表过滤逻辑.md": "主表与 ent 表 data_status 不一致时按 AND 过滤 (两表都 =0 才有效)"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-022",
+      "item": {
+        "issue": "GT-FN-002 提及字段缺失但未含回填, [[历史数据回填规约.md]] 是补集",
+        "evidence_content": "[[历史数据回填规约.md]] 新增 is_mediation 字段后, 历史数据按 case_code LIKE '%诉前调%' 回刷",
+        "evidence_type": "B",
+        "topic": "回填策略"
+      },
+      "wiki_pages": {
+        "历史数据回填规约.md": "新增 is_mediation 字段后, 历史数据按 case_code LIKE '%诉前调%' 回刷"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-023",
+      "item": {
+        "issue": "PRD 缺 dedupe 规则, [[档位去重规则.md]] 给出 maxExchangeYuan 边界",
+        "evidence_content": "[[档位去重规则.md]] 当 maxExchangeYuan ≤ ¥1 时仅展示「全部兑换」单档, 避免档位冗余",
+        "evidence_type": "B",
+        "topic": "dedupe 档位"
+      },
+      "wiki_pages": {
+        "档位去重规则.md": "当 maxExchangeYuan ≤ ¥1 时仅展示「全部兑换」单档, 避免档位冗余"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-024",
+      "item": {
+        "issue": "GT-PP-005 提到边界, [[支付订单边界.md]] 明确恰好等于不显示",
+        "evidence_content": "[[支付订单边界.md]] 余额恰好 = 订单金额时不显示积分引导行 (恰好满足非「不足」)",
+        "evidence_type": "B",
+        "topic": "订单边界"
+      },
+      "wiki_pages": {
+        "支付订单边界.md": "余额恰好 = 订单金额时不显示积分引导行 (恰好满足非「不足」)"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-025",
+      "item": {
+        "issue": "侵权软件 §1.1 定义四种符号但全文未严格使用, [[PRD 术语规范.md]] 是强制约束",
+        "evidence_content": "[[PRD 术语规范.md]] (xx) 表临时备注, {xx} 表占位符, 【xx】表强调, 《xx》表引用文档",
+        "evidence_type": "B",
+        "topic": "术语约定"
+      },
+      "wiki_pages": {
+        "PRD 术语规范.md": "(xx) 表临时备注, {xx} 表占位符, 【xx】表强调, 《xx》表引用文档"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-026",
+      "item": {
+        "issue": "侵权软件 §1.3.1 写「不适用」与 §1.3.3 工信部通报数据源矛盾, [[合规披露规约.md]]",
+        "evidence_content": "[[合规披露规约.md]] 数据源含工信部通报时, 必须在「法规依据」声明合规披露要求",
+        "evidence_type": "B",
+        "topic": "法规依据"
+      },
+      "wiki_pages": {
+        "合规披露规约.md": "数据源含工信部通报时, 必须在「法规依据」声明合规披露要求"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-027",
+      "item": {
+        "issue": "§4.1 混合案号归属规则不明, [[诉前调解分类粒度.md]] 给出案号粒度结论",
+        "evidence_content": "[[诉前调解分类粒度.md]] 诉前调解分类按案号粒度, 一条记录可同时归两类",
+        "evidence_type": "B",
+        "topic": "分类粒度"
+      },
+      "wiki_pages": {
+        "诉前调解分类粒度.md": "诉前调解分类按案号粒度, 一条记录可同时归两类"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-028",
+      "item": {
+        "issue": "GT-PP-003 缺接口契约, [[积分兑换接口契约.md]] 是完整字段表",
+        "evidence_content": "[[积分兑换接口契约.md]] 兑换接口请求字段: orderId/source/exchangeYuan; 响应: actualYuan/errorCode",
+        "evidence_type": "B",
+        "topic": "接口契约"
+      },
+      "wiki_pages": {
+        "积分兑换接口契约.md": "兑换接口请求字段: orderId/source/exchangeYuan; 响应: actualYuan/errorCode"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-029",
+      "item": {
+        "issue": "§3.6 vs §4.3 排序矛盾根因是默认值未约定, [[筛选项排序规约.md]] 给出默认值",
+        "evidence_content": "[[筛选项排序规约.md]] 筛选项默认按字典序; 数量驱动排序需明示「按数量降序」",
+        "evidence_type": "B",
+        "topic": "筛选项排序"
+      },
+      "wiki_pages": {
+        "筛选项排序规约.md": "筛选项默认按字典序; 数量驱动排序需明示「按数量降序」"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-REAL-030",
+      "item": {
+        "issue": "脱敏方法应明确模型, [[中文 NER 模型选型.md]] 给出推荐+准确率",
+        "evidence_content": "[[中文 NER 模型选型.md]] 公告内容人名识别推荐 bert-zh-name v3, 准确率 92%",
+        "evidence_type": "B",
+        "topic": "人名 NER 模型"
+      },
+      "wiki_pages": {
+        "中文 NER 模型选型.md": "公告内容人名识别推荐 bert-zh-name v3, 准确率 92%"
+      },
+      "is_hallucination": false,
+      "construction_method": "real",
+      "expected_verdict": "entail",
+      "rationale": "evidence_content 引用真实存在的 wiki 页, 内容能被该 wiki 直接 entail"
+    },
+    {
+      "id": "HAL-FAKE-REF-001",
+      "item": {
+        "issue": "PRD 中关于「脱敏规则」的描述与 wiki 不符",
+        "evidence_content": "[[脱敏标准化指南.md]] 该页定义了 脱敏规则 的规范",
+        "evidence_type": "B",
+        "topic": "脱敏规则"
+      },
+      "wiki_pages": {
+        "实际存在的页_脱敏规则.md": "这是 脱敏规则 相关的真实 wiki 内容, 但页名是 实际存在的页_脱敏规则.md 而非引用中那个"
+      },
+      "is_hallucination": true,
+      "construction_method": "fake_ref",
+      "expected_verdict": "contradict",
+      "rationale": "引用 [[脱敏标准化指南.md]] 在 wiki_pages 中不存在, 凭空编造的引用"
+    },
+    {
+      "id": "HAL-FAKE-REF-002",
+      "item": {
+        "issue": "PRD 中关于「ES mapping」的描述与 wiki 不符",
+        "evidence_content": "[[ES索引最佳实践.md]] 该页定义了 ES mapping 的规范",
+        "evidence_type": "B",
+        "topic": "ES mapping"
+      },
+      "wiki_pages": {
+        "实际存在的页_ES mapping.md": "这是 ES mapping 相关的真实 wiki 内容, 但页名是 实际存在的页_ES mapping.md 而非引用中那个"
+      },
+      "is_hallucination": true,
+      "construction_method": "fake_ref",
+      "expected_verdict": "contradict",
+      "rationale": "引用 [[ES索引最佳实践.md]] 在 wiki_pages 中不存在, 凭空编造的引用"
+    },
+    {
+      "id": "HAL-FAKE-REF-003",
+      "item": {
+        "issue": "PRD 中关于「案号正则」的描述与 wiki 不符",
+        "evidence_content": "[[案号匹配标准库.md]] 该页定义了 案号正则 的规范",
+        "evidence_type": "B",
+        "topic": "案号正则"
+      },
+      "wiki_pages": {
+        "实际存在的页_案号正则.md": "这是 案号正则 相关的真实 wiki 内容, 但页名是 实际存在的页_案号正则.md 而非引用中那个"
+      },
+      "is_hallucination": true,
+      "construction_method": "fake_ref",
+      "expected_verdict": "contradict",
+      "rationale": "引用 [[案号匹配标准库.md]] 在 wiki_pages 中不存在, 凭空编造的引用"
+    },
+    {
+      "id": "HAL-FAKE-REF-004",
+      "item": {
+        "issue": "PRD 中关于「快捷档位」的描述与 wiki 不符",
+        "evidence_content": "[[支付档位2025春季版.md]] 该页定义了 快捷档位 的规范",
+        "evidence_type": "B",
+        "topic": "快捷档位"
+      },
+      "wiki_pages": {
+        "实际存在的页_快捷档位.md": "这是 快捷档位 相关的真实 wiki 内容, 但页名是 实际存在的页_快捷档位.md 而非引用中那个"
+      },
+      "is_hallucination": true,
+      "construction_method": "fake_ref",
+      "expected_verdict": "contradict",
+      "rationale": "引用 [[支付档位2025春季版.md]] 在 wiki_pages 中不存在, 凭空编造的引用"
+    },
+    {
+      "id": "HAL-FAKE-REF-005",
+      "item": {
+        "issue": "PRD 中关于「即兑即用」的描述与 wiki 不符",
+        "evidence_content": "[[积分实时到账方案.md]] 该页定义了 即兑即用 的规范",
+        "evidence_type": "B",
+        "topic": "即兑即用"
+      },
+      "wiki_pages": {
+        "实际存在的页_即兑即用.md": "这是 即兑即用 相关的真实 wiki 内容, 但页名是 实际存在的页_即兑即用.md 而非引用中那个"
+      },
+      "is_hallucination": true,
+      "construction_method": "fake_ref",
+      "expected_verdict": "contradict",
+      "rationale": "引用 [[积分实时到账方案.md]] 在 wiki_pages 中不存在, 凭空编造的引用"
+    },
+    {
+      "id": "HAL-FAKE-REF-006",
+      "item": {
+        "issue": "PRD 中关于「Phase 隔离」的描述与 wiki 不符",
+        "evidence_content": "[[支付Phase架构白皮书.md]] 该页定义了 Phase 隔离 的规范",
+        "evidence_type": "B",
+        "topic": "Phase 隔离"
+      },
+      "wiki_pages": {
+        "实际存在的页_Phase 隔离.md": "这是 Phase 隔离 相关的真实 wiki 内容, 但页名是 实际存在的页_Phase 隔离.md 而非引用中那个"
+      },
+      "is_hallucination": true,
+      "construction_method": "fake_ref",
+      "expected_verdict": "contradict",
+      "rationale": "引用 [[支付Phase架构白皮书.md]] 在 wiki_pages 中不存在, 凭空编造的引用"
+    },
+    {
+      "id": "HAL-FAKE-REF-007",
+      "item": {
+        "issue": "PRD 中关于「UI 四态」的描述与 wiki 不符",
+        "evidence_content": "[[前端组件标准库.md]] 该页定义了 UI 四态 的规范",
+        "evidence_type": "B",
+        "topic": "UI 四态"
+      },
+      "wiki_pages": {
+        "实际存在的页_UI 四态.md": "这是 UI 四态 相关的真实 wiki 内容, 但页名是 实际存在的页_UI 四态.md 而非引用中那个"
+      },
+      "is_hallucination": true,
+      "construction_method": "fake_ref",
+      "expected_verdict": "contradict",
+      "rationale": "引用 [[前端组件标准库.md]] 在 wiki_pages 中不存在, 凭空编造的引用"
+    },
+    {
+      "id": "HAL-FAKE-REF-008",
+      "item": {
+        "issue": "PRD 中关于「时间格式」的描述与 wiki 不符",
+        "evidence_content": "[[datetime统一规范.md]] 该页定义了 时间格式 的规范",
+        "evidence_type": "B",
+        "topic": "时间格式"
+      },
+      "wiki_pages": {
+        "实际存在的页_时间格式.md": "这是 时间格式 相关的真实 wiki 内容, 但页名是 实际存在的页_时间格式.md 而非引用中那个"
+      },
+      "is_hallucination": true,
+      "construction_method": "fake_ref",
+      "expected_verdict": "contradict",
+      "rationale": "引用 [[datetime统一规范.md]] 在 wiki_pages 中不存在, 凭空编造的引用"
+    },
+    {
+      "id": "HAL-FAKE-CONTENT-001",
+      "item": {
+        "issue": "根据 wiki, 复姓脱敏固定使用三个星号 (欧阳修→欧阳***)",
+        "evidence_content": "[[脱敏规则.md]] 复姓脱敏固定使用三个星号 (欧阳修→欧阳***)",
+        "evidence_type": "B",
+        "topic": "脱敏规则"
+      },
+      "wiki_pages": {
+        "脱敏规则.md": "复姓脱敏按名字字数填星 (欧阳修→欧阳*)"
+      },
+      "is_hallucination": true,
+      "construction_method": "fake_content",
+      "expected_verdict": "contradict",
+      "rationale": "wiki 实际「复姓脱敏按名字字数填星 (欧阳修→欧阳*)」, item 声称「复姓脱敏固定使用三个星号 (欧阳修→欧阳***)」, 内容编造"
+    },
+    {
+      "id": "HAL-FAKE-CONTENT-002",
+      "item": {
+        "issue": "根据 wiki, 标准 5 档: ¥1/¥3/¥5/¥10/全兑",
+        "evidence_content": "[[积分兑换交互规范.md]] 标准 5 档: ¥1/¥3/¥5/¥10/全兑",
+        "evidence_type": "B",
+        "topic": "快捷档位"
+      },
+      "wiki_pages": {
+        "积分兑换交互规范.md": "标准 4 档: ¥1/¥5/¥10/全兑"
+      },
+      "is_hallucination": true,
+      "construction_method": "fake_content",
+      "expected_verdict": "contradict",
+      "rationale": "wiki 实际「标准 4 档: ¥1/¥5/¥10/全兑」, item 声称「标准 5 档: ¥1/¥3/¥5/¥10/全兑」, 内容编造"
+    },
+    {
+      "id": "HAL-FAKE-CONTENT-003",
+      "item": {
+        "issue": "根据 wiki, data_status=1 有效, =0 待审核",
+        "evidence_content": "[[data_status规约.md]] data_status=1 有效, =0 待审核",
+        "evidence_type": "B",
+        "topic": "data_status"
+      },
+      "wiki_pages": {
+        "data_status规约.md": "data_status=0 有效, =1 已删除"
+      },
+      "is_hallucination": true,
+      "construction_method": "fake_content",
+      "expected_verdict": "contradict",
+      "rationale": "wiki 实际「data_status=0 有效, =1 已删除」, item 声称「data_status=1 有效, =0 待审核」, 内容编造"
+    },
+    {
+      "id": "HAL-FAKE-CONTENT-004",
+      "item": {
+        "issue": "根据 wiki, Phase 2 完成积分扣减",
+        "evidence_content": "[[支付架构.md]] Phase 2 完成积分扣减",
+        "evidence_type": "B",
+        "topic": "Phase 隔离"
+      },
+      "wiki_pages": {
+        "支付架构.md": "Phase 1 完成积分扣减"
+      },
+      "is_hallucination": true,
+      "construction_method": "fake_content",
+      "expected_verdict": "contradict",
+      "rationale": "wiki 实际「Phase 1 完成积分扣减」, item 声称「Phase 2 完成积分扣减」, 内容编造"
+    },
+    {
+      "id": "HAL-FAKE-CONTENT-005",
+      "item": {
+        "issue": "根据 wiki, case_code text, open_time string",
+        "evidence_content": "[[ES_index_mapping.md]] case_code text, open_time string",
+        "evidence_type": "B",
+        "topic": "ES mapping"
+      },
+      "wiki_pages": {
+        "ES_index_mapping.md": "case_code keyword, open_time date"
+      },
+      "is_hallucination": true,
+      "construction_method": "fake_content",
+      "expected_verdict": "contradict",
+      "rationale": "wiki 实际「case_code keyword, open_time date」, item 声称「case_code text, open_time string」, 内容编造"
+    },
+    {
+      "id": "HAL-FAKE-CONTENT-006",
+      "item": {
+        "issue": "根据 wiki, 实时审核, 秒级到账, 无人工干预",
+        "evidence_content": "[[积分兑换流程.md]] 实时审核, 秒级到账, 无人工干预",
+        "evidence_type": "B",
+        "topic": "即兑即用"
+      },
+      "wiki_pages": {
+        "积分兑换流程.md": "需 2-3 工作日人工审核, T+2 到账"
+      },
+      "is_hallucination": true,
+      "construction_method": "fake_content",
+      "expected_verdict": "contradict",
+      "rationale": "wiki 实际「需 2-3 工作日人工审核, T+2 到账」, item 声称「实时审核, 秒级到账, 无人工干预」, 内容编造"
+    },
+    {
+      "id": "HAL-FAKE-CONTENT-007",
+      "item": {
+        "issue": "根据 wiki, 三态: 加载中/失败/成功",
+        "evidence_content": "[[前端 UI 状态规约.md]] 三态: 加载中/失败/成功",
+        "evidence_type": "B",
+        "topic": "UI 四态"
+      },
+      "wiki_pages": {
+        "前端 UI 状态规约.md": "四态: 加载中/请求失败/筛选无结果/空数据"
+      },
+      "is_hallucination": true,
+      "construction_method": "fake_content",
+      "expected_verdict": "contradict",
+      "rationale": "wiki 实际「四态: 加载中/请求失败/筛选无结果/空数据」, item 声称「三态: 加载中/失败/成功」, 内容编造"
+    },
+    {
+      "id": "HAL-FAKE-CONTENT-008",
+      "item": {
+        "issue": "根据 wiki, 按记录粒度分类, 一条记录只归一类",
+        "evidence_content": "[[司法案件案号粒度.md]] 按记录粒度分类, 一条记录只归一类",
+        "evidence_type": "B",
+        "topic": "混合案号"
+      },
+      "wiki_pages": {
+        "司法案件案号粒度.md": "按案号粒度分类, 一条记录可归两类"
+      },
+      "is_hallucination": true,
+      "construction_method": "fake_content",
+      "expected_verdict": "contradict",
+      "rationale": "wiki 实际「按案号粒度分类, 一条记录可归两类」, item 声称「按记录粒度分类, 一条记录只归一类」, 内容编造"
+    },
+    {
+      "id": "HAL-PARA-001",
+      "item": {
+        "issue": "PRD §1.4 写「姓+**」但示例「欧阳修→欧阳*」, 这是规则与示例不一致",
+        "evidence_content": "[[假装存在的wiki页_脱敏歧义.md]] PRD §1.4 写「姓+**」但示例「欧阳修→欧阳*」, 这是规则与示例不一致",
+        "evidence_type": "B",
+        "topic": "脱敏歧义"
+      },
+      "wiki_pages": {},
+      "is_hallucination": true,
+      "construction_method": "paraphrase_only",
+      "expected_verdict": "neutral",
+      "rationale": "evidence 仅是 PRD 原文 paraphrase, 没有任何 wiki 页能 entail/contradict"
+    },
+    {
+      "id": "HAL-PARA-002",
+      "item": {
+        "issue": "v2 PRD 状态3 ASCII 显示 3 档, 文字规格写 4 档, 两处不符",
+        "evidence_content": "[[假装存在的wiki页_档位冲突.md]] v2 PRD 状态3 ASCII 显示 3 档, 文字规格写 4 档, 两处不符",
+        "evidence_type": "B",
+        "topic": "档位冲突"
+      },
+      "wiki_pages": {},
+      "is_hallucination": true,
+      "construction_method": "paraphrase_only",
+      "expected_verdict": "neutral",
+      "rationale": "evidence 仅是 PRD 原文 paraphrase, 没有任何 wiki 页能 entail/contradict"
+    },
+    {
+      "id": "HAL-PARA-003",
+      "item": {
+        "issue": "企业主页用字段过滤, 查风险用字符串过滤, 两套机制并存",
+        "evidence_content": "[[假装存在的wiki页_过滤机制.md]] 企业主页用字段过滤, 查风险用字符串过滤, 两套机制并存",
+        "evidence_type": "B",
+        "topic": "过滤机制"
+      },
+      "wiki_pages": {},
+      "is_hallucination": true,
+      "construction_method": "paraphrase_only",
+      "expected_verdict": "neutral",
+      "rationale": "evidence 仅是 PRD 原文 paraphrase, 没有任何 wiki 页能 entail/contradict"
+    },
+    {
+      "id": "HAL-PARA-004",
+      "item": {
+        "issue": "诉前调解 PRD §2.1 表格全空, 没有任何字段定义",
+        "evidence_content": "[[假装存在的wiki页_UI 缺失.md]] 诉前调解 PRD §2.1 表格全空, 没有任何字段定义",
+        "evidence_type": "B",
+        "topic": "UI 缺失"
+      },
+      "wiki_pages": {},
+      "is_hallucination": true,
+      "construction_method": "paraphrase_only",
+      "expected_verdict": "neutral",
+      "rationale": "evidence 仅是 PRD 原文 paraphrase, 没有任何 wiki 页能 entail/contradict"
+    },
+    {
+      "id": "HAL-PARA-005",
+      "item": {
+        "issue": "PRD §4.1 列举多种混合案号但归属规则未说明",
+        "evidence_content": "[[假装存在的wiki页_案号歧义.md]] PRD §4.1 列举多种混合案号但归属规则未说明",
+        "evidence_type": "B",
+        "topic": "案号歧义"
+      },
+      "wiki_pages": {},
+      "is_hallucination": true,
+      "construction_method": "paraphrase_only",
+      "expected_verdict": "neutral",
+      "rationale": "evidence 仅是 PRD 原文 paraphrase, 没有任何 wiki 页能 entail/contradict"
+    },
+    {
+      "id": "HAL-PARA-006",
+      "item": {
+        "issue": "积分兑换 PRD 缺接口契约, 字段/错误码均无",
+        "evidence_content": "[[假装存在的wiki页_接口缺失.md]] 积分兑换 PRD 缺接口契约, 字段/错误码均无",
+        "evidence_type": "B",
+        "topic": "接口缺失"
+      },
+      "wiki_pages": {},
+      "is_hallucination": true,
+      "construction_method": "paraphrase_only",
+      "expected_verdict": "neutral",
+      "rationale": "evidence 仅是 PRD 原文 paraphrase, 没有任何 wiki 页能 entail/contradict"
+    },
+    {
+      "id": "HAL-PARA-007",
+      "item": {
+        "issue": "v2 PRD「假设」第4条与核心模型 Phase 隔离直接矛盾",
+        "evidence_content": "[[假装存在的wiki页_Phase 矛盾.md]] v2 PRD「假设」第4条与核心模型 Phase 隔离直接矛盾",
+        "evidence_type": "B",
+        "topic": "Phase 矛盾"
+      },
+      "wiki_pages": {},
+      "is_hallucination": true,
+      "construction_method": "paraphrase_only",
+      "expected_verdict": "neutral",
+      "rationale": "evidence 仅是 PRD 原文 paraphrase, 没有任何 wiki 页能 entail/contradict"
+    },
+    {
+      "id": "HAL-INFER-001",
+      "item": {
+        "issue": "因此应该用 BERT-large 模型而非小模型",
+        "evidence_content": "[[脱敏识别方法.md]] wiki 提到 NER 识别人名",
+        "evidence_type": "B",
+        "topic": "脱敏 NLP"
+      },
+      "wiki_pages": {
+        "脱敏识别方法.md": "wiki 提到 NER 识别人名"
+      },
+      "is_hallucination": true,
+      "construction_method": "ungrounded_inference",
+      "expected_verdict": "neutral",
+      "rationale": "wiki 只说「wiki 提到 NER 识别人名」, item 推到「因此应该用 BERT-large 模型而非小模型」, 推理超出 wiki 覆盖"
+    },
+    {
+      "id": "HAL-INFER-002",
+      "item": {
+        "issue": "因此 data_status=2 应该是「待删除」状态",
+        "evidence_content": "[[data_status规约.md]] wiki 规定 data_status=0 有效",
+        "evidence_type": "B",
+        "topic": "data_status"
+      },
+      "wiki_pages": {
+        "data_status规约.md": "wiki 规定 data_status=0 有效"
+      },
+      "is_hallucination": true,
+      "construction_method": "ungrounded_inference",
+      "expected_verdict": "neutral",
+      "rationale": "wiki 只说「wiki 规定 data_status=0 有效」, item 推到「因此 data_status=2 应该是「待删除」状态」, 推理超出 wiki 覆盖"
+    },
+    {
+      "id": "HAL-INFER-003",
+      "item": {
+        "issue": "因此响应字段必须含 createdAt 和 traceId",
+        "evidence_content": "[[积分兑换接口契约.md]] wiki 给出请求字段 orderId/source/exchangeYuan",
+        "evidence_type": "B",
+        "topic": "接口契约"
+      },
+      "wiki_pages": {
+        "积分兑换接口契约.md": "wiki 给出请求字段 orderId/source/exchangeYuan"
+      },
+      "is_hallucination": true,
+      "construction_method": "ungrounded_inference",
+      "expected_verdict": "neutral",
+      "rationale": "wiki 只说「wiki 给出请求字段 orderId/source/exchangeYuan」, item 推到「因此响应字段必须含 createdAt 和 traceId」, 推理超出 wiki 覆盖"
+    },
+    {
+      "id": "HAL-INFER-004",
+      "item": {
+        "issue": "因此移动端必须用 Vant 组件库实现",
+        "evidence_content": "[[前端 UI 状态规约.md]] wiki 定义 4 态",
+        "evidence_type": "B",
+        "topic": "UI 四态"
+      },
+      "wiki_pages": {
+        "前端 UI 状态规约.md": "wiki 定义 4 态"
+      },
+      "is_hallucination": true,
+      "construction_method": "ungrounded_inference",
+      "expected_verdict": "neutral",
+      "rationale": "wiki 只说「wiki 定义 4 态」, item 推到「因此移动端必须用 Vant 组件库实现」, 推理超出 wiki 覆盖"
+    },
+    {
+      "id": "HAL-INFER-005",
+      "item": {
+        "issue": "因此必须开启 ES 中文分词器 ik_smart",
+        "evidence_content": "[[ES_index_mapping.md]] wiki 给出 case_code keyword 类型",
+        "evidence_type": "B",
+        "topic": "ES mapping"
+      },
+      "wiki_pages": {
+        "ES_index_mapping.md": "wiki 给出 case_code keyword 类型"
+      },
+      "is_hallucination": true,
+      "construction_method": "ungrounded_inference",
+      "expected_verdict": "neutral",
+      "rationale": "wiki 只说「wiki 给出 case_code keyword 类型」, item 推到「因此必须开启 ES 中文分词器 ik_smart」, 推理超出 wiki 覆盖"
+    },
+    {
+      "id": "HAL-INFER-006",
+      "item": {
+        "issue": "因此回填必须分批执行, 每批 1000 条",
+        "evidence_content": "[[历史数据回填规约.md]] wiki 提供 SQL LIKE 回刷策略",
+        "evidence_type": "B",
+        "topic": "回填策略"
+      },
+      "wiki_pages": {
+        "历史数据回填规约.md": "wiki 提供 SQL LIKE 回刷策略"
+      },
+      "is_hallucination": true,
+      "construction_method": "ungrounded_inference",
+      "expected_verdict": "neutral",
+      "rationale": "wiki 只说「wiki 提供 SQL LIKE 回刷策略」, item 推到「因此回填必须分批执行, 每批 1000 条」, 推理超出 wiki 覆盖"
+    },
+    {
+      "id": "HAL-INFER-007",
+      "item": {
+        "issue": "因此 PRD 模板必须由 PMO 统一审核才能发布",
+        "evidence_content": "[[PRD 术语规范.md]] wiki 定义四种符号语义",
+        "evidence_type": "B",
+        "topic": "术语约定"
+      },
+      "wiki_pages": {
+        "PRD 术语规范.md": "wiki 定义四种符号语义"
+      },
+      "is_hallucination": true,
+      "construction_method": "ungrounded_inference",
+      "expected_verdict": "neutral",
+      "rationale": "wiki 只说「wiki 定义四种符号语义」, item 推到「因此 PRD 模板必须由 PMO 统一审核才能发布」, 推理超出 wiki 覆盖"
+    }
+  ]
+}
