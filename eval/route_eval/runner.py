@@ -11,7 +11,9 @@ docstring.
 """
 from __future__ import annotations
 
+import json
 import os
+import re
 import sys
 import tempfile
 import time
@@ -371,29 +373,42 @@ def _do_real_call(
 ) -> tuple:
     """按 route_id 分发真跑 calling pattern, 返回 (resp, error_type, fallback_triggered).
 
-    Wave 4 P0 实现 2 类 pattern (verify.nli + router.intent), 其他 route 仍 raise
-    NotImplementedError 保持框架完整 (worker.* / advisor.* / eval.cuckoo 等待 P1
-    接 codex 时一起补 -- 避免做两次).
+    Wave 4 实现 verify.nli + router.intent 两类 classification pattern.
+    Wave 5C 补 worker.* / advisor.* / eval.cuckoo 三类 pattern (本次), 让 baseline
+    全表都能跑出真数据.
 
-    单 run 处理的 case 数受 PECKER_EVAL_MAX_CASES_PER_RUN env 控制 (默认 10),
-    避免 60 case × 3 runs 跑批太贵.
+    单 run 处理的 case 数受 PECKER_EVAL_MAX_CASES_PER_RUN env 控制 (默认按 pattern
+    取不同值: nli/intent=10, worker=2, advisor=3 -- worker 单 call 慢, 限小一点).
     """
     if not dataset:
         return _FakeResponse(model=model_tier, items=[]), "empty_dataset", False
 
-    max_cases = int(os.environ.get("PECKER_EVAL_MAX_CASES_PER_RUN", "10"))
+    # 默认 max_cases: classification 类用 10, worker 用 2, advisor 用 3
+    env_max = os.environ.get("PECKER_EVAL_MAX_CASES_PER_RUN", "").strip()
 
     if route_id == "verify.nli":
+        max_cases = int(env_max or "10")
         return _call_nli_pattern(model_tier, dataset, max_cases)
     if route_id == "router.intent":
+        max_cases = int(env_max or "10")
         return _call_intent_pattern(model_tier, dataset, max_cases)
-    if route_id == "advisor.goshawk.shadow":
-        # shadow 默认 enabled=false, 不应被 baseline 跑到; 留兜底
-        return _FakeResponse(model=model_tier, items=[]), "shadow_disabled", False
+    if route_id.startswith("worker."):
+        max_cases = int(env_max or "2")
+        return _call_worker_pattern(route_id, model_tier, dataset, max_cases)
+    if route_id.startswith("advisor.goshawk"):
+        if route_id == "advisor.goshawk.shadow":
+            # shadow 默认 enabled=false (model_routes.yaml), 走 router 时被
+            # RouteDisabledError 挡住; 这里兜底返回空 resp 避免崩
+            return _FakeResponse(model=model_tier, items=[]), "shadow_disabled", False
+        max_cases = int(env_max or "3")
+        return _call_advisor_pattern(route_id, model_tier, dataset, max_cases)
+    if route_id == "eval.cuckoo":
+        max_cases = int(env_max or "2")
+        return _call_eval_cuckoo_pattern(route_id, model_tier, dataset, max_cases)
 
     raise NotImplementedError(
-        f"route {route_id!r} 真跑 calling pattern 待 P1 接 codex 时一起补 "
-        f"(worker.* / advisor.* / eval.cuckoo). 当前 P0 实跑仅 verify.nli + router.intent."
+        f"route {route_id!r} 真跑 calling pattern 未支持 "
+        f"(已实现: verify.nli / router.intent / worker.* / advisor.goshawk* / eval.cuckoo)"
     )
 
 
@@ -512,6 +527,298 @@ def _call_intent_pattern(
 
     resp.items = predictions
     return resp, error_type, False
+
+
+# ============================================================
+# Wave 5C: worker / advisor / eval.cuckoo calling patterns
+# ============================================================
+
+# 项目根 (用于解析 dataset 的相对 prd_path)
+_RUNNER_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+# PRD 内容截断长度 (避免 token 爆 -- 8000 字符 ≈ 4-5k tokens)
+_PRD_TRUNCATE_CHARS = 8000
+
+
+def _read_prd_safe(prd_path: str) -> str:
+    """读 PRD 文件并截断, 路径解析失败返空串."""
+    abs_path = prd_path if os.path.isabs(prd_path) else os.path.join(_RUNNER_PROJECT_ROOT, prd_path)
+    try:
+        with open(abs_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except (FileNotFoundError, OSError) as e:
+        log.warning(f"[worker_pattern] 读 PRD 失败 {abs_path}: {e}")
+        return ""
+    if len(content) > _PRD_TRUNCATE_CHARS:
+        content = content[:_PRD_TRUNCATE_CHARS] + "\n\n... [PRD 内容已截断, 评测期只看前 8000 字]"
+    return content
+
+
+def _extract_text_from_resp(resp: Any) -> str:
+    """从 UnifiedResponse / _FakeResponse 拼出 text content (兼容 dict / object 两种 block)."""
+    parts: List[str] = []
+    for block in getattr(resp, "text_blocks", []) or []:
+        if isinstance(block, dict):
+            t = block.get("text", "")
+        else:
+            t = getattr(block, "text", "")
+        if t:
+            parts.append(t)
+    return "".join(parts)
+
+
+_JSON_LIST_RE = re.compile(r"\[\s*(?:\{.*?\})?(?:\s*,\s*\{.*?\})*\s*\]", re.DOTALL)
+_JSON_OBJ_RE = re.compile(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", re.DOTALL)
+
+
+def _parse_json_list(text: str) -> List[Dict[str, Any]]:
+    """从 LLM response 抽 JSON list (容错: ```json fenced / 内嵌 / 无 list 都返空).
+
+    优先策略:
+    1. 先剥 ```json ... ``` fence (LLM 常加)
+    2. 直接 json.loads 整段
+    3. 正则找第一个 [...] 块再 loads
+    4. 找不到返 []
+    """
+    if not text:
+        return []
+    # 剥 markdown code fence
+    fence_match = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL)
+    if fence_match:
+        candidate = fence_match.group(1).strip()
+    else:
+        candidate = text.strip()
+
+    # 直接 try
+    try:
+        parsed = json.loads(candidate)
+        if isinstance(parsed, list):
+            return [x for x in parsed if isinstance(x, dict)]
+        if isinstance(parsed, dict):
+            # 可能是 {"items": [...]} 或 {"issues": [...]}
+            for key in ("items", "issues", "review_items", "results"):
+                if key in parsed and isinstance(parsed[key], list):
+                    return [x for x in parsed[key] if isinstance(x, dict)]
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    # 正则找首个 [ ... ] 块
+    list_match = _JSON_LIST_RE.search(text)
+    if list_match:
+        try:
+            parsed = json.loads(list_match.group(0))
+            if isinstance(parsed, list):
+                return [x for x in parsed if isinstance(x, dict)]
+        except json.JSONDecodeError:
+            pass
+    return []
+
+
+def _parse_json_obj(text: str) -> Dict[str, Any]:
+    """从 LLM response 抽 JSON object (advisor 决策用), 失败返 {}."""
+    if not text:
+        return {}
+    fence_match = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL)
+    candidate = fence_match.group(1).strip() if fence_match else text.strip()
+    try:
+        parsed = json.loads(candidate)
+        if isinstance(parsed, dict):
+            return parsed
+    except (json.JSONDecodeError, TypeError):
+        pass
+    obj_match = _JSON_OBJ_RE.search(text)
+    if obj_match:
+        try:
+            parsed = json.loads(obj_match.group(0))
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+    return {}
+
+
+def _call_worker_pattern(
+    route_id: str,
+    model_tier: str,
+    dataset: List[Dict[str, Any]],
+    max_cases: int,
+) -> tuple:
+    """对 business_prd_gt dataset 跑 worker.* 真调用, 输出 issues list 给 cuckoo P/R/F1.
+
+    最简化策略 (不走 review.worker._worker_core 全流程):
+    - 抽 dim_key from route_id (worker.compliance → "compliance")
+    - 读 PRD 内容 (截断 8000 字符)
+    - 单维度 prompt 让模型输出 JSON list of issues
+    - 累计每条 entry 的 items 到 _BatchResponse.items
+    """
+    from model_router import route_call
+
+    dim_key = route_id.split(".", 1)[1] if "." in route_id else "default"
+    sub = dataset[:max_cases]
+    all_items: List[Dict[str, Any]] = []
+    error_type: Optional[str] = None
+    fallback_triggered = False
+    resp = _BatchResponse(model=model_tier, predictions=[])
+
+    # 注意: system prompt 走 --system-prompt argv 传给 claude CLI, Windows cmd 会
+    # 解析 shell 元字符 "|" "<" ">" "&" 等 (memory: claude_cli_windows_subprocess.md
+    # 同款坑). 全部用普通字符替代避免触发 shell 解析.
+    system = (
+        f"你是 PRD 评审员, 专注 {dim_key} 维度审核. "
+        "审阅以下 PRD, 输出 **只含一个 JSON list** 的回复 (不要 markdown 文本). "
+        "每条 issue 字段: "
+        "rule_id (规则ID 如 V-08 / RC-014 / EV-01), "
+        "severity (取值: must / should / info), "
+        "location (章节号 如 3.2), "
+        "issue (80 字以内问题描述), "
+        "suggestion (80 字以内修复建议). "
+        "未发现问题则返 [], 不要硬凑."
+    )
+
+    for entry in sub:
+        prd_path = entry.get("prd_path", "")
+        prd_content = _read_prd_safe(prd_path)
+        if not prd_content:
+            log.warning(f"[worker:{dim_key}] PRD 内容空 {prd_path}, 跳过")
+            continue
+        user = f"# PRD ({entry.get('workspace', '')})\n\n{prd_content}"
+        try:
+            sub_resp = route_call(
+                route_id,
+                system=system,
+                messages=[{"role": "user", "content": user}],
+                max_tokens=4096,
+                temperature=0.3,
+            )
+            text = _extract_text_from_resp(sub_resp)
+            items = _parse_json_list(text)
+            # 给每条 item 标 source 让后续 cuckoo 区分
+            for it in items:
+                it.setdefault("dimension", dim_key)
+                it.setdefault("workspace", entry.get("workspace", ""))
+            all_items.extend(items)
+            usage = getattr(sub_resp, "usage", {}) or {}
+            resp.add_usage(usage)
+            log.info(f"[worker:{dim_key}] {entry.get('workspace', '')} → {len(items)} items")
+        except Exception as e:  # pragma: no cover -- 真跑兜底
+            log.warning(f"[worker:{dim_key}] {prd_path} 失败: {type(e).__name__}: {e}")
+            if error_type is None:
+                error_type = type(e).__name__.lower()
+
+    resp.items = all_items
+    return resp, error_type, fallback_triggered
+
+
+def _call_advisor_pattern(
+    route_id: str,
+    model_tier: str,
+    dataset: List[Dict[str, Any]],
+    max_cases: int,
+) -> tuple:
+    """对 advisor_conflicts dataset 跑 advisor.goshawk* 真调用, 输出 merged items.
+
+    最简化策略 (不走 goshawk_advisor.advisor_review 全流程):
+    - 每条 entry 拿 worker_outputs (4-5 worker 提报)
+    - 让 LLM 输出 JSON object: {merged: [...], dropped: [...], conflict_resolutions: [...]}
+    - merged 列表的 worker_output 复刻成 items 给 cuckoo P/R/F1
+    """
+    from model_router import route_call
+
+    sub = dataset[:max_cases]
+    all_items: List[Dict[str, Any]] = []
+    extra_dropped = 0
+    extra_conflicts = 0
+    error_type: Optional[str] = None
+    fallback_triggered = False
+    resp = _BatchResponse(model=model_tier, predictions=[])
+
+    # Windows cmd shell 元字符 (| < > &) 在 --system-prompt argv 里会被解析.
+    # 全部用普通字符表达 schema 避免崩.
+    system = (
+        "你是苍鹰 (meta-reviewer), 审核多个 worker 的 PRD 评审结果. "
+        "对同源 / 重复 / 冲突的 issue 做合并, 保留最完整的, 丢弃冗余. "
+        "输出 **只含一个 JSON object** 的回复 (不要 markdown 文本). "
+        "object 字段: "
+        "merged (list of 保留的 worker_output id 字符串), "
+        "dropped (list of object, 每条含 id 和 reason 40 字以内), "
+        "conflict_resolutions (list of object, 每条含 ids 数组和 resolution 文本如 合并 / 保留 / 降级). "
+        "保留最完整的 1-3 条作 merged, 其余丢入 dropped."
+    )
+
+    for entry in sub:
+        worker_outputs = entry.get("worker_outputs", []) or []
+        if not worker_outputs:
+            continue
+        # 给 LLM 看简化版 worker_outputs (避免 token 爆)
+        compact = [
+            {
+                "id": w.get("id", ""),
+                "rule_id": w.get("rule_id", ""),
+                "dimension": w.get("dimension", ""),
+                "location": w.get("location", ""),
+                "issue": (w.get("issue", "") or "")[:200],
+                "severity": w.get("severity", ""),
+            }
+            for w in worker_outputs
+        ]
+        user = (
+            f"# 场景 ({entry.get('workspace', '')})\n"
+            f"{entry.get('scenario', '')}\n\n"
+            f"# worker_outputs ({len(worker_outputs)} 条)\n"
+            f"{json.dumps(compact, ensure_ascii=False, indent=2)}"
+        )
+        try:
+            sub_resp = route_call(
+                route_id,
+                system=system,
+                messages=[{"role": "user", "content": user}],
+                max_tokens=2048,
+                temperature=0.2,
+            )
+            text = _extract_text_from_resp(sub_resp)
+            decision = _parse_json_obj(text)
+            merged_ids = [str(x) for x in (decision.get("merged") or []) if isinstance(x, (str, int))]
+            dropped_list = decision.get("dropped") or []
+            conflicts_list = decision.get("conflict_resolutions") or []
+            extra_dropped += len(dropped_list) if isinstance(dropped_list, list) else 0
+            extra_conflicts += len(conflicts_list) if isinstance(conflicts_list, list) else 0
+            # 把 merged_ids 复刻回原 worker_output (cuckoo 走 location/issue/keywords 匹配)
+            id_map = {str(w.get("id", "")): w for w in worker_outputs}
+            for mid in merged_ids:
+                if mid in id_map:
+                    item = dict(id_map[mid])
+                    item.setdefault("workspace", entry.get("workspace", ""))
+                    item["_advisor_decision"] = "merged"
+                    all_items.append(item)
+            usage = getattr(sub_resp, "usage", {}) or {}
+            resp.add_usage(usage)
+            log.info(
+                f"[advisor:{route_id}] {entry.get('id', '')} → "
+                f"merged={len(merged_ids)} dropped={len(dropped_list)} "
+                f"conflicts={len(conflicts_list)}"
+            )
+        except Exception as e:  # pragma: no cover -- 真跑兜底
+            log.warning(f"[advisor] {entry.get('id')} 失败: {type(e).__name__}: {e}")
+            if error_type is None:
+                error_type = type(e).__name__.lower()
+
+    resp.items = all_items
+    # extra metadata 挂 resp 上, report 层可以可选消费
+    resp.advisor_dropped_count = extra_dropped
+    resp.advisor_conflict_count = extra_conflicts
+    return resp, error_type, fallback_triggered
+
+
+def _call_eval_cuckoo_pattern(
+    route_id: str,
+    model_tier: str,
+    dataset: List[Dict[str, Any]],
+    max_cases: int,
+) -> tuple:
+    """eval.cuckoo (LLM-as-judge 评测期跑分) -- P0 阶段功能等同 worker.default,
+    直接复用 _call_worker_pattern. P1 才分化做 LLM scorer 行为.
+    """
+    return _call_worker_pattern("worker.default", model_tier, dataset, max_cases)
 
 
 def _estimate_cost(model: str, usage: Dict[str, Any]) -> float:
