@@ -157,7 +157,8 @@ class ReviewResult(BaseModel):
 
 
 # 2026-04-26 audit wave2 P1-A: reason_category 收敛到 RejectReason 7 种枚举.
-# 当前 web/ 0 处使用此字段(前端尚未接 reason dropdown), 严校 zero risk.
+# 2026-04-28 P0 step 2: web/ Phase3ConfirmV8 已接 7 类下拉 (REJECT_CATEGORIES) +
+#   web/lib/api.ts ItemDecision 已带 reason_category 字段, 不再是 zero usage.
 # 列字面量确保 Pydantic 校验失败时 422 错误清晰提示有效值列表.
 _VALID_REJECT_REASONS = frozenset({
     "good_issue", "false_positive", "known_tradeoff", "wiki_missing",

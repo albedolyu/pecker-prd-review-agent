@@ -36,6 +36,17 @@ MILESTONES = {
     "final_reviewer_done":   {"progress": 95,  "label": "终审完成"},
     "result":                {"progress": 100, "label": "完成"},
     "error":                 {"progress": None, "label": "失败"},
+    # 2026-04-28 step 1b: funnel telemetry 不占主进度刻度 (progress=None),
+    # 但显式登记后前端 useReviewStream 能在 union type 里识别, dashboard
+    # 可以根据 event 名挂面板而不是按 progress% 跳站.
+    # 七位 telemetry event 对应 review/funnel_telemetry.py 各 compute_* + evidence_verify_done 升级.
+    "funnel_stage_worker_raw":            {"progress": None, "label": "N0 worker 原始产出"},
+    "funnel_stage_after_dedup":           {"progress": None, "label": "N1 去重后"},
+    "funnel_stage_after_evidence_verify": {"progress": None, "label": "N2 evidence verify 后"},
+    "funnel_stage_after_goshawk":         {"progress": None, "label": "N3 苍鹰终审后"},
+    "funnel_stage_after_pm_decision":     {"progress": None, "label": "N4 PM 决策后"},
+    "funnel_summary":                     {"progress": None, "label": "漏斗汇总"},
+    "evidence_verify_done":               {"progress": None, "label": "evidence verify 完成"},
 }
 
 # 每个 worker 占 (70 - 15) / 4 = 13.75%,从 15% 递增到 70%
@@ -139,6 +150,26 @@ class ReviewProgressEmitter:
             event_name = item.get("event", "message")
             data_json = json.dumps(item, ensure_ascii=False)
             yield f"event: {event_name}\ndata: {data_json}\n\n"
+
+
+def emit_and_log(emitter: "ReviewProgressEmitter", evt, event_type: str, data: Dict[str, Any]) -> None:
+    """funnel telemetry 双发: jsonl (evt.append) + SSE (emitter.emit).
+
+    背景 (2026-04-28 audit_frontend_sync): review.py 8 个 funnel event 历史只 evt.append
+    写 jsonl, 不走 emitter.emit 推 SSE → 前端 Phase2/4 即使后端 telemetry 完整也拿不到
+    实时数据. 双发模式让老 jsonl 路径不破 + 前端实时能看到漏斗.
+
+    Args:
+        emitter: ReviewProgressEmitter 实例 (走 SSE)
+        evt: EventStore 实例 (走 jsonl)
+        event_type: 事件名 (如 "funnel_stage_worker_raw")
+        data: 事件 payload
+
+    任一失败不阻塞另一个: evt.append OSError 已在 EventStore 内部 swallow,
+    emitter.emit 队列满会 silently drop. 调用方仍应外包 try/except 防 compute 抛.
+    """
+    evt.append(event_type, data)
+    emitter.emit(event_type, data=data)
 
 
 async def sse_review_pipeline(

@@ -25,7 +25,7 @@ from api.deps import (
 )
 from api.budget_gate import budget_status_snapshot, check_budget, record_review_cost
 from api.models import ConfirmRequest, ReviewResult, verify_review_result
-from api.stream import ReviewProgressEmitter, sse_review_pipeline
+from api.stream import ReviewProgressEmitter, emit_and_log, sse_review_pipeline
 from api.workspace_acl import require_workspace_access
 
 # 预检 wiki scan 缓存(同一 workspace 10 分钟内复用)
@@ -379,11 +379,12 @@ async def run_review(
             try:
                 from review.funnel_telemetry import compute_worker_raw_stage, compute_dedup_stage
                 _worker_raw = compute_worker_raw_stage(result.get("workers", []))
-                evt.append("funnel_stage_worker_raw", _worker_raw)
+                # 2026-04-28 step 1a: 双发 jsonl + SSE, 让前端 Phase2/4 拿到实时 funnel
+                emit_and_log(emitter, evt, "funnel_stage_worker_raw", _worker_raw)
                 _funnel_stages["N0_worker_raw"] = _worker_raw["count"]
 
                 _after_dedup = compute_dedup_stage(_worker_raw["count"], items)
-                evt.append("funnel_stage_after_dedup", _after_dedup)
+                emit_and_log(emitter, evt, "funnel_stage_after_dedup", _after_dedup)
                 _funnel_stages["N1_after_dedup"] = _after_dedup["count"]
             except Exception as _fn_err:
                 log.warning(f"[funnel] N0/N1 emit 失败不阻塞: {_fn_err}")
@@ -410,18 +411,27 @@ async def run_review(
                 v_sum = summarize_verification(verified)
 
                 # T3: funnel stage N2 (after_evidence_verify) — 用扩展后的 v_sum + wiki telemetry
+                _after_ev = None
                 try:
                     wiki_tele = await asyncio.to_thread(get_wiki_telemetry, ws_abs_path)
                     _after_ev = compute_evidence_verify_stage(v_sum, wiki_tele)
-                    evt.append("funnel_stage_after_evidence_verify", _after_ev)
+                    # 2026-04-28 step 1a: 双发 jsonl + SSE
+                    emit_and_log(emitter, evt, "funnel_stage_after_evidence_verify", _after_ev)
                     _funnel_stages["N2_after_evidence_verify"] = _after_ev["count"]
                 except Exception as _fn_err2:
                     log.warning(f"[funnel] N2 emit 失败不阻塞: {_fn_err2}")
 
-                emitter.emit("evidence_verify_done", data={
+                # 2026-04-28 step 1a: evidence_verify_done SSE 升级 — audit 第 4 项
+                # 老版只发 retracted+caveat, 前端 dashboard 拿不到 wiki authority/mode.
+                # 现在合并 _after_ev 的 authority_distribution + wiki_mode 上车.
+                _ev_done_payload = {
                     "retracted": v_sum.get("retracted", 0),
                     "caveat": v_sum.get("caveat", 0),
-                })
+                }
+                if _after_ev is not None:
+                    _ev_done_payload["wiki_mode"] = _after_ev.get("wiki_mode", "unknown")
+                    _ev_done_payload["authority_distribution"] = _after_ev.get("authority_distribution", {})
+                emit_and_log(emitter, evt, "evidence_verify_done", _ev_done_payload)
             except Exception as _ev_err:
                 # 失败不阻塞: items 不变, 行为等同本次修复前 (goshawk 侧查兜底)
                 log.warning(f"[evidence_verify] API flow 失败回退到跳过模式: {_ev_err}")
@@ -474,7 +484,8 @@ async def run_review(
                     try:
                         from review.funnel_telemetry import compute_goshawk_stage
                         _after_g = compute_goshawk_stage(items, goshawk_result)
-                        evt.append("funnel_stage_after_goshawk", _after_g)
+                        # 2026-04-28 step 1a: 双发 jsonl + SSE
+                        emit_and_log(emitter, evt, "funnel_stage_after_goshawk", _after_g)
                         _funnel_stages["N3_after_goshawk"] = _after_g["count"]
                     except Exception as _fn_err3:
                         log.warning(f"[funnel] N3 emit 失败不阻塞: {_fn_err3}")
@@ -483,20 +494,19 @@ async def run_review(
                     # 修法 C (2026-04-26): 附带 DAR retention_kind / n_samples 分布
                     from goshawk_advisor import summarize_resample_telemetry
                     _resample_dim = summarize_resample_telemetry(goshawk_result)
-                    _final_evt = {
+                    # 2026-04-28 step 1a: SSE/jsonl payload 统一 (老版 SSE 短/jsonl 长, 前端
+                    # 拿不到 confidence + empty_retry_used). 现在两边都走 _final_evt_full.
+                    _final_evt_full = {
                         "false_positive": len(goshawk_result.get("flagged_as_false_positive", [])),
                         "additional": len(goshawk_result.get("additional_findings", [])),
                         "verdict": goshawk_result.get("verdict", "UNKNOWN"),
+                        "confidence": goshawk_result.get("confidence", 0.0),
+                        "empty_retry_used": goshawk_result.get("empty_retry_used", False),
                     }
-                    _final_evt.update(_resample_dim)
-                    emitter.emit("final_reviewer_done", data=_final_evt)
-                    _final_evt_full = dict(_final_evt)
-                    _final_evt_full["confidence"] = goshawk_result.get("confidence", 0.0)
-                    _final_evt_full["empty_retry_used"] = goshawk_result.get("empty_retry_used", False)
-                    evt.append("final_reviewer_done", _final_evt_full)
+                    _final_evt_full.update(_resample_dim)
+                    emit_and_log(emitter, evt, "final_reviewer_done", _final_evt_full)
                 except Exception as e:
-                    emitter.emit("final_reviewer_done", data={"error": str(e)[:200]})
-                    evt.append("final_reviewer_done", {"error": str(e)[:200]})
+                    emit_and_log(emitter, evt, "final_reviewer_done", {"error": str(e)[:200]})
 
         # 成本归因聚合 (CC cost-tracker querySource 模式)
         cost_breakdown = {}
@@ -560,7 +570,8 @@ async def run_review(
         try:
             from review.funnel_telemetry import compute_funnel_summary
             _summary = compute_funnel_summary(_funnel_stages)
-            evt.append("funnel_summary", _summary)
+            # 2026-04-28 step 1a: 双发 jsonl + SSE
+            emit_and_log(emitter, evt, "funnel_summary", _summary)
         except Exception as _fn_err4:
             log.warning(f"[funnel] summary emit 失败不阻塞: {_fn_err4}")
 
@@ -812,6 +823,9 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
 
     # Step 5: T3 2026-04-24 — funnel stage N4 (after_pm_decision) 写回对应 review_id 的 jsonl
     # 失败不阻塞 confirm (反正已 return 的前提)
+    # 2026-04-28 step 1a 注: confirm_review 是独立 POST endpoint, 无 SSE 流 (Phase 2 的 emitter
+    # 在 /run 完成时已 close). 前端拿 N4 数据通过 confirm 返回 body 或后续轮询 jsonl.
+    # 因此本处 evt.append 单发是 by-design, 不是 step 1a 双发遗漏.
     review_id = req.review_result.get("review_id", "")
     if workspace and review_id and decisions:
         try:
