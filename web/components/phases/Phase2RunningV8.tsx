@@ -57,6 +57,7 @@ import {
   ROLE_TO_BIRD_ID,
   classifyFailure,
   classifyFailReason,
+  deriveFunnelState,
   formatDuration,
   formatElapsed,
   formatTokens,
@@ -64,6 +65,8 @@ import {
   isAllWorkersDone,
   modelForRole,
   roleToBird,
+  type FunnelStageKey,
+  type FunnelState,
 } from "@/lib/v8-run-helpers";
 
 // worker 侧 4 鸟 · 展示顺序和 parallel_review _DEFAULT_REVIEW_DIMENSIONS 一致
@@ -242,6 +245,15 @@ export function Phase2RunningV8() {
 
   const consoleLines = useMemo(
     () => buildConsoleLines(stream.events),
+    [stream.events],
+  );
+
+  // ============================================================
+  // funnel 漏斗实时状态 (2026-04-28 step 1c)
+  // 从 SSE event 派生 5 stage 进度,实时渲染 review pipeline panel.
+
+  const funnelState = useMemo(
+    () => deriveFunnelState(stream.events),
     [stream.events],
   );
 
@@ -607,6 +619,9 @@ export function Phase2RunningV8() {
         </div>
       </section>
 
+      {/* ── 评审漏斗实时进度 (step 1c) ── */}
+      <FunnelPanel funnel={funnelState} />
+
       {/* ── RunConsole ── */}
       <RunConsole
         lines={consoleLines}
@@ -828,6 +843,247 @@ function DependencyEdges({ allDone }: { allDone: boolean }) {
         }
       `}</style>
     </svg>
+  );
+}
+
+// ============================================================
+// FunnelPanel · 5 stage 漏斗横向进度条 (step 1c)
+//
+// 设计:
+// - 5 个 stage tile 横排,每个显示 label + 大数字 + 细节 (撤回/降权/合并)
+// - 顶部右侧三个 retention 比率 (来自 funnel_summary)
+// - 没收到 funnel event 时整个 panel 折叠不显示, 留 fallback 文案
+// - audit #4: wiki canonical/contextual 比例显示在 N2 tile 下方
+
+function FunnelPanel({ funnel }: { funnel: FunnelState }) {
+  if (!funnel.hasAnyEvent) {
+    // fallback: 还没收到任何 funnel 事件 (评审刚开始 / 老版后端) — 折叠不渲染
+    // 避免占空间但不挡 UI, 保留 console + agent card 主流程
+    return null;
+  }
+
+  const stageOrder: FunnelStageKey[] = [
+    "N0_worker_raw",
+    "N1_after_dedup",
+    "N2_after_evidence_verify",
+    "N3_after_goshawk",
+    "N4_after_pm_decision",
+  ];
+
+  return (
+    <section
+      style={{
+        marginBottom: 16,
+        padding: "14px 16px",
+        borderRadius: "var(--r-3)",
+        background: "var(--surface-raised)",
+        border: "1px solid var(--border-subtle)",
+      }}
+      aria-label="评审漏斗实时进度"
+      data-testid="funnel-panel"
+    >
+      {/* header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          marginBottom: 12,
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+          <span
+            style={{
+              fontSize: 10,
+              fontFamily: "var(--font-mono)",
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              color: "var(--accent-600)",
+            }}
+          >
+            Review Funnel
+          </span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-strong)" }}>
+            评审漏斗
+          </span>
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+            5 stage 实时进度
+          </span>
+        </div>
+        {funnel.retention && (
+          <div
+            style={{
+              display: "flex",
+              gap: 12,
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              color: "var(--text-muted)",
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            <RetentionPill
+              label="dedup"
+              value={funnel.retention.dedup_retention}
+            />
+            <RetentionPill
+              label="ev"
+              value={funnel.retention.evidence_verify_retention}
+            />
+            <RetentionPill
+              label="goshawk"
+              value={funnel.retention.goshawk_retention}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* 5 stage 横排 */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(5, 1fr)",
+          gap: 8,
+        }}
+      >
+        {stageOrder.map((key) => {
+          const s = funnel.stages[key];
+          return (
+            <div
+              key={key}
+              data-testid={`funnel-stage-${key}`}
+              style={{
+                padding: "10px 12px",
+                borderRadius: "var(--r-2)",
+                background: s.received ? "var(--surface-canvas)" : "transparent",
+                border: `1px solid ${
+                  s.received ? "var(--border-default)" : "var(--border-subtle)"
+                }`,
+                opacity: s.received ? 1 : 0.45,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 10,
+                  fontFamily: "var(--font-mono)",
+                  fontWeight: 500,
+                  color: "var(--text-muted)",
+                  marginBottom: 4,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+                title={s.label}
+              >
+                {s.label}
+              </div>
+              <div
+                style={{
+                  fontSize: 22,
+                  fontWeight: 600,
+                  color: s.received ? "var(--text-strong)" : "var(--text-faint)",
+                  fontVariantNumeric: "tabular-nums",
+                  fontFamily: "var(--font-mono)",
+                  lineHeight: 1.1,
+                }}
+              >
+                {s.count == null ? "—" : s.count}
+              </div>
+              {s.detail && (
+                <div
+                  style={{
+                    marginTop: 4,
+                    fontSize: 10,
+                    color: "var(--text-muted)",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                  title={s.detail}
+                >
+                  {s.detail}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* audit #4: wiki authority 分布 (可选, 收到 evidence_verify 才显示) */}
+      {funnel.authorityDistribution && Object.keys(funnel.authorityDistribution).length > 0 && (
+        <div
+          style={{
+            marginTop: 10,
+            padding: "8px 10px",
+            borderRadius: "var(--r-2)",
+            background: "var(--surface-canvas)",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            flexWrap: "wrap",
+            fontSize: 11,
+            color: "var(--text-muted)",
+            fontFamily: "var(--font-mono)",
+            fontVariantNumeric: "tabular-nums",
+          }}
+          data-testid="wiki-authority-bar"
+        >
+          <span style={{ fontWeight: 600, color: "var(--text-default)" }}>
+            wiki 权威性
+          </span>
+          {funnel.wikiMode && (
+            <span
+              style={{
+                padding: "1px 6px",
+                borderRadius: "var(--r-2)",
+                background:
+                  funnel.wikiMode === "rich"
+                    ? "var(--status-done-bg)"
+                    : funnel.wikiMode === "sparse"
+                      ? "var(--status-warn-bg)"
+                      : "var(--neutral-100)",
+                color:
+                  funnel.wikiMode === "rich"
+                    ? "var(--status-done-fg)"
+                    : funnel.wikiMode === "sparse"
+                      ? "var(--status-warn-fg)"
+                      : "var(--text-muted)",
+                fontSize: 10,
+              }}
+            >
+              {funnel.wikiMode === "rich"
+                ? "rich"
+                : funnel.wikiMode === "sparse"
+                  ? "sparse"
+                  : "unknown"}
+            </span>
+          )}
+          {Object.entries(funnel.authorityDistribution).map(([tier, n]) => (
+            <span key={tier}>
+              {tier}: <span style={{ color: "var(--text-default)" }}>{n}</span>
+            </span>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function RetentionPill({ label, value }: { label: string; value: number }) {
+  // < 50% 提示降权过多 (suspicious_flags 触发条件之一); 50-80% 正常; > 80% 良好
+  const tone =
+    value < 0.5
+      ? "var(--status-failed-fg)"
+      : value < 0.8
+        ? "var(--status-warn-fg)"
+        : "var(--status-done-fg)";
+  return (
+    <span>
+      <span style={{ opacity: 0.6 }}>{label}</span>{" "}
+      <span style={{ color: tone }}>{(value * 100).toFixed(0)}%</span>
+    </span>
   );
 }
 

@@ -7,7 +7,10 @@
 
 import type { BirdId } from "@/components/birds/BirdAvatar";
 import type { RoleKey } from "@/lib/roles";
-import type { WorkerDoneEvent } from "@/lib/useReviewStream";
+import type {
+  ReviewStreamEvent,
+  WorkerDoneEvent,
+} from "@/lib/useReviewStream";
 import type {
   AgentStatus,
   FailReason,
@@ -133,6 +136,213 @@ export function formatDuration(ms?: number): string | undefined {
 export function modelForRole(roleKey: RoleKey, mode: string): string {
   if (mode === "quick") return "sonnet-4-6";
   return roleKey === "ai_coding" ? "opus-4" : "sonnet-4-6";
+}
+
+// ============================================================
+// Funnel state · 从 SSE event 流派生 5 stage 漏斗 (2026-04-28 step 1c)
+//
+// 后端 step 1a 走 SSE 推 5 个 funnel_stage_* + funnel_summary,前端 Phase2 拿
+// 这些事件实时渲染评审漏斗 panel。这里的派生函数纯函数,可以单测 (vitest node
+// env 不能跑 React render,但可以测 events → state 的算法层)。
+//
+// 5 stage 语义 (与 review/funnel_telemetry.py 对齐):
+// - N0_worker_raw          4 worker 原始产出 (含跨 worker 重复)
+// - N1_after_dedup         merge_and_deduplicate 后
+// - N2_after_evidence_verify  evidence verify (撤回/降权) 后
+// - N3_after_goshawk       苍鹰终审 + apply_advisor_result 后
+// - N4_after_pm_decision   PM 接受决策后 (confirm endpoint 单发, Phase2 拿不到, 标 pending)
+
+export type FunnelStageKey =
+  | "N0_worker_raw"
+  | "N1_after_dedup"
+  | "N2_after_evidence_verify"
+  | "N3_after_goshawk"
+  | "N4_after_pm_decision";
+
+export interface FunnelStageState {
+  /** 该 stage 的 item count (null = 还没收到对应 event) */
+  count: number | null;
+  /** stage 是否已收到事件 */
+  received: boolean;
+  /** stage 标签 (中文) */
+  label: string;
+  /** stage 的辅助文案 (例如 retracted=3 / dropped=6) */
+  detail?: string;
+}
+
+export interface FunnelState {
+  stages: Record<FunnelStageKey, FunnelStageState>;
+  /** N1/N2/N3 留存比率 (来自 funnel_summary, 没收到时为 undefined) */
+  retention?: {
+    dedup_retention: number;
+    evidence_verify_retention: number;
+    goshawk_retention: number;
+  };
+  /** 是否任意 funnel event 收到过 — false 时 UI 走 fallback */
+  hasAnyEvent: boolean;
+  /** wiki_mode (从 evidence_verify 拿, 给 audit#4 用) */
+  wikiMode?: "sparse" | "rich" | "unknown";
+  /** wiki authority 分布 (canonical/contextual/generated) — audit#4 */
+  authorityDistribution?: Readonly<Record<string, number>>;
+}
+
+const STAGE_LABELS: Record<FunnelStageKey, string> = {
+  N0_worker_raw: "N0 · worker 原始产出",
+  N1_after_dedup: "N1 · 去重后",
+  N2_after_evidence_verify: "N2 · 证据校验后",
+  N3_after_goshawk: "N3 · 苍鹰终审后",
+  N4_after_pm_decision: "N4 · PM 决策后",
+};
+
+/**
+ * 从 events 数组派生 funnel 5 stage 状态。
+ *
+ * 选最后一次出现的对应 event (而不是 first), 因为后端理论上一轮只发一次,
+ * 但 retry 场景可能重发 — 取最后的避免显示老数据。
+ */
+export function deriveFunnelState(
+  events: ReadonlyArray<ReviewStreamEvent>,
+): FunnelState {
+  const stages: Record<FunnelStageKey, FunnelStageState> = {
+    N0_worker_raw: { count: null, received: false, label: STAGE_LABELS.N0_worker_raw },
+    N1_after_dedup: { count: null, received: false, label: STAGE_LABELS.N1_after_dedup },
+    N2_after_evidence_verify: {
+      count: null,
+      received: false,
+      label: STAGE_LABELS.N2_after_evidence_verify,
+    },
+    N3_after_goshawk: { count: null, received: false, label: STAGE_LABELS.N3_after_goshawk },
+    N4_after_pm_decision: {
+      count: null,
+      received: false,
+      label: STAGE_LABELS.N4_after_pm_decision,
+      detail: "待 PM 决策",
+    },
+  };
+
+  let hasAnyEvent = false;
+  let retention: FunnelState["retention"];
+  let wikiMode: FunnelState["wikiMode"];
+  let authorityDistribution: FunnelState["authorityDistribution"];
+
+  for (const e of events) {
+    switch (e.event) {
+      case "funnel_stage_worker_raw":
+        stages.N0_worker_raw = {
+          count: e.count,
+          received: true,
+          label: STAGE_LABELS.N0_worker_raw,
+          detail:
+            e.dropped_unknown_rule_count && e.dropped_unknown_rule_count > 0
+              ? `dropped 幻觉 rule_id ${e.dropped_unknown_rule_count}`
+              : undefined,
+        };
+        hasAnyEvent = true;
+        break;
+      case "funnel_stage_after_dedup":
+        stages.N1_after_dedup = {
+          count: e.count,
+          received: true,
+          label: STAGE_LABELS.N1_after_dedup,
+          detail: e.dropped_count > 0 ? `去重 -${e.dropped_count}` : undefined,
+        };
+        hasAnyEvent = true;
+        break;
+      case "funnel_stage_after_evidence_verify": {
+        const parts: string[] = [];
+        if (e.retracted_count && e.retracted_count > 0)
+          parts.push(`撤回 -${e.retracted_count}`);
+        if (e.downgraded_count && e.downgraded_count > 0)
+          parts.push(`降权 ${e.downgraded_count}`);
+        stages.N2_after_evidence_verify = {
+          count: e.count,
+          received: true,
+          label: STAGE_LABELS.N2_after_evidence_verify,
+          detail: parts.length > 0 ? parts.join(" · ") : undefined,
+        };
+        wikiMode = e.wiki_mode;
+        authorityDistribution = e.authority_distribution;
+        hasAnyEvent = true;
+        break;
+      }
+      case "funnel_stage_after_goshawk": {
+        const d = e.delta_breakdown;
+        const parts: string[] = [];
+        if (d.removed > 0) parts.push(`移除 -${d.removed}`);
+        if (d.merged_to_facet > 0) parts.push(`合并 ${d.merged_to_facet}`);
+        if (d.added > 0) parts.push(`补充 +${d.added}`);
+        stages.N3_after_goshawk = {
+          count: e.count,
+          received: true,
+          label: STAGE_LABELS.N3_after_goshawk,
+          detail: parts.length > 0 ? parts.join(" · ") : undefined,
+        };
+        hasAnyEvent = true;
+        break;
+      }
+      case "funnel_summary":
+        retention = {
+          dedup_retention: e.stage_retention.dedup_retention,
+          evidence_verify_retention: e.stage_retention.evidence_verify_retention,
+          goshawk_retention: e.stage_retention.goshawk_retention,
+        };
+        // funnel_summary 也可能后发, 同步 stages 做兜底
+        if (typeof e.stages.N0_worker_raw === "number" && !stages.N0_worker_raw.received) {
+          stages.N0_worker_raw = {
+            count: e.stages.N0_worker_raw,
+            received: true,
+            label: STAGE_LABELS.N0_worker_raw,
+          };
+        }
+        if (typeof e.stages.N1_after_dedup === "number" && !stages.N1_after_dedup.received) {
+          stages.N1_after_dedup = {
+            count: e.stages.N1_after_dedup,
+            received: true,
+            label: STAGE_LABELS.N1_after_dedup,
+          };
+        }
+        if (
+          typeof e.stages.N2_after_evidence_verify === "number" &&
+          !stages.N2_after_evidence_verify.received
+        ) {
+          stages.N2_after_evidence_verify = {
+            count: e.stages.N2_after_evidence_verify,
+            received: true,
+            label: STAGE_LABELS.N2_after_evidence_verify,
+          };
+        }
+        if (
+          typeof e.stages.N3_after_goshawk === "number" &&
+          !stages.N3_after_goshawk.received
+        ) {
+          stages.N3_after_goshawk = {
+            count: e.stages.N3_after_goshawk,
+            received: true,
+            label: STAGE_LABELS.N3_after_goshawk,
+          };
+        }
+        hasAnyEvent = true;
+        break;
+      case "evidence_verify_done":
+        // 老版兼容: evidence_verify_done 升级 payload 也带 wiki_mode + authority
+        // (audit#4 的兜底数据源, 当 funnel_stage_after_evidence_verify 没发时)
+        if (!wikiMode && e.wiki_mode) wikiMode = e.wiki_mode;
+        if (!authorityDistribution && e.authority_distribution) {
+          authorityDistribution = e.authority_distribution;
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  return {
+    stages,
+    retention,
+    hasAnyEvent,
+    wikiMode,
+    authorityDistribution,
+  };
 }
 
 // ============================================================

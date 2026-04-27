@@ -87,6 +87,35 @@ export function Phase4ReportV8() {
     return map;
   }, [reviewResult]);
 
+  // audit #5: 苍鹰 DAR (Diversified Aggregated Resampling) 简报
+  // reviewResult.goshawk_summary 在多轮采样时带 retention_kind_dist + minority_kept,
+  // 单轮 (n_samples=1) 走老路径无此字段, 此处静默 best-effort 显示.
+  const darSummary = useMemo(() => {
+    const g = reviewResult?.goshawk_summary;
+    if (!g) return null;
+    const nSamples = typeof g.n_samples === "number" ? g.n_samples : null;
+    if (!nSamples || nSamples <= 1) return null;
+    // retention_kind_dist 只有 summarize_resample_telemetry 走过才有, 此处兜底解构
+    const dist = (g.retention_kind_dist as Record<string, number> | undefined) ?? {};
+    const minorityKept =
+      typeof g.minority_kept === "number" ? g.minority_kept : (dist.minority ?? 0);
+    return {
+      nSamples,
+      nSamplesSucceeded:
+        typeof g.n_samples_succeeded === "number" ? g.n_samples_succeeded : nSamples,
+      unanimous: dist.unanimous ?? 0,
+      majority: dist.majority ?? 0,
+      minority: dist.minority ?? 0,
+      minorityKept,
+    };
+  }, [reviewResult]);
+
+  // cross_boundary 计数 (顶部统计用) — 从所有 item 聚合
+  const crossBoundaryCount = useMemo(() => {
+    if (!reviewResult) return 0;
+    return reviewResult.items.filter((it) => it.cross_boundary).length;
+  }, [reviewResult]);
+
   const handleDownload = () => {
     if (!markdown) return;
     const safeName = (prdName || "PRD").replace(/\.[^.]+$/, "");
@@ -381,6 +410,74 @@ export function Phase4ReportV8() {
         )}
       </section>
 
+      {/* ── 评审治理简报 (DAR + cross_boundary) ── */}
+      {(darSummary || crossBoundaryCount > 0) && (
+        <section
+          style={{
+            marginTop: 24,
+            padding: "12px 16px",
+            borderRadius: "var(--r-3)",
+            background: "var(--surface-sunken)",
+            border: "1px solid var(--border-subtle)",
+            fontSize: 12,
+            color: "var(--text-muted)",
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 16,
+            alignItems: "center",
+          }}
+          data-testid="governance-summary"
+        >
+          <span
+            style={{
+              fontSize: 10,
+              fontFamily: "var(--font-mono)",
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              color: "var(--accent-600)",
+            }}
+          >
+            治理简报
+          </span>
+          {darSummary && (
+            <span
+              data-testid="dar-summary"
+              title="DAR (Diversified Aggregated Resampling): 苍鹰多轮采样,unanimous = N 轮全保留,minority = 仅少数轮保留 (DAR 少数派保留机制让其不被丢弃)"
+              style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}
+            >
+              苍鹰多轮: {darSummary.nSamplesSucceeded}/{darSummary.nSamples} 轮 ·
+              <span style={{ color: "var(--status-done-fg)", marginLeft: 4 }}>
+                unanimous {darSummary.unanimous}
+              </span>{" "}
+              ·{" "}
+              <span style={{ color: "var(--text-default)" }}>
+                majority {darSummary.majority}
+              </span>{" "}
+              ·{" "}
+              <span style={{ color: "var(--status-warn-fg)" }}>
+                minority {darSummary.minority}
+              </span>
+              {darSummary.minorityKept > 0 && (
+                <span style={{ marginLeft: 4, color: "var(--accent-600)" }}>
+                  (DAR 少数派保留 {darSummary.minorityKept})
+                </span>
+              )}
+            </span>
+          )}
+          {crossBoundaryCount > 0 && (
+            <span
+              data-testid="cross-boundary-count"
+              title="跨维度规则: worker 引用了 schema_registry 内但不属于本维度的 rule_id, 自动降权 0.3 confidence 后保留"
+              style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}
+            >
+              跨维度规则:{" "}
+              <span style={{ color: "var(--text-default)" }}>{crossBoundaryCount}</span> 条
+            </span>
+          )}
+        </section>
+      )}
+
       {/* ── 底部导出按钮行 ── */}
       <footer
         style={{
@@ -630,6 +727,7 @@ function DimGroup({ roleKey, items, decisions }: DimGroupProps) {
               <DecisionChip action={decision?.action} />
               <span style={{ flex: 1 }}>
                 {it.problem || it.suggestion || "(无摘要)"}
+                {it.cross_boundary && <CrossBoundaryChip />}
                 {it.location && (
                   <span
                     style={{
@@ -691,6 +789,40 @@ function DecisionChip({ action }: { action?: "accept" | "reject" | "edit" }) {
       }}
     >
       {tok.label}
+    </span>
+  );
+}
+
+/**
+ * cross_boundary chip · 跨维度规则视觉标 (step 1c)
+ *
+ * 当 worker 引用的 rule_id 属于 schema_registry 但不在本维度时,
+ * apply_advisor_result 保留 + 打 cross_boundary=true + confidence -0.3 降权.
+ * 此 chip 让 PM 一眼看出"这条不是本维度核心规则,只是跨域引用".
+ */
+function CrossBoundaryChip() {
+  return (
+    <span
+      data-testid="cross-boundary-chip"
+      title="此 rule_id 在本维度规则表外,但属于其他维度合法规则 (跨维度引用)。已自动降权 0.3 confidence。"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        marginLeft: 6,
+        padding: "1px 6px",
+        borderRadius: "var(--r-2)",
+        background: "var(--neutral-100)",
+        color: "var(--text-muted)",
+        fontSize: 10,
+        fontFamily: "var(--font-mono)",
+        fontWeight: 500,
+        lineHeight: 1.4,
+        verticalAlign: "middle",
+        whiteSpace: "nowrap",
+        cursor: "help",
+      }}
+    >
+      跨维度规则
     </span>
   );
 }
