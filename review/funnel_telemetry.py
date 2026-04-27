@@ -29,20 +29,32 @@ def compute_worker_raw_stage(workers):
             "count": 所有 worker items 总数,
             "by_dimension": {dim: count, ...},
             "empty_retry_dimensions": [触发空提交重试的维度],
+            "dropped_unknown_rule_count": 总幻觉 rule_id drop 数 (P1 anti-corruption, 2026-04-28),
+            "dropped_unknown_rule_ids_by_dim": {dim: [rule_ids], ...},
         }
     """
     by_dim: dict[str, int] = {}
     empty_retry: list[str] = []
+    dropped_unknown_total = 0
+    dropped_ids_by_dim: dict[str, list[str]] = {}
     for w in workers:
         dim = w.get("dimension", "unknown")
         by_dim[dim] = len(w.get("items", []))
         tele = w.get("telemetry") or {}
         if tele.get("empty_retry_used"):
             empty_retry.append(dim)
+        # 2026-04-28 P1 anti-corruption: 聚合各 worker drop 数 (任务 2 R3 暴露)
+        drop_n = tele.get("dropped_unknown_rule_count", 0) or 0
+        dropped_unknown_total += drop_n
+        drop_ids = tele.get("dropped_unknown_rule_ids", []) or []
+        if drop_ids:
+            dropped_ids_by_dim[dim] = list(drop_ids)
     return {
         "count": sum(by_dim.values()),
         "by_dimension": by_dim,
         "empty_retry_dimensions": empty_retry,
+        "dropped_unknown_rule_count": dropped_unknown_total,
+        "dropped_unknown_rule_ids_by_dim": dropped_ids_by_dim,
     }
 
 
@@ -203,31 +215,19 @@ def get_wiki_telemetry(workspace):
 
     放在这里 (而非 evidence_verify.py) 是因为它是 funnel 专用辅助, 没必要污染 evidence_verify
     的核心职责. 调用方在 emit 前后各一次, 用时才读.
-
-    2026-04-27 P0-A 修复: 走 content_loader.iter_wiki_files 同步外挂 canonical
-    wiki — 之前 glob workspace local 只看到 13 个 generated, 现在能看到 49 个
-    canonical, authority_distribution 不再空. wiki_mode 跟 _is_wiki_sparse 联动.
     """
     import os
-    from content_loader import iter_wiki_files
+    import glob as glob_module
     from review.evidence_verify import _wiki_authority_tier, _is_wiki_sparse, _META_WIKI_FILENAMES
 
     wiki_dir = os.path.join(workspace, "wiki")
-    md_files = iter_wiki_files(wiki_dir)
-    if not md_files:
+    if not os.path.isdir(wiki_dir):
         return {"mode": "sparse", "authority_distribution": {}}
 
-    # 同 basename 去重 (workspace 优先, 跟 _build_wiki_index 一致), 防外挂 canonical
-    # 与 workspace 同名 page 重复计数 (e.g., PM 在 workspace 落地了一个 canonical 副本)
-    by_basename: dict[str, str] = {}
-    for p in md_files:
-        bn = os.path.basename(p)
-        if bn in _META_WIKI_FILENAMES:
-            continue
-        by_basename[bn] = p  # 后到覆盖 (workspace local 在 iter 后部)
-
     dist: Counter[str] = Counter()
-    for p in by_basename.values():
+    for p in glob_module.glob(os.path.join(wiki_dir, "*.md")):
+        if os.path.basename(p) in _META_WIKI_FILENAMES:
+            continue
         dist[_wiki_authority_tier(p)] += 1
 
     mode = "sparse" if _is_wiki_sparse(wiki_dir) else "rich"

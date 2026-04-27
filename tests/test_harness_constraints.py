@@ -28,106 +28,53 @@ class TestConfidenceFieldUnified:
     """越界惩罚必须作用到 confidence_score (下游消费字段),不是 confidence。"""
 
     def test_cross_boundary_penalty_on_confidence_score(self, tmp_path):
-        """Worker item 的 rule_id 不在 checklist 时,confidence_score 应 -0.3。
+        """Worker item 的 rule_id 跨维度 (∈ registry 但 ∉ 本维度) 时, confidence_score 应 -0.3.
 
-        这是真 bug 的回归测: 之前改的是 confidence 字段,下游完全无感。
+        这是真 bug 的回归测: 之前改的是 confidence 字段, 下游完全无感.
+        2026-04-28 P1 修法: 幻觉 ID (∉ registry) 改 drop, 跨维度合法 ID 仍走老 cross_boundary 惩罚.
+        本测试 dim_key='structure', rule_id='V-07' (V-07 在 registry quality 维度) → cross_boundary.
         """
         import parallel_review as pr
+        from review.worker import _postprocess_items
+        from review.dimensions import get_review_dimensions
 
-        # 构造最小 _worker_core 环境
-        fake_dim = {
-            "name": "测试维度",
-            "model": "sonnet",
-            "effort": "medium",
-            "checklist": [{"rule_id": "RC-001"}],  # 只允许 RC-001
+        # 直接测 _postprocess_items (避免 _worker_core 全套 mock 复杂度)
+        # 关键契约: cross_boundary 惩罚作用到 confidence_score 而非 confidence
+        dim = get_review_dimensions()["structure"]
+        cross_boundary_item = {
+            "id": "R-001",
+            "rule_id": "V-07",  # V-07 在 quality 维度, 但本维度是 structure → 跨维度合法
+            "issue": "foo",
+            "severity": "must",
+            "confidence_score": 0.9,  # 初始高置信度
+            "dimension": dim["name"],
         }
-        with patch("review.worker.get_review_dimensions",
-                   return_value={"test_dim": fake_dim}), \
-             patch("review.worker.get_wiki_keywords", return_value=[]), \
-             patch("review.worker._build_worker_system", return_value="sys"), \
-             patch("review.worker._build_worker_messages",
-                   return_value=[{"role": "user", "content": "prd"}]), \
-             patch("review.worker.PromptCacheMonitor", MagicMock, create=True), \
-             patch("api_adapter.compute_call_cost_usd", return_value=0.001), \
-             patch("review.worker.time.sleep", lambda _: None), \
-             patch("review.worker.random.uniform", lambda a, b: 0):
+        out, _tele = _postprocess_items([cross_boundary_item], dim, "structure")
 
-            # model 返回一条越界的 item (rule_id 不在 checklist)
-            from types import SimpleNamespace
-            cross_boundary_item = {
-                "id": "R-001",
-                "rule_id": "RC-999",  # 不在 checklist!
-                "issue": "foo",
-                "severity": "must",
-                "confidence_score": 0.9,  # 初始高置信度
-            }
-            response = SimpleNamespace(
-                content=[SimpleNamespace(
-                    type="tool_use", name="submit_review_items",
-                    id="t1", input={"items": [cross_boundary_item]},
-                )],
-                stop_reason="end_turn",
-                usage={"input_tokens": 100, "output_tokens": 50,
-                       "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0},
-            )
-            client = MagicMock()
-            client.create.return_value = response
-
-            result = pr._worker_core(
-                client=client, dim_key="test_dim",
-                prd_content="PRD", wiki_pages={}, model_tiers={"sonnet": "s"},
-            )
-
-        assert len(result["items"]) == 1
-        item = result["items"][0]
+        assert len(out) == 1
+        item = out[0]
         assert item["cross_boundary"] is True
         # 关键断言: confidence_score 被下调到 0.9 - 0.3 = 0.6
         assert abs(item["confidence_score"] - 0.6) < 1e-6, (
-            f"越界惩罚应作用到 confidence_score,实际 = {item.get('confidence_score')}。"
-            f"如果这个测试失败,说明有人又把字段名改回 confidence 了。"
+            f"越界惩罚应作用到 confidence_score, 实际 = {item.get('confidence_score')}. "
+            f"如果这个测试失败, 说明有人又把字段名改回 confidence 了."
         )
 
     def test_no_penalty_when_rule_id_in_checklist(self, tmp_path):
-        """合法 rule_id 不触发越界惩罚。"""
-        import parallel_review as pr
+        """合法本维度 rule_id 不触发越界惩罚."""
+        from review.worker import _postprocess_items
+        from review.dimensions import get_review_dimensions
 
-        fake_dim = {
-            "name": "测试维度",
-            "model": "sonnet", "effort": "medium",
-            "checklist": [{"rule_id": "RC-001"}],
+        dim = get_review_dimensions()["structure"]
+        # V-02 ∈ structure 维度真规则, 不应惩罚
+        ok_item = {
+            "id": "R-001", "rule_id": "V-02", "issue": "foo",
+            "severity": "must", "confidence_score": 0.9,
+            "dimension": dim["name"],
         }
-        with patch("review.worker.get_review_dimensions",
-                   return_value={"test_dim": fake_dim}), \
-             patch("review.worker.get_wiki_keywords", return_value=[]), \
-             patch("review.worker._build_worker_system", return_value="sys"), \
-             patch("review.worker._build_worker_messages",
-                   return_value=[{"role": "user", "content": "prd"}]), \
-             patch("review.worker.PromptCacheMonitor", MagicMock, create=True), \
-             patch("api_adapter.compute_call_cost_usd", return_value=0.001):
-
-            from types import SimpleNamespace
-            ok_item = {
-                "id": "R-001", "rule_id": "RC-001", "issue": "foo",
-                "severity": "must", "confidence_score": 0.9,
-            }
-            response = SimpleNamespace(
-                content=[SimpleNamespace(
-                    type="tool_use", name="submit_review_items",
-                    id="t1", input={"items": [ok_item]},
-                )],
-                stop_reason="end_turn",
-                usage={"input_tokens": 100, "output_tokens": 50,
-                       "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0},
-            )
-            client = MagicMock()
-            client.create.return_value = response
-
-            result = pr._worker_core(
-                client=client, dim_key="test_dim",
-                prd_content="PRD", wiki_pages={}, model_tiers={"sonnet": "s"},
-            )
-
-        item = result["items"][0]
+        out, _tele = _postprocess_items([ok_item], dim, "structure")
+        assert len(out) == 1
+        item = out[0]
         assert item.get("cross_boundary") is not True  # False or missing
         assert item["confidence_score"] == 0.9
 

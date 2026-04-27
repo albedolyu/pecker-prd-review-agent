@@ -114,7 +114,7 @@ def _postprocess_items(
     items: List[Dict[str, Any]],
     dim: Dict[str, Any],
     dim_key: str,
-) -> List[Dict[str, Any]]:
+) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """items 后处理: 过滤非 dict / 维度校正 / 规则越界标注 / MAX_ITEMS 软上限截断.
 
     纯函数, 可独立单测. 入参 dim 是 dimensions[dim_key] 配置, 包含 name/checklist.
@@ -122,8 +122,17 @@ def _postprocess_items(
     2026-04-26 sprint Day3 P0-2: 截断从硬上限 (15) 改软上限 (15 * 1.5 = 22 默认).
     实测 sampling noise: 同 PRD 同 codebase N0 浮动 8-18, 17%~100% 命中硬截断 → 14.5% overlap.
     软上限让常见量级 (8-22) 全保留, 仅在异常多产 (>22) 时截. 越界时 + WORKER_SEED 确定排序.
+
+    2026-04-28 P1 anti-corruption drop (任务 2 R3 暴露):
+    rule_id 校验改 3 类区分 (走 SchemaRegistry, 不再依赖 dim['checklist'] 现算):
+      ∈ all_rule_ids ∩ dim_rule_ids   → 留 (合法本维度)
+      ∈ all_rule_ids \\ dim_rule_ids  → 留 + cross_boundary 标 (跨维度合法)
+      ∉ all_rule_ids                  → drop + log warning (LLM 幻觉 ID)
+    返回 (items, drop_telemetry) tuple — drop_telemetry 含 dropped_unknown_rule_count
+    用于 funnel jsonl emit.
     """
     from agent_config import MAX_ITEMS_PER_WORKER, WORKER_SOFT_CAP_MULTIPLIER, WORKER_SEED
+    from review.schema_registry import SchemaRegistry
 
     # 过滤非 dict (模型偶尔返回字符串数组而非对象数组)
     items = [item for item in items if isinstance(item, dict)]
@@ -134,17 +143,42 @@ def _postprocess_items(
             log.warning(f"[{_cn_label(dim_key)}] 维度越界: {item.get('dimension')} → {dim['name']}")
         item["dimension"] = dim["name"]
 
-    # P1.3: 规则越界硬校验 — checklist 里定义的 rule_id 才算本维度合法
-    valid_rule_ids = {r["rule_id"] for r in dim.get("checklist", [])}
+    # P1 anti-corruption drop (2026-04-28): registry 单点 SoT 做 3 类区分
+    # 走 SchemaRegistry.get() workspace=None (workspace 上下文从 dim 推不出, 默认 global yaml)
+    # 不影响真 worker — 真 worker 的 dim 来自 get_review_dimensions, 与 registry 同源
+    registry = SchemaRegistry.get(workspace=None)
+    all_rule_ids = registry.all_rule_ids()  # frozenset
+    dim_rule_ids = {r.rule_id for r in registry.dimension_rules(dim_key)}
+
+    kept_items: List[Dict[str, Any]] = []
+    dropped_unknown_count = 0
+    dropped_unknown_ids: List[str] = []
+
     for item in items:
         rid = item.get("rule_id", "")
-        if rid and valid_rule_ids and rid not in valid_rule_ids:
-            log.warning(f"[{_cn_label(dim_key)}] 规则越界: {rid} 不在 {dim_key} checklist 中")
+        if not rid:
+            # 无 rule_id 不动 (老行为兼容, parse 失败兜底)
+            kept_items.append(item)
+            continue
+        if rid not in all_rule_ids:
+            # 第 3 类: 幻觉 ID — drop
+            dropped_unknown_count += 1
+            dropped_unknown_ids.append(rid)
+            log.warning(
+                f"[{_cn_label(dim_key)}] drop_unknown_rule_id: rule_id={rid!r} "
+                f"不在 registry.all_rule_ids() (LLM 幻觉, 任务 2 R3 暴露)"
+            )
+            continue
+        if rid not in dim_rule_ids:
+            # 第 2 类: 跨维度合法 — 留 + 标 (老 defense-in-depth 行为保留)
+            log.warning(f"[{_cn_label(dim_key)}] 规则越界: {rid} 不在 {dim_key} 维度内 (但 ∈ registry)")
             item["cross_boundary"] = True
-            # 2026-04-16 harness audit 修复: 原先改 confidence, 下游只读
-            # confidence_score, 让惩罚静默失效. 统一成 confidence_score.
             current = item.get("confidence_score", 0.85)
             item["confidence_score"] = max(0.0, round(current - 0.3, 2))
+        # 第 1 类 (合法本维度) 走默认: 不打标, 直接留
+        kept_items.append(item)
+
+    items = kept_items
 
     # 2026-04-26 P0-2: 软上限截断 — 大部分 PRD 不会触发, sampling noise 在边界处消失
     soft_cap = max(MAX_ITEMS_PER_WORKER, int(MAX_ITEMS_PER_WORKER * WORKER_SOFT_CAP_MULTIPLIER))
@@ -172,7 +206,11 @@ def _postprocess_items(
             items.sort(key=lambda x: (0 if x.get("severity") == "must" else 1, -x.get("confidence_score", 0)))
         items = items[:soft_cap]
 
-    return items
+    drop_telemetry = {
+        "dropped_unknown_rule_count": dropped_unknown_count,
+        "dropped_unknown_rule_ids": dropped_unknown_ids,
+    }
+    return items, drop_telemetry
 
 
 # ============================================================
@@ -541,7 +579,8 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
                 log.info(f"[{_cn_label(dim_key)}] 文本兜底解析出 {len(items)} 条改进项")
 
     # items 后处理抽到 _postprocess_items (纯函数, 可独立单测)
-    items = _postprocess_items(items, dim, dim_key)
+    # 2026-04-28 P1: 返 (items, drop_telemetry), drop_telemetry 含 dropped_unknown_rule_count
+    items, drop_telemetry = _postprocess_items(items, dim, dim_key)
 
     # 提取 worker 发现的关键规则 ID（供 scratchpad 跨 worker 共享）
     found_rule_ids = list(set(item.get("rule_id", "") for item in items if item.get("rule_id")))
@@ -568,6 +607,9 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
         "turns_used": current_turn,
         "truncated": getattr(response, "truncated", False),
         "empty_retry_used": empty_retry_used,
+        # 2026-04-28 P1 anti-corruption drop: LLM 出未知 rule_id 数 (任务 2 R3 暴露)
+        "dropped_unknown_rule_count": drop_telemetry["dropped_unknown_rule_count"],
+        "dropped_unknown_rule_ids": drop_telemetry["dropped_unknown_rule_ids"],
     }
 
     return {

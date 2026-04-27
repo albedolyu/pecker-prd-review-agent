@@ -107,7 +107,7 @@ def _make_minimal_worker_env(monkeypatch):
         "name": "测试维度",
         "model": "sonnet",
         "effort": "medium",
-        "checklist": [{"rule_id": "R-TEST-001"}],
+        "checklist": [{"rule_id": "V-02"}],
     }
     monkeypatch.setattr(
         "review.worker.get_review_dimensions",
@@ -145,7 +145,7 @@ class TestWorkerEmptyRetry:
 
         first = _response([_tool_use_block([])])
         retry_items = [{"id": "R-001", "issue": "补充发现", "severity": "should",
-                        "rule_id": "R-TEST-001"}]
+                        "rule_id": "V-02"}]
         second = _response([_tool_use_block(retry_items)])
         client = MagicMock()
         client.create.side_effect = [first, second]
@@ -195,7 +195,7 @@ class TestWorkerEmptyRetry:
         from parallel_review import _worker_core
 
         first_items = [{"id": "R-001", "issue": "foo", "severity": "must",
-                        "rule_id": "R-TEST-001"}]
+                        "rule_id": "V-02"}]
         first = _response([_tool_use_block(first_items)])
         client = MagicMock()
         client.create.side_effect = [first]
