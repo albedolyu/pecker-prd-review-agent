@@ -72,41 +72,17 @@ class TestYamlLoadIncludesFnEv:
 
 
 # ============================================================
-# 2. _DEFAULT_REVIEW_DIMENSIONS 兜底真含 EV/FN (yaml 失败时 fallback)
+# 2. _DEFAULT_REVIEW_DIMENSIONS fallback 测试已删除 (step 3.2, 2026-04-27)
 # ============================================================
-
-
-class TestDefaultDimensionsFallbackContainsFnEv:
-    """yaml 加载失败 fallback 时, _DEFAULT_REVIEW_DIMENSIONS 仍要含 EV/FN, 不能丢."""
-
-    def test_default_structure_has_ev01_fn09(self):
-        from review.dimensions import _DEFAULT_REVIEW_DIMENSIONS
-        rids = [r["rule_id"] for r in _DEFAULT_REVIEW_DIMENSIONS["structure"]["checklist"]]
-        assert "EV-01" in rids, f"_DEFAULT structure 应含 EV-01, 实际 {rids}"
-        assert "FN-09" in rids, f"_DEFAULT structure 应含 FN-09, 实际 {rids}"
-
-    def test_default_ai_coding_has_fn03(self):
-        from review.dimensions import _DEFAULT_REVIEW_DIMENSIONS
-        rids = [r["rule_id"] for r in _DEFAULT_REVIEW_DIMENSIONS["ai_coding"]["checklist"]]
-        assert "FN-03" in rids, f"_DEFAULT ai_coding 应含 FN-03, 实际 {rids}"
-
-    def test_default_data_quality_has_ev04_fn01(self):
-        from review.dimensions import _DEFAULT_REVIEW_DIMENSIONS
-        rids = [r["rule_id"] for r in _DEFAULT_REVIEW_DIMENSIONS["data_quality"]["checklist"]]
-        assert "EV-04" in rids, f"_DEFAULT data_quality 应含 EV-04, 实际 {rids}"
-        assert "FN-01" in rids, f"_DEFAULT data_quality 应含 FN-01, 实际 {rids}"
-
-    def test_default_rules_text_mentions_fn_ev(self):
-        """_DEFAULT rules 文本也要提到 EV/FN, 让 _build_feedback_section 能扫到."""
-        from review.dimensions import _DEFAULT_REVIEW_DIMENSIONS
-        struct_rules = _DEFAULT_REVIEW_DIMENSIONS["structure"]["rules"]
-        assert "EV-01" in struct_rules
-        assert "FN-09" in struct_rules
-        ai_rules = _DEFAULT_REVIEW_DIMENSIONS["ai_coding"]["rules"]
-        assert "FN-03" in ai_rules
-        dq_rules = _DEFAULT_REVIEW_DIMENSIONS["data_quality"]["rules"]
-        assert "EV-04" in dq_rules
-        assert "FN-01" in dq_rules
+#
+# 历史: P0-B 时这里有 4 个测试锁死 _DEFAULT_REVIEW_DIMENSIONS 含 EV/FN.
+# step 3.2 删了 _DEFAULT_REVIEW_DIMENSIONS 硬编码 fallback (反模式根因 — 与 yaml 漂移).
+# yaml 加载失败的新行为: 返回空 dict + warn (或 PECKER_SCHEMA_FALLBACK=1 兜底空).
+#
+# yaml 真路径含 EV/FN 的 P0-B 防回归:
+# - 上方 TestYamlLoadIncludesFnEv 已锁死 yaml 真路径含 EV/FN.
+# - tests/test_dimensions_registry_wiring.py::test_yaml_loaded_rules_include_v_rc_ev_fn
+#   也锁死 4 前缀都被 yaml 加载.
 
 
 # ============================================================

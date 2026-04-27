@@ -14,6 +14,37 @@ import re
 from datetime import datetime
 
 
+# ============================================================
+# rule_id 抽取: 走 SchemaRegistry 单点 SoT (step 3.5)
+# ============================================================
+
+
+def _extract_rule_ids_via_registry(text, workspace=None, allow_bmad_prefix=False):
+    """从文本抽合法 rule_id 列表 — 走 SchemaRegistry 单点 SoT.
+
+    替代散落 ``re.findall(r"(RC-\\d+|V-\\d+|...)", text)`` 硬编码.
+    yaml 加新前缀 (V-13/RC-017/EV-XX/FN-XX) 时 cuckoo_scorer 自动同步,
+    防 P0-B 漂移再现.
+    """
+    if not text:
+        return []
+    from review.evidence_verify import _extract_rule_ids
+    return _extract_rule_ids(text, workspace=workspace, allow_bmad_prefix=allow_bmad_prefix)
+
+
+def _workspace_from_rules_dir(rules_dir):
+    """rules_dir 反推 workspace — cuckoo_scorer 内层函数只持 rules_dir 时的 fallback.
+
+    rules_dir 形如 ``<workspace>/review-rules``, 取 dirname 即可. None 时返 None.
+    剥所有尾分隔符 (兼容 ``/ws/review-rules/`` 或 ``\\ws\\review-rules\\`` 写法).
+    """
+    if not rules_dir:
+        return None
+    # 同时剥 / 和 \ (Windows + Unix 兼容), 不只剥 os.sep
+    stripped = rules_dir.rstrip("/\\")
+    return os.path.dirname(stripped) or None
+
+
 # ── 匹配引擎 ──
 
 def match_items_to_bugs(review_items, planted_bugs):
@@ -236,11 +267,14 @@ def _verify_type_a(evidence_content, wiki_dir):
 
 def _verify_type_b(evidence_content, rules_dir):
     """B 类依据验证：规则编号是否在 review-rules/ 中"""
-    # 提取规则编号（RC-XXX, V-XX, BMAD 等）
-    rule_refs = re.findall(r'(RC-\d+|BMAD[\s-]V-\d+|V-\d+)', evidence_content)
+    # 提取规则编号 — 走 SchemaRegistry 单点 SoT (step 3.5), 加 BMAD 兼容
+    workspace = _workspace_from_rules_dir(rules_dir)
+    rule_refs = _extract_rule_ids_via_registry(
+        evidence_content, workspace=workspace, allow_bmad_prefix=True,
+    )
 
     if not rule_refs:
-        return False, "B 类依据未包含有效的规则编号（RC-XXX 或 V-XX）"
+        return False, "B 类依据未包含有效的规则编号（如 V-XX / RC-XXX / EV-XX / FN-XX）"
 
     if not os.path.isdir(rules_dir):
         # 规则目录不存在，但引用了规则编号 — 视为无法验证
@@ -301,8 +335,9 @@ def _verify_unknown_type(evidence_content, wiki_dir, rules_dir, item):
         ok, reason = _verify_type_a(evidence_content, wiki_dir)
         return ok, f"[自动推断为 A 类] {reason}"
 
-    # 有 RC-/V- 编号 → 可能是 B 类
-    if re.search(r'RC-\d+|V-\d+', evidence_content):
+    # 有 V/RC/EV/FN 编号 → 可能是 B 类 (走 registry 单点 SoT, step 3.5)
+    workspace = _workspace_from_rules_dir(rules_dir)
+    if _extract_rule_ids_via_registry(evidence_content, workspace=workspace):
         ok, reason = _verify_type_b(evidence_content, rules_dir)
         return ok, f"[自动推断为 B 类] {reason}"
 
@@ -464,14 +499,22 @@ def aggregate_rule_metrics(matches, review_items):
     return result
 
 
-def _extract_rule_id_from_item(item):
-    """从改进项中提取规则编号(RC-xxx / V-xx)"""
+def _extract_rule_id_from_item(item, workspace=None):
+    """从改进项中提取规则编号 — 走 SchemaRegistry 单点 SoT (step 3.5).
+
+    替代硬编码 ``r"(RC-\\d+|V-\\d+)"`` — yaml 加 EV/FN/V-13 时 cuckoo_scorer
+    自动识别, 不需要再改这里.
+
+    Args:
+        item: review 改进项 dict.
+        workspace: 工作目录路径 (拿对应 registry). None 时走全局 registry.
+    """
     # 直接字段
     rid = item.get("rule_id") or item.get("rule")
     if rid:
-        m = re.search(r'(RC-\d+|V-\d+)', str(rid))
-        if m:
-            return m.group(1)
+        ids = _extract_rule_ids_via_registry(str(rid), workspace=workspace)
+        if ids:
+            return ids[0]
 
     # evidence_content / raw_text 中的规则编号
     text = " ".join([
@@ -479,8 +522,8 @@ def _extract_rule_id_from_item(item):
         str(item.get("raw_text", "")),
         str(item.get("related_rule", "")),
     ])
-    m = re.search(r'(RC-\d+|V-\d+)', text)
-    return m.group(1) if m else "UNKNOWN"
+    ids = _extract_rule_ids_via_registry(text, workspace=workspace)
+    return ids[0] if ids else "UNKNOWN"
 
 
 def _guess_rule_id_for_bug(bug, review_items):
@@ -604,7 +647,7 @@ def calculate_rule_coverage_matrix(review_items, workspace):
             "by_dimension": {dim_name: [rule_ids]},
         }
     """
-    # 1. 扫 workspace/review-rules 抽所有可用 rule_id
+    # 1. 扫 workspace/review-rules 抽所有可用 rule_id — 走 SchemaRegistry 单点 SoT (step 3.5)
     all_rules = set()
     rules_dir = os.path.join(workspace, "review-rules")
     if os.path.isdir(rules_dir):
@@ -615,7 +658,9 @@ def calculate_rule_coverage_matrix(review_items, workspace):
                         fpath = os.path.join(root, f)
                         with open(fpath, "r", encoding="utf-8") as fp:
                             content = fp.read()
-                        all_rules.update(re.findall(r"(RC-\d+|V-\d+)", content))
+                        all_rules.update(
+                            _extract_rule_ids_via_registry(content, workspace=workspace)
+                        )
                     except (OSError, UnicodeDecodeError):
                         continue
 
@@ -626,9 +671,9 @@ def calculate_rule_coverage_matrix(review_items, workspace):
         rid = (item.get("rule_id") or "").strip()
         if not rid:
             content = item.get("evidence_content") or ""
-            m = re.search(r"(RC-\d+|V-\d+)", content)
-            if m:
-                rid = m.group(1)
+            ids = _extract_rule_ids_via_registry(content, workspace=workspace)
+            if ids:
+                rid = ids[0]
         if rid and rid in all_rules:
             hit_rules.add(rid)
             dim = item.get("dimension") or "未知"

@@ -23,6 +23,71 @@ log = get_logger("parallel")
 
 
 # ============================================================
+# rule_id 抽取: 走 SchemaRegistry 单点 SoT (step 3.4)
+# ============================================================
+
+# 把 registry.rule_id_pattern() 的 ^...$ 锚点剥掉, 用于在 evidence 文本里 findall 抽 rule_id.
+# 为什么不直接 re.findall(pattern) — registry pattern 是 ^(V|RC|EV|FN)-\d+$ anchored,
+# findall 在长文本里会一条都抽不到. 这里剥锚点保留 prefix 枚举.
+_ANCHOR_STRIP = re.compile(r"^\^(.*)\$$")
+
+
+def _registry_rule_id_extractor(workspace=None, allow_bmad_prefix=False):
+    r"""从 SchemaRegistry 拿 rule_id 抽取正则 (单点 SoT, step 3.4).
+
+    替代原硬编码 ``r"(?:RC|V|EV|FN)-\d+"`` — 加新前缀 (如 RC-017) 时
+    只改 review-dimensions.yaml, evidence_verify 自动同步.
+
+    Args:
+        workspace: 工作目录路径, 传给 SchemaRegistry.get 拿对应 registry.
+        allow_bmad_prefix: True 时同时识别 ``BMAD V-XX`` 写法 (向后兼容).
+
+    Returns:
+        compiled regex (re.Pattern), 用于 findall 抽 rule_id substring.
+    """
+    from review.schema_registry import SchemaRegistry
+
+    registry = SchemaRegistry.get(workspace=workspace)
+    anchored = registry.rule_id_pattern()           # 例 r"^(V|RC|EV|FN)-\d+$"
+    m = _ANCHOR_STRIP.match(anchored)
+    bare = m.group(1) if m else anchored            # → r"(V|RC|EV|FN)-\d+"
+    # 把 capturing group 转成 non-capturing — 否则 findall 只返 prefix 不返完整 id.
+    # registry rule_id_pattern() 用 capturing group `(V|RC|...)`, findall 行为是返
+    # group 1, 这里把第一个 `(` 换成 `(?:` 让 findall 拿完整 substring.
+    bare_noncap = re.sub(r"^\(([^?])", r"(?:\1", bare)
+
+    if allow_bmad_prefix:
+        # BMAD 前缀只与 V-XX 搭配 (历史 BMAD 框架兼容, 与 P0-B 改前一致)
+        return re.compile(rf"(?:BMAD\s+V-\d+|{bare_noncap})")
+    return re.compile(bare_noncap)
+
+
+def _extract_rule_ids(text, workspace=None, allow_bmad_prefix=False):
+    """从文本抽合法 rule_id 列表 (registry 已知前缀过滤).
+
+    单点入口, 取代散落 re.findall 调用.
+    """
+    if not text:
+        return []
+    pattern = _registry_rule_id_extractor(workspace=workspace, allow_bmad_prefix=allow_bmad_prefix)
+    return pattern.findall(text)
+
+
+def _is_known_rule_id(rule_id, workspace=None):
+    """rule_id 合法性校验: registry.all_rule_ids() set membership.
+
+    替代字符串 regex 校验 — V-99 / FN-50 这种"前缀对但 yaml 没注册"的 id 也能拒掉.
+    """
+    if not rule_id:
+        return False
+    from review.schema_registry import SchemaRegistry
+    registry = SchemaRegistry.get(workspace=workspace)
+    # BMAD V-XX 兼容: 剥前缀再查
+    clean = rule_id.replace("BMAD ", "").strip()
+    return clean in registry.all_rule_ids()
+
+
+# ============================================================
 # wiki / rule 文件查找
 # ============================================================
 
@@ -476,14 +541,22 @@ def _verify_evidence_chain(chain, wiki_dir=None, wiki_index=None, prd_content=No
 
 
 def _find_rule_reference(evidence_content, rules_dir):
-    """检查规则编号是否在 review-rules 目录中存在"""
+    r"""检查规则编号是否在 review-rules 目录中存在.
+
+    2026-04-27 step 3.4: rule_id 抽取走 SchemaRegistry.rule_id_pattern() 单点 SoT,
+    替代原硬编码 ``(?:RC|V|EV|FN)-\d+`` regex. 加新前缀 (RC-017 / V-13 / FN-04)
+    时只改 review-dimensions.yaml, evidence_verify 自动同步, 不再 P0-B 漂移.
+
+    workspace 用 ``rules_dir`` 反推 (rules_dir = workspace/review-rules), 避免
+    改函数签名破坏 caller.
+    """
     if not os.path.isdir(rules_dir):
         return False
 
+    # 反推 workspace (rules_dir = workspace/review-rules)
+    workspace = os.path.dirname(rules_dir.rstrip(os.sep))
     # 提取规则编号（如 RC-005, V-07, EV-01, FN-09, BMAD V-02 等）
-    # 2026-04-27 P0-B: 扩 EV-/FN- 跟 schema regex 校准. 老 regex 漏 EV/FN, 让 worker
-    # 提交 EV-01/FN-09 的 B 类依据时被判 retracted (找不到), 强迫 worker 用 V-/RC- 幻觉绕过.
-    rule_ids = re.findall(r"(?:BMAD\s+V-\d+|(?:RC|V|EV|FN)-\d+)", evidence_content)
+    rule_ids = _extract_rule_ids(evidence_content, workspace=workspace, allow_bmad_prefix=True)
     if not rule_ids:
         # 没有明确规则编号，视为验证失败
         return False
@@ -524,8 +597,11 @@ def _verify_b_class_semantic(item, rules_dir):
         (passed: bool, note: str)
     """
     ev_content = item.get("evidence_content", "")
-    # 2026-04-27 P0-B: 扩 EV-/FN- 跟 schema regex 校准, 让 EV/FN 的 item 也走语义验证
-    rule_ids = re.findall(r"(?:RC|V|EV|FN)-\d+", ev_content)
+    # 2026-04-27 step 3.4: rule_id 抽取走 SchemaRegistry 单点 SoT, 替代散落 regex.
+    # 不传 allow_bmad_prefix — 语义验证拿不到 BMAD V-XX 在 review-rules 里独立条目,
+    # 与原 regex 行为一致 (上面 _find_rule_reference 才需要 BMAD 兼容).
+    workspace = os.path.dirname(rules_dir.rstrip(os.sep))
+    rule_ids = _extract_rule_ids(ev_content, workspace=workspace, allow_bmad_prefix=False)
     if not rule_ids or not os.path.isdir(rules_dir):
         return True, ""
 

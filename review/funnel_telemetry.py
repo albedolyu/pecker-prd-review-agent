@@ -213,19 +213,19 @@ def compute_funnel_summary(stages):
 def get_wiki_telemetry(workspace):
     """读 wiki 目录返回 {mode, authority_distribution} — 有 I/O, 不放 pure-function 测试.
 
-    放在这里 (而非 evidence_verify.py) 是因为它是 funnel 专用辅助, 没必要污染 evidence_verify
-    的核心职责. 调用方在 emit 前后各一次, 用时才读.
+    P0-A 修法 (2026-04-27): 用 content_loader.iter_wiki_files 单点 SoT, 含 workspace
+    local + 外挂 PECKER_EXTERNAL_CANONICAL_WIKI 递归扫描. basename 去重 (workspace 优先).
     """
     import os
-    import glob as glob_module
+    from content_loader import iter_wiki_files
     from review.evidence_verify import _wiki_authority_tier, _is_wiki_sparse, _META_WIKI_FILENAMES
 
     wiki_dir = os.path.join(workspace, "wiki")
-    if not os.path.isdir(wiki_dir):
+    if not os.path.isdir(wiki_dir) and not os.environ.get("PECKER_EXTERNAL_CANONICAL_WIKI"):
         return {"mode": "sparse", "authority_distribution": {}}
 
     dist: Counter[str] = Counter()
-    for p in glob_module.glob(os.path.join(wiki_dir, "*.md")):
+    for p in iter_wiki_files(wiki_dir):
         if os.path.basename(p) in _META_WIKI_FILENAMES:
             continue
         dist[_wiki_authority_tier(p)] += 1

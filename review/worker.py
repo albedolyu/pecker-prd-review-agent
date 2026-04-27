@@ -99,6 +99,23 @@ def _prepare_worker_context(
         "description": f"评审维度(必须填 '{dim['name']}')",
     }
 
+    # step 3.3 registry 注入 rule_id enum (硬挡 LLM 幻觉 ID, P0-B 反模式核心修法)
+    # — 替代 prompt 软约束 + 后置 cross_boundary 静默打标. Anthropic API
+    # 直接拒非法 rule_id, 让 worker 不能用 DQ-XX/AC-XX 这种幻觉 ID 绕开.
+    # PECKER_SCHEMA_FALLBACK=1 时 fallback 到 dim["checklist"] 现算 (兼容老路径).
+    try:
+        from review.schema_registry import SchemaRegistry
+        _registry = SchemaRegistry.get(workspace=None)
+        _dim_rule_ids = sorted(r.rule_id for r in _registry.dimension_rules(dim_key))
+    except Exception:
+        _dim_rule_ids = sorted(
+            r.get("rule_id") for r in dim.get("checklist", []) if r.get("rule_id")
+        )
+    if _dim_rule_ids:
+        dim_constrained_tool["input_schema"]["properties"]["items"]["items"][
+            "properties"
+        ]["rule_id"]["enum"] = _dim_rule_ids
+
     return {
         "dim": dim,
         "model": model,

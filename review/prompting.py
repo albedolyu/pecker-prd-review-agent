@@ -28,6 +28,52 @@ from review.dimensions import (
 log = get_logger("parallel")
 
 
+# ============================================================
+# rule_id 抽取 + 错误提示文本: 走 SchemaRegistry 单点 SoT (step 3.5)
+# ============================================================
+
+
+def _extract_rule_ids_via_registry(text, workspace=None):
+    """从文本抽合法 rule_id 列表 — 走 SchemaRegistry 单点 SoT.
+
+    替代散落硬编码 rule_id 抽取正则 (前 P0-B 是手列 RC/V/EV/FN 4 前缀的固定 regex).
+    加新前缀 (如 DQ-/BMAD-) 时只改 yaml, prompting 自动同步.
+    """
+    if not text:
+        return []
+    # 复用 evidence_verify._extract_rule_ids — 已是 step 3.4 单点 entry
+    from review.evidence_verify import _extract_rule_ids
+    return _extract_rule_ids(text, workspace=workspace)
+
+
+def _b_class_format_hint(workspace=None):
+    """生成 B 类 rule_id 格式铁律文本 — 从 SchemaRegistry 动态拼.
+
+    替代 P0-B 落地的"扩 EV-/FN-"硬列举. yaml 加 DQ-/BMAD- 时这里自动同步.
+
+    Returns:
+        给 worker 看的一行 markdown bullet, 含合法前缀 + sample.
+    """
+    from review.schema_registry import SchemaRegistry
+
+    registry = SchemaRegistry.get(workspace=workspace)
+    prefixes = registry.valid_prefixes()       # 如 ("EV", "FN", "RC", "V")
+    samples = registry.sample_rule_ids(n=3)    # 如 ("EV-01", "FN-01", "RC-009")
+
+    # 拼前缀格式提示 (`V-\d+` / `RC-\d+` / ...)
+    prefix_fmt = " / ".join(f"`{p}-\\d+`" for p in prefixes)
+
+    if samples:
+        sample_text = "（示例: " + " / ".join(samples) + "）"
+    else:
+        sample_text = ""
+
+    return (
+        f"- **B 类**：`evidence_content` 必须包含 {prefix_fmt} 格式的真实规则号"
+        f"{sample_text}（从下表选），禁止只写规则描述。"
+    )
+
+
 def _add_freshness_note(wiki_page_path, content):
     """给 wiki 页面加新鲜度标记（CC memoryAge.ts:33-42 模式）"""
     try:
@@ -145,14 +191,12 @@ def _build_feedback_section(dim_key, rule_perf_history=None, dimensions=None):
     if not isinstance(rule_perf_history, dict):
         return ""
 
-    # 2. 提取当前维度涉及的规则编号
-    # 2026-04-27 P0-B: 扩 EV-/FN- (跟 dimensions.py 的 _REVIEW_DIMENSIONS_SCHEMA
-    # 第 189 行的 `^(V|RC|EV|FN)-\d+$` 校准). 老 regex 漏 EV/FN, 让 rule_perf
-    # 反馈循环里 EV-01/FN-XX 永远进不来, EV/FN 规则的 impact_score / 漏报率
-    # 历史无法注入 worker prompt.
+    # 2. 提取当前维度涉及的规则编号 — 走 SchemaRegistry 单点 SoT (step 3.5)
+    # 替代 P0-B 落地的硬编码 `(?:RC|V|EV|FN)-\d+` regex. 加新前缀 (DQ-/BMAD-) 时
+    # 只改 yaml, prompting 自动同步, 防漂移.
     dims = dimensions or get_review_dimensions()
     dim_rules_text = dims[dim_key]["rules"]
-    dim_rule_ids = set(re.findall(r"(?:RC|V|EV|FN)-\d+", dim_rules_text))
+    dim_rule_ids = set(_extract_rule_ids_via_registry(dim_rules_text))
     if not dim_rule_ids:
         return ""
 
@@ -282,10 +326,9 @@ def _build_real_refs_section(workspace):
     if not workspace or not os.path.isdir(workspace):
         return ""
 
-    # 1. 扫 review-rules/ 抽所有 rule_id
-    # 2026-04-27 P0-B: 扩 EV-/FN- (跟 schema regex 校准). 老逻辑漏 EV-01/FN-01/03/09,
-    # 真实清单里没出现 → 模型看不到合法 EV/FN id → 用幻觉 ID (DQ-XX/AC-XX)
-    # 试图绕开 prompt 第 326 行 "不在下表降级 C 类" 的兜底.
+    # 1. 扫 review-rules/ 抽所有 rule_id — 走 SchemaRegistry 单点 SoT (step 3.5)
+    # 替代 P0-B 落地的硬编码 `(?:RC|V|EV|FN)-\d+` regex. 加新前缀只改 yaml, prompting
+    # 自动同步; 老逻辑漏 EV-01/FN-XX 已是漂移先例.
     rule_ids = set()
     rules_dir = os.path.join(workspace, "review-rules")
     if os.path.isdir(rules_dir):
@@ -296,7 +339,7 @@ def _build_real_refs_section(workspace):
                         fp = os.path.join(root, fn)
                         with open(fp, "r", encoding="utf-8") as f:
                             text = f.read()
-                        rule_ids.update(re.findall(r"(?:RC|V|EV|FN)-\d+", text))
+                        rule_ids.update(_extract_rule_ids_via_registry(text, workspace=workspace))
                     except (OSError, UnicodeDecodeError):
                         continue
 
@@ -320,6 +363,10 @@ def _build_real_refs_section(workspace):
     if not rule_ids and not wiki_pages:
         return ""
 
+    # B 类合法前缀文本 — 走 SchemaRegistry 单点 SoT (step 3.5). yaml 加 DQ-/BMAD-
+    # 时这里自动同步, 不需要再手动改"扩 EV-/FN-"这种文案.
+    b_class_format_hint = _b_class_format_hint(workspace=workspace)
+
     lines = [
         "## 真实依据清单（强制复用）",
         "以下清单由 workspace 扫描生成。verify_evidence 会对每条 item 的依据做硬验证：",
@@ -327,8 +374,7 @@ def _build_real_refs_section(workspace):
         "",
         "### 依据格式铁律（违反即 FAIL）",
         "",
-        # 2026-04-27 P0-B: 扩文本提示, 老版本只说 RC-/V- 让模型以为 EV-/FN- 不合法 → 用幻觉 ID 绕开
-        "- **B 类**：`evidence_content` 必须包含 `RC-\\d+` / `V-\\d+` / `EV-\\d+` / `FN-\\d+` 格式的真实规则号（从下表选），禁止只写规则描述。",
+        b_class_format_hint,
         "- **A 类**：`evidence_content` 必须包含 `[[页面名]]` 双方括号格式引用，**禁止使用《》书名号、「」、引号或其他符号**。页面名必须与下表精确一致。",
         "- **C 类**：竞品/行业/经验，必须在 `evidence_content` 里明确标注 `⚠️ 待确定` 或 `外部参考`，否则算 C 类违规。",
         "- **如果你想引用的规则/页面不在下表中**：降级为 C 类 + `⚠️ 待确定`，不要强行用 A/B 造假。",

@@ -13,12 +13,13 @@
 """
 
 # Cluster A — 维度配置
+# step 3.2 (2026-04-27): 删 _DEFAULT_REVIEW_DIMENSIONS / _DEFAULT_DIMENSION_WIKI_KEYWORDS
+# re-export — 这俩硬编码 fallback 已从 review.dimensions 移除 (P0-B 反模式根因).
+# 老 caller 若直接 import 这俩 symbol 会 ImportError, 应改用 SchemaRegistry / load_review_dimensions.
 from review.dimensions import (  # noqa: F401
     MAX_WORKER_TURNS,
     _BASE_DIR,
     _CN_LABEL,
-    _DEFAULT_DIMENSION_WIKI_KEYWORDS,
-    _DEFAULT_REVIEW_DIMENSIONS,
     _REVIEW_DIMENSIONS_SCHEMA,
     _YAML_FILENAME,
     _cn_label,
