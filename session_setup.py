@@ -47,6 +47,11 @@ def build_parser() -> argparse.ArgumentParser:
                         default="off",
                         help=("Phase 3 批量决策: by-confidence 按 confidence 自动 Y/N "
                               "(>=0.8 接受, <0.5 驳回, 中间挂起);accept-all 全 Y;reject-all 全 N"))
+    # Wave 2: model_router 配置入口
+    parser.add_argument("--routes-file", default=None,
+                        help="覆盖默认 model_routes.yaml (灰度/实验用, 设 PECKER_ROUTES_FILE)")
+    parser.add_argument("--enable-shadow-advisor", action="store_true",
+                        help="启用影子苍鹰对照 (advisor.goshawk.shadow), 设 PECKER_ENABLE_SHADOW_ADVISOR=1")
     return parser
 
 
@@ -72,6 +77,14 @@ def apply_noninteractive_defaults(args: argparse.Namespace, stdin_is_tty: bool) 
         print("[auto] 非交互模式自动启用 --auto-decide=by-confidence")
 
     os.environ["PECKER_AUTO_DECIDE"] = args.auto_decide
+
+    # Wave 2: model_router 全局配置 (worker.* tier override / 路由表 / 影子苍鹰)
+    # auto 等价不 override (model_router 实现里直接 noop)
+    os.environ["PECKER_MODEL_OVERRIDE"] = args.model
+    if getattr(args, "routes_file", None):
+        os.environ["PECKER_ROUTES_FILE"] = args.routes_file
+    if getattr(args, "enable_shadow_advisor", False):
+        os.environ["PECKER_ENABLE_SHADOW_ADVISOR"] = "1"
     return args
 
 

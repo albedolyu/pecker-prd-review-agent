@@ -14,17 +14,31 @@ def route_intent(client: Any, prd_name: str, user_instruction: str = "PRD 评审
     """用 Haiku 做轻量分类,决定用哪个模型。
 
     返回 MODEL_TIERS 中的键(opus/sonnet/haiku),失败默认 sonnet。
+
+    Wave 2: 默认走 model_router.route_call("router.intent", ...). client 入参变 deprecated
+    但保留 — 显式传 client (e.g. test_router 系列 mock client) 时仍走 client.create
+    兼容老 mock 通道.
     """
+    msgs = [{
+        "role": "user",
+        "content": f"PRD 名称：{prd_name}\n用户指令：{user_instruction}",
+    }]
     try:
-        response = client.create(
-            model=MODEL_TIERS["haiku"],
-            max_tokens=10,
-            system=ROUTER_PROMPT,
-            messages=[{
-                "role": "user",
-                "content": f"PRD 名称：{prd_name}\n用户指令：{user_instruction}",
-            }],
-        )
+        if client is None:
+            from model_router import route_call
+            response = route_call(
+                "router.intent",
+                system=ROUTER_PROMPT,
+                messages=msgs,
+                max_tokens=10,
+            )
+        else:
+            response = client.create(
+                model=MODEL_TIERS["haiku"],
+                max_tokens=10,
+                system=ROUTER_PROMPT,
+                messages=msgs,
+            )
         tier = response.content[0].text.strip().lower()
         if tier in MODEL_TIERS:
             return tier

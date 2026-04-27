@@ -69,7 +69,20 @@ def _prepare_worker_context(
     dimensions = get_review_dimensions()
     wiki_keywords = get_wiki_keywords()
     dim = dimensions[dim_key]
-    model = model_tiers.get(dim["model"], model_tiers["sonnet"])
+    # Wave 2: model 选择交给 model_router (按 worker.<dim_key> route 解析,
+    # dim["model"] 作为 tier 别名 override 传入). 这里只解析"显示用 model 名",
+    # 真正的 client.create 已迁到 route_call. model_tiers 入参变 deprecated 兼容
+    # orchestration 老调用方, 内部不再使用.
+    from model_router import get_model_for_route
+    dim_tier_alias = dim.get("model")  # "sonnet" / "opus" / "haiku" or None
+    try:
+        model = get_model_for_route(f"worker.{dim_key}", model_override=dim_tier_alias)
+    except Exception:
+        # routes.yaml 未配 worker.<dim_key> 也 fallback 失败时, 兜底用 model_tiers 老路径,
+        # 仅用于 telemetry / log 显示, 真正调用走 route_call 自身的 fallback.
+        # 注意: 不写硬编码模型名, 终极兜底用 model_tiers 自带的 sonnet 别名 (即使值为 None,
+        # client 层 _map_model 已会 fallback, 见 test_claude_cli_map_model_none_fallbacks_to_sonnet).
+        model = (model_tiers or {}).get(dim_tier_alias or "sonnet") or (model_tiers or {}).get("sonnet")
 
     effort = dim.get("effort", "medium")
     max_tokens = EFFORT_TOKENS.get(effort, 8192)
@@ -118,7 +131,9 @@ def _prepare_worker_context(
 
     return {
         "dim": dim,
-        "model": model,
+        "dim_key": dim_key,                  # Wave 2: 给 _worker_core 转 route_id
+        "dim_tier_alias": dim_tier_alias,    # Wave 2: dim["model"] tier 别名 → route_call model_override
+        "model": model,                       # 解析后的实名 (telemetry / cost / log)
         "max_tokens": max_tokens,
         "system_blocks": system_blocks,
         "messages": messages,
@@ -473,11 +488,18 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
     )
     dim = ctx["dim"]
     model = ctx["model"]
+    dim_tier_alias = ctx["dim_tier_alias"]
     max_tokens = ctx["max_tokens"]
     system_blocks = ctx["system_blocks"]
     messages = ctx["messages"]
     dim_constrained_tool = ctx["dim_constrained_tool"]
     cache_monitor = ctx["cache_monitor"]
+
+    # Wave 2: 默认走 model_router 路由 (worker.<dim_key>). client 入参变 deprecated 但保留,
+    # 显式传 client (e.g. e2e MagicMock 测试 / orchestration 注入) 时仍走 client.create
+    # 兼容老 mock 通道 — _llm_nli_score 同款处理.
+    from model_router import route_call
+    use_router = client is None
 
     def _call(msgs, use_compact_tool=False, call_kind="initial"):
         # Pattern 17: followup 催促重试时用精简版 tool schema
@@ -495,15 +517,27 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
         cache_monitor.snapshot(system_text, tools_json, model, dim_key=dim_key)
 
         _t0 = time.time()
-        resp = client.create(
-            model=model,
-            max_tokens=max_tokens,  # Pattern 20: effort-aware
-            system=system_blocks,
-            messages=msgs,
-            tools=[tool_to_use],
-            tool_choice={"type": "any"},
-            retry_policy="worker",
-        )
+        if use_router:
+            resp = route_call(
+                f"worker.{dim_key}",
+                system=system_blocks,
+                messages=msgs,
+                tools=[tool_to_use],
+                tool_choice={"type": "any"},
+                max_tokens=max_tokens,            # Pattern 20: effort-aware
+                model_override=dim_tier_alias,    # 兼容 dim["model"] 老语义
+            )
+        else:
+            # 老 caller (传 client) 路径: 兼容 e2e mock 测试和 orchestration 注入
+            resp = client.create(
+                model=model,
+                max_tokens=max_tokens,
+                system=system_blocks,
+                messages=msgs,
+                tools=[tool_to_use],
+                tool_choice={"type": "any"},
+                retry_policy="worker",
+            )
         _t1 = time.time()
 
         # Pattern 18: check after API response

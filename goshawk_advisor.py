@@ -152,19 +152,34 @@ SUBMIT_ADVISOR_REVIEW_TOOL = {
 }
 
 # ============================================================
-# 默认模型（从 agent_config 统一获取）
+# 默认模型（向后兼容: 老 caller 仍可读 DEFAULT_MODEL, 新 caller 走 model_router）
 # ============================================================
 
-# Opus→Sonnet: Opus CLI 2/3 轮 timeout,Sonnet 稳定 30-60s。质量略降但每次跑完。
-DEFAULT_MODEL = MODEL_TIERS["sonnet"]
+# 历史: Opus CLI 2/3 轮 timeout, Sonnet 稳定 30-60s。质量略降但每次跑完。
+# Wave 2: model 选择已迁到 model_router (advisor.goshawk route),
+# DEFAULT_MODEL 仅供老 caller 引用 (advisor_review_default 单测 import 它做签名校验) —
+# 实际 client.create 已不再读这里, 改走 route_call("advisor.goshawk", ...).
+def _resolve_default_model() -> str:
+    """从 model_router 取 advisor.goshawk 默认 model 实名 (避免硬编码)."""
+    try:
+        from model_router import get_model_for_route
+        return get_model_for_route("advisor.goshawk")
+    except Exception:
+        # routes.yaml 未加载 / config 未就绪时的兜底, 与老逻辑等价
+        return MODEL_TIERS["sonnet"]
+
+
+DEFAULT_MODEL = _resolve_default_model()
 
 
 # ============================================================
-# 构建 Anthropic Client
+# 构建 Anthropic Client (Wave 2 后变 noop, 仅保留避免 break import)
 # ============================================================
 
 def _make_client():
-    """从 .env 创建 API client（复用 api_adapter，确保 token 统计一致）"""
+    """Wave 2 deprecated: 历史用 .env 创建 API client, 现在 client 由 model_router
+    内部按 vendor 单例管理. 保留函数避免 break import; 对外仍返 client 实例供
+    sanity_check / 老 fallback 用 (但所有正式 LLM 调用应走 route_call)."""
     from api_adapter import create_client
     return create_client()
 
@@ -247,16 +262,47 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
     # 估单次 retry 分支最坏耗时: sleep 2-2.5s + API call 5-30s Opus
     coord = DeadlineCoordinator(deadline=deadline, min_per_retry=8.0)
 
+    # Wave 2: 主审默认走 advisor.goshawk route. _make_client 仍可调,
+    # 但显式 mock client (e2e / 单测) 路径继续走 client.create 兼容老 mock.
+    from model_router import route_call
+    # _make_client 兜底已在前面赋值 (client is None → _make_client() → 真 CLI 实例),
+    # use_router 通过判定 client 是否是真 CLI 实例区分: e2e/test 注入的 MagicMock 走老路径
+    use_router = client.__class__.__name__ == "ClaudeCodeCLIClient"
+
     def _call(msgs, call_kind="goshawk_initial"):
         _t0 = time.time()
-        resp = client.create(
-            model=model,
-            max_tokens=4096,
-            system=GOSHAWK_SYSTEM_PROMPT,
-            messages=msgs,
-            tools=[SUBMIT_ADVISOR_REVIEW_TOOL],
-            tool_choice={"type": "any"},
-        )
+        # model 参数可能是完整模型名 ("claude-sonnet-4-6") 或 tier 别名 ("sonnet").
+        # router 期待 tier 别名, 完整名走 fallback (不在 model_tiers → 用 route 默认).
+        # 这里把已知完整名反查回 tier 别名, 保持 advisor_review_with_resampling
+        # 老 model 透传语义.
+        tier_override = None
+        if model:
+            for tier, full in MODEL_TIERS.items():
+                if full == model:
+                    tier_override = tier
+                    break
+            if tier_override is None and model in MODEL_TIERS:
+                tier_override = model       # 直接传别名的情况
+        if use_router:
+            resp = route_call(
+                "advisor.goshawk",
+                system=GOSHAWK_SYSTEM_PROMPT,
+                messages=msgs,
+                tools=[SUBMIT_ADVISOR_REVIEW_TOOL],
+                tool_choice={"type": "any"},
+                max_tokens=4096,
+                model_override=tier_override,
+            )
+        else:
+            # mock client / 老 caller 路径
+            resp = client.create(
+                model=model,
+                max_tokens=4096,
+                system=GOSHAWK_SYSTEM_PROMPT,
+                messages=msgs,
+                tools=[SUBMIT_ADVISOR_REVIEW_TOOL],
+                tool_choice={"type": "any"},
+            )
         _t1 = time.time()
         if on_tool_call is not None:
             try:
@@ -906,6 +952,11 @@ def _sanity_check_false_positives(fps, items_by_id, client):
     if not fps or client is None:
         return {"sanity_check_count": 0, "sanity_check_disagreed": 0}
 
+    # Wave 2: 二次校验默认走 advisor.goshawk.recheck route (默认 haiku).
+    # client 是 ClaudeCodeCLIClient 真实例时切到 router; mock client 仍走老路径
+    # (兼容现有 sanity_check 测试).
+    from model_router import route_call
+    use_router_recheck = client.__class__.__name__ == "ClaudeCodeCLIClient"
     haiku_model = MODEL_TIERS.get("haiku", "claude-haiku-4-5")
     check_count = 0
     disagreed_count = 0
@@ -933,12 +984,20 @@ def _sanity_check_false_positives(fps, items_by_id, client):
         )
 
         try:
-            resp = client.create(
-                model=haiku_model,
-                max_tokens=256,
-                messages=[{"role": "user", "content": prompt}],
-                timeout=10,
-            )
+            if use_router_recheck:
+                resp = route_call(
+                    "advisor.goshawk.recheck",
+                    system="",
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=256,
+                )
+            else:
+                resp = client.create(
+                    model=haiku_model,
+                    max_tokens=256,
+                    messages=[{"role": "user", "content": prompt}],
+                    timeout=10,
+                )
             text = ""
             for block in resp.content:
                 if block.type == "text":

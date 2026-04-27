@@ -46,7 +46,17 @@ from clients.claude_cli import (  # noqa: F401
 def create_client(api_key=None, base_url=None, **kwargs):
     """创建 API 客户端。
 
+    Wave 2 deprecated: 新代码请用 model_router.route_call(route_id, ...) — 它会按
+    routes.yaml 自动选 vendor + transport + model. create_client 仅返单 vendor 的 CLI client,
+    没有 vendor 抽象, 不利后续接 codex / gpt-5.
+
     只走本地 Claude Code CLI（零 API key，复用当前 CC 登录态）。
     api_key / base_url 参数保留仅为兼容旧调用签名，实际被忽略。
     """
+    import warnings
+    warnings.warn(
+        "create_client() is deprecated, use model_router.route_call() instead",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return ClaudeCodeCLIClient()

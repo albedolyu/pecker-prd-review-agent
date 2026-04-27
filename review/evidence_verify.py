@@ -335,11 +335,15 @@ def _find_wiki_page(evidence_content, wiki_dir, wiki_index=None):
     return found
 
 
-def _llm_nli_score(client, item, wiki_pages, n_samples=4, model="claude-haiku-4-5-20251001"):
+def _llm_nli_score(client, item, wiki_pages, n_samples=4, model=None):
     """Sprint #6 EvidenceRL: 用 LLM 三选一判 evidence 与 wiki 的支持度 (entail/contradict/neutral).
 
     Anthropic API 不暴露 token logprobs, 用蒙特卡洛重采样近似 (N=4 默认 + temperature=0.7).
     比 logprobs 公式精度粗 (95% CI ±25%), 但够替代 binary 信号给 EMA 用.
+
+    Wave 2 路由:
+    - client is None → 走 model_router.route_call("verify.nli", ...) (推荐路径)
+    - client is not None → 仍走入参 client.create (兼容 mock 测试 + 老 caller)
 
     设计 (来自 audit feasibility 调研):
     - 拒 hedging: prompt 强制非 entail 时给 ≥ 30 字理由, 否则采样无效
@@ -347,11 +351,11 @@ def _llm_nli_score(client, item, wiki_pages, n_samples=4, model="claude-haiku-4-
     - 失败回 default `{entail=0, contradict=0, neutral=1, max_signal=0}` 让 caller 知道 NLI 没生效
 
     Args:
-        client: 有 .create() 方法的 LLM client (`clients/claude_cli.py:ClaudeCodeCLIClient` 兼容)
+        client: 有 .create() 方法的 LLM client (兼容 mock 测试). None → 走 router.
         item: review item dict, 必须含 "issue" + "evidence_content"
         wiki_pages: dict {page_title: page_content}, 从 verify_evidence 上层传入
         n_samples: 重采样次数, 默认 4 (单 PRD 评审 ~5s 串行 / ~2s 并行)
-        model: 默认 haiku-4-5 (~1.2s/call)
+        model: 默认 None (走 router 配置). 显式传完整 model 名时仍用入参 client (兼容老 caller).
 
     Returns:
         {
@@ -369,7 +373,11 @@ def _llm_nli_score(client, item, wiki_pages, n_samples=4, model="claude-haiku-4-
         "max_signal": 0.0,
         "n_samples_succeeded": 0,
     }
-    if not client or not wiki_pages or not item:
+    # Wave 2: client=None 时走 router. 老 caller 传 client 时为兼容 mock 测试不走 router.
+    use_router = client is None
+    if not wiki_pages or not item:
+        return default
+    if not use_router and not client:
         return default
 
     issue = (item.get("issue") or "").strip()
@@ -408,13 +416,24 @@ def _llm_nli_score(client, item, wiki_pages, n_samples=4, model="claude-haiku-4-
 
     for _ in range(n_samples):
         try:
-            resp = client.create(
-                model=model,
-                max_tokens=300,
-                system=system,
-                messages=[{"role": "user", "content": user}],
-                temperature=0.7,
-            )
+            if use_router:
+                from model_router import route_call
+                resp = route_call(
+                    "verify.nli",
+                    system=system,
+                    messages=[{"role": "user", "content": user}],
+                    max_tokens=300,
+                    temperature=0.7,
+                )
+            else:
+                # 老 caller (传 client) 路径: 兼容 mock 测试 / 直接复用 worker client
+                resp = client.create(
+                    model=model,
+                    max_tokens=300,
+                    system=system,
+                    messages=[{"role": "user", "content": user}],
+                    temperature=0.7,
+                )
             text_parts = []
             for block in resp.content:
                 if getattr(block, "type", "") == "text":
