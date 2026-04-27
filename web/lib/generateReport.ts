@@ -24,7 +24,26 @@ import {
   normalizeDimensionKey,
   type RoleKey,
 } from "./roles";
-import type { ItemDecision, ReviewItem, ReviewResult } from "./api";
+import type {
+  ItemDecision,
+  RejectReason,
+  ReviewItem,
+  ReviewResult,
+} from "./api";
+
+/**
+ * 7 类 reject reason 的报告显示标签 — 与 Phase3ConfirmV8 REJECT_CATEGORIES 一致.
+ * 改这里要同步 components/phases/Phase3ConfirmV8.tsx::REJECT_CATEGORIES.
+ */
+const REJECT_CATEGORY_LABELS: Record<RejectReason, string> = {
+  good_issue: "实际是好问题(手滑点错)",
+  false_positive: "误报",
+  known_tradeoff: "已知取舍, 不改",
+  wiki_missing: "知识库缺失",
+  rule_too_strict: "规则太严",
+  impl_detail: "实现细节, 不该 PRD 管",
+  model_noise: "模型噪音",
+};
 
 export interface ReportStats {
   total: number;
@@ -182,8 +201,16 @@ export function generateReportMarkdown(
       }
       if (item.evidence) lines.push(`- **依据**: ${item.evidence}`);
       if (item.suggestion) lines.push(`- **建议**: ${item.suggestion}`);
-      if (action === "reject" && d?.reason) {
-        lines.push(`- **拒绝原因**: ${d.reason}`);
+      if (action === "reject") {
+        // P0 step 2 (2026-04-28): 报告里区分 7 类 reason_category + 自由文本备注
+        // 老版本只有 reason 自由文本, 现在带 category label 让读报告的人知道驳因归类
+        const cat = d?.reason_category;
+        if (cat) {
+          lines.push(`- **拒绝原因**: ${REJECT_CATEGORY_LABELS[cat] ?? cat}`);
+        }
+        if (d?.reason) {
+          lines.push(`- **驳回备注**: ${d.reason}`);
+        }
       }
       if (typeof item.confidence === "number") {
         lines.push(`- **置信度**: ${(item.confidence * 100).toFixed(0)}%`);

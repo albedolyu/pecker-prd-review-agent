@@ -29,6 +29,7 @@ import {
   ApiError,
   type ConfirmResponse,
   type ItemDecision,
+  type RejectReason,
   type ReviewItem,
 } from "@/lib/api";
 import { BirdAvatar, type BirdId } from "@/components/birds/BirdAvatar";
@@ -50,6 +51,31 @@ const ROLE_TO_BIRD_ID: Record<RoleKey, BirdId> = {
   archivist: 9,
   "qa-gatekeeper": 10,
 };
+
+/**
+ * PM 驳回原因 7 分类 (P0 step 2, 2026-04-28 接通)
+ * value 必须与后端 models.py:RejectReason 一致 — 改这里要同步:
+ *   - models.py / api/models.py / web/lib/api.ts / 测试 enum drift 守护
+ * 默认值 = "model_noise" (与后端 _update_rule_perf_from_decisions 兜底一致)
+ *
+ * 上线前 reject 只发自由文本 reason → 后端按 model_noise 默认记账 →
+ * EMA 反馈闭环吃错信号 (Pecker 持续学习承诺 dead). 现在 PM 必选 7 选 1.
+ */
+const REJECT_CATEGORIES: ReadonlyArray<{
+  value: RejectReason;
+  label: string;
+  hint: string;
+}> = [
+  { value: "good_issue", label: "实际是好问题(手滑点错)", hint: "PM 改主意了, 不算规则锅 → EMA 正向微调" },
+  { value: "false_positive", label: "误报", hint: "PRD 确实没这问题 → 规则精度差, 重惩罚" },
+  { value: "known_tradeoff", label: "已知取舍, 不改", hint: "业务允许, 不改 → 弱惩罚 + 周报建议加 ignore" },
+  { value: "wiki_missing", label: "知识库缺失", hint: "规则没错, 是 wiki 缺背景 → 弱惩罚 + 周报提示补 wiki" },
+  { value: "rule_too_strict", label: "规则太严", hint: "规则 scope 问题 → 重惩罚 + 周报提示改写规则" },
+  { value: "impl_detail", label: "实现细节, 不该 PRD 管", hint: "规则 scope 错 → 中等惩罚 + 收窄 rule" },
+  { value: "model_noise", label: "模型噪音", hint: "无业务意义 → 中等惩罚, 进 prompt 迭代队列" },
+];
+
+const DEFAULT_REJECT_CATEGORY: RejectReason = "model_noise";
 
 export function Phase3ConfirmV8() {
   const reviewResult = useReviewStore((s) => s.reviewResult);
@@ -165,10 +191,23 @@ export function Phase3ConfirmV8() {
 
   const handleReject = useCallback(
     (itemId: string) => {
-      setDecision(itemId, { action: "reject" });
+      // P0 step 2: reject 进入态默认带 reason_category=model_noise (兜底, 与后端一致),
+      // 让 PM 必须显式从 dropdown 选 7 选 1, 否则报告里 reason_category 留空也会被
+      // ConfirmRequest validator 接受 (default model_noise) 但 EMA 信号失真 — 所以
+      // dropdown 是 PM 的强 nudge, 不是 schema 强制.
+      const existing = decisions[itemId];
+      const reuseCat =
+        existing?.action === "reject" && existing.reason_category
+          ? existing.reason_category
+          : DEFAULT_REJECT_CATEGORY;
+      setDecision(itemId, {
+        action: "reject",
+        reason_category: reuseCat,
+        reason: existing?.action === "reject" ? existing.reason : undefined,
+      });
       setEditingId(null);
     },
-    [setDecision],
+    [decisions, setDecision],
   );
 
   const handleEdit = useCallback(
@@ -363,12 +402,27 @@ export function Phase3ConfirmV8() {
                   edited_problem: v,
                 })
               }
-              onRejectReasonChange={(v) =>
+              onRejectReasonChange={(v) => {
+                // 写自由文本备注时保留已选的 reason_category (默认 model_noise)
+                const existing = decisions[item.id];
                 setDecision(item.id, {
                   action: "reject",
+                  reason_category:
+                    existing?.action === "reject" && existing.reason_category
+                      ? existing.reason_category
+                      : DEFAULT_REJECT_CATEGORY,
                   reason: v,
-                })
-              }
+                });
+              }}
+              onRejectCategoryChange={(cat) => {
+                const existing = decisions[item.id];
+                setDecision(item.id, {
+                  action: "reject",
+                  reason_category: cat,
+                  reason:
+                    existing?.action === "reject" ? existing.reason : undefined,
+                });
+              }}
               onEditDone={() => setEditingId(null)}
             />
           ))}
@@ -470,6 +524,7 @@ interface ItemCardV8Props {
   onEdit: () => void;
   onEditChange: (v: string) => void;
   onRejectReasonChange: (v: string) => void;
+  onRejectCategoryChange: (cat: RejectReason) => void;
   onEditDone: () => void;
 }
 
@@ -484,6 +539,7 @@ function ItemCardV8({
   onEdit,
   onEditChange,
   onRejectReasonChange,
+  onRejectCategoryChange,
   onEditDone,
 }: ItemCardV8Props) {
   const roleKey = normalizeDimensionKey(item.dimension);
@@ -709,14 +765,68 @@ function ItemCardV8({
         </div>
       )}
 
-      {/* reject 原因 textarea */}
+      {/* reject 原因 — 7 类下拉 (P0 step 2 必填) + 可选自由文本备注 */}
       {action === "reject" && (
-        <div style={{ marginTop: 2 }}>
+        <div
+          style={{
+            marginTop: 2,
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+            padding: "8px 10px",
+            background: "var(--surface-sunken)",
+            borderRadius: "var(--r-3)",
+            border: "1px dashed var(--border-default)",
+          }}
+        >
+          {/* 顶栏: 7 类 dropdown + 当前选择提示 */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+            }}
+          >
+            <span
+              style={{
+                fontSize: 11,
+                fontFamily: "var(--font-mono)",
+                color: "var(--text-faint)",
+                letterSpacing: "0.04em",
+                textTransform: "uppercase",
+              }}
+            >
+              驳回原因
+            </span>
+            <select
+              value={decision?.reason_category ?? DEFAULT_REJECT_CATEGORY}
+              onChange={(e) =>
+                onRejectCategoryChange(e.target.value as RejectReason)
+              }
+              style={rejectCategorySelectStyle}
+              title={
+                REJECT_CATEGORIES.find(
+                  (c) =>
+                    c.value ===
+                    (decision?.reason_category ?? DEFAULT_REJECT_CATEGORY),
+                )?.hint ?? ""
+              }
+            >
+              {REJECT_CATEGORIES.map((cat) => (
+                <option key={cat.value} value={cat.value}>
+                  {cat.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 自由文本备注 (对应后端 reason_note, 可选) */}
           <textarea
             rows={2}
             value={decision?.reason ?? ""}
             onChange={(e) => onRejectReasonChange(e.target.value)}
-            placeholder="驳回原因(可选)"
+            placeholder="备注(可选)— 例如规则太严的具体场景, 帮助后续 rule_lifecycle 决策"
             style={rejectTextareaStyle}
           />
         </div>
@@ -1050,14 +1160,29 @@ const editTextareaStyle: React.CSSProperties = {
 const rejectTextareaStyle: React.CSSProperties = {
   width: "100%",
   resize: "vertical",
-  border: "1px dashed var(--border-default)",
-  borderRadius: "var(--r-3)",
-  background: "var(--surface-sunken)",
-  padding: "8px 12px",
+  border: "1px solid var(--border-subtle)",
+  borderRadius: "var(--r-2)",
+  background: "var(--surface-raised)",
+  padding: "6px 10px",
   fontFamily: "var(--font-sans)",
   fontSize: 12,
   lineHeight: 1.55,
-  color: "var(--text-muted)",
+  color: "var(--text-default)",
+  outline: "none",
+};
+
+const rejectCategorySelectStyle: React.CSSProperties = {
+  flex: 1,
+  minWidth: 200,
+  maxWidth: 360,
+  padding: "5px 10px",
+  borderRadius: "var(--r-2)",
+  border: "1px solid var(--border-default)",
+  background: "var(--surface-raised)",
+  color: "var(--text-default)",
+  fontSize: 12,
+  fontFamily: "var(--font-sans)",
+  cursor: "pointer",
   outline: "none",
 };
 
