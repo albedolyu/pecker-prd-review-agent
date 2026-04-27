@@ -79,8 +79,149 @@ export interface FinalReviewerStartedEvent extends BaseEvent {
   readonly event: "final_reviewer_started";
 }
 
+/**
+ * final_reviewer_done — 苍鹰终审完成 (2026-04-28 step 1a 升级:统一 SSE/jsonl payload)
+ *
+ * 老版前端只能拿 false_positive / additional / verdict;现在升级带:
+ * - confidence + empty_retry_used (复用原来 jsonl-only 字段)
+ * - DAR resample telemetry: n_samples / n_samples_succeeded /
+ *   retention_kind_dist (unanimous|majority|minority) / minority_kept
+ *   (DAR = 少数派保留机制, 2026-04-26 借鉴 GitHub 落地)
+ *
+ * error 分支只有 error 字段, 主任务异常时由 `emit_and_log(..., {"error": ...})` 推。
+ */
 export interface FinalReviewerDoneEvent extends BaseEvent {
   readonly event: "final_reviewer_done";
+  readonly false_positive?: number;
+  readonly additional?: number;
+  readonly verdict?: string;
+  readonly confidence?: number;
+  readonly empty_retry_used?: boolean;
+  // DAR resample telemetry (修法 C, 2026-04-26)
+  readonly n_samples?: number;
+  readonly n_samples_succeeded?: number;
+  readonly retention_kind_dist?: Readonly<{
+    unanimous?: number;
+    majority?: number;
+    minority?: number;
+  }>;
+  readonly minority_kept?: number;
+  // 失败时只有 error 字段
+  readonly error?: string;
+}
+
+// ============================================================
+// 2026-04-28 step 1a: funnel telemetry SSE 双发事件
+// ============================================================
+// 后端 review.py emit_and_log() 把 funnel telemetry 走 SSE,
+// 前端 Phase2/4 dashboard 实时拿数据 (而不是要等 result 后回查 jsonl).
+// schema 与 review/funnel_telemetry.py 各 compute_* 函数返回对齐.
+
+/**
+ * funnel_stage_worker_raw — N0 stage:4 worker 原始产出
+ *
+ * by_dimension 把每个 worker 维度产出拆开 (structure/quality/data_quality/ai_coding).
+ * 2026-04-28 P1 anti-corruption 加 dropped_unknown_* 暴露 LLM 幻觉 rule_id 被 schema_registry drop 的统计.
+ */
+export interface FunnelStageWorkerRawEvent extends BaseEvent {
+  readonly event: "funnel_stage_worker_raw";
+  readonly count: number;
+  readonly by_dimension: Readonly<Record<string, number>>;
+  readonly empty_retry_dimensions?: ReadonlyArray<string>;
+  readonly dropped_unknown_rule_count?: number;
+  readonly dropped_unknown_rule_ids_by_dim?: Readonly<Record<string, ReadonlyArray<string>>>;
+}
+
+/**
+ * funnel_stage_after_dedup — N1 stage:merge_and_deduplicate 后
+ *
+ * dropped_count = N0 - N1 (含跨 worker 重复的 item 被合并).
+ */
+export interface FunnelStageAfterDedupEvent extends BaseEvent {
+  readonly event: "funnel_stage_after_dedup";
+  readonly count: number;
+  readonly dropped_count: number;
+}
+
+/**
+ * funnel_stage_after_evidence_verify — N2 stage:evidence_verify 后
+ *
+ * - retracted_by_reason / downgraded_by_reason: 按原因码统计 (no_wiki_match / wiki_contradicts ...)
+ * - wiki_mode: sparse (新业务/模板 PRD) | rich (有 canonical wiki)
+ * - authority_distribution: 按 wiki tier 统计 (canonical / contextual / generated)
+ */
+export interface FunnelStageAfterEvidenceVerifyEvent extends BaseEvent {
+  readonly event: "funnel_stage_after_evidence_verify";
+  readonly count: number;
+  readonly retracted_count?: number;
+  readonly downgraded_count?: number;
+  readonly retracted_by_reason: Readonly<Record<string, number>>;
+  readonly downgraded_by_reason: Readonly<Record<string, number>>;
+  readonly wiki_mode: "sparse" | "rich" | "unknown";
+  readonly authority_distribution: Readonly<Record<string, number>>;
+}
+
+/**
+ * funnel_stage_after_goshawk — N3 stage:苍鹰终审 + apply_advisor_result 后
+ *
+ * delta_breakdown 五桶互斥:
+ * - removed: 苍鹰判 false_positive 且建议移除的
+ * - merged_to_facet: 主项的 facet 子项 (P0-1 commit 213ca4c 起保留)
+ * - added: 苍鹰补充新条目 (provenance=meta_added 或 source=苍鹰补充)
+ * - false_positive_restored: 误判后被 sanity_check 复活的
+ * - kept_intact: worker 原生穿过苍鹰
+ *
+ * facet_links: facet 子项 → primary 主项的引用对.
+ */
+export interface FunnelStageAfterGoshawkEvent extends BaseEvent {
+  readonly event: "funnel_stage_after_goshawk";
+  readonly count: number;
+  readonly delta_breakdown: Readonly<{
+    removed: number;
+    merged_to_facet: number;
+    added: number;
+    false_positive_restored: number;
+    kept_intact: number;
+  }>;
+  readonly facet_links: ReadonlyArray<Readonly<{ facet: string; primary: string }>>;
+}
+
+/**
+ * funnel_summary — 完整漏斗汇总 (review.py 末尾发, confirm_review 单独再发 N4)
+ *
+ * stage_retention 三个比率: dedup / evidence_verify / goshawk (N4 在 confirm endpoint 单发).
+ * suspicious_flags: stage 之间留存比率低于阈值时的告警字符串数组.
+ */
+export interface FunnelSummaryEvent extends BaseEvent {
+  readonly event: "funnel_summary";
+  readonly stages: Readonly<{
+    N0_worker_raw?: number;
+    N1_after_dedup?: number;
+    N2_after_evidence_verify?: number;
+    N3_after_goshawk?: number;
+    N4_after_pm_decision?: number;
+  }>;
+  readonly stage_retention: Readonly<{
+    dedup_retention: number;
+    evidence_verify_retention: number;
+    goshawk_retention: number;
+    pm_retention?: number;
+  }>;
+  readonly suspicious_flags: ReadonlyArray<string>;
+}
+
+/**
+ * evidence_verify_done — 兼容老版 (老 review.py 已发, step 1a 升级 payload)
+ *
+ * 老版只 retracted + caveat;step 1a 加 wiki_mode + authority_distribution
+ * 让前端 dashboard 不用回查 jsonl 也能渲染 wiki 治理面板.
+ */
+export interface EvidenceVerifyDoneEvent extends BaseEvent {
+  readonly event: "evidence_verify_done";
+  readonly retracted: number;
+  readonly caveat: number;
+  readonly wiki_mode?: "sparse" | "rich" | "unknown";
+  readonly authority_distribution?: Readonly<Record<string, number>>;
 }
 
 export interface ResultEvent extends BaseEvent {
@@ -121,7 +262,14 @@ export type ReviewStreamEvent =
   | ResultEvent
   | ErrorEvent
   | ReviewFailedEvent
-  | ReviewDegradedEvent;
+  | ReviewDegradedEvent
+  // 2026-04-28 step 1b: funnel telemetry SSE (5 新增 + evidence_verify_done 升级)
+  | FunnelStageWorkerRawEvent
+  | FunnelStageAfterDedupEvent
+  | FunnelStageAfterEvidenceVerifyEvent
+  | FunnelStageAfterGoshawkEvent
+  | FunnelSummaryEvent
+  | EvidenceVerifyDoneEvent;
 
 // ============================================================
 // SSE 帧解析器

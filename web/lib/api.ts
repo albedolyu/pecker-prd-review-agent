@@ -197,6 +197,16 @@ export interface ReviewItem {
   }>;
   /** CC deep #23: 钉选状态 — compact 时不压缩 */
   readonly pinned?: boolean;
+  /**
+   * 2026-04-28 step 1b: 跨维度合法 rule_id 标 (review/worker.py:192)
+   *
+   * 当 worker 引用的 rule_id 在 schema_registry 总表内但不在本维度 dim_rule_ids 时,
+   * 保留该 item + 打 cross_boundary=true + confidence -0.3 降权.
+   * 与"幻觉 rule_id" (registry 都没有, 直接 drop) 区分.
+   *
+   * 用途:Phase4ReportV8 渲染时给 cross_boundary item 加视觉标 (step 1c 渲染用).
+   */
+  readonly cross_boundary?: boolean;
   readonly [key: string]: unknown;
 }
 
@@ -267,11 +277,35 @@ export interface ReviewRunRequest {
 }
 
 /**
+ * PM 驳回原因 7 分类 — 与后端 models.py:RejectReason 严格对齐。
+ * 修改这里时必须同步:
+ *   - models.py::RejectReason 枚举
+ *   - api/models.py::_VALID_REJECT_REASONS
+ *   - components/phases/Phase3ConfirmV8.tsx::REJECT_CATEGORIES
+ *   - tests/test_reject_reason_category.py 的 enum drift 守护
+ */
+export type RejectReason =
+  | "good_issue"        // 实际是好问题(PM 手滑 / 改主意)
+  | "false_positive"    // 误报, PRD 确实没这问题
+  | "known_tradeoff"    // 已知取舍, 业务允许
+  | "wiki_missing"      // 知识库缺上下文导致误判
+  | "rule_too_strict"   // 规则太严, 不适用本 PRD
+  | "impl_detail"       // 实现细节, 不该 PRD 管
+  | "model_noise";      // 模型噪音, 无业务意义
+
+/**
  * 用户在 Phase 3 对每个 item 做的决定。
  * action: 接受 / 拒绝 / 编辑;edited_problem 仅在 action=edit 时有意义。
+ *
+ * reject 必须带 reason_category(7 类下拉), reason 为可选自由文本备注:
+ *   - reason_category 缺失 → 后端走 "model_noise" 兜底, 但 EMA 反馈闭环吃错信号
+ *   - reason_category 不在 7 种之一 → 后端 422
  */
 export interface ItemDecision {
   action: "accept" | "reject" | "edit";
+  /** 仅 reject 时有意义, 7 类下拉之一 */
+  reason_category?: RejectReason;
+  /** 可选自由文本备注(对应后端 reason_note), 老字段名保留兼容报告生成 */
   reason?: string;
   edited_problem?: string;
 }
