@@ -1,0 +1,1093 @@
+{
+  "generated_at": "2026-04-27 21:19:30",
+  "routes": [
+    {
+      "route_id": "verify.nli",
+      "vendor": "anthropic",
+      "model": "haiku",
+      "runs": 1,
+      "dataset": "hallucination",
+      "dry_run": false,
+      "responses": [
+        [
+          {
+            "id": "HAL-FAKE-REF-001",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-REF-002",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-REF-003",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-REF-004",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-REF-005",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-REAL-001",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-002",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-003",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-004",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-005",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          }
+        ]
+      ],
+      "call_records": [
+        {
+          "ts": "2026-04-27T21:09:17",
+          "route_id": "verify.nli",
+          "vendor": "anthropic",
+          "model": "haiku",
+          "latency_ms": 409382,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "cost_usd": 0.0,
+          "stop_reason": "end_turn",
+          "error_type": null,
+          "fallback_triggered": false
+        }
+      ],
+      "ground_truth": [],
+      "capability": {
+        "accuracy": 0.5,
+        "n_samples": 10,
+        "n_correct": 5,
+        "task_type": "binary",
+        "tpr": 0.0,
+        "fpr": 0.0,
+        "true_positives": 0,
+        "false_negatives": 5,
+        "false_positives": 0,
+        "true_negatives": 5
+      },
+      "stability": {
+        "overlap": 1.0,
+        "n0_var": 0.0,
+        "sampling_cv": 0.0,
+        "stable_count": 0,
+        "n_runs": 1
+      },
+      "cost_latency": {
+        "p50_ms": 409382.0,
+        "p95_ms": 409382.0,
+        "p99_ms": 409382.0,
+        "cost_usd_total": 0.0,
+        "cost_usd_per_run": 0.0,
+        "total_input_tokens": 0,
+        "total_output_tokens": 0,
+        "n_calls": 1
+      },
+      "failure_modes": {
+        "quota_rate": 0.0,
+        "json_parse_fail_rate": 0.0,
+        "tool_use_fail_rate": 0.0,
+        "fallback_rate": 0.0,
+        "timeout_rate": 0.0,
+        "n_calls": 1
+      },
+      "metrics": {
+        "capability": {
+          "accuracy": 0.5,
+          "n_samples": 10,
+          "n_correct": 5,
+          "task_type": "binary",
+          "tpr": 0.0,
+          "fpr": 0.0,
+          "true_positives": 0,
+          "false_negatives": 5,
+          "false_positives": 0,
+          "true_negatives": 5
+        },
+        "stability": {
+          "overlap": 1.0,
+          "n0_var": 0.0,
+          "sampling_cv": 0.0,
+          "stable_count": 0,
+          "n_runs": 1
+        },
+        "cost_latency": {
+          "p50_ms": 409382.0,
+          "p95_ms": 409382.0,
+          "p99_ms": 409382.0,
+          "cost_usd_total": 0.0,
+          "cost_usd_per_run": 0.0,
+          "total_input_tokens": 0,
+          "total_output_tokens": 0,
+          "n_calls": 1
+        },
+        "failure_modes": {
+          "quota_rate": 0.0,
+          "json_parse_fail_rate": 0.0,
+          "tool_use_fail_rate": 0.0,
+          "fallback_rate": 0.0,
+          "timeout_rate": 0.0,
+          "n_calls": 1
+        }
+      }
+    },
+    {
+      "route_id": "router.intent",
+      "vendor": "anthropic",
+      "model": "haiku",
+      "runs": 1,
+      "dataset": "intent",
+      "dry_run": false,
+      "responses": [
+        [
+          {
+            "prd_name": "企业关联图谱 v3.0",
+            "expected_tier": "opus",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "风火台 B 端推数 v2.5",
+            "expected_tier": "opus",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "企业基本信息查询 H5 改版",
+            "expected_tier": "sonnet",
+            "predicted_tier": "sonnet",
+            "correct": true
+          },
+          {
+            "prd_name": "收藏夹分类管理",
+            "expected_tier": "sonnet",
+            "predicted_tier": "sonnet",
+            "correct": true
+          },
+          {
+            "prd_name": "已评审 PRD 二次复核 — 劳动仲裁 v5.2",
+            "expected_tier": "haiku",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "仅做 markdown lint 检查",
+            "expected_tier": "haiku",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "张三-产品经理简历 v2.pdf",
+            "expected_tier": "reject",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "企业服务合同模板.docx",
+            "expected_tier": "reject",
+            "predicted_tier": "sonnet",
+            "correct": false
+          }
+        ]
+      ],
+      "call_records": [
+        {
+          "ts": "2026-04-27T21:12:36",
+          "route_id": "router.intent",
+          "vendor": "anthropic",
+          "model": "haiku",
+          "latency_ms": 199468,
+          "input_tokens": 640,
+          "output_tokens": 40,
+          "cost_usd": 0.00252,
+          "stop_reason": "end_turn",
+          "error_type": null,
+          "fallback_triggered": false
+        }
+      ],
+      "ground_truth": [],
+      "capability": {
+        "accuracy": 0.25,
+        "n_samples": 8,
+        "n_correct": 2,
+        "task_type": "multiclass",
+        "per_class_accuracy": {
+          "opus": 0.0,
+          "sonnet": 1.0,
+          "haiku": 0.0,
+          "reject": 0.0
+        },
+        "per_class_total": {
+          "opus": 2,
+          "sonnet": 2,
+          "haiku": 2,
+          "reject": 2
+        }
+      },
+      "stability": {
+        "overlap": 1.0,
+        "n0_var": 0.0,
+        "sampling_cv": 0.0,
+        "stable_count": 0,
+        "n_runs": 1
+      },
+      "cost_latency": {
+        "p50_ms": 199468.0,
+        "p95_ms": 199468.0,
+        "p99_ms": 199468.0,
+        "cost_usd_total": 0.00252,
+        "cost_usd_per_run": 0.00252,
+        "total_input_tokens": 640,
+        "total_output_tokens": 40,
+        "n_calls": 1
+      },
+      "failure_modes": {
+        "quota_rate": 0.0,
+        "json_parse_fail_rate": 0.0,
+        "tool_use_fail_rate": 0.0,
+        "fallback_rate": 0.0,
+        "timeout_rate": 0.0,
+        "n_calls": 1
+      },
+      "metrics": {
+        "capability": {
+          "accuracy": 0.25,
+          "n_samples": 8,
+          "n_correct": 2,
+          "task_type": "multiclass",
+          "per_class_accuracy": {
+            "opus": 0.0,
+            "sonnet": 1.0,
+            "haiku": 0.0,
+            "reject": 0.0
+          },
+          "per_class_total": {
+            "opus": 2,
+            "sonnet": 2,
+            "haiku": 2,
+            "reject": 2
+          }
+        },
+        "stability": {
+          "overlap": 1.0,
+          "n0_var": 0.0,
+          "sampling_cv": 0.0,
+          "stable_count": 0,
+          "n_runs": 1
+        },
+        "cost_latency": {
+          "p50_ms": 199468.0,
+          "p95_ms": 199468.0,
+          "p99_ms": 199468.0,
+          "cost_usd_total": 0.00252,
+          "cost_usd_per_run": 0.00252,
+          "total_input_tokens": 640,
+          "total_output_tokens": 40,
+          "n_calls": 1
+        },
+        "failure_modes": {
+          "quota_rate": 0.0,
+          "json_parse_fail_rate": 0.0,
+          "tool_use_fail_rate": 0.0,
+          "fallback_rate": 0.0,
+          "timeout_rate": 0.0,
+          "n_calls": 1
+        }
+      }
+    },
+    {
+      "route_id": "worker.compliance",
+      "vendor": "anthropic",
+      "model": "sonnet",
+      "runs": 1,
+      "dataset": "business_prd_gt",
+      "dry_run": false,
+      "responses": [
+        [
+          {
+            "rule_id": "RC-001",
+            "severity": "must",
+            "location": "核心规则/退款逻辑",
+            "issue": "积分兑换不可逆且退款不返还积分属重大不利条款，弹窗小字提示不符合消费者权益保护法第8条知情权要求",
+            "suggestion": "兑换弹窗增加显著标注并要求用户勾选「已知悉积分兑换后不可退回且退款不返还积分」复选框，确认后按钮方可激活",
+            "dimension": "compliance",
+            "workspace": "workspace-points-payment"
+          },
+          {
+            "rule_id": "EV-01",
+            "severity": "must",
+            "location": "兑换弹窗交互细节",
+            "issue": "弹窗仅有静态文案「积分兑换后不可退回，请确认金额」，无强制确认机制，不足以构成对不可逆财务操作的有效授权",
+            "suggestion": "增加二次确认步骤：底部加复选框或独立确认弹窗，文案须含「退款不退积分」关键词，勾选后确认按钮才可用",
+            "dimension": "compliance",
+            "workspace": "workspace-points-payment"
+          },
+          {
+            "rule_id": "RC-002",
+            "severity": "must",
+            "location": "核心规则/每日兑换上限",
+            "issue": "积分兑换余额属虚拟货币转预付价值，PRD未提及反洗钱（AML）合规措施及异常累计兑换监控机制",
+            "suggestion": "补充AML合规章节：跨日累计监控、异常高频兑换触发风控审查、达监管报告阈值时上报机制",
+            "dimension": "compliance",
+            "workspace": "workspace-points-payment"
+          },
+          {
+            "rule_id": "V-08",
+            "severity": "should",
+            "location": "核心规则/退款逻辑",
+            "issue": "部分退款按比例从余额和现金退回，当余额来自多次兑换叠加时，比例计算基准未明确定义，存在财务纠纷风险",
+            "suggestion": "明确部分退款公式并用示例验证：退款金额按订单内余额占比和现金占比各自退回，混合余额不区分来源统一处理",
+            "dimension": "compliance",
+            "workspace": "workspace-points-payment"
+          },
+          {
+            "rule_id": "DP-001",
+            "severity": "should",
+            "location": "核心规则/退款逻辑（流水记录）",
+            "issue": "PRD提及写积分/余额流水记录但未说明数据保留期限，可能不符合国内金融类流水至少5年的留存要求",
+            "suggestion": "补充数据保留策略：积分兑换、余额变动、消费积分流水最短保存期限建议≥5年，并说明到期处理方式",
+            "dimension": "compliance",
+            "workspace": "workspace-points-payment"
+          },
+          {
+            "rule_id": "RC-003",
+            "severity": "should",
+            "location": "功能范围/Out of scope",
+            "issue": "PRD排除iOS IAP但未说明Android Google Play结算政策合规性，Google Play对应用内虚拟货币兑换亦有限制",
+            "suggestion": "补充Android平台政策审查结论，明确Google Play计费政策下积分兑换余额是否合规，必要时同步排除",
+            "dimension": "compliance",
+            "workspace": "workspace-points-payment"
+          },
+          {
+            "rule_id": "EV-02",
+            "severity": "info",
+            "location": "核心规则/汇率",
+            "issue": "100积分=¥1固定汇率若后续调整，历史兑换用户可能投诉，PRD未说明汇率变更的提前通知机制",
+            "suggestion": "建议补充汇率变更提前公示期要求（如提前15天站内通知），并在兑换弹窗展示当前汇率生效日期",
+            "dimension": "compliance",
+            "workspace": "workspace-points-payment"
+          }
+        ]
+      ],
+      "call_records": [
+        {
+          "ts": "2026-04-27T21:17:14",
+          "route_id": "worker.compliance",
+          "vendor": "anthropic",
+          "model": "sonnet",
+          "latency_ms": 277857,
+          "input_tokens": 17,
+          "output_tokens": 16782,
+          "cost_usd": 0.251781,
+          "stop_reason": "end_turn",
+          "error_type": null,
+          "fallback_triggered": false
+        }
+      ],
+      "ground_truth": [
+        {
+          "rule_id": "BUG-001",
+          "issue": "开庭公告排序规则写'支持切换到按照开庭时间从晚到早排序'，与默认方向相同，实为笔误",
+          "severity": "must",
+          "location": "3.7",
+          "type": "笔误",
+          "keywords": [
+            "排序",
+            "从晚到早",
+            "开庭时间",
+            "切换",
+            "方向"
+          ]
+        },
+        {
+          "rule_id": "BUG-002",
+          "issue": "§4.2 开庭公告筛选项写'仲裁机构'，但 §3.6 和 §4.3 都写'发布机构'，三处不一致",
+          "severity": "must",
+          "location": "4.2",
+          "type": "不一致",
+          "keywords": [
+            "仲裁机构",
+            "发布机构",
+            "筛选",
+            "矛盾",
+            "不一致"
+          ]
+        },
+        {
+          "rule_id": "BUG-003",
+          "issue": "字段映射表多处写'A或B'（如 ent表.arbitration_org 或 主表.arbitration_org），无优先级和空值降级说明",
+          "severity": "must",
+          "location": "2.2",
+          "type": "歧义",
+          "keywords": [
+            "或",
+            "优先级",
+            "空值",
+            "降级",
+            "字段映射",
+            "arbitration_org"
+          ]
+        },
+        {
+          "rule_id": "BUG-004",
+          "issue": "全文未定义 UI 四态（加载中/请求失败/筛选无结果/空数据）",
+          "severity": "must",
+          "location": "4",
+          "type": "缺失",
+          "keywords": [
+            "四态",
+            "加载中",
+            "请求失败",
+            "空数据",
+            "UI状态"
+          ]
+        },
+        {
+          "rule_id": "BUG-005",
+          "issue": "数据导出仅一句话，缺导出上限、格式、权限、字段明细",
+          "severity": "must",
+          "location": "5.2",
+          "type": "缺失",
+          "keywords": [
+            "导出",
+            "上限",
+            "格式",
+            "权限",
+            "TBD"
+          ]
+        },
+        {
+          "rule_id": "BUG-006",
+          "issue": "公告内容人名脱敏方式未说明（内容是非结构化文本，用什么方式识别人名？）",
+          "severity": "must",
+          "location": "3.3",
+          "type": "歧义",
+          "keywords": [
+            "脱敏",
+            "公告内容",
+            "人名",
+            "识别",
+            "NLP"
+          ]
+        },
+        {
+          "rule_id": "BUG-007",
+          "issue": "§3.6 筛选项按 area_code 从小到大排序，§4.3 按数量降序排列，直接矛盾",
+          "severity": "must",
+          "location": "3.6",
+          "type": "不一致",
+          "keywords": [
+            "area_code",
+            "排序",
+            "降序",
+            "矛盾",
+            "筛选"
+          ]
+        },
+        {
+          "rule_id": "BUG-008",
+          "issue": "详情弹窗字段布局写'具体见 figma'，PRD 无法独立支撑开发",
+          "severity": "must",
+          "location": "4.4",
+          "type": "缺失",
+          "keywords": [
+            "figma",
+            "详情",
+            "弹窗",
+            "布局",
+            "字段"
+          ]
+        },
+        {
+          "rule_id": "BUG-009",
+          "issue": "主表 open_time 是 datetime，ent 表 open_time 是 date，类型不一致会导致前端时间格式处理歧义",
+          "severity": "should",
+          "location": "2.1",
+          "type": "字段类型",
+          "keywords": [
+            "open_time",
+            "datetime",
+            "date",
+            "类型",
+            "不一致"
+          ]
+        },
+        {
+          "rule_id": "BUG-010",
+          "issue": "主表与 ent 表 data_status 不一致时的处理逻辑未定义（是 OR 还是 AND？）",
+          "severity": "should",
+          "location": "3.1.1",
+          "type": "缺失",
+          "keywords": [
+            "data_status",
+            "主表",
+            "ent表",
+            "一致",
+            "过滤"
+          ]
+        },
+        {
+          "rule_id": "GT-FN-001",
+          "issue": "§2.1 Web UI 表格完全为空, 字段展示/筛选项/搜索项/导出均无内容, 开发无法实现",
+          "severity": "must",
+          "location": "2.1 Web UI",
+          "type": "缺失",
+          "keywords": [
+            "Web UI",
+            "表格",
+            "为空",
+            "字段",
+            "筛选项"
+          ]
+        },
+        {
+          "rule_id": "GT-FN-002",
+          "issue": "§3 「立案信息ds表会新增一个字段以表明是否是诉前调解数据」未定义字段名/类型/取值语义/ES mapping",
+          "severity": "must",
+          "location": "3. 企业主页立案信息去除诉前调解数据",
+          "type": "缺失",
+          "keywords": [
+            "新增字段",
+            "字段名",
+            "ES mapping",
+            "tinyint",
+            "默认值"
+          ]
+        },
+        {
+          "rule_id": "GT-FN-003",
+          "issue": "企业主页用新增标记字段过滤诉前调解, 查风险用 case_code 字符串包含「诉前调」过滤, 两套机制对同一数据可能产生不同展示",
+          "severity": "must",
+          "location": "3. 企业主页 vs 6.1 查风险",
+          "type": "不一致",
+          "keywords": [
+            "过滤逻辑",
+            "case_code",
+            "标记字段",
+            "字符串匹配",
+            "不一致"
+          ]
+        },
+        {
+          "rule_id": "GT-FN-004",
+          "issue": "§4.1 PRD 列举了多种诉前调解案件混合模式 (单案号含裁判文书/两案号混合/多案号混合) 但未说明各模式在新分类下的归属规则",
+          "severity": "must",
+          "location": "4.1 司法案件样例",
+          "type": "歧义",
+          "keywords": [
+            "案件模式",
+            "归属规则",
+            "混合案号",
+            "粒度",
+            "记录级"
+          ]
+        },
+        {
+          "rule_id": "GT-FN-005",
+          "issue": "§2.x 反复用「字段展示、筛选项、搜索项、导出，全都和立案信息UI保持一致」兜底, 但未在本 PRD 列出立案信息字段清单",
+          "severity": "must",
+          "location": "2.1 / 2.2 / 2.3 / 2.4",
+          "type": "缺失",
+          "keywords": [
+            "立案信息",
+            "字段清单",
+            "兜底",
+            "AI Coding"
+          ]
+        },
+        {
+          "rule_id": "GT-FN-006",
+          "issue": "企业主页读取 ds_risk_court_mediation 时, 各子章节均未声明 data_status=0 的有效性过滤条件",
+          "severity": "should",
+          "location": "第2节「企业主页增加诉前调解」",
+          "type": "缺失",
+          "keywords": [
+            "data_status",
+            "有效性过滤",
+            "ds_risk_court_mediation"
+          ]
+        },
+        {
+          "rule_id": "GT-PP-001",
+          "issue": "状态3 ASCII 原型显示 3 个档位 (¥1/¥5/全部兑换), 兑换弹窗交互细节文字写明 4 个档位 (¥1/¥5/¥10/全兑), 两处规格不一致",
+          "severity": "must",
+          "location": "状态3 ASCII 原型 + 兑换弹窗交互细节",
+          "type": "不一致",
+          "keywords": [
+            "快捷档位",
+            "ASCII 原型",
+            "数量不一致",
+            "实现歧义"
+          ]
+        },
+        {
+          "rule_id": "GT-PP-002",
+          "issue": "v2 核心交互依赖「积分即兑即用 (秒到账)」, 但现有积分中心兑换接口需 2-3 个工作日人工审核, 阻断后端开工",
+          "severity": "must",
+          "location": "风险与假设 → 待决策: 现有积分兑换审核机制",
+          "type": "阻断",
+          "keywords": [
+            "即兑即用",
+            "秒到账",
+            "人工审核",
+            "阻断",
+            "前置依赖"
+          ]
+        },
+        {
+          "rule_id": "GT-PP-003",
+          "issue": "兑换后端接口契约未定义 (请求字段/响应字段/错误码/二次校验差异返回), AI 无法生成请求/响应代码",
+          "severity": "must",
+          "location": "核心规则 · 兑换与支付解耦 / 风险与假设 · 方案 A",
+          "type": "缺失",
+          "keywords": [
+            "接口契约",
+            "请求字段",
+            "错误码",
+            "AI Coding",
+            "source=payment_checkout"
+          ]
+        },
+        {
+          "rule_id": "GT-PP-004",
+          "issue": "「假设」第4条说积分在支付成功回调中扣减, 但 v2 核心模型把兑换定义为独立 Phase 1 (即时扣减), 两处直接矛盾",
+          "severity": "must",
+          "location": "风险与假设 → 假设 (第4条)",
+          "type": "不一致",
+          "keywords": [
+            "扣减时点",
+            "支付回调",
+            "Phase 1",
+            "Phase 2",
+            "兑换支付解耦"
+          ]
+        },
+        {
+          "rule_id": "GT-PP-005",
+          "issue": "积分抵扣引导行触发条件 (余额不足以支付订单) 缺少边界定义: 余额恰好等于订单金额时是否显示? 待支付订单部分扣减后余额变化是否实时刷新?",
+          "severity": "should",
+          "location": "v2 设计依据 / 积分抵扣引导行",
+          "type": "歧义",
+          "keywords": [
+            "余额不足",
+            "边界条件",
+            "引导行",
+            "实时刷新"
+          ]
+        }
+      ],
+      "capability": {
+        "p": 0.0,
+        "r": 0.0,
+        "f1": 0.0,
+        "severity_kl": 0.0,
+        "severity_distribution": {
+          "must": 3,
+          "should": 3,
+          "info": 1,
+          "other": 0
+        },
+        "hits": 0,
+        "misses": 21,
+        "fps": 7,
+        "total_items": 7
+      },
+      "stability": {
+        "overlap": 1.0,
+        "n0_var": 0.0,
+        "sampling_cv": 0.0,
+        "stable_count": 0,
+        "n_runs": 1
+      },
+      "cost_latency": {
+        "p50_ms": 277857.0,
+        "p95_ms": 277857.0,
+        "p99_ms": 277857.0,
+        "cost_usd_total": 0.251781,
+        "cost_usd_per_run": 0.251781,
+        "total_input_tokens": 17,
+        "total_output_tokens": 16782,
+        "n_calls": 1
+      },
+      "failure_modes": {
+        "quota_rate": 0.0,
+        "json_parse_fail_rate": 0.0,
+        "tool_use_fail_rate": 0.0,
+        "fallback_rate": 0.0,
+        "timeout_rate": 0.0,
+        "n_calls": 1
+      },
+      "metrics": {
+        "capability": {
+          "p": 0.0,
+          "r": 0.0,
+          "f1": 0.0,
+          "severity_kl": 0.0,
+          "severity_distribution": {
+            "must": 3,
+            "should": 3,
+            "info": 1,
+            "other": 0
+          },
+          "hits": 0,
+          "misses": 21,
+          "fps": 7,
+          "total_items": 7
+        },
+        "stability": {
+          "overlap": 1.0,
+          "n0_var": 0.0,
+          "sampling_cv": 0.0,
+          "stable_count": 0,
+          "n_runs": 1
+        },
+        "cost_latency": {
+          "p50_ms": 277857.0,
+          "p95_ms": 277857.0,
+          "p99_ms": 277857.0,
+          "cost_usd_total": 0.251781,
+          "cost_usd_per_run": 0.251781,
+          "total_input_tokens": 17,
+          "total_output_tokens": 16782,
+          "n_calls": 1
+        },
+        "failure_modes": {
+          "quota_rate": 0.0,
+          "json_parse_fail_rate": 0.0,
+          "tool_use_fail_rate": 0.0,
+          "fallback_rate": 0.0,
+          "timeout_rate": 0.0,
+          "n_calls": 1
+        }
+      }
+    },
+    {
+      "route_id": "advisor.goshawk",
+      "vendor": "anthropic",
+      "model": "sonnet",
+      "runs": 1,
+      "dataset": "advisor_conflicts",
+      "dry_run": false,
+      "responses": [
+        [
+          {
+            "id": "R-001",
+            "rule_id": "V-04",
+            "dimension": "结构层",
+            "location": "二、企业主页 / 1.4 脱敏规则",
+            "issue": "复姓+单字名脱敏结果歧义: 通用规则表述「姓+**」(固定两个星号), 但示例「欧阳修 → 欧阳*」只有一个星号, 规则与示例自相矛盾",
+            "severity": "must",
+            "evidence_type": "A",
+            "workspace": "workspace-劳动仲裁",
+            "_advisor_decision": "merged"
+          },
+          {
+            "id": "R-013",
+            "rule_id": "FN-01",
+            "dimension": "跨章节冲突",
+            "location": "二、企业主页 / 1.4 脱敏规则 (规则 vs 示例)",
+            "issue": "脱敏规则标题与示例直接矛盾, 复姓脱敏行为在两处不一致, 影响公告内容脱敏的级联实现",
+            "severity": "must",
+            "evidence_type": "A",
+            "workspace": "workspace-劳动仲裁",
+            "_advisor_decision": "merged"
+          },
+          {
+            "id": "R-001",
+            "rule_id": "V-06",
+            "dimension": "结构层",
+            "location": "2.1 Web UI",
+            "issue": "企业主页诉前调解 Web UI 表格完全为空, 字段展示/筛选项/搜索项/导出均无内容",
+            "severity": "must",
+            "workspace": "workspace-fengniao-mediation",
+            "_advisor_decision": "merged"
+          },
+          {
+            "id": "R-006",
+            "rule_id": "V-06",
+            "dimension": "结构层",
+            "location": "6.2.1/6.2.2 查风险",
+            "issue": "查风险查询条件章节缺失字段定义",
+            "severity": "must",
+            "workspace": "workspace-fengniao-mediation",
+            "_advisor_decision": "merged"
+          },
+          {
+            "id": "R-012",
+            "rule_id": "RC-005",
+            "dimension": "跨章节冲突",
+            "location": "全文",
+            "issue": "横向质量汇总: PRD 多处 UI 表格为空形成系统性缺失",
+            "severity": "must",
+            "workspace": "workspace-fengniao-mediation",
+            "_advisor_decision": "merged"
+          },
+          {
+            "id": "R-005",
+            "rule_id": "V-08",
+            "dimension": "AI Coding 友好度",
+            "location": "状态3 ASCII + 兑换弹窗 + 全兑文案 + dedupe",
+            "issue": "档位数量不一致 + 全兑文案是否拼金额未定义 + dedupe 规则缺失 (3 点冲突最全)",
+            "severity": "must",
+            "workspace": "workspace-points-payment",
+            "_advisor_decision": "merged"
+          },
+          {
+            "id": "R-001",
+            "rule_id": "V-04",
+            "dimension": "结构层",
+            "location": "状态3 ASCII 原型 + 兑换弹窗交互细节",
+            "issue": "ASCII 原型 3 档 vs 文字规格 4 档不一致, 实现歧义",
+            "severity": "must",
+            "workspace": "workspace-points-payment",
+            "_advisor_decision": "merged"
+          },
+          {
+            "id": "R-014",
+            "rule_id": "RC-007",
+            "dimension": "AI Coding 友好度",
+            "location": "3 vs 6.1 (含 SQL 伪代码)",
+            "issue": "过滤机制不一致 + 多案号边界场景 (含诉前调案号 + 普通案号的混合记录) 判定逻辑未给出 SQL 伪代码",
+            "severity": "must",
+            "workspace": "workspace-fengniao-mediation",
+            "_advisor_decision": "merged"
+          },
+          {
+            "id": "R-016",
+            "rule_id": "RC-009",
+            "dimension": "数据一致性",
+            "location": "ES 索引使用",
+            "issue": "若两端共用同一 ES 索引, 应统一字段过滤; 当前两端独立可能引入数据漂移",
+            "severity": "should",
+            "workspace": "workspace-fengniao-mediation",
+            "_advisor_decision": "merged"
+          },
+          {
+            "id": "R-013",
+            "rule_id": "RC-006",
+            "dimension": "数据一致性",
+            "location": "3 + 历史回填 + ES 全量重跑",
+            "issue": "新增字段规格缺失 (字段名/类型/默认值/回填策略/ES mapping/全量重跑判断) 全方位未定义",
+            "severity": "must",
+            "workspace": "workspace-fengniao-mediation",
+            "_advisor_decision": "merged"
+          }
+        ]
+      ],
+      "call_records": [
+        {
+          "ts": "2026-04-27T21:19:30",
+          "route_id": "advisor.goshawk",
+          "vendor": "anthropic",
+          "model": "sonnet",
+          "latency_ms": 135971,
+          "input_tokens": 15,
+          "output_tokens": 5855,
+          "cost_usd": 0.08787,
+          "stop_reason": "end_turn",
+          "error_type": null,
+          "fallback_triggered": false
+        }
+      ],
+      "ground_truth": [],
+      "capability": {
+        "p": 0.0,
+        "r": 0.0,
+        "f1": 0.0,
+        "severity_kl": 0.0,
+        "severity_distribution": {
+          "must": 9,
+          "should": 1,
+          "info": 0,
+          "other": 0
+        },
+        "hits": 0,
+        "misses": 0,
+        "fps": 10,
+        "total_items": 10
+      },
+      "stability": {
+        "overlap": 1.0,
+        "n0_var": 0.0,
+        "sampling_cv": 0.0,
+        "stable_count": 0,
+        "n_runs": 1
+      },
+      "cost_latency": {
+        "p50_ms": 135971.0,
+        "p95_ms": 135971.0,
+        "p99_ms": 135971.0,
+        "cost_usd_total": 0.08787,
+        "cost_usd_per_run": 0.08787,
+        "total_input_tokens": 15,
+        "total_output_tokens": 5855,
+        "n_calls": 1
+      },
+      "failure_modes": {
+        "quota_rate": 0.0,
+        "json_parse_fail_rate": 0.0,
+        "tool_use_fail_rate": 0.0,
+        "fallback_rate": 0.0,
+        "timeout_rate": 0.0,
+        "n_calls": 1
+      },
+      "metrics": {
+        "capability": {
+          "p": 0.0,
+          "r": 0.0,
+          "f1": 0.0,
+          "severity_kl": 0.0,
+          "severity_distribution": {
+            "must": 9,
+            "should": 1,
+            "info": 0,
+            "other": 0
+          },
+          "hits": 0,
+          "misses": 0,
+          "fps": 10,
+          "total_items": 10
+        },
+        "stability": {
+          "overlap": 1.0,
+          "n0_var": 0.0,
+          "sampling_cv": 0.0,
+          "stable_count": 0,
+          "n_runs": 1
+        },
+        "cost_latency": {
+          "p50_ms": 135971.0,
+          "p95_ms": 135971.0,
+          "p99_ms": 135971.0,
+          "cost_usd_total": 0.08787,
+          "cost_usd_per_run": 0.08787,
+          "total_input_tokens": 15,
+          "total_output_tokens": 5855,
+          "n_calls": 1
+        },
+        "failure_modes": {
+          "quota_rate": 0.0,
+          "json_parse_fail_rate": 0.0,
+          "tool_use_fail_rate": 0.0,
+          "fallback_rate": 0.0,
+          "timeout_rate": 0.0,
+          "n_calls": 1
+        }
+      }
+    }
+  ]
+}
