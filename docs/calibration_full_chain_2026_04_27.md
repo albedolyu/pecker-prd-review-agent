@@ -110,3 +110,13 @@ worker 阶段 cuckoo Phase 0 输出明确含:
 1. **P0 修 prompt-binding 缺口**: worker prompt 末尾加 "你只能用这个 dim 的 valid_rule_ids 中规则号, 含 FN-XX. 列表如下: [FN-01 / FN-03 / FN-09 / V-XX / RC-XX]"。让 worker 拒绝幻觉 ID。
 2. **P1 修 evidence_verify 接 canonical wiki**: `_is_wiki_sparse(wiki_dir)` 改成接 canonical merged 后的实际页面数, 让 wiki_mode 真 rich + authority_distribution 出值。
 3. **P2 灰度跑 7 PRD**: 三波风鸟 PRD (劳动仲裁 / 侵权软件 / 纳税人资质 / 风鸟诉前调解 / ...) 都跑一遍, 看 FN-01/03/09 在不同 PRD 下的真触发率, 决定是否升 active 或继续打磨 prompt。
+
+---
+
+## 2026-04-27 update — schema_registry 接管
+
+- ✅ P0 prompt-binding 缺口 — schema_registry step 3.3 已落地 `SUBMIT_REVIEW_ITEMS_TOOL` 动态 enum (来源 `registry.valid_rule_ids()`), worker 输出非 enum rule_id 直接被工具层拒。worker prompt 提示词由 step 3.5 的 `review/prompting.py` 通过 `valid_prefixes()` + `sample_rule_ids(3)` 动态生成, FN-XX 跨维度 valid 集合也接通。
+- 上述第 1 项的 prompt 调优策略落到 schema_registry SoT, **本 doc 第 71 行"valid_rule_ids 是从 dim.checklist 派生 / 跨维度时不直接进 valid 集合"现象在 step 3.3 后由全 registry-driven enum 取代, 不再 dim 局部派生**.
+- P1/P2 仍在 backlog, 由后续 sprint 跟进.
+
+详见 `docs/schema_registry_design_2026_04_27.md` 实施回顾段.

@@ -277,3 +277,29 @@ Grep memory/[a-z_]+\.md *.py = 0 命中
 **报告路径**: `docs/audit_drift_pollution_2026_04_26.md`
 **生成日期**: 2026-04-26 Day4
 **审查者**: Pecker 自审 (只读模式)
+
+---
+
+## 2026-04-27 update — schema_registry 修法落地
+
+Day5 PM 选择长期修法 schema_registry 单点 SoT. 8 substep 全完成 (commit 待 squash 提交, 当前 working tree).
+本审查报告里**已修复**的漂移项:
+
+- ✅ §3.1 / §6.2 RC-014 zombie 6 workspace — step 3.6 anti-corruption layer 端到端 0 复活, e2e 测试覆盖
+- ✅ §6.2 `_DEFAULT_REVIEW_DIMENSIONS` (review/dimensions.py:53) — step 3.2 已删除内部硬编码 fallback dict, dimensions.py 现仅从 SchemaRegistry 拉
+- ✅ §6.2 `_DEFAULT_DIMENSION_WIKI_KEYWORDS` — step 3.2 同步删除, wiki keyword 由 registry 统一暴露
+- ✅ §3.4 SUBMIT_REVIEW_ITEMS_TOOL 隐式 rule_id 无 enum 约束 — step 3.3 已加动态 enum (来源于 registry.valid_rule_ids())
+- ✅ §3.1 散落 regex `(RC|V|EV|FN)-\d+` — step 3.4-3.5 evidence_verify / prompting / review_fixer / cuckoo_scorer 全部 SoT 化, 改用 `registry.rule_id_pattern()`
+- ✅ §6.2 5 workspace 老 yaml schema 不兼容 (rules 数组 vs dimensions map) — step 3.6 anti-corruption layer 转译 100%, 端到端不污染主链路
+- ✅ P0-B (§8 P0 列表) `review/dimensions.py:108/:117` hardcoded fallback 删 RC-014 — 上层级 step 3.2 整体废除 fallback dict 一并解决
+
+未修但 schema_registry 已挡住的:
+- §2.2 老 yaml zombie 字段 — anti-corruption layer fail-safe, 老 yaml 仍存但 production 端不见 zombie
+- §3.5 prompting 错误提示文本手列 prefix — step 3.5 改为动态 `valid_prefixes()` + `sample_rule_ids(3)`
+
+未处置 (deferred):
+- Q1 6 workspace `review-checklist.yaml` 是否合并到顶层 — anti-corruption 已挡住下游污染, 合并工作 backlog
+- Q5 RC-014 历史 rule_performance_history.json 是否回溯清洗 — schema_registry 已挡住新数据, 历史档案保留作 audit 凭证
+
+详见: `docs/schema_registry_design_2026_04_27.md` 末尾"实施回顾"段 + `tests/test_schema_registry_e2e.py` (28 测试, pytest 1073 全绿).
+

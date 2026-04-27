@@ -339,3 +339,42 @@ rules:
     description: ...
     impact_score: 0.8
 ```
+
+---
+
+## 实施回顾 (2026-04-27)
+
+8 substep 全部 e2e 验证通过, pytest 932 → 1073 (+141 测试):
+
+| substep | 范围 | pytest 累计 |
+|---|---|---|
+| 3.1 | `review/schema_registry.py` 骨架 + `tests/test_schema_registry.py` (14 测试) | 946 |
+| 3.2 | `review/dimensions.py` 删 fallback dict + `parallel_review.py` re-export 删 + `tests/test_dimensions_registry_wiring.py` (14 测试) | 954 |
+| 3.3 | `review/worker.py` SUBMIT_REVIEW_ITEMS_TOOL 动态 enum + `tests/test_worker_dynamic_enum.py` (7 测试) | 961 |
+| 3.4 | `review/evidence_verify.py` regex SoT 化 + `tests/test_evidence_verify_registry.py` (10 测试) | 971 |
+| 3.5 | `review/prompting.py` + `review_fixer.py` + `cuckoo_scorer.py` SoT 化 + 3 测试文件 (47 测试) | 1018 |
+| 3.6 | anti-corruption section (5 workspace 老 yaml schema 转译) + `tests/test_schema_registry_anticorruption.py` (27 测试) | 1045 |
+| 3.7 | `tests/test_schema_registry_e2e.py` 端到端集成 (28 测试) | 1073 |
+| 3.8 | docs 同步 (本次, 不动代码) | 1073 |
+
+核心目标在 e2e 层达成:
+- ✓ 加新规则 (V-13 / RC-017 / FN-04) 真 1 处改 6 处自动 propagate (e2e 用例覆盖)
+- ✓ 加新前缀 (DQ-99) 正确 raise SchemaRegistryError, 强制 PM 改 schema_registry 一处
+- ✓ 6 workspace 老 yaml anti-corruption 100% 转译, RC-014 zombie 端到端 0 复活
+- ✓ 不动 hotfix 路径 (`goshawk_advisor.py` / `clients/claude_cli.py` 不在变更范围)
+
+实际工作量 vs 设计估算:
+- 设计文档估 5 天 / 10 step, 实际 8 substep 约 12 小时 wall clock (cron + 8 agent 接力)
+- P0-A/B 修法预先实现了 50% 思想 (yaml 真接通 + RC-014 6 workspace 物理删), 加速大幅
+- 最大风险 step 3.6 (5 workspace anti-corruption) 安全通过, fail-safe 在所有未知字段场景未误伤
+
+后续 backlog (本次未处置):
+- 5 workspace 老 yaml 物理清 zombie (RC-014 等) — anti-corruption fail-safe 已挡, 但 PM 可清 yaml 让 SoT 干净
+- 6 workspace yaml byte-by-byte 对齐 — 后续可考虑合到全局 yaml, 删 `review-checklist.yaml` 这套并行 schema
+- `review_fixer` regex 无 word boundary 边缘 bug — `tests/test_schema_registry_e2e.py` 注释 caveat
+- `rule_perf` wiring (本设计 with_perf 接口骨架已落, 联动 step 留下次)
+
+落地后单点 SoT 修改路径 (新规则只改 1 处):
+1. 改 `review/schema_registry.py` (加 prefix / 加 rule_id) → 17 wiring 点全部自动 propagate
+2. 跑 `pytest tests/test_schema_registry_e2e.py` 确认 propagate 正确 → 加新规则 case 强制覆盖
+3. 完毕
