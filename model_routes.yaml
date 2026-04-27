@@ -1,0 +1,102 @@
+# 多模型路由配置 — Pecker 多 vendor / 多 tier 全链路统一抽象
+#
+# 改这里 = 改全链路 model 选择，不需要改代码。
+# 新增 vendor 见 clients/factory.py docstring。
+# 调用方改 model_router.route_call(route_id, ...) 进入此路由表。
+#
+# route_id 命名空间:
+#   worker.<dim_key>          各维度 worker (兼容 dimensions.yaml 的 dim["model"] tier 别名 override)
+#   advisor.goshawk[.recheck|.shadow]  苍鹰主审 / 二次校验 / 影子实验槽位
+#   verify.nli                evidence_verify NLI 校验
+#   router.intent             意图路由 (Haiku 三分类)
+#   eval.<scorer>             评测期间 LLM-as-judge 调用
+#
+# 全局开关 (env):
+#   PECKER_ROUTES_FILE                覆盖默认 model_routes.yaml 路径 (实验/灰度用)
+#   PECKER_MODEL_OVERRIDE             等价 --model auto/opus/sonnet/haiku, 仅覆盖 worker.* 的 tier
+#   PECKER_ENABLE_SHADOW_ADVISOR=1    一键开 advisor.goshawk.shadow
+
+vendors:
+  anthropic:
+    cli_client: clients.claude_cli.ClaudeCodeCLIClient
+    native_client: clients.anthropic_native.AnthropicNativeClient
+    model_tiers:
+      opus:   claude-opus-4-7
+      sonnet: claude-sonnet-4-6
+      haiku:  claude-haiku-4-5-20251001
+    fallback_chain: [opus, sonnet, haiku]
+
+  # P1 接入: 需要 OPENAI_API_KEY + clients/codex_cli.py 实现
+  # 启用前必须过 scripts/eval_admission.py 准入门槛
+  # openai:
+  #   cli_client: clients.codex_cli.CodexCLIClient
+  #   model_tiers:
+  #     pro: gpt-5-codex
+  #     mid: gpt-5-codex-mini
+  #   fallback_chain: [pro, mid]
+
+routes:
+  # ============================================================
+  # Worker 维度 (4-6 个并行 worker)
+  # dimensions.yaml 里的 dim["model"] = "sonnet"|"opus"|"haiku" 仍然生效,
+  # model_router 把 dim["model"] 当 model_override 传入, 覆盖此处 model 字段。
+  # ============================================================
+  worker.default:      {vendor: anthropic, transport: cli, model: sonnet, retry_policy: worker}
+  worker.structure:    {vendor: anthropic, transport: cli, model: sonnet, retry_policy: worker}
+  worker.compliance:   {vendor: anthropic, transport: cli, model: sonnet, retry_policy: worker}
+  worker.data_quality: {vendor: anthropic, transport: cli, model: sonnet, retry_policy: worker}
+  worker.quality:      {vendor: anthropic, transport: cli, model: sonnet, retry_policy: worker}
+  worker.consistency:  {vendor: anthropic, transport: cli, model: sonnet, retry_policy: worker}
+  worker.ai_friendly:  {vendor: anthropic, transport: cli, model: sonnet, retry_policy: worker}
+
+  # ============================================================
+  # 苍鹰 meta-reviewer
+  # ============================================================
+  advisor.goshawk:
+    vendor: anthropic
+    transport: cli
+    model: sonnet            # 历史: Opus CLI 偶发 timeout (goshawk_advisor.py:158 注释), 修复后可切回 opus
+    retry_policy: advisor
+
+  advisor.goshawk.recheck:
+    vendor: anthropic
+    transport: cli
+    model: haiku
+    retry_policy: router
+
+  # P2 影子苍鹰 (默认 disabled)
+  # 启用后 model_router.route_call_with_shadow 会异步并发跑, 仅落 logs/shadow_*.jsonl 不影响主路径
+  # scripts/eval_dual_advisor.py 启用此 route 跑跨 vendor 互补率实验
+  advisor.goshawk.shadow:
+    vendor: anthropic        # P1 codex 接入后改为 openai
+    transport: cli
+    model: opus              # 暂用同 vendor 高 tier dry-run, P1 后切跨 vendor
+    retry_policy: advisor
+    enabled: false
+
+  # ============================================================
+  # Evidence verify NLI (高频小任务, evidence_verify._llm_nli_score)
+  # ============================================================
+  verify.nli:
+    vendor: anthropic
+    transport: cli
+    model: haiku
+    retry_policy: router
+
+  # ============================================================
+  # 意图路由 (router.route_intent)
+  # ============================================================
+  router.intent:
+    vendor: anthropic
+    transport: cli
+    model: haiku
+    retry_policy: router
+
+  # ============================================================
+  # Eval LLM-as-judge (cuckoo_eval scorer 调用)
+  # ============================================================
+  eval.cuckoo:
+    vendor: anthropic
+    transport: cli
+    model: sonnet
+    retry_policy: foreground
