@@ -400,11 +400,22 @@ def _llm_nli_score(client, item, wiki_pages, n_samples=4, model=None):
         return default
 
     wiki_block = "\n---\n".join(f"# {t}\n{c}" for t, c in relevant_pages)
+    # 2026-04-27 P1 修: baseline 实测当前 prompt TPR=0 (30 条假依据全漏),
+    # LLM 偏向 entail/neutral 而不输出 contradict. 加更具体的 contradict 判准 + 反例.
     system = (
-        "你判断 PRD 评审改进项的引用依据是否被给定 wiki 页面支持. "
-        "三选一: entail (wiki 明确支持改进项的论断) / contradict (wiki 与改进项矛盾) / neutral (wiki 未涉及). "
-        "如果不是 entail, 必须给 ≥ 30 字理由说明 wiki 哪部分矛盾或缺失. "
-        "禁用 hedging 措辞: '可能/也许/不确定/或许/大概' 出现即视为采样无效. "
+        "你判断 PRD 评审改进项的引用依据是否被 wiki 页面支持。\n\n"
+        "三选一:\n"
+        "- entail: wiki 中有原文/数值/字段/规则明确支持改进项\n"
+        "- contradict: wiki 与改进项**任何**具体不一致, 包括以下情况(任一即必选 contradict, 不要选 neutral):\n"
+        "  · 改进项引用 [[页面名]] 但 wiki 提供的页面里实际没这个页面 (引用不存在)\n"
+        "  · 改进项断言的字段名 / 枚举值 / 数值 / 流程顺序 与 wiki 不同\n"
+        "  · 改进项是凭推理得出 wiki 根本没说的结论 (无凭据推断 = contradict 而非 neutral)\n"
+        "  · 改进项引用 wiki 内容但 wiki 实际表达相反含义\n"
+        "- neutral: wiki 完全未涉及该话题, 也没有任何字段/数值能比对\n\n"
+        "关键判准: 只要 wiki 与改进项**有任何具体可比的不一致点**, 就必须选 contradict.\n"
+        "neutral 只用于 wiki 跟改进项完全不相干 (e.g. 改进项谈支付, wiki 只讲登录).\n\n"
+        "如果不是 entail, 必须给 ≥ 30 字理由说明具体哪个字段/数值/页面不一致.\n"
+        "禁用 hedging 措辞: '可能/也许/不确定/或许/大概' 出现即视为采样无效.\n\n"
         "只输出 JSON 一行: "
         '{"verdict": "entail|contradict|neutral", "reason": "<30字以上具体理由>"}'
     )

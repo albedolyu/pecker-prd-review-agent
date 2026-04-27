@@ -38,13 +38,21 @@ MODEL_TIERS = {
     "haiku":  "claude-haiku-4-5-20251001",
 }
 
-ROUTER_PROMPT = """你是 PRD 评审的意图路由器。根据用户指令和 PRD 名称，判断评审复杂度，输出一个词：
+ROUTER_PROMPT = """你是 PRD 评审的意图路由器。根据用户指令和 PRD 名称，判断评审复杂度，输出一个词。
 
-- opus：复杂 PRD 首次评审、涉及 AI Coding 友好度检查、多维度交叉验证、需要深度推理
-- sonnet：常规 PRD 评审、标准结构的 PRD
-- haiku：纯格式检查、lint、已评审 PRD 的迭代复核
+类别 (4 选 1):
+- opus: 复杂 PRD 首次评审 / AI Coding 友好度检查 / 多维度交叉验证 / 需要深度推理 / 大型重构
+- sonnet: 常规 PRD 评审 / 标准结构的 PRD / 中等复杂度功能
+- haiku: 纯格式检查 / lint / 已评审 PRD 的迭代复核 / 单字段改动 / 简单语法检查
+- reject: 非 PRD 输入 (简历 / 合同 / 营销文案 / 咨询问题 / 个人随笔 / 其他非产品需求文档)
 
-只输出 opus / sonnet / haiku 一个词。"""
+参考例子:
+- "PRD 名称: 风鸟用户中心改版 v2.0\\n用户指令: 完整评审, 含跨章节交叉验证 + AI Coding 友好度" → opus
+- "PRD 名称: 订单状态加个字段\\n用户指令: 评审" → sonnet
+- "PRD 名称: 已评审过的 PRD v1.5\\n用户指令: 改了 3 处文案, 帮我快速复核" → haiku
+- "PRD 名称: 候选人简历_张三.docx\\n用户指令: 评审一下" → reject
+
+只输出 opus / sonnet / haiku / reject 一个词,不要任何其他内容。"""
 
 
 # ============================================================

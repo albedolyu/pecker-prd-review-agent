@@ -419,6 +419,10 @@ def _call_nli_pattern(
     error_type: Optional[str] = None
     resp = _BatchResponse(model=model_tier, predictions=[])
 
+    # 2026-04-27 P1 调参: 阈值 0.5→0.3, n_samples 2→4 (baseline 实测 TPR=0,
+    # 配合 evidence_verify.py prompt 加强 contradict 判准, 重测看 TPR)
+    nli_threshold = float(os.environ.get("PECKER_NLI_CONTRADICT_THRESHOLD", "0.3"))
+    nli_samples = int(os.environ.get("PECKER_NLI_N_SAMPLES", "4"))
     for entry in sub:
         item = entry.get("item", {}) or {}
         wiki_pages = entry.get("wiki_pages", {}) or {}
@@ -428,9 +432,9 @@ def _call_nli_pattern(
                 client=None,
                 item=item,
                 wiki_pages=wiki_pages,
-                n_samples=2,  # 评测期 2 采样, 节约成本
+                n_samples=nli_samples,
             )
-            detected = score.get("contradict_score", 0.0) > 0.5
+            detected = score.get("contradict_score", 0.0) > nli_threshold
             predictions.append({
                 "id": entry.get("id", ""),
                 "expected_hallucination": is_halluc,

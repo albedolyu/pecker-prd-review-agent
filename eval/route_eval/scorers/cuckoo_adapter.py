@@ -20,10 +20,19 @@ except ImportError:  # pragma: no cover -- 单元测试时走 mock 也别炸
 
 
 def _flatten_responses_to_items(responses: List[Any]) -> List[Dict[str, Any]]:
-    """把 N 个 response 的 items 拍平为单一 review_items list (按 cuckoo 期待的 schema)."""
+    """把 N 个 response 的 items 拍平为单一 review_items list (按 cuckoo 期待的 schema).
+
+    支持 3 种输入形态 (兼容 runner._BatchResponse + dry-run + 历史 dict 形态):
+    - List[item]: runner.all_responses 直接 append items list (主形态)
+    - {items: [...]} dict: 历史形态
+    - _FakeResponse / UnifiedResponse 对象: 取 .items 属性
+    """
     flat: List[Dict[str, Any]] = []
     for idx, resp in enumerate(responses or []):
-        if isinstance(resp, dict):
+        if isinstance(resp, list):
+            # runner.all_responses 主形态: 单 run 的 items list 直接 append 进来
+            items = resp
+        elif isinstance(resp, dict):
             items = resp.get("items") or resp.get("review_items") or []
         else:
             # _FakeResponse / UnifiedResponse 类对象, 兜底取 .items 或空
