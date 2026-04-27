@@ -83,8 +83,19 @@ def main(argv=None):
     print(f"[eval_route] PASS")
     print(f"  md   -> {md_path}")
     print(f"  json -> {json_path}")
-    print(f"  capability: P={result['capability']['p']:.3f} R={result['capability']['r']:.3f} "
-          f"F1={result['capability']['f1']:.3f}")
+    cap = result["capability"]
+    task_type = cap.get("task_type", "issues")
+    if task_type == "binary":
+        print(f"  capability (binary NLI): accuracy={cap.get('accuracy', 0):.3f} "
+              f"TPR={cap.get('tpr', 0):.3f} FPR={cap.get('fpr', 0):.3f} "
+              f"n={cap.get('n_samples', 0)}")
+    elif task_type == "multiclass":
+        print(f"  capability (multiclass intent): accuracy={cap.get('accuracy', 0):.3f} "
+              f"n={cap.get('n_samples', 0)} "
+              f"per_class={cap.get('per_class_accuracy', {})}")
+    else:
+        print(f"  capability: P={cap.get('p', 0):.3f} R={cap.get('r', 0):.3f} "
+              f"F1={cap.get('f1', 0):.3f}")
     print(f"  stability: overlap={result['stability']['overlap']:.3f} "
           f"sampling_cv={result['stability']['sampling_cv']:.3f}")
     print(f"  cost: ${result['cost_latency']['cost_usd_per_run']:.6f}/run "

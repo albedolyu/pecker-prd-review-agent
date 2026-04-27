@@ -41,6 +41,70 @@ def _kl_divergence(p: Dict[str, int], q: Dict[str, int], smoothing: float = 1e-6
     return round(kl, 4)
 
 
+def compute_classification_metrics(
+    predictions: List[Dict[str, Any]],
+    task_type: str = "binary",
+) -> Dict[str, Any]:
+    """分类任务 (NLI / intent) 指标 -- accuracy / TPR / FPR / per-class.
+
+    Args:
+        predictions: list of dict, 字段按 task_type:
+            binary: {expected_hallucination: bool, detected_hallucination: bool, correct: bool}
+            multiclass: {expected_tier: str, predicted_tier: str, correct: bool}
+        task_type: "binary" (verify.nli) 或 "multiclass" (router.intent)
+
+    Returns:
+        {accuracy, n_samples, n_correct, ...} + task_type 专用字段
+    """
+    if not predictions:
+        return {"accuracy": 0.0, "n_samples": 0, "n_correct": 0, "task_type": task_type}
+
+    n = len(predictions)
+    correct = sum(1 for p in predictions if p.get("correct", False))
+    accuracy = correct / n if n else 0.0
+    out: Dict[str, Any] = {
+        "accuracy": round(accuracy, 4),
+        "n_samples": n,
+        "n_correct": correct,
+        "task_type": task_type,
+    }
+
+    if task_type == "binary":
+        # TPR (hallucination 拦截率) / FPR (误杀率) -- admission 阈值 ≥0.85 / ≤0.10
+        tp = sum(1 for p in predictions
+                 if p.get("expected_hallucination") and p.get("detected_hallucination"))
+        fn = sum(1 for p in predictions
+                 if p.get("expected_hallucination") and not p.get("detected_hallucination"))
+        fp = sum(1 for p in predictions
+                 if not p.get("expected_hallucination") and p.get("detected_hallucination"))
+        tn = sum(1 for p in predictions
+                 if not p.get("expected_hallucination") and not p.get("detected_hallucination"))
+        tpr = tp / (tp + fn) if (tp + fn) else 0.0
+        fpr = fp / (fp + tn) if (fp + tn) else 0.0
+        out.update({
+            "tpr": round(tpr, 4),
+            "fpr": round(fpr, 4),
+            "true_positives": tp,
+            "false_negatives": fn,
+            "false_positives": fp,
+            "true_negatives": tn,
+        })
+    elif task_type == "multiclass":
+        from collections import Counter
+        per_class_total: Counter = Counter(p.get("expected_tier") for p in predictions)
+        per_class_correct: Counter = Counter()
+        for p in predictions:
+            if p.get("correct"):
+                per_class_correct[p.get("expected_tier")] += 1
+        out["per_class_accuracy"] = {
+            k: round(per_class_correct[k] / v, 4) if v else 0.0
+            for k, v in per_class_total.items()
+        }
+        out["per_class_total"] = dict(per_class_total)
+
+    return out
+
+
 def compute_capability(
     responses: List[Any],
     ground_truth: List[Dict[str, Any]],

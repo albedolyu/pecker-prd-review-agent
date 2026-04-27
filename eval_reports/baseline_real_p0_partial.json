@@ -1,0 +1,1485 @@
+{
+  "generated_at": "2026-04-27 17:31:33",
+  "routes": [
+    {
+      "route_id": "verify.nli",
+      "vendor": "anthropic",
+      "model": "haiku",
+      "runs": 3,
+      "dataset": "hallucination",
+      "dry_run": false,
+      "responses": [
+        [
+          {
+            "id": "HAL-FAKE-REF-001",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-REF-002",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-REF-003",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-REF-004",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-REF-005",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-REF-006",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-REF-007",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-REF-008",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-CONTENT-001",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_content"
+          },
+          {
+            "id": "HAL-FAKE-CONTENT-002",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_content"
+          },
+          {
+            "id": "HAL-REAL-001",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-002",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-003",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-004",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-005",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-006",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-007",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-008",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-009",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-010",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          }
+        ],
+        [
+          {
+            "id": "HAL-FAKE-REF-001",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-REF-002",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-REF-003",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-REF-004",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-REF-005",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-REF-006",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-REF-007",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-REF-008",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-CONTENT-001",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_content"
+          },
+          {
+            "id": "HAL-FAKE-CONTENT-002",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_content"
+          },
+          {
+            "id": "HAL-REAL-001",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-002",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-003",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-004",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-005",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-006",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-007",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-008",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-009",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-010",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          }
+        ],
+        [
+          {
+            "id": "HAL-FAKE-REF-001",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-REF-002",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-REF-003",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-REF-004",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-REF-005",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-REF-006",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-REF-007",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-REF-008",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_ref"
+          },
+          {
+            "id": "HAL-FAKE-CONTENT-001",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_content"
+          },
+          {
+            "id": "HAL-FAKE-CONTENT-002",
+            "expected_hallucination": true,
+            "detected_hallucination": false,
+            "correct": false,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "fake_content"
+          },
+          {
+            "id": "HAL-REAL-001",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-002",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-003",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-004",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-005",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-006",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-007",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-008",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-009",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          },
+          {
+            "id": "HAL-REAL-010",
+            "expected_hallucination": false,
+            "detected_hallucination": false,
+            "correct": true,
+            "scores": {
+              "entail_score": 0.0,
+              "contradict_score": 0.0,
+              "neutral_score": 1.0,
+              "max_signal": 0.0,
+              "n_samples_succeeded": 0
+            },
+            "construction_method": "real"
+          }
+        ]
+      ],
+      "call_records": [
+        {
+          "ts": "2026-04-27T16:59:10",
+          "route_id": "verify.nli",
+          "vendor": "anthropic",
+          "model": "haiku",
+          "latency_ms": 678,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "cost_usd": 0.0,
+          "stop_reason": "end_turn",
+          "error_type": null,
+          "fallback_triggered": false
+        },
+        {
+          "ts": "2026-04-27T16:59:10",
+          "route_id": "verify.nli",
+          "vendor": "anthropic",
+          "model": "haiku",
+          "latency_ms": 744,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "cost_usd": 0.0,
+          "stop_reason": "end_turn",
+          "error_type": null,
+          "fallback_triggered": false
+        },
+        {
+          "ts": "2026-04-27T16:59:11",
+          "route_id": "verify.nli",
+          "vendor": "anthropic",
+          "model": "haiku",
+          "latency_ms": 865,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "cost_usd": 0.0,
+          "stop_reason": "end_turn",
+          "error_type": null,
+          "fallback_triggered": false
+        }
+      ],
+      "ground_truth": [],
+      "capability": {
+        "accuracy": 0.5,
+        "n_samples": 60,
+        "n_correct": 30,
+        "task_type": "binary",
+        "tpr": 0.0,
+        "fpr": 0.0,
+        "true_positives": 0,
+        "false_negatives": 30,
+        "false_positives": 0,
+        "true_negatives": 30
+      },
+      "stability": {
+        "overlap": 1.0,
+        "n0_var": 0.0,
+        "sampling_cv": 0.0,
+        "stable_count": 1,
+        "n_runs": 3
+      },
+      "cost_latency": {
+        "p50_ms": 744.0,
+        "p95_ms": 852.9,
+        "p99_ms": 862.58,
+        "cost_usd_total": 0.0,
+        "cost_usd_per_run": 0.0,
+        "total_input_tokens": 0,
+        "total_output_tokens": 0,
+        "n_calls": 3
+      },
+      "failure_modes": {
+        "quota_rate": 0.0,
+        "json_parse_fail_rate": 0.0,
+        "tool_use_fail_rate": 0.0,
+        "fallback_rate": 0.0,
+        "timeout_rate": 0.0,
+        "n_calls": 3
+      },
+      "metrics": {
+        "capability": {
+          "accuracy": 0.5,
+          "n_samples": 60,
+          "n_correct": 30,
+          "task_type": "binary",
+          "tpr": 0.0,
+          "fpr": 0.0,
+          "true_positives": 0,
+          "false_negatives": 30,
+          "false_positives": 0,
+          "true_negatives": 30
+        },
+        "stability": {
+          "overlap": 1.0,
+          "n0_var": 0.0,
+          "sampling_cv": 0.0,
+          "stable_count": 1,
+          "n_runs": 3
+        },
+        "cost_latency": {
+          "p50_ms": 744.0,
+          "p95_ms": 852.9,
+          "p99_ms": 862.58,
+          "cost_usd_total": 0.0,
+          "cost_usd_per_run": 0.0,
+          "total_input_tokens": 0,
+          "total_output_tokens": 0,
+          "n_calls": 3
+        },
+        "failure_modes": {
+          "quota_rate": 0.0,
+          "json_parse_fail_rate": 0.0,
+          "tool_use_fail_rate": 0.0,
+          "fallback_rate": 0.0,
+          "timeout_rate": 0.0,
+          "n_calls": 3
+        }
+      }
+    },
+    {
+      "route_id": "router.intent",
+      "vendor": "anthropic",
+      "model": "haiku",
+      "runs": 3,
+      "dataset": "intent",
+      "dry_run": false,
+      "responses": [
+        [
+          {
+            "prd_name": "企业关联图谱 v3.0",
+            "expected_tier": "opus",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "风火台 B 端推数 v2.5",
+            "expected_tier": "opus",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "司法风险扫描多端协议",
+            "expected_tier": "opus",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "企业搜索引擎 v4 — 模糊检索增强",
+            "expected_tier": "opus",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "企业图谱 GraphRAG 接入",
+            "expected_tier": "opus",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "企业基本信息查询 H5 改版",
+            "expected_tier": "sonnet",
+            "predicted_tier": "sonnet",
+            "correct": true
+          },
+          {
+            "prd_name": "收藏夹分类管理",
+            "expected_tier": "sonnet",
+            "predicted_tier": "sonnet",
+            "correct": true
+          },
+          {
+            "prd_name": "搜索历史记录持久化",
+            "expected_tier": "sonnet",
+            "predicted_tier": "sonnet",
+            "correct": true
+          },
+          {
+            "prd_name": "企业关注提醒消息中心",
+            "expected_tier": "sonnet",
+            "predicted_tier": "sonnet",
+            "correct": true
+          },
+          {
+            "prd_name": "企业搜索热词推荐",
+            "expected_tier": "sonnet",
+            "predicted_tier": "sonnet",
+            "correct": true
+          },
+          {
+            "prd_name": "已评审 PRD 二次复核 — 劳动仲裁 v5.2",
+            "expected_tier": "haiku",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "仅做 markdown lint 检查",
+            "expected_tier": "haiku",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "段落标题层级检查",
+            "expected_tier": "haiku",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "术语用词统一性检查",
+            "expected_tier": "haiku",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "链接有效性检查",
+            "expected_tier": "haiku",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "张三-产品经理简历 v2.pdf",
+            "expected_tier": "reject",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "企业服务合同模板.docx",
+            "expected_tier": "reject",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "产品 H5 落地页营销文案",
+            "expected_tier": "reject",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "PM 转岗后的 30/60/90 天计划",
+            "expected_tier": "reject",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "微信群里讨论的几个产品想法",
+            "expected_tier": "reject",
+            "predicted_tier": "sonnet",
+            "correct": false
+          }
+        ],
+        [
+          {
+            "prd_name": "企业关联图谱 v3.0",
+            "expected_tier": "opus",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "风火台 B 端推数 v2.5",
+            "expected_tier": "opus",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "司法风险扫描多端协议",
+            "expected_tier": "opus",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "企业搜索引擎 v4 — 模糊检索增强",
+            "expected_tier": "opus",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "企业图谱 GraphRAG 接入",
+            "expected_tier": "opus",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "企业基本信息查询 H5 改版",
+            "expected_tier": "sonnet",
+            "predicted_tier": "sonnet",
+            "correct": true
+          },
+          {
+            "prd_name": "收藏夹分类管理",
+            "expected_tier": "sonnet",
+            "predicted_tier": "sonnet",
+            "correct": true
+          },
+          {
+            "prd_name": "搜索历史记录持久化",
+            "expected_tier": "sonnet",
+            "predicted_tier": "sonnet",
+            "correct": true
+          },
+          {
+            "prd_name": "企业关注提醒消息中心",
+            "expected_tier": "sonnet",
+            "predicted_tier": "sonnet",
+            "correct": true
+          },
+          {
+            "prd_name": "企业搜索热词推荐",
+            "expected_tier": "sonnet",
+            "predicted_tier": "sonnet",
+            "correct": true
+          },
+          {
+            "prd_name": "已评审 PRD 二次复核 — 劳动仲裁 v5.2",
+            "expected_tier": "haiku",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "仅做 markdown lint 检查",
+            "expected_tier": "haiku",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "段落标题层级检查",
+            "expected_tier": "haiku",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "术语用词统一性检查",
+            "expected_tier": "haiku",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "链接有效性检查",
+            "expected_tier": "haiku",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "张三-产品经理简历 v2.pdf",
+            "expected_tier": "reject",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "企业服务合同模板.docx",
+            "expected_tier": "reject",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "产品 H5 落地页营销文案",
+            "expected_tier": "reject",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "PM 转岗后的 30/60/90 天计划",
+            "expected_tier": "reject",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "微信群里讨论的几个产品想法",
+            "expected_tier": "reject",
+            "predicted_tier": "sonnet",
+            "correct": false
+          }
+        ],
+        [
+          {
+            "prd_name": "企业关联图谱 v3.0",
+            "expected_tier": "opus",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "风火台 B 端推数 v2.5",
+            "expected_tier": "opus",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "司法风险扫描多端协议",
+            "expected_tier": "opus",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "企业搜索引擎 v4 — 模糊检索增强",
+            "expected_tier": "opus",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "企业图谱 GraphRAG 接入",
+            "expected_tier": "opus",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "企业基本信息查询 H5 改版",
+            "expected_tier": "sonnet",
+            "predicted_tier": "sonnet",
+            "correct": true
+          },
+          {
+            "prd_name": "收藏夹分类管理",
+            "expected_tier": "sonnet",
+            "predicted_tier": "sonnet",
+            "correct": true
+          },
+          {
+            "prd_name": "搜索历史记录持久化",
+            "expected_tier": "sonnet",
+            "predicted_tier": "sonnet",
+            "correct": true
+          },
+          {
+            "prd_name": "企业关注提醒消息中心",
+            "expected_tier": "sonnet",
+            "predicted_tier": "sonnet",
+            "correct": true
+          },
+          {
+            "prd_name": "企业搜索热词推荐",
+            "expected_tier": "sonnet",
+            "predicted_tier": "sonnet",
+            "correct": true
+          },
+          {
+            "prd_name": "已评审 PRD 二次复核 — 劳动仲裁 v5.2",
+            "expected_tier": "haiku",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "仅做 markdown lint 检查",
+            "expected_tier": "haiku",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "段落标题层级检查",
+            "expected_tier": "haiku",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "术语用词统一性检查",
+            "expected_tier": "haiku",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "链接有效性检查",
+            "expected_tier": "haiku",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "张三-产品经理简历 v2.pdf",
+            "expected_tier": "reject",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "企业服务合同模板.docx",
+            "expected_tier": "reject",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "产品 H5 落地页营销文案",
+            "expected_tier": "reject",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "PM 转岗后的 30/60/90 天计划",
+            "expected_tier": "reject",
+            "predicted_tier": "sonnet",
+            "correct": false
+          },
+          {
+            "prd_name": "微信群里讨论的几个产品想法",
+            "expected_tier": "reject",
+            "predicted_tier": "sonnet",
+            "correct": false
+          }
+        ]
+      ],
+      "call_records": [
+        {
+          "ts": "2026-04-27T17:06:49",
+          "route_id": "router.intent",
+          "vendor": "anthropic",
+          "model": "haiku",
+          "latency_ms": 457874,
+          "input_tokens": 1600,
+          "output_tokens": 100,
+          "cost_usd": 0.0063,
+          "stop_reason": "end_turn",
+          "error_type": null,
+          "fallback_triggered": false
+        },
+        {
+          "ts": "2026-04-27T17:20:07",
+          "route_id": "router.intent",
+          "vendor": "anthropic",
+          "model": "haiku",
+          "latency_ms": 797639,
+          "input_tokens": 1600,
+          "output_tokens": 100,
+          "cost_usd": 0.0063,
+          "stop_reason": "end_turn",
+          "error_type": null,
+          "fallback_triggered": false
+        },
+        {
+          "ts": "2026-04-27T17:29:43",
+          "route_id": "router.intent",
+          "vendor": "anthropic",
+          "model": "haiku",
+          "latency_ms": 575874,
+          "input_tokens": 1600,
+          "output_tokens": 100,
+          "cost_usd": 0.0063,
+          "stop_reason": "end_turn",
+          "error_type": null,
+          "fallback_triggered": false
+        }
+      ],
+      "ground_truth": [],
+      "capability": {
+        "accuracy": 0.25,
+        "n_samples": 60,
+        "n_correct": 15,
+        "task_type": "multiclass",
+        "per_class_accuracy": {
+          "opus": 0.0,
+          "sonnet": 1.0,
+          "haiku": 0.0,
+          "reject": 0.0
+        },
+        "per_class_total": {
+          "opus": 15,
+          "sonnet": 15,
+          "haiku": 15,
+          "reject": 15
+        }
+      },
+      "stability": {
+        "overlap": 1.0,
+        "n0_var": 0.0,
+        "sampling_cv": 0.0,
+        "stable_count": 1,
+        "n_runs": 3
+      },
+      "cost_latency": {
+        "p50_ms": 575874.0,
+        "p95_ms": 775462.5,
+        "p99_ms": 793203.7,
+        "cost_usd_total": 0.0189,
+        "cost_usd_per_run": 0.0063,
+        "total_input_tokens": 4800,
+        "total_output_tokens": 300,
+        "n_calls": 3
+      },
+      "failure_modes": {
+        "quota_rate": 0.0,
+        "json_parse_fail_rate": 0.0,
+        "tool_use_fail_rate": 0.0,
+        "fallback_rate": 0.0,
+        "timeout_rate": 0.0,
+        "n_calls": 3
+      },
+      "metrics": {
+        "capability": {
+          "accuracy": 0.25,
+          "n_samples": 60,
+          "n_correct": 15,
+          "task_type": "multiclass",
+          "per_class_accuracy": {
+            "opus": 0.0,
+            "sonnet": 1.0,
+            "haiku": 0.0,
+            "reject": 0.0
+          },
+          "per_class_total": {
+            "opus": 15,
+            "sonnet": 15,
+            "haiku": 15,
+            "reject": 15
+          }
+        },
+        "stability": {
+          "overlap": 1.0,
+          "n0_var": 0.0,
+          "sampling_cv": 0.0,
+          "stable_count": 1,
+          "n_runs": 3
+        },
+        "cost_latency": {
+          "p50_ms": 575874.0,
+          "p95_ms": 775462.5,
+          "p99_ms": 793203.7,
+          "cost_usd_total": 0.0189,
+          "cost_usd_per_run": 0.0063,
+          "total_input_tokens": 4800,
+          "total_output_tokens": 300,
+          "n_calls": 3
+        },
+        "failure_modes": {
+          "quota_rate": 0.0,
+          "json_parse_fail_rate": 0.0,
+          "tool_use_fail_rate": 0.0,
+          "fallback_rate": 0.0,
+          "timeout_rate": 0.0,
+          "n_calls": 3
+        }
+      }
+    }
+  ]
+}

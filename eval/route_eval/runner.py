@@ -46,6 +46,28 @@ class _FakeResponse:
         self.items = items or []
 
 
+class _BatchResponse:
+    """真跑分类型 route 时, 把 N 条 dataset entry 的预测聚合成单 resp.
+
+    items = list of predictions (binary: detected_hallucination/expected_hallucination/correct;
+    multiclass: predicted_tier/expected_tier/correct).
+    usage 是 N 次 sub-call 的累计.
+    """
+
+    def __init__(self, model: str, predictions: List[Dict[str, Any]]):
+        self.model = model
+        self.text_blocks = [{"type": "text", "text": ""}]
+        self.tool_calls = []
+        self.stop_reason = "end_turn"
+        self.usage: Dict[str, int] = {"input_tokens": 0, "output_tokens": 0}
+        self.truncated = False
+        self.items = predictions
+
+    def add_usage(self, usage: Dict[str, Any]) -> None:
+        self.usage["input_tokens"] += int(usage.get("input_tokens", 0) or 0)
+        self.usage["output_tokens"] += int(usage.get("output_tokens", 0) or 0)
+
+
 def _gen_fake_items(seed_offset: int = 0) -> List[Dict[str, Any]]:
     """生成 dry-run 假改进项, 模拟 worker 输出 schema. 不同 seed 出不同条数, 模拟 sampling noise."""
     base = [
@@ -277,7 +299,18 @@ def run_route_eval(
     # 算 5 维度指标
     from . import metrics as metrics_mod
 
-    capability = metrics_mod.compute_capability(all_responses, ground_truth)
+    # 按 route_id 选 capability metric:
+    #   verify.nli   → binary classification (TPR/FPR)
+    #   router.intent → multiclass classification (per-class accuracy)
+    #   其他        → cuckoo P/R/F1 (worker.* / advisor.* 默认)
+    if route_id == "verify.nli" and not dry_run:
+        flat_preds = [p for run in all_responses for p in run]
+        capability = metrics_mod.compute_classification_metrics(flat_preds, task_type="binary")
+    elif route_id == "router.intent" and not dry_run:
+        flat_preds = [p for run in all_responses for p in run]
+        capability = metrics_mod.compute_classification_metrics(flat_preds, task_type="multiclass")
+    else:
+        capability = metrics_mod.compute_capability(all_responses, ground_truth)
     stability = metrics_mod.compute_stability(all_responses)
     cost_latency = metrics_mod.compute_cost_latency(call_records)
     failure_modes = metrics_mod.compute_failure_modes(call_records)
@@ -304,15 +337,18 @@ def run_route_eval(
         },
     }
 
-    # ClickHouse 持久化 (目前只 log)
+    # ClickHouse 持久化 (目前只 log) -- 用 .get 兜底兼容 classification 输出 (无 p/r/f1, 有 tpr/fpr/accuracy)
     _persist_to_clickhouse({
         "route_id": route_id,
         "vendor": vendor,
         "model": model,
         "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        "p_score": capability["p"],
-        "r_score": capability["r"],
-        "f1": capability["f1"],
+        "p_score": capability.get("p", capability.get("accuracy", 0.0)),
+        "r_score": capability.get("r", capability.get("tpr", 0.0)),
+        "f1": capability.get("f1", capability.get("accuracy", 0.0)),
+        "task_type": capability.get("task_type", "issues"),
+        "tpr": capability.get("tpr", 0.0),
+        "fpr": capability.get("fpr", 0.0),
         "overlap_pct": stability["overlap"],
         "p95_ms": int(cost_latency["p95_ms"]),
         "cost_usd": cost_latency["cost_usd_per_run"],
@@ -333,14 +369,145 @@ def _do_real_call(
     model_tier: str,
     dataset: List[Dict[str, Any]],
 ) -> tuple:
-    """真跑 LLM (P0 不会进, 留 P1 真评测时填). 返回 (resp, error_type, fallback_triggered).
+    """按 route_id 分发真跑 calling pattern, 返回 (resp, error_type, fallback_triggered).
 
-    NOTE: P0 阶段 dry_run=True 默认, 这条代码路径不应被触发. 留下让 runner 形态
-    完整即可。真跑评测见 Wave 4 plan.
+    Wave 4 P0 实现 2 类 pattern (verify.nli + router.intent), 其他 route 仍 raise
+    NotImplementedError 保持框架完整 (worker.* / advisor.* / eval.cuckoo 等待 P1
+    接 codex 时一起补 -- 避免做两次).
+
+    单 run 处理的 case 数受 PECKER_EVAL_MAX_CASES_PER_RUN env 控制 (默认 10),
+    避免 60 case × 3 runs 跑批太贵.
     """
+    if not dataset:
+        return _FakeResponse(model=model_tier, items=[]), "empty_dataset", False
+
+    max_cases = int(os.environ.get("PECKER_EVAL_MAX_CASES_PER_RUN", "10"))
+
+    if route_id == "verify.nli":
+        return _call_nli_pattern(model_tier, dataset, max_cases)
+    if route_id == "router.intent":
+        return _call_intent_pattern(model_tier, dataset, max_cases)
+    if route_id == "advisor.goshawk.shadow":
+        # shadow 默认 enabled=false, 不应被 baseline 跑到; 留兜底
+        return _FakeResponse(model=model_tier, items=[]), "shadow_disabled", False
+
     raise NotImplementedError(
-        f"非 dry_run 模式真跑 LLM 留待 Wave 4. 当前 P0 只支持 --dry-run."
+        f"route {route_id!r} 真跑 calling pattern 待 P1 接 codex 时一起补 "
+        f"(worker.* / advisor.* / eval.cuckoo). 当前 P0 实跑仅 verify.nli + router.intent."
     )
+
+
+def _call_nli_pattern(
+    model_tier: str,
+    dataset: List[Dict[str, Any]],
+    max_cases: int,
+) -> tuple:
+    """对 hallucination dataset 跑 verify.nli 真调用, 聚合 binary classification predictions.
+
+    决策规则: contradict_score > 0.5 视为检测到 hallucination
+    (跟 verify_evidence 上层 EMA 阈值一致).
+    """
+    from review.evidence_verify import _llm_nli_score
+
+    # Stratified sample: 真 (is_hallucination=False) 和 假 各取 max_cases//2
+    # (dataset 30 真 + 30 假, 直接 [:N] 全是真, TPR/FPR 失效)
+    halluc_cases = [e for e in dataset if e.get("is_hallucination")]
+    real_cases = [e for e in dataset if not e.get("is_hallucination")]
+    half = max(1, max_cases // 2)
+    sub = halluc_cases[:half] + real_cases[:half]
+    predictions: List[Dict[str, Any]] = []
+    error_type: Optional[str] = None
+    resp = _BatchResponse(model=model_tier, predictions=[])
+
+    for entry in sub:
+        item = entry.get("item", {}) or {}
+        wiki_pages = entry.get("wiki_pages", {}) or {}
+        is_halluc = bool(entry.get("is_hallucination", False))
+        try:
+            score = _llm_nli_score(
+                client=None,
+                item=item,
+                wiki_pages=wiki_pages,
+                n_samples=2,  # 评测期 2 采样, 节约成本
+            )
+            detected = score.get("contradict_score", 0.0) > 0.5
+            predictions.append({
+                "id": entry.get("id", ""),
+                "expected_hallucination": is_halluc,
+                "detected_hallucination": detected,
+                "correct": detected == is_halluc,
+                "scores": score,
+                "construction_method": entry.get("construction_method", ""),
+            })
+            # _llm_nli_score 内部走 route_call, 返回的 score 不带 token usage;
+            # token usage 在 token_tracker 里集中, 这里粗估 (每次 ~500/100)
+            resp.add_usage({"input_tokens": 500 * score.get("n_samples_succeeded", 0),
+                            "output_tokens": 100 * score.get("n_samples_succeeded", 0)})
+        except Exception as e:  # pragma: no cover -- 真跑兜底
+            log.warning(f"[nli] case {entry.get('id')} 失败: {type(e).__name__}: {e}")
+            error_type = type(e).__name__.lower()
+            predictions.append({
+                "id": entry.get("id", ""),
+                "expected_hallucination": is_halluc,
+                "detected_hallucination": False,
+                "correct": False,
+                "error": str(e)[:200],
+            })
+
+    resp.items = predictions
+    return resp, error_type, False
+
+
+def _call_intent_pattern(
+    model_tier: str,
+    dataset: List[Dict[str, Any]],
+    max_cases: int,
+) -> tuple:
+    """对 intent dataset 跑 router.intent 真调用, 聚合 multiclass predictions.
+
+    expected_tier 取值: opus / sonnet / haiku / reject (route_intent 只输出
+    opus/sonnet/haiku, reject 类应被识别为 sonnet 默认 -- 这是已知 fallback 限制).
+    """
+    from router import route_intent
+
+    # Stratified sample: 4 类 (opus/sonnet/haiku/reject) 各取 max_cases//4
+    by_tier: Dict[str, List[Dict[str, Any]]] = {}
+    for e in dataset:
+        by_tier.setdefault(e.get("expected_tier", "sonnet"), []).append(e)
+    per_tier = max(1, max_cases // 4)
+    sub: List[Dict[str, Any]] = []
+    for tier_name in ("opus", "sonnet", "haiku", "reject"):
+        sub.extend(by_tier.get(tier_name, [])[:per_tier])
+    predictions: List[Dict[str, Any]] = []
+    error_type: Optional[str] = None
+    resp = _BatchResponse(model=model_tier, predictions=[])
+
+    for entry in sub:
+        prd_name = entry.get("prd_name", "")
+        user_instruction = entry.get("user_instruction", "PRD 评审")
+        expected = entry.get("expected_tier", "sonnet")
+        try:
+            predicted = route_intent(client=None, prd_name=prd_name, user_instruction=user_instruction)
+            predictions.append({
+                "prd_name": prd_name,
+                "expected_tier": expected,
+                "predicted_tier": predicted,
+                "correct": predicted == expected,
+            })
+            resp.add_usage({"input_tokens": 80, "output_tokens": 5})
+        except Exception as e:  # pragma: no cover -- 真跑兜底
+            log.warning(f"[intent] case {prd_name!r} 失败: {type(e).__name__}: {e}")
+            error_type = type(e).__name__.lower()
+            predictions.append({
+                "prd_name": prd_name,
+                "expected_tier": expected,
+                "predicted_tier": "sonnet",  # route_intent 失败默认 sonnet
+                "correct": expected == "sonnet",
+                "error": str(e)[:200],
+            })
+
+    resp.items = predictions
+    return resp, error_type, False
 
 
 def _estimate_cost(model: str, usage: Dict[str, Any]) -> float:

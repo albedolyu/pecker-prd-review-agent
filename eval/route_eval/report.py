@@ -181,7 +181,7 @@ def write_baseline_matrix(
         "",
         "## 5 维度全表",
         "",
-        "| route_id | vendor | model | F1 | Recall | Overlap | p95 ms | $/run | quota% | parse fail% |",
+        "| route_id | vendor | model | task | 主指标 | n | Overlap | p95 ms | $/run | quota% |",
         "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for m in all_route_metrics:
@@ -192,14 +192,30 @@ def write_baseline_matrix(
         stab = m.get("stability", {}) or {}
         cost = m.get("cost_latency", {}) or {}
         fm = m.get("failure_modes", {}) or {}
+
+        # 按 task_type 切换主指标显示 (issues / binary / multiclass)
+        task = cap.get("task_type", "issues")
+        n = cap.get("n_samples", cap.get("total_items", 0))
+        if task == "binary":
+            primary = (
+                f"acc={cap.get('accuracy', 0):.3f} "
+                f"TPR={cap.get('tpr', 0):.3f} FPR={cap.get('fpr', 0):.3f}"
+            )
+        elif task == "multiclass":
+            pca = cap.get("per_class_accuracy", {}) or {}
+            pca_str = "/".join(f"{k}:{v:.2f}" for k, v in pca.items())
+            primary = f"acc={cap.get('accuracy', 0):.3f} ({pca_str})"
+        else:
+            primary = (
+                f"P={cap.get('p', 0):.3f} R={cap.get('r', 0):.3f} F1={cap.get('f1', 0):.3f}"
+            )
+
         lines.append(
-            f"| {rid} | {v} | {mdl} | "
-            f"{cap.get('f1', 0):.3f} | {cap.get('r', 0):.3f} | "
+            f"| {rid} | {v} | {mdl} | {task} | {primary} | {n} | "
             f"{stab.get('overlap', 0):.3f} | "
             f"{cost.get('p95_ms', 0):.0f} | "
             f"{cost.get('cost_usd_per_run', 0):.6f} | "
-            f"{fm.get('quota_rate', 0):.3f} | "
-            f"{fm.get('json_parse_fail_rate', 0):.3f} |"
+            f"{fm.get('quota_rate', 0):.3f} |"
         )
     lines.append("")
 
@@ -208,8 +224,10 @@ def write_baseline_matrix(
         "## 说明",
         "",
         "- 此表作为后续准入对比的参照基线 (scripts/eval_admission.py --compare)",
-        "- 阈值: F1>=baseline-0.05, Recall>=baseline-0.05, Overlap>=baseline-0.05,",
-        "  p95<=baseline*1.5, $/run<=baseline*2.0",
+        "- task=issues 主指标 P/R/F1 (cuckoo); task=binary 主指标 accuracy/TPR/FPR;",
+        "  task=multiclass 主指标 accuracy + per-class accuracy",
+        "- 准入阈值: F1>=base-0.05, Recall>=base-0.05, Overlap>=base-0.05,",
+        "  p95<=base*1.5, $/run<=base*2.0; halluc TPR>=0.85, FPR<=0.10 (绝对)",
         "",
     ]
 
