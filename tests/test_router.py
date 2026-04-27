@@ -48,6 +48,22 @@ class TestRouteIntent:
         client.create.side_effect = RuntimeError("api down")
         assert route_intent(client, "foo") == "sonnet"
 
+    def test_reject_class_passes_through(self):
+        """2026-04-27 P1 修: ROUTER_PROMPT 加 reject 类, 应支持返回不再 fallback sonnet"""
+        client = _mk_client_response("reject")
+        assert route_intent(client, "候选人简历_张三.docx") == "reject"
+
+    def test_reject_with_trailing_punctuation(self):
+        """LLM 偶发输出 'Reject.' / 'reject\\n' / 'reject;' 等带标点形式, split 容错"""
+        for raw in ("Reject.", "reject\n", "REJECT;", "reject 这个不是 PRD"):
+            client = _mk_client_response(raw)
+            assert route_intent(client, "foo") == "reject", f"failed for {raw!r}"
+
+    def test_opus_with_explanation_takes_first_word(self):
+        """LLM 偶发额外解释 (e.g. 'opus 因为复杂'), 取首词容错"""
+        client = _mk_client_response("opus 因为涉及复杂跨章节交叉")
+        assert route_intent(client, "foo") == "opus"
+
 
 class TestBuildSystemBlocks:
     def test_single_block_no_prd_no_workspace(self):
