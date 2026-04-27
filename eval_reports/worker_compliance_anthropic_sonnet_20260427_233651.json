@@ -1,0 +1,402 @@
+{
+  "route_id": "worker.compliance",
+  "vendor": "anthropic",
+  "model": "sonnet",
+  "runs": 1,
+  "dataset": "business_prd_gt",
+  "dry_run": false,
+  "responses": [
+    []
+  ],
+  "call_records": [
+    {
+      "ts": "2026-04-27T23:36:51",
+      "route_id": "worker.compliance",
+      "vendor": "anthropic",
+      "model": "sonnet",
+      "latency_ms": 178324,
+      "input_tokens": 8,
+      "output_tokens": 11342,
+      "cost_usd": 0.170154,
+      "stop_reason": "end_turn",
+      "error_type": null,
+      "fallback_triggered": false
+    }
+  ],
+  "ground_truth": [
+    {
+      "rule_id": "BUG-001",
+      "issue": "开庭公告排序规则写'支持切换到按照开庭时间从晚到早排序'，与默认方向相同，实为笔误",
+      "severity": "must",
+      "location": "3.7",
+      "type": "笔误",
+      "keywords": [
+        "排序",
+        "从晚到早",
+        "开庭时间",
+        "切换",
+        "方向"
+      ]
+    },
+    {
+      "rule_id": "BUG-002",
+      "issue": "§4.2 开庭公告筛选项写'仲裁机构'，但 §3.6 和 §4.3 都写'发布机构'，三处不一致",
+      "severity": "must",
+      "location": "4.2",
+      "type": "不一致",
+      "keywords": [
+        "仲裁机构",
+        "发布机构",
+        "筛选",
+        "矛盾",
+        "不一致"
+      ]
+    },
+    {
+      "rule_id": "BUG-003",
+      "issue": "字段映射表多处写'A或B'（如 ent表.arbitration_org 或 主表.arbitration_org），无优先级和空值降级说明",
+      "severity": "must",
+      "location": "2.2",
+      "type": "歧义",
+      "keywords": [
+        "或",
+        "优先级",
+        "空值",
+        "降级",
+        "字段映射",
+        "arbitration_org"
+      ]
+    },
+    {
+      "rule_id": "BUG-004",
+      "issue": "全文未定义 UI 四态（加载中/请求失败/筛选无结果/空数据）",
+      "severity": "must",
+      "location": "4",
+      "type": "缺失",
+      "keywords": [
+        "四态",
+        "加载中",
+        "请求失败",
+        "空数据",
+        "UI状态"
+      ]
+    },
+    {
+      "rule_id": "BUG-005",
+      "issue": "数据导出仅一句话，缺导出上限、格式、权限、字段明细",
+      "severity": "must",
+      "location": "5.2",
+      "type": "缺失",
+      "keywords": [
+        "导出",
+        "上限",
+        "格式",
+        "权限",
+        "TBD"
+      ]
+    },
+    {
+      "rule_id": "BUG-006",
+      "issue": "公告内容人名脱敏方式未说明（内容是非结构化文本，用什么方式识别人名？）",
+      "severity": "must",
+      "location": "3.3",
+      "type": "歧义",
+      "keywords": [
+        "脱敏",
+        "公告内容",
+        "人名",
+        "识别",
+        "NLP"
+      ]
+    },
+    {
+      "rule_id": "BUG-007",
+      "issue": "§3.6 筛选项按 area_code 从小到大排序，§4.3 按数量降序排列，直接矛盾",
+      "severity": "must",
+      "location": "3.6",
+      "type": "不一致",
+      "keywords": [
+        "area_code",
+        "排序",
+        "降序",
+        "矛盾",
+        "筛选"
+      ]
+    },
+    {
+      "rule_id": "BUG-008",
+      "issue": "详情弹窗字段布局写'具体见 figma'，PRD 无法独立支撑开发",
+      "severity": "must",
+      "location": "4.4",
+      "type": "缺失",
+      "keywords": [
+        "figma",
+        "详情",
+        "弹窗",
+        "布局",
+        "字段"
+      ]
+    },
+    {
+      "rule_id": "BUG-009",
+      "issue": "主表 open_time 是 datetime，ent 表 open_time 是 date，类型不一致会导致前端时间格式处理歧义",
+      "severity": "should",
+      "location": "2.1",
+      "type": "字段类型",
+      "keywords": [
+        "open_time",
+        "datetime",
+        "date",
+        "类型",
+        "不一致"
+      ]
+    },
+    {
+      "rule_id": "BUG-010",
+      "issue": "主表与 ent 表 data_status 不一致时的处理逻辑未定义（是 OR 还是 AND？）",
+      "severity": "should",
+      "location": "3.1.1",
+      "type": "缺失",
+      "keywords": [
+        "data_status",
+        "主表",
+        "ent表",
+        "一致",
+        "过滤"
+      ]
+    },
+    {
+      "rule_id": "GT-FN-001",
+      "issue": "§2.1 Web UI 表格完全为空, 字段展示/筛选项/搜索项/导出均无内容, 开发无法实现",
+      "severity": "must",
+      "location": "2.1 Web UI",
+      "type": "缺失",
+      "keywords": [
+        "Web UI",
+        "表格",
+        "为空",
+        "字段",
+        "筛选项"
+      ]
+    },
+    {
+      "rule_id": "GT-FN-002",
+      "issue": "§3 「立案信息ds表会新增一个字段以表明是否是诉前调解数据」未定义字段名/类型/取值语义/ES mapping",
+      "severity": "must",
+      "location": "3. 企业主页立案信息去除诉前调解数据",
+      "type": "缺失",
+      "keywords": [
+        "新增字段",
+        "字段名",
+        "ES mapping",
+        "tinyint",
+        "默认值"
+      ]
+    },
+    {
+      "rule_id": "GT-FN-003",
+      "issue": "企业主页用新增标记字段过滤诉前调解, 查风险用 case_code 字符串包含「诉前调」过滤, 两套机制对同一数据可能产生不同展示",
+      "severity": "must",
+      "location": "3. 企业主页 vs 6.1 查风险",
+      "type": "不一致",
+      "keywords": [
+        "过滤逻辑",
+        "case_code",
+        "标记字段",
+        "字符串匹配",
+        "不一致"
+      ]
+    },
+    {
+      "rule_id": "GT-FN-004",
+      "issue": "§4.1 PRD 列举了多种诉前调解案件混合模式 (单案号含裁判文书/两案号混合/多案号混合) 但未说明各模式在新分类下的归属规则",
+      "severity": "must",
+      "location": "4.1 司法案件样例",
+      "type": "歧义",
+      "keywords": [
+        "案件模式",
+        "归属规则",
+        "混合案号",
+        "粒度",
+        "记录级"
+      ]
+    },
+    {
+      "rule_id": "GT-FN-005",
+      "issue": "§2.x 反复用「字段展示、筛选项、搜索项、导出，全都和立案信息UI保持一致」兜底, 但未在本 PRD 列出立案信息字段清单",
+      "severity": "must",
+      "location": "2.1 / 2.2 / 2.3 / 2.4",
+      "type": "缺失",
+      "keywords": [
+        "立案信息",
+        "字段清单",
+        "兜底",
+        "AI Coding"
+      ]
+    },
+    {
+      "rule_id": "GT-FN-006",
+      "issue": "企业主页读取 ds_risk_court_mediation 时, 各子章节均未声明 data_status=0 的有效性过滤条件",
+      "severity": "should",
+      "location": "第2节「企业主页增加诉前调解」",
+      "type": "缺失",
+      "keywords": [
+        "data_status",
+        "有效性过滤",
+        "ds_risk_court_mediation"
+      ]
+    },
+    {
+      "rule_id": "GT-PP-001",
+      "issue": "状态3 ASCII 原型显示 3 个档位 (¥1/¥5/全部兑换), 兑换弹窗交互细节文字写明 4 个档位 (¥1/¥5/¥10/全兑), 两处规格不一致",
+      "severity": "must",
+      "location": "状态3 ASCII 原型 + 兑换弹窗交互细节",
+      "type": "不一致",
+      "keywords": [
+        "快捷档位",
+        "ASCII 原型",
+        "数量不一致",
+        "实现歧义"
+      ]
+    },
+    {
+      "rule_id": "GT-PP-002",
+      "issue": "v2 核心交互依赖「积分即兑即用 (秒到账)」, 但现有积分中心兑换接口需 2-3 个工作日人工审核, 阻断后端开工",
+      "severity": "must",
+      "location": "风险与假设 → 待决策: 现有积分兑换审核机制",
+      "type": "阻断",
+      "keywords": [
+        "即兑即用",
+        "秒到账",
+        "人工审核",
+        "阻断",
+        "前置依赖"
+      ]
+    },
+    {
+      "rule_id": "GT-PP-003",
+      "issue": "兑换后端接口契约未定义 (请求字段/响应字段/错误码/二次校验差异返回), AI 无法生成请求/响应代码",
+      "severity": "must",
+      "location": "核心规则 · 兑换与支付解耦 / 风险与假设 · 方案 A",
+      "type": "缺失",
+      "keywords": [
+        "接口契约",
+        "请求字段",
+        "错误码",
+        "AI Coding",
+        "source=payment_checkout"
+      ]
+    },
+    {
+      "rule_id": "GT-PP-004",
+      "issue": "「假设」第4条说积分在支付成功回调中扣减, 但 v2 核心模型把兑换定义为独立 Phase 1 (即时扣减), 两处直接矛盾",
+      "severity": "must",
+      "location": "风险与假设 → 假设 (第4条)",
+      "type": "不一致",
+      "keywords": [
+        "扣减时点",
+        "支付回调",
+        "Phase 1",
+        "Phase 2",
+        "兑换支付解耦"
+      ]
+    },
+    {
+      "rule_id": "GT-PP-005",
+      "issue": "积分抵扣引导行触发条件 (余额不足以支付订单) 缺少边界定义: 余额恰好等于订单金额时是否显示? 待支付订单部分扣减后余额变化是否实时刷新?",
+      "severity": "should",
+      "location": "v2 设计依据 / 积分抵扣引导行",
+      "type": "歧义",
+      "keywords": [
+        "余额不足",
+        "边界条件",
+        "引导行",
+        "实时刷新"
+      ]
+    }
+  ],
+  "capability": {
+    "p": 0.0,
+    "r": 0.0,
+    "f1": 0.0,
+    "severity_kl": 0.0,
+    "severity_distribution": {
+      "must": 0,
+      "should": 0,
+      "info": 0,
+      "other": 0
+    },
+    "hits": 0,
+    "misses": 21,
+    "fps": 0,
+    "total_items": 0
+  },
+  "stability": {
+    "overlap": 1.0,
+    "n0_var": 0.0,
+    "sampling_cv": 0.0,
+    "stable_count": 0,
+    "n_runs": 1
+  },
+  "cost_latency": {
+    "p50_ms": 178324.0,
+    "p95_ms": 178324.0,
+    "p99_ms": 178324.0,
+    "cost_usd_total": 0.170154,
+    "cost_usd_per_run": 0.170154,
+    "total_input_tokens": 8,
+    "total_output_tokens": 11342,
+    "n_calls": 1
+  },
+  "failure_modes": {
+    "quota_rate": 0.0,
+    "json_parse_fail_rate": 0.0,
+    "tool_use_fail_rate": 0.0,
+    "fallback_rate": 0.0,
+    "timeout_rate": 0.0,
+    "n_calls": 1
+  },
+  "metrics": {
+    "capability": {
+      "p": 0.0,
+      "r": 0.0,
+      "f1": 0.0,
+      "severity_kl": 0.0,
+      "severity_distribution": {
+        "must": 0,
+        "should": 0,
+        "info": 0,
+        "other": 0
+      },
+      "hits": 0,
+      "misses": 21,
+      "fps": 0,
+      "total_items": 0
+    },
+    "stability": {
+      "overlap": 1.0,
+      "n0_var": 0.0,
+      "sampling_cv": 0.0,
+      "stable_count": 0,
+      "n_runs": 1
+    },
+    "cost_latency": {
+      "p50_ms": 178324.0,
+      "p95_ms": 178324.0,
+      "p99_ms": 178324.0,
+      "cost_usd_total": 0.170154,
+      "cost_usd_per_run": 0.170154,
+      "total_input_tokens": 8,
+      "total_output_tokens": 11342,
+      "n_calls": 1
+    },
+    "failure_modes": {
+      "quota_rate": 0.0,
+      "json_parse_fail_rate": 0.0,
+      "tool_use_fail_rate": 0.0,
+      "fallback_rate": 0.0,
+      "timeout_rate": 0.0,
+      "n_calls": 1
+    }
+  }
+}

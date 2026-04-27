@@ -39,9 +39,15 @@ def _flatten_responses_to_items(responses: List[Any]) -> List[Dict[str, Any]]:
             items = getattr(resp, "items", None) or []
         for j, item in enumerate(items):
             if isinstance(item, dict):
-                # cuckoo 要求 item 有 id 字段
+                # cuckoo 要求 item 有 id 字段 (cuckoo_scorer.py:91/203/223 硬下标 item["id"])
+                # 2026-04-27 P2 修: 用 truthy 检查代替 setdefault, 因为 worker LLM 可能
+                # 输出 {"id": null} / {"id": ""} 让 setdefault 失效, 仍崩 KeyError.
                 merged = dict(item)
-                merged.setdefault("id", f"r{idx}-i{j}")
+                if not merged.get("id"):
+                    merged["id"] = f"r{idx}-i{j}"
+                # location 也是 cuckoo_scorer._calc_match_score 硬下标依赖
+                if not merged.get("location"):
+                    merged["location"] = ""
                 flat.append(merged)
     return flat
 
@@ -89,7 +95,20 @@ def score_worker_outputs(
             "_note": "cuckoo_scorer unavailable or empty ground_truth",
         }
 
-    matches = match_items_to_bugs(items, ground_truth)
+    # GT 也要补 id (loader 映射 planted_bugs.id → rule_id, cuckoo_scorer 仍硬下标 bug["id"])
+    normalized_gt = []
+    for j, bug in enumerate(ground_truth or []):
+        b = dict(bug)
+        if not b.get("id"):
+            b["id"] = b.get("rule_id") or f"GT-{j:03d}"
+        if not b.get("keywords"):
+            b["keywords"] = []
+        if not b.get("severity"):
+            b["severity"] = "must"
+        if not b.get("location"):
+            b["location"] = ""
+        normalized_gt.append(b)
+    matches = match_items_to_bugs(items, normalized_gt)
     # calculate_scores 需要 evidence_results tuple, dry-run 跳过 verify_evidence
     fake_evidence = (0, 0, [])
     scored = calculate_scores(matches, fake_evidence, items)
