@@ -1,0 +1,244 @@
+{
+  "route_id": "verify.nli",
+  "vendor": "anthropic",
+  "model": "haiku",
+  "runs": 1,
+  "dataset": "hallucination",
+  "dry_run": false,
+  "responses": [
+    [
+      {
+        "id": "HAL-FAKE-REF-001",
+        "expected_hallucination": true,
+        "detected_hallucination": true,
+        "correct": true,
+        "scores": {
+          "entail_score": 0.0,
+          "contradict_score": 1.0,
+          "neutral_score": 0.0,
+          "max_signal": 1.0,
+          "n_samples_succeeded": -1
+        },
+        "construction_method": "fake_ref"
+      },
+      {
+        "id": "HAL-FAKE-REF-002",
+        "expected_hallucination": true,
+        "detected_hallucination": true,
+        "correct": true,
+        "scores": {
+          "entail_score": 0.0,
+          "contradict_score": 1.0,
+          "neutral_score": 0.0,
+          "max_signal": 1.0,
+          "n_samples_succeeded": -1
+        },
+        "construction_method": "fake_ref"
+      },
+      {
+        "id": "HAL-FAKE-REF-003",
+        "expected_hallucination": true,
+        "detected_hallucination": true,
+        "correct": true,
+        "scores": {
+          "entail_score": 0.0,
+          "contradict_score": 1.0,
+          "neutral_score": 0.0,
+          "max_signal": 1.0,
+          "n_samples_succeeded": -1
+        },
+        "construction_method": "fake_ref"
+      },
+      {
+        "id": "HAL-FAKE-REF-004",
+        "expected_hallucination": true,
+        "detected_hallucination": true,
+        "correct": true,
+        "scores": {
+          "entail_score": 0.0,
+          "contradict_score": 1.0,
+          "neutral_score": 0.0,
+          "max_signal": 1.0,
+          "n_samples_succeeded": -1
+        },
+        "construction_method": "fake_ref"
+      },
+      {
+        "id": "HAL-FAKE-REF-005",
+        "expected_hallucination": true,
+        "detected_hallucination": true,
+        "correct": true,
+        "scores": {
+          "entail_score": 0.0,
+          "contradict_score": 1.0,
+          "neutral_score": 0.0,
+          "max_signal": 1.0,
+          "n_samples_succeeded": -1
+        },
+        "construction_method": "fake_ref"
+      },
+      {
+        "id": "HAL-REAL-001",
+        "expected_hallucination": false,
+        "detected_hallucination": false,
+        "correct": true,
+        "scores": {
+          "entail_score": 0.0,
+          "contradict_score": 0.0,
+          "neutral_score": 1.0,
+          "max_signal": 0.0,
+          "n_samples_succeeded": 0
+        },
+        "construction_method": "real"
+      },
+      {
+        "id": "HAL-REAL-002",
+        "expected_hallucination": false,
+        "detected_hallucination": false,
+        "correct": true,
+        "scores": {
+          "entail_score": 0.0,
+          "contradict_score": 0.0,
+          "neutral_score": 1.0,
+          "max_signal": 0.0,
+          "n_samples_succeeded": 0
+        },
+        "construction_method": "real"
+      },
+      {
+        "id": "HAL-REAL-003",
+        "expected_hallucination": false,
+        "detected_hallucination": false,
+        "correct": true,
+        "scores": {
+          "entail_score": 0.0,
+          "contradict_score": 0.0,
+          "neutral_score": 1.0,
+          "max_signal": 0.0,
+          "n_samples_succeeded": 0
+        },
+        "construction_method": "real"
+      },
+      {
+        "id": "HAL-REAL-004",
+        "expected_hallucination": false,
+        "detected_hallucination": false,
+        "correct": true,
+        "scores": {
+          "entail_score": 0.0,
+          "contradict_score": 0.0,
+          "neutral_score": 1.0,
+          "max_signal": 0.0,
+          "n_samples_succeeded": 0
+        },
+        "construction_method": "real"
+      },
+      {
+        "id": "HAL-REAL-005",
+        "expected_hallucination": false,
+        "detected_hallucination": false,
+        "correct": true,
+        "scores": {
+          "entail_score": 0.0,
+          "contradict_score": 0.0,
+          "neutral_score": 1.0,
+          "max_signal": 0.0,
+          "n_samples_succeeded": 0
+        },
+        "construction_method": "real"
+      }
+    ]
+  ],
+  "call_records": [
+    {
+      "ts": "2026-04-27T22:33:45",
+      "route_id": "verify.nli",
+      "vendor": "anthropic",
+      "model": "haiku",
+      "latency_ms": 513955,
+      "input_tokens": -2500,
+      "output_tokens": -500,
+      "cost_usd": -0.015,
+      "stop_reason": "end_turn",
+      "error_type": null,
+      "fallback_triggered": false
+    }
+  ],
+  "ground_truth": [],
+  "capability": {
+    "accuracy": 1.0,
+    "n_samples": 10,
+    "n_correct": 10,
+    "task_type": "binary",
+    "tpr": 1.0,
+    "fpr": 0.0,
+    "true_positives": 5,
+    "false_negatives": 0,
+    "false_positives": 0,
+    "true_negatives": 5
+  },
+  "stability": {
+    "overlap": 1.0,
+    "n0_var": 0.0,
+    "sampling_cv": 0.0,
+    "stable_count": 0,
+    "n_runs": 1
+  },
+  "cost_latency": {
+    "p50_ms": 513955.0,
+    "p95_ms": 513955.0,
+    "p99_ms": 513955.0,
+    "cost_usd_total": -0.015,
+    "cost_usd_per_run": -0.015,
+    "total_input_tokens": -2500,
+    "total_output_tokens": -500,
+    "n_calls": 1
+  },
+  "failure_modes": {
+    "quota_rate": 0.0,
+    "json_parse_fail_rate": 0.0,
+    "tool_use_fail_rate": 0.0,
+    "fallback_rate": 0.0,
+    "timeout_rate": 0.0,
+    "n_calls": 1
+  },
+  "metrics": {
+    "capability": {
+      "accuracy": 1.0,
+      "n_samples": 10,
+      "n_correct": 10,
+      "task_type": "binary",
+      "tpr": 1.0,
+      "fpr": 0.0,
+      "true_positives": 5,
+      "false_negatives": 0,
+      "false_positives": 0,
+      "true_negatives": 5
+    },
+    "stability": {
+      "overlap": 1.0,
+      "n0_var": 0.0,
+      "sampling_cv": 0.0,
+      "stable_count": 0,
+      "n_runs": 1
+    },
+    "cost_latency": {
+      "p50_ms": 513955.0,
+      "p95_ms": 513955.0,
+      "p99_ms": 513955.0,
+      "cost_usd_total": -0.015,
+      "cost_usd_per_run": -0.015,
+      "total_input_tokens": -2500,
+      "total_output_tokens": -500,
+      "n_calls": 1
+    },
+    "failure_modes": {
+      "quota_rate": 0.0,
+      "json_parse_fail_rate": 0.0,
+      "tool_use_fail_rate": 0.0,
+      "fallback_rate": 0.0,
+      "timeout_rate": 0.0,
+      "n_calls": 1
+    }
+  }
+}

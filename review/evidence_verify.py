@@ -16,6 +16,7 @@ import glob as glob_module
 import os
 import re
 from collections import Counter
+from typing import Any, Dict, List
 
 from logger import get_logger
 
@@ -396,34 +397,57 @@ def _llm_nli_score(client, item, wiki_pages, n_samples=4, model=None):
         if len(relevant_pages) >= 3:
             break
 
+    # 2026-04-27 P2 修: evidence 明确引用 [[ref]] 但 wiki_pages 全找不到对应页面
+    # = 引用了不存在的 wiki 页面 = 经典 hallucination 模式 (fake_ref).
+    # 之前 return default (neutral_score=1) 让这类 case 在 NLI 评测中永远漏检 (TPR=0).
+    # 现在直接判 contradict, 节省 LLM 调用 + 修复 fake_ref 漏检.
+    if page_refs and not relevant_pages:
+        return {
+            "entail_score": 0.0,
+            "contradict_score": 1.0,
+            "neutral_score": 0.0,
+            "max_signal": 1.0,
+            "n_samples_succeeded": -1,  # -1 标识 fast-path (没调 LLM)
+        }
+
     if not relevant_pages:
+        # evidence 没 [[ref]] 引用 + wiki 也对不上 → 真 neutral, default 回
         return default
 
     wiki_block = "\n---\n".join(f"# {t}\n{c}" for t, c in relevant_pages)
-    # 2026-04-27 P1 修: baseline 实测当前 prompt TPR=0 (30 条假依据全漏),
-    # LLM 偏向 entail/neutral 而不输出 contradict. 加更具体的 contradict 判准 + 反例.
+    # 2026-04-27 P2 修: Wave 5 真 baseline 显示 n_samples_succeeded=0 (LLM 输出全被
+    # 解析层吃掉, 不是 LLM 不输出 contradict). 三处放宽:
+    #   1. reason 长度 30→15 (env PECKER_NLI_REASON_MIN_LEN)
+    #   2. hedging filter 默认关 (env PECKER_NLI_HEDGING_FILTER=1 才启用)
+    #   3. verdict regex 加宽容 fallback (无引号 / markdown 加粗 / 单词形式)
+    # 配 PECKER_NLI_DEBUG=1 dump 每次 LLM raw text + 拒收原因, 方便后续诊断.
     system = (
         "你判断 PRD 评审改进项的引用依据是否被 wiki 页面支持。\n\n"
         "三选一:\n"
         "- entail: wiki 中有原文/数值/字段/规则明确支持改进项\n"
-        "- contradict: wiki 与改进项**任何**具体不一致, 包括以下情况(任一即必选 contradict, 不要选 neutral):\n"
-        "  · 改进项引用 [[页面名]] 但 wiki 提供的页面里实际没这个页面 (引用不存在)\n"
+        "- contradict: wiki 与改进项**任何**具体不一致 (任一即必选 contradict, 不要选 neutral):\n"
+        "  · 改进项引用 [[页面名]] 但 wiki 提供的页面里实际没这个页面\n"
         "  · 改进项断言的字段名 / 枚举值 / 数值 / 流程顺序 与 wiki 不同\n"
-        "  · 改进项是凭推理得出 wiki 根本没说的结论 (无凭据推断 = contradict 而非 neutral)\n"
+        "  · 改进项凭推理得出 wiki 根本没说的结论 (无凭据推断 = contradict 而非 neutral)\n"
         "  · 改进项引用 wiki 内容但 wiki 实际表达相反含义\n"
         "- neutral: wiki 完全未涉及该话题, 也没有任何字段/数值能比对\n\n"
         "关键判准: 只要 wiki 与改进项**有任何具体可比的不一致点**, 就必须选 contradict.\n"
         "neutral 只用于 wiki 跟改进项完全不相干 (e.g. 改进项谈支付, wiki 只讲登录).\n\n"
-        "如果不是 entail, 必须给 ≥ 30 字理由说明具体哪个字段/数值/页面不一致.\n"
-        "禁用 hedging 措辞: '可能/也许/不确定/或许/大概' 出现即视为采样无效.\n\n"
-        "只输出 JSON 一行: "
-        '{"verdict": "entail|contradict|neutral", "reason": "<30字以上具体理由>"}'
+        "如果不是 entail, 用 1-2 句 (≥15 字) 说明具体哪个字段/数值/页面不一致.\n\n"
+        "只输出 JSON 一行 (不要 markdown 代码块): "
+        '{"verdict": "entail|contradict|neutral", "reason": "<具体理由>"}'
     )
     user = f"# 改进项问题\n{issue}\n\n# 引用依据\n{evidence}\n\n# Wiki 相关页面\n{wiki_block}"
 
+    # P2 调参 (env-gated, 默认更宽容)
+    reason_min_len = int(os.environ.get("PECKER_NLI_REASON_MIN_LEN", "15"))
+    hedging_on = os.environ.get("PECKER_NLI_HEDGING_FILTER", "0") == "1"
+    debug_on = os.environ.get("PECKER_NLI_DEBUG", "0") == "1"
+    _HEDGING_WORDS = ("可能", "也许", "不确定", "或许", "大概", "应该是", "貌似", "看起来")
+
     counts = {"entail": 0, "contradict": 0, "neutral": 0}
     succeeded = 0
-    _HEDGING_WORDS = ("可能", "也许", "不确定", "或许", "大概", "应该是", "貌似", "看起来")
+    debug_samples: List[Dict[str, Any]] = [] if debug_on else None
 
     for _ in range(n_samples):
         try:
@@ -451,23 +475,57 @@ def _llm_nli_score(client, item, wiki_pages, n_samples=4, model=None):
                     text_parts.append(getattr(block, "text", ""))
             text = "".join(text_parts)
 
-            v_match = re.search(r'"verdict"\s*:\s*"(entail|contradict|neutral)"', text)
-            if not v_match:
+            # verdict 解析: 三层 fallback
+            #  1. 标准 JSON: "verdict": "contradict"
+            #  2. 无引号或单引号: verdict: contradict / 'verdict': 'contradict'
+            #  3. 单词形式: 文本里出现明确 "contradict" / "entail" / "neutral" 词
+            verdict = None
+            v_match = re.search(r'["\']?verdict["\']?\s*[:：]\s*["\']?(entail|contradict|neutral)["\']?', text, re.IGNORECASE)
+            if v_match:
+                verdict = v_match.group(1).lower()
+            else:
+                # 单词扫描 fallback
+                for w in ("contradict", "entail", "neutral"):
+                    if re.search(rf"\b{w}\b", text, re.IGNORECASE):
+                        verdict = w
+                        break
+            if not verdict:
+                if debug_on:
+                    debug_samples.append({"reject_reason": "no_verdict", "text": text[:300]})
                 continue
-            verdict = v_match.group(1)
 
-            r_match = re.search(r'"reason"\s*:\s*"([^"]*)"', text)
-            reason = r_match.group(1) if r_match else ""
+            # reason 解析: 标准 JSON + 单引号 fallback + 取整段 text 作为 reason
+            r_match = re.search(r'["\']?reason["\']?\s*[:：]\s*["\']([^"\']*)["\']', text)
+            if r_match:
+                reason = r_match.group(1)
+            else:
+                # 没找到结构化 reason, 用整个 LLM 输出当 reason (最大兼容)
+                reason = text.strip()
 
-            if any(h in reason for h in _HEDGING_WORDS):
-                continue   # hedging 拒
-            if verdict != "entail" and len(reason) < 30:
-                continue   # 非 entail 但理由不足, 拒
+            if hedging_on and any(h in reason for h in _HEDGING_WORDS):
+                if debug_on:
+                    debug_samples.append({"reject_reason": "hedging", "verdict": verdict, "reason": reason[:200]})
+                continue
+            if verdict != "entail" and len(reason) < reason_min_len:
+                if debug_on:
+                    debug_samples.append({"reject_reason": "reason_too_short", "verdict": verdict,
+                                          "reason_len": len(reason), "reason": reason[:200]})
+                continue
 
             counts[verdict] += 1
             succeeded += 1
-        except Exception:
+            if debug_on:
+                debug_samples.append({"accepted": True, "verdict": verdict, "reason_len": len(reason)})
+        except Exception as e:
+            if debug_on:
+                debug_samples.append({"reject_reason": "exception", "error": str(e)[:200]})
             continue
+
+    if debug_on and debug_samples:
+        from logger import get_logger
+        _log = get_logger("nli_debug")
+        for d in debug_samples:
+            _log.info(f"[nli] {d}")
 
     if succeeded == 0:
         return default

@@ -147,8 +147,13 @@ class TestLlmNliScore:
         assert out["contradict_score"] == 0.25
         assert out["neutral_score"] == 0.25
 
-    def test_hedging_rejected(self):
-        """全部含 hedging 词 ('可能/也许/不确定') → succeeded=0, default 回."""
+    def test_hedging_rejected(self, monkeypatch):
+        """全部含 hedging 词 ('可能/也许/不确定') + 启用 hedging filter → succeeded=0, default 回.
+
+        2026-04-27 P2 修: hedging filter 默认关 (Wave 5 真 baseline 显示太严导致 succeeded=0),
+        env PECKER_NLI_HEDGING_FILTER=1 启用. 本测试显式 set env 测原行为。
+        """
+        monkeypatch.setenv("PECKER_NLI_HEDGING_FILTER", "1")
         from review.evidence_verify import _llm_nli_score
         client = MagicMock()
         client.create.return_value = _mock_response(
@@ -162,6 +167,23 @@ class TestLlmNliScore:
         )
         assert out["n_samples_succeeded"] == 0   # 全 hedging 拒
         assert out["entail_score"] == 0.0
+
+    def test_hedging_default_off_passes(self):
+        """默认 hedging filter off (P2 修): 含 hedging 词的 contradict 应被采纳."""
+        from review.evidence_verify import _llm_nli_score
+        client = MagicMock()
+        client.create.return_value = _mock_response(
+            '{"verdict": "contradict", "reason": "可能 wiki 不够全面也许有遗漏(>15字)"}'
+        )
+        out = _llm_nli_score(
+            client,
+            item={"issue": "x", "evidence_content": "[[页1]]"},
+            wiki_pages={"页1": "wiki"},
+            n_samples=4,
+        )
+        # 默认 hedging filter off → 4 次都被采纳 (verdict=contradict, reason 含 hedging 但不拒)
+        assert out["n_samples_succeeded"] == 4
+        assert out["contradict_score"] == 1.0
 
     def test_short_reason_for_non_entail_rejected(self):
         """非 entail 但 reason 不足 30 字 → 拒采样."""
