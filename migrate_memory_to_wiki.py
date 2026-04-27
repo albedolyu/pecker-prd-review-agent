@@ -36,6 +36,8 @@ from review_memory import (
     _memory_hash,
     _collect_wiki_hashes,
     _normalize_content,
+    get_memory_dir,
+    assert_wiki_isolated,
 )
 
 
@@ -44,8 +46,12 @@ def migrate_workspace(workspace, dry_run=False, delete_old=False):
 
     Returns: dict 统计信息
     """
-    mem_dir = os.path.join(workspace, "output", ".review_memory")
+    # 用单点 SoT 取 mem_dir, 不硬编码 ".review_memory" 路径
+    mem_dir = get_memory_dir(workspace)
     wiki_path = os.path.join(workspace, "wiki")
+    # 守: 防止 wiki 跟 mem 路径错位 (清缓存连带删 wiki 的 setup fragility)
+    if os.path.isdir(wiki_path):
+        assert_wiki_isolated(workspace, wiki_path)
 
     if not os.path.isdir(mem_dir):
         return {"workspace": workspace, "status": "no_mem_dir", "migrated": 0}

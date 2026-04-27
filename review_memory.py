@@ -64,10 +64,111 @@ EXTRACT_SYSTEM_PROMPT = """你是评审记忆提取器。从 PRD 评审会话中
 
 
 def get_memory_dir(workspace):
-    """获取记忆存储目录"""
+    """获取记忆存储目录
+
+    路径形状: workspace/output/.review_memory
+    跟 workspace/wiki/ 物理隔离 (不同父目录), 清缓存不会动到 wiki.
+    """
     d = os.path.join(workspace, "output", MEMORY_DIR_NAME)
     os.makedirs(d, exist_ok=True)
     return d
+
+
+def get_sessions_dir(workspace):
+    """获取会话日志目录 (telemetry / claude -p 续会缓存)"""
+    return os.path.join(workspace, "output", ".sessions")
+
+
+def assert_wiki_isolated(workspace, wiki_path):
+    """守 wiki/ 跟 .review_memory/ 物理隔离 — 防 setup fragility
+
+    背景: 2026-04-28 R2 retry 后用户手动 rm -rf .review_memory, 但因为
+    没工具命令保证只清 mem 不动 wiki, 用户连带删了 workspace/wiki/, R3
+    evidence verify 全 fallback A_wiki_sparse_relaxed. 这是 setup fragility.
+
+    Args:
+        workspace: 工作目录
+        wiki_path: wiki 目录绝对路径
+
+    Raises:
+        ValueError: 当 wiki_path 等于或落在 .review_memory 子树内 (致命退化)
+    """
+    if not wiki_path:
+        return
+    mem_dir = os.path.abspath(get_memory_dir(workspace))
+    wiki_abs = os.path.abspath(wiki_path)
+    # wiki == mem_dir
+    if wiki_abs == mem_dir:
+        raise ValueError(
+            f"wiki_path 不能等于 .review_memory 路径 ({mem_dir}); "
+            f"清缓存会清掉 wiki. 请把 wiki 放到 workspace 顶层或独立目录."
+        )
+    # wiki 落在 mem_dir 子树
+    try:
+        common = os.path.commonpath([wiki_abs, mem_dir])
+    except ValueError:
+        return  # 不同盘符或路径不可比, 自动隔离
+    if common == mem_dir:
+        raise ValueError(
+            f"wiki_path ({wiki_abs}) 落在 .review_memory ({mem_dir}) 子树内; "
+            f"清缓存会一起删掉 wiki. 请把 wiki 移出 .review_memory."
+        )
+
+
+def clear_review_memory(workspace, also_sessions=False, wiki_path=None):
+    """清评审记忆缓存 - 只清 .review_memory/, 显式不动 wiki/
+
+    背景修法: 把"清缓存"封装成函数,替代手动 rm -rf, 防 R3 那种连带误删 wiki.
+    本函数有 wiki 隔离守护, 路径配置错位时拒绝执行不动任何东西.
+
+    Args:
+        workspace: 工作目录
+        also_sessions: 同时清 .sessions/ (claude -p 续会缓存),应对"对话太长"retry
+        wiki_path: 若提供, 校验它跟 mem 物理隔离 (assert_wiki_isolated 守)
+
+    Returns:
+        dict: {"cleared_mem": bool, "cleared_sessions": bool, "wiki_preserved": bool}
+    """
+    # 守: 先校验 wiki_path 隔离, 配置错位直接拒绝, 不动任何东西
+    if wiki_path:
+        assert_wiki_isolated(workspace, wiki_path)
+
+    import shutil as _shutil
+    result = {"cleared_mem": False, "cleared_sessions": False, "wiki_preserved": True}
+
+    # 清 .review_memory (路径写死, 不接受外部传, 防 mis-pointing 到 wiki)
+    mem_dir = get_memory_dir(workspace)  # 会重建空目录
+    try:
+        for fname in os.listdir(mem_dir):
+            fpath = os.path.join(mem_dir, fname)
+            if os.path.isfile(fpath):
+                os.remove(fpath)
+            elif os.path.isdir(fpath):
+                _shutil.rmtree(fpath, ignore_errors=True)
+        result["cleared_mem"] = True
+        log.info(f"[clear] 已清 .review_memory: {mem_dir}")
+    except OSError as e:
+        log.warning(f"清 .review_memory 失败: {e}")
+
+    # 可选清 sessions
+    if also_sessions:
+        sess_dir = get_sessions_dir(workspace)
+        if os.path.isdir(sess_dir):
+            try:
+                for fname in os.listdir(sess_dir):
+                    fpath = os.path.join(sess_dir, fname)
+                    if os.path.isfile(fpath):
+                        os.remove(fpath)
+                    elif os.path.isdir(fpath):
+                        _shutil.rmtree(fpath, ignore_errors=True)
+                result["cleared_sessions"] = True
+                log.info(f"[clear] 已清 .sessions: {sess_dir}")
+            except OSError as e:
+                log.warning(f"清 .sessions 失败: {e}")
+        else:
+            result["cleared_sessions"] = True  # 不存在视为已清
+
+    return result
 
 
 def build_memory_manifest(workspace):
