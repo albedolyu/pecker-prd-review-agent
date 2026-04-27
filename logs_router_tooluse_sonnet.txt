@@ -1,0 +1,43 @@
+[router_debug] prompt_chars system=555 user=90 tool_use=True prd_name='企业关联图谱 v3.0' instruction_head='评审这份 PRD, 重点检查跨章节冲突 — 股权结构图谱与法人变更模块的实体定义是否一致, 找出所有需要 ETL 同步的'
+[router_debug] tool_use_tier='opus' final=opus
+[router_debug] prompt_chars system=555 user=87 tool_use=True prd_name='风火台 B 端推数 v2.5' instruction_head='请深度检查这份 PRD 的 AI Coding 友好度, 对每个接口字段评估开发能否仅凭文档生成代码, 不需要读现有源码'
+[cc_client] tool=select_review_intent JSON 解析失败, text_result 前 200 字: 我无法执行这个任务，因为**缺少 PRD 文档本身**。
+
+你的指令中说"请深度检查**这份** PRD"（强调了具体的 PRD），但我没有看到"风火台 B 端推数 v2.5"的实际文档内容。
+
+为了完成你的需求（对每个接口字段评估 AI Coding 友好度），我需要：
+
+1. **PRD 文档内容**：接口定义、字段说明、请求/响应示例等
+2. **文件位置**：该 PRD 是否在 `C:\U
+[cc_client] parse 失败 retry 一次: CLI JSON parse failed for tool select_review_intent (text_result 343 chars)
+[router_debug] tool_use_tier='sonnet' final=sonnet
+[router_debug] prompt_chars system=555 user=35 tool_use=True prd_name='企业基本信息查询 H5 改版' instruction_head='评审这份 PRD'
+[cc_client] tool=select_review_intent JSON 解析失败, text_result 前 200 字: 我需要看到 PRD 的实际内容才能判断评审复杂度。请提供以下任一方式：
+
+1. **PRD 文本**：直接贴出 PRD 内容
+2. **文件路径**：告诉我 PRD 文档在本地或网络中的位置
+3. **Figma/文档链接**：提供 PRD 所在的设计文件或文档链接
+
+拿到内容后，我会根据以下维度快速判断 tier：
+- 改动范围（仅 UI vs 数据流 vs 架构）
+- 涉及的系统模块数
+- 是
+[cc_client] parse 失败 retry 一次: CLI JSON parse failed for tool select_review_intent (text_result 217 chars)
+[router_debug] tool_use_tier='sonnet' final=sonnet
+[router_debug] prompt_chars system=555 user=31 tool_use=True prd_name='收藏夹分类管理' instruction_head='请帮我评审这份 PRD'
+[router_debug] tool_use_tier='sonnet' final=sonnet
+[router_debug] prompt_chars system=555 user=72 tool_use=True prd_name='已评审 PRD 二次复核 — 劳动仲裁 v5.2' instruction_head='这份 PRD 上周已评审过, 这次只检查格式和 markdown 排版'
+[router_debug] tool_use_tier='haiku' final=haiku
+[router_debug] prompt_chars system=555 user=66 tool_use=True prd_name='仅做 markdown lint 检查' instruction_head='帮我检查这份 PRD 的 markdown 格式, 不需要做内容评审'
+[router_debug] tool_use_tier='haiku' final=haiku
+[router_debug] prompt_chars system=555 user=38 tool_use=True prd_name='张三-产品经理简历 v2.pdf' instruction_head='请评审这份 PRD'
+[router_debug] tool_use_tier='reject' final=reject
+[router_debug] prompt_chars system=555 user=34 tool_use=True prd_name='企业服务合同模板.docx' instruction_head='评审一下这份合同'
+[router_debug] tool_use_tier='reject' final=reject
+[eval_route] route_id=router.intent vendor=anthropic model=sonnet runs=1 dataset=intent dry_run=False
+[eval_route] PASS
+  md   -> eval_reports\router_intent_anthropic_sonnet_20260427_223941.md
+  json -> eval_reports\router_intent_anthropic_sonnet_20260427_223941.json
+  capability (multiclass intent): accuracy=0.875 n=8 per_class={'opus': 0.5, 'sonnet': 1.0, 'haiku': 1.0, 'reject': 1.0}
+  stability: overlap=1.000 sampling_cv=0.000
+  cost: $0.002520/run p95=261585ms

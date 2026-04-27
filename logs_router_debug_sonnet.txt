@@ -1,0 +1,31 @@
+[router_debug] prompt_chars system=555 user=90 prd_name='企业关联图谱 v3.0' instruction_head='评审这份 PRD, 重点检查跨章节冲突 — 股权结构图谱与法人变更模块的实体定义是否一致, 找出所有需要 ETL 同步的'
+[router_debug] raw='我需要先看到 prd 的实际内容才能进行评审。请提供"企业关联图谱 v3.0"的 prd 文档（可以粘贴内容或共享位置），我就能按你的要求：\n\n1. **检查跨章节冲突** — 股权结构图谱 vs 法人变更模块的实体定义\n2. **找出字段不一致点** — 特别是需要 etl 同步的部分\n\n你有以下选项：\n- **直接粘贴 prd 内容**（或关键章节）\n- **提供文件路径**（我会读取）\n- **指向知识库位置**（如风鸟 wiki 或 fengniao-knowledge）\n\n确认后我会立即开始。' first_word='我需要先看到' valid=False final=sonnet(fallback)
+[router_debug] final=sonnet(fallback)
+[router_debug] prompt_chars system=555 user=87 prd_name='风火台 B 端推数 v2.5' instruction_head='请深度检查这份 PRD 的 AI Coding 友好度, 对每个接口字段评估开发能否仅凭文档生成代码, 不需要读现有源码'
+[router_debug] raw='我需要先获取到这份 prd 的内容。根据你的设置，我有几个问题需要确认：\n\n1. **prd 文件位置**：风火台 b 端推数 v2.5 这份 prd 文件存储在哪里？\n   - 是本地某个目录的 markdown/word/pdf 文件？\n   - 还是在某个在线文档系统（如 notion、confluence 等）中？\n\n2. **我应该如何获取**：\n   - 你可以粘贴 prd 的全文或链接，我来分析\n   - 或者告诉我文件路径，我从本地读取\n\n一旦我拿到 prd 内容，我会按这个框架**深度评审 ai coding 友好度**：\n\n| 评审维度 | 检查项 |\n|---------|--------|\n| **接口定义清晰性** | 请求体/响应体字段名、类型、范围、默认值是否完整且无歧义 |\n| **字段约束可机读性** | 格式规则、枚举值、长度限制、业务约束能否直接编码 |\n| **错误场景覆盖** | 异常响应、错误码、降级策略是否明确 |\n| **依赖关系显式化** | 字段间依赖、前置条件、状态转移是否可单独推导 |\n| **代码可生成度** | \u2713 可仅凭文档生成 / \u26a0 需查源码澄清 / \u2717 需与原开发沟通 |\n\n请提供 prd 文件，我立即开始评审。' first_word='我需要先获取到这份' valid=False final=sonnet(fallback)
+[router_debug] final=sonnet(fallback)
+[router_debug] prompt_chars system=555 user=35 prd_name='企业基本信息查询 H5 改版' instruction_head='评审这份 PRD'
+[router_debug] raw='需要看到 prd 具体内容才能评审。请提供以下任一种方式：\n\n1. **prd 文件路径**（本地或 wiki）\n2. **prd 内容粘贴** \n3. **wiki 链接**（如果已记录在风鸟知识库中）\n\n提供后，我会按复杂度输出一个词的评估结果。' first_word='需要看到' valid=False final=sonnet(fallback)
+[router_debug] final=sonnet(fallback)
+[router_debug] prompt_chars system=555 user=31 prd_name='收藏夹分类管理' instruction_head='请帮我评审这份 PRD'
+[router_debug] raw='根据 prd 名称「收藏夹分类管理」，我来判断评审复杂度。\n\n**中等**\n\n---\n\n### 复杂度判断理由\n- **数据模型复杂性**：涉及分类树、层级关系、收藏项目关联，需要清晰的数据结构定义\n- **交互设计**：拖拽排序、移动、编辑等多个交互场景，需要完整的用户故事覆盖\n- **业务逻辑**：可能涉及权限边界（个人/共享分类）、冲突处理（删除分类时的项目处理）\n- **前后端协调**：数据同步、缓存一致性需要清晰的接口定义\n\n### 建议\n如果你已经有 prd 文稿，可以直接分享内容（或文件路径），我可以进行详细评审，重点关注：\n1. 分类层级上限与冲突处理规则\n2. 收藏项目与分类删除时的级联关系\n3. 性能边界（支持多少个分类/多少个收藏项）\n4. 前端与后端的数据一致性保证' first_word='根据' valid=False final=sonnet(fallback)
+[router_debug] final=sonnet(fallback)
+[router_debug] prompt_chars system=555 user=72 prd_name='已评审 PRD 二次复核 — 劳动仲裁 v5.2' instruction_head='这份 PRD 上周已评审过, 这次只检查格式和 markdown 排版'
+[router_debug] raw='低' first_word='低' valid=False final=sonnet(fallback)
+[router_debug] final=sonnet(fallback)
+[router_debug] prompt_chars system=555 user=66 prd_name='仅做 markdown lint 检查' instruction_head='帮我检查这份 PRD 的 markdown 格式, 不需要做内容评审'
+[router_debug] raw='根据你的指令分析：\n\n- **prd 名称**：仅做 markdown lint 检查\n- **评审范围**：格式检查（不涉及内容评审）\n- **复杂度**：**轻**\n\n---\n\n但我需要你提供实际的 prd 文本或文件路径，才能执行 markdown lint 检查。请问：\n\n1. prd 在哪里？（文件路径、url 或直接粘贴文本）\n2. 你希望检查哪些方面？（标题层级、列表缩进、代码块、链接格式等）' first_word='根据你的指令分析：' valid=False final=sonnet(fallback)
+[router_debug] final=sonnet(fallback)
+[router_debug] prompt_chars system=555 user=38 prd_name='张三-产品经理简历 v2.pdf' instruction_head='请评审这份 PRD'
+[router_debug] raw='我是 prd 评审的意图路由器。在判断评审复杂度之前，我需要看到 prd 的实际内容。\n\n目前我收到的只是文件名 **"张三-产品经理简历 v2.pdf"**，但：\n\n1. **文件名与任务不符** — 这看起来像是个人简历，而非产品需求文档（prd）\n2. **无法访问文件内容** — 我没有收到实际的 prd 文本或上传的文件\n\n请执行以下任一操作：\n\n- **粘贴 prd 内容**：直接在对话中分享 prd 的文本\n- **上传文件**：通过文件上传功能提供 pdf（我会读取内容）\n- **澄清意图**：如果这份简历确实是评审对象，请说明评审的具体目标（如：求职竞争力、内容结构、项目经历呈现等）\n\n一旦我看到内容，我会立即输出**一个复杂度词**（如 simple / medium / complex）。' first_word='我是' valid=False final=sonnet(fallback)
+[router_debug] final=sonnet(fallback)
+[router_debug] prompt_chars system=555 user=34 prd_name='企业服务合同模板.docx' instruction_head='评审一下这份合同'
+[router_debug] raw='停一下——我加载了 `prd` 技能，但那是用来生成 prd 的，不是用来评审合同的。\n\n**我需要确认：** 你说的"企业服务合同模板.docx"现在在哪里？\n\n我需要你：\n1. **要么上传这个 .docx 文件** 到当前对话中\n2. **要么告诉我文件路径**，我尝试读取\n\n等到我看到合同内容后，我才能判断评审复杂度。\n\n根据文件名来推测，这是一份**标准企业服务合同**的模板评审，通常涉及多个条款（服务范围、费用、期限、风险分担等），应该属于 **中等复杂度** — 但确切判断需要看实际内容。' first_word='停一下——我加载了' valid=False final=sonnet(fallback)
+[router_debug] final=sonnet(fallback)
+[eval_route] route_id=router.intent vendor=anthropic model=sonnet runs=1 dataset=intent dry_run=False
+[eval_route] PASS
+  md   -> eval_reports\router_intent_anthropic_sonnet_20260427_222433.md
+  json -> eval_reports\router_intent_anthropic_sonnet_20260427_222433.json
+  capability (multiclass intent): accuracy=0.250 n=8 per_class={'opus': 0.0, 'sonnet': 1.0, 'haiku': 0.0, 'reject': 0.0}
+  stability: overlap=1.000 sampling_cv=0.000
+  cost: $0.002520/run p95=291958ms

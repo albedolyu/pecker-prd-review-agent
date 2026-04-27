@@ -1,0 +1,31 @@
+[router_debug] prompt_chars system=555 user=90 prd_name='企业关联图谱 v3.0' instruction_head='评审这份 PRD, 重点检查跨章节冲突 — 股权结构图谱与法人变更模块的实体定义是否一致, 找出所有需要 ETL 同步的'
+[router_debug] raw='确认理解：你需要我评审《企业关联图谱 v3.0》这份 prd，重点是找出**股权结构图谱模块**与**法人变更模块**之间的实体定义冲突，以及哪些字段需要在 etl 层同步。\n\n但我目前没有看到这份 prd 文档。请问：\n\n1. **prd 文件位置**：这份文档在哪里？（文件路径、云盘链接、还是直接粘贴内容）\n2. **评审范围确认**：只评审这两个模块的一致性，还是要做完整的跨章节冲突扫描（包括其他模块）？\n\n贴上 prd 内容或文件路径后，我会直接输出：\n- **实体定义冲突表**（字段对比）\n- **etl 同步风险点**\n- **跨章节逻辑矛盾**' first_word='确认理解：你需要我评审《企业关联图谱' valid=False final=sonnet(fallback)
+[router_debug] final=sonnet(fallback)
+[router_debug] prompt_chars system=555 user=87 prd_name='风火台 B 端推数 v2.5' instruction_head='请深度检查这份 PRD 的 AI Coding 友好度, 对每个接口字段评估开发能否仅凭文档生成代码, 不需要读现有源码'
+[router_debug] raw='确认理解：你需要我深度评审"风火台 b 端推数 v2.5"这份 prd 的 **ai coding 友好度**，重点检查接口字段定义是否足够清晰，使得 ai 开发能仅凭 prd 生成代码。\n\n我需要先找到这份 prd。请告诉我：\n\n1. **prd 文件位置**是什么？（完整路径或文件名）\n2. 是在**代码仓库内**还是**单独的文档系统**中？\n3. 是 **markdown / pdf / 在线文档** 哪种格式？\n\n一旦你提供位置，我会：\n- 逐一检查每个 api 端点的字段定义\n- 评估 **类型/长度/枚举值/必需性** 的完整性\n- 指出哪些字段定义不足以支持 ai 代码生成\n- 给出改进建议（从"需要补充"到"优化写法"）\n- 最后输出一个**友好度评分**（简单/中等/复杂）' first_word='确认理解：你需要我深度评审' valid=False final=sonnet(fallback)
+[router_debug] final=sonnet(fallback)
+[router_debug] prompt_chars system=555 user=35 prd_name='企业基本信息查询 H5 改版' instruction_head='评审这份 PRD'
+[router_debug] raw='**中等**\n\n理由：\n- 改版涉及前端全链路（搜索→结果→详情），需要评审 ux 设计、交互流程、信息架构\n- 作为企业查询的核心功能，改版影响用户转化，但不涉及后端 api 协调或多模型架构决策\n- 属于有明确边界的单系统改动，复杂度在改进型 prd 的中等水平' first_word='**中等**' valid=False final=sonnet(fallback)
+[router_debug] final=sonnet(fallback)
+[router_debug] prompt_chars system=555 user=31 prd_name='收藏夹分类管理' instruction_head='请帮我评审这份 PRD'
+[router_debug] raw='根据 "收藏夹分类管理" 这个 prd 名称，我来判断其评审复杂度。\n\n**中**\n\n**判断依据：**\n- 功能边界清晰（分类管理的职责明确）\n- 涉及前后端改动（需要数据模型+api+ui 协调）\n- 与现有收藏功能有交互（需要梳理关联关系）\n- 用户体验有讲究（分类层级、拖拽排序等交互设计）\n- 但非核心业务改造（不涉及搜索、风险评分等底层逻辑）\n\n---\n\n现在我需要看到具体的 prd 内容才能进行评审。请提供：\n1. prd 文件路径或内容\n2. 想重点审查的维度（需求完整性/技术可行性/用户体验/成本约束等）' first_word='根据' valid=False final=sonnet(fallback)
+[router_debug] final=sonnet(fallback)
+[router_debug] prompt_chars system=555 user=72 prd_name='已评审 PRD 二次复核 — 劳动仲裁 v5.2' instruction_head='这份 PRD 上周已评审过, 这次只检查格式和 markdown 排版'
+[router_debug] raw='轻' first_word='轻' valid=False final=sonnet(fallback)
+[router_debug] final=sonnet(fallback)
+[router_debug] prompt_chars system=555 user=66 prd_name='仅做 markdown lint 检查' instruction_head='帮我检查这份 PRD 的 markdown 格式, 不需要做内容评审'
+[router_debug] raw='**轻量**\n\n---\n\n确认理解：您需要对一份 prd 进行 **markdown 格式检查**（lint），仅检查语法、列表、标题、代码块等格式问题，不涉及内容评审。\n\n请提供 prd 文本，我来逐项检查：\n- 标题层级是否递进合理\n- 列表格式（无序/有序）是否一致\n- 代码块是否标注语言\n- 链接格式是否完整\n- 其他 markdown 规范问题' first_word='**轻量**' valid=False final=sonnet(fallback)
+[router_debug] final=sonnet(fallback)
+[router_debug] prompt_chars system=555 user=38 prd_name='张三-产品经理简历 v2.pdf' instruction_head='请评审这份 PRD'
+[router_debug] raw='我需要澄清一下：文件名"张三-产品经理简历 v2.pdf"看起来像一份**个人简历**，而不是**产品需求文档（prd）**。\n\n能确认一下吗：\n1. 这份文件确实是 prd 吗？\n2. 文件的实际位置在哪里？（我需要读取它才能判断复杂度）\n\n或者，如果你实际上是要求**评审这份简历本身**，我可以用不同的方式处理。请告诉我你的真实需求。' first_word='我需要澄清一下：文件名' valid=False final=sonnet(fallback)
+[router_debug] final=sonnet(fallback)
+[router_debug] prompt_chars system=555 user=34 prd_name='企业服务合同模板.docx' instruction_head='评审一下这份合同'
+[router_debug] raw='根据题意，我需要基于文件名和用户指令判断评审复杂度，输出一个词。\n\n**评审复杂度：高**\n\n**理由：**\n1. 这是法律文件而非产品文档，评审维度跨越法律、商业、风险等多个领域\n2. 缺少上下文信息（适用场景、服务类型、金额规模、双方身份等），难以做出有针对性的评审\n3. 合同条款间的逻辑完整性、风险识别、关键条款漏项等都属于专业性较强的工作' first_word='根据题意，我需要基于文件名和用户指令判断评审复杂度，输出一个词。' valid=False final=sonnet(fallback)
+[router_debug] final=sonnet(fallback)
+[eval_route] route_id=router.intent vendor=anthropic model=haiku runs=1 dataset=intent dry_run=False
+[eval_route] PASS
+  md   -> eval_reports\router_intent_anthropic_haiku_20260427_221841.md
+  json -> eval_reports\router_intent_anthropic_haiku_20260427_221841.json
+  capability (multiclass intent): accuracy=0.250 n=8 per_class={'opus': 0.0, 'sonnet': 1.0, 'haiku': 0.0, 'reject': 0.0}
+  stability: overlap=1.000 sampling_cv=0.000
+  cost: $0.002520/run p95=244201ms

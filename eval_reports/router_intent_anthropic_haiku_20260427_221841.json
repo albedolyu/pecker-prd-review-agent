@@ -1,0 +1,164 @@
+{
+  "route_id": "router.intent",
+  "vendor": "anthropic",
+  "model": "haiku",
+  "runs": 1,
+  "dataset": "intent",
+  "dry_run": false,
+  "responses": [
+    [
+      {
+        "prd_name": "企业关联图谱 v3.0",
+        "expected_tier": "opus",
+        "predicted_tier": "sonnet",
+        "correct": false
+      },
+      {
+        "prd_name": "风火台 B 端推数 v2.5",
+        "expected_tier": "opus",
+        "predicted_tier": "sonnet",
+        "correct": false
+      },
+      {
+        "prd_name": "企业基本信息查询 H5 改版",
+        "expected_tier": "sonnet",
+        "predicted_tier": "sonnet",
+        "correct": true
+      },
+      {
+        "prd_name": "收藏夹分类管理",
+        "expected_tier": "sonnet",
+        "predicted_tier": "sonnet",
+        "correct": true
+      },
+      {
+        "prd_name": "已评审 PRD 二次复核 — 劳动仲裁 v5.2",
+        "expected_tier": "haiku",
+        "predicted_tier": "sonnet",
+        "correct": false
+      },
+      {
+        "prd_name": "仅做 markdown lint 检查",
+        "expected_tier": "haiku",
+        "predicted_tier": "sonnet",
+        "correct": false
+      },
+      {
+        "prd_name": "张三-产品经理简历 v2.pdf",
+        "expected_tier": "reject",
+        "predicted_tier": "sonnet",
+        "correct": false
+      },
+      {
+        "prd_name": "企业服务合同模板.docx",
+        "expected_tier": "reject",
+        "predicted_tier": "sonnet",
+        "correct": false
+      }
+    ]
+  ],
+  "call_records": [
+    {
+      "ts": "2026-04-27T22:18:41",
+      "route_id": "router.intent",
+      "vendor": "anthropic",
+      "model": "haiku",
+      "latency_ms": 244201,
+      "input_tokens": 640,
+      "output_tokens": 40,
+      "cost_usd": 0.00252,
+      "stop_reason": "end_turn",
+      "error_type": null,
+      "fallback_triggered": false
+    }
+  ],
+  "ground_truth": [],
+  "capability": {
+    "accuracy": 0.25,
+    "n_samples": 8,
+    "n_correct": 2,
+    "task_type": "multiclass",
+    "per_class_accuracy": {
+      "opus": 0.0,
+      "sonnet": 1.0,
+      "haiku": 0.0,
+      "reject": 0.0
+    },
+    "per_class_total": {
+      "opus": 2,
+      "sonnet": 2,
+      "haiku": 2,
+      "reject": 2
+    }
+  },
+  "stability": {
+    "overlap": 1.0,
+    "n0_var": 0.0,
+    "sampling_cv": 0.0,
+    "stable_count": 0,
+    "n_runs": 1
+  },
+  "cost_latency": {
+    "p50_ms": 244201.0,
+    "p95_ms": 244201.0,
+    "p99_ms": 244201.0,
+    "cost_usd_total": 0.00252,
+    "cost_usd_per_run": 0.00252,
+    "total_input_tokens": 640,
+    "total_output_tokens": 40,
+    "n_calls": 1
+  },
+  "failure_modes": {
+    "quota_rate": 0.0,
+    "json_parse_fail_rate": 0.0,
+    "tool_use_fail_rate": 0.0,
+    "fallback_rate": 0.0,
+    "timeout_rate": 0.0,
+    "n_calls": 1
+  },
+  "metrics": {
+    "capability": {
+      "accuracy": 0.25,
+      "n_samples": 8,
+      "n_correct": 2,
+      "task_type": "multiclass",
+      "per_class_accuracy": {
+        "opus": 0.0,
+        "sonnet": 1.0,
+        "haiku": 0.0,
+        "reject": 0.0
+      },
+      "per_class_total": {
+        "opus": 2,
+        "sonnet": 2,
+        "haiku": 2,
+        "reject": 2
+      }
+    },
+    "stability": {
+      "overlap": 1.0,
+      "n0_var": 0.0,
+      "sampling_cv": 0.0,
+      "stable_count": 0,
+      "n_runs": 1
+    },
+    "cost_latency": {
+      "p50_ms": 244201.0,
+      "p95_ms": 244201.0,
+      "p99_ms": 244201.0,
+      "cost_usd_total": 0.00252,
+      "cost_usd_per_run": 0.00252,
+      "total_input_tokens": 640,
+      "total_output_tokens": 40,
+      "n_calls": 1
+    },
+    "failure_modes": {
+      "quota_rate": 0.0,
+      "json_parse_fail_rate": 0.0,
+      "tool_use_fail_rate": 0.0,
+      "fallback_rate": 0.0,
+      "timeout_rate": 0.0,
+      "n_calls": 1
+    }
+  }
+}
