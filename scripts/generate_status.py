@@ -106,6 +106,15 @@ def _is_auth_error(err: str) -> bool:
             or "invalid authentication" in low or "failed to authenticate" in low)
 
 
+def _is_confirmed_empty_worker(w: dict) -> bool:
+    """0 items 但 worker 明确填写 null_finding_reason,视为 clean 结果。"""
+    return (
+        (w.get("items_count", 0) or 0) == 0
+        and not w.get("error")
+        and bool(w.get("empty_submission_confirmed"))
+    )
+
+
 def classify_session(workers_done: list) -> str:
     """把一次 session 分类为 ops/bug 分层结果:
 
@@ -128,19 +137,26 @@ def classify_session(workers_done: list) -> str:
         return "auth_expired"
 
     def _is_silent(w):
-        return (w.get("items_count", 0) or 0) == 0 and not w.get("error")
+        return (
+            (w.get("items_count", 0) or 0) == 0
+            and not w.get("error")
+            and not _is_confirmed_empty_worker(w)
+        )
 
     def _is_productive(w):
         return (w.get("items_count", 0) or 0) > 0 and not w.get("error")
 
-    silent_count = sum(1 for w in workers_done if _is_silent(w))
-    productive_count = sum(1 for w in workers_done if _is_productive(w))
+    def _is_healthy(w):
+        return _is_productive(w) or _is_confirmed_empty_worker(w)
 
+    silent_count = sum(1 for w in workers_done if _is_silent(w))
+    healthy_count = sum(1 for w in workers_done if _is_healthy(w))
+
+    if healthy_count == len(workers_done):
+        return "productive"
     if silent_count == len(workers_done):
         return "empty_bug"
-    if productive_count == len(workers_done):
-        return "productive"
-    if silent_count > 0 and productive_count > 0:
+    if silent_count > 0 and healthy_count > 0:
         return "partial_silent"
     return "error_other"
 
@@ -174,6 +190,7 @@ def _analyze_sessions(session_files: list) -> dict:
     outcomes = Counter()
     worker_silent = Counter()
     worker_productive = Counter()
+    worker_confirmed_empty = Counter()
     worker_errored = Counter()
     items_distribution = []
 
@@ -187,6 +204,7 @@ def _analyze_sessions(session_files: list) -> dict:
     retry_triggered = 0  # 触发了 empty_retry 的 worker_done 计数
     retry_rescued = 0    # 触发后最终出了 items 的计数
     retry_kept_empty = 0 # 触发后仍空的计数
+    retry_confirmed_empty = 0  # 触发后仍空但显式说明 clean 的计数
     retry_total_workers = 0  # 具备 empty_retry_used 字段的 worker_done 总数
 
     # Round 8: goshawk verdict 分布聚合
@@ -236,9 +254,12 @@ def _analyze_sessions(session_files: list) -> dict:
             for w in workers_done:
                 dim = w.get("dim", "?")
                 count = w.get("items_count", 0) or 0
+                confirmed_empty = _is_confirmed_empty_worker(w)
                 if w.get("error"):
                     worker_errored[dim] += 1
                     error_fingerprints[_error_fingerprint(w["error"])] += 1
+                elif confirmed_empty:
+                    worker_confirmed_empty[dim] += 1
                 elif count == 0:
                     worker_silent[dim] += 1
                 else:
@@ -255,6 +276,8 @@ def _analyze_sessions(session_files: list) -> dict:
                             retry_rescued += 1
                         else:
                             retry_kept_empty += 1
+                            if confirmed_empty:
+                                retry_confirmed_empty += 1
             items_distribution.append(items_sum)
 
     total = sum(outcomes.values())
@@ -268,8 +291,8 @@ def _analyze_sessions(session_files: list) -> dict:
 
     # per-worker silent_rate: 分母是"该 worker 成功跑完没 error 的次数"
     silent_rate = {}
-    for dim in set(list(worker_silent) + list(worker_productive)):
-        denom = worker_silent[dim] + worker_productive[dim]
+    for dim in set(list(worker_silent) + list(worker_productive) + list(worker_confirmed_empty)):
+        denom = worker_silent[dim] + worker_productive[dim] + worker_confirmed_empty[dim]
         silent_rate[dim] = worker_silent[dim] / denom if denom else 0
 
     items_sorted = sorted(items_distribution)
@@ -301,6 +324,7 @@ def _analyze_sessions(session_files: list) -> dict:
         "checkpoint_rate": round(checkpoint_rate, 3),
         "final_reviewer_failure_rate": round(final_reviewer_failure_rate, 3),
         "worker_silent_rate": {k: round(v, 3) for k, v in silent_rate.items()},
+        "worker_confirmed_empty": dict(worker_confirmed_empty),
         "worker_errored": dict(worker_errored),
         "items_median": median,
         "flow_milestones": dict(flow_milestones),
@@ -313,6 +337,7 @@ def _analyze_sessions(session_files: list) -> dict:
             "triggered": retry_triggered,
             "rescued": retry_rescued,
             "kept_empty": retry_kept_empty,
+            "confirmed_empty": retry_confirmed_empty,
         },
         # Round 8: goshawk verdict 分布
         "goshawk": {
@@ -444,11 +469,12 @@ def format_report(git_info, test_info, code_info, session_info) -> str:
             "",
             "### Worker 静默率 (仅统计非 quota 成功调用)",
             "",
-            "| dimension | silent_rate |",
-            "|-----------|-------------|",
+            "| dimension | silent_rate | confirmed_empty |",
+            "|-----------|-------------|-----------------|",
         ]
+        confirmed_empty = session_info.get("worker_confirmed_empty", {})
         for dim, rate in sorted(session_info["worker_silent_rate"].items()):
-            lines.append(f"| {dim} | {rate:.1%} |")
+            lines.append(f"| {dim} | {rate:.1%} | {confirmed_empty.get(dim, 0)} |")
 
         # 非 quota 错误 fingerprint (前 10 条,归一化聚合)
         fps = session_info.get("error_fingerprints", {})
@@ -498,7 +524,8 @@ def format_report(git_info, test_info, code_info, session_info) -> str:
                 f"- 已埋点 worker 调用数: {retry['instrumented_workers']}",
                 f"- 触发率: **{retry['trigger_rate']:.1%}** (应接近 data_quality/quality 静默率 ≈ 50%)",
                 f"- 救回率 (触发后最终出了 items): **{retry['rescue_rate']:.1%}**",
-                f"- 分解: triggered={retry['triggered']} rescued={retry['rescued']} kept_empty={retry['kept_empty']}",
+                f"- 分解: triggered={retry['triggered']} rescued={retry['rescued']} "
+                f"kept_empty={retry['kept_empty']} confirmed_empty={retry.get('confirmed_empty', 0)}",
                 "",
                 "> 救回率 < 40% → retry prompt 无效,考虑改进提示词;",
                 "> 救回率 > 70% → 修复有效;",

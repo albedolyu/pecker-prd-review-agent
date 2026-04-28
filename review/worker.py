@@ -434,6 +434,25 @@ def _is_empty_tool_submission(response) -> bool:
     return False
 
 
+def _empty_submission_reason(response) -> str:
+    """提取空提交时的 null_finding_reason。
+
+    items=[] 本身可能是 worker 真正检查后给出的 clean 结论;只有同时带
+    null_finding_reason,下游 STATUS 才能把它从"静默"里剥离出来。
+    """
+    for block in response.content:
+        if block.type == "tool_use" and block.name == "submit_review_items":
+            items = block.input.get("items", [])
+            if items:
+                continue
+            reason = block.input.get("null_finding_reason", "")
+            if isinstance(reason, str):
+                reason = reason.strip()
+                if reason:
+                    return reason
+    return ""
+
+
 def _extract_text(response):
     """从响应中提取纯文本"""
     return "\n".join(block.text for block in response.content if block.type == "text")
@@ -565,6 +584,8 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
     response = _call(messages)
 
     items = _extract_items_from_response(response)
+    empty_submission_reason = _empty_submission_reason(response)
+    empty_submission_confirmed = bool(empty_submission_reason)
 
     # Tool 调用检测 + 催促重试 + 文本兜底 (CC maxTurns 约束)
     current_turn = 1  # 已用 1 轮
@@ -591,7 +612,11 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
             items = _parse_items_from_text(text)
             if items:
                 log.info(f"[{_cn_label(dim_key)}] 从文本中解析出 {len(items)} 条改进项")
-    elif _is_empty_tool_submission(response) and current_turn < MAX_WORKER_TURNS:
+    elif (
+        _is_empty_tool_submission(response)
+        and not empty_submission_confirmed
+        and current_turn < MAX_WORKER_TURNS
+    ):
         # 空提交重试: 模型调了 tool 但 items=[],常见于 data_quality/quality
         # 静默率 50% 的典型场景 (session 2 真实出现)。
         # 给一次复检机会,让它要么补充遗漏要么写清楚"为何为空"。
@@ -603,20 +628,27 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
             {"role": "assistant",
              "content": prev_text or "(我已完成首次审查,提交了 0 条改进项)"},
             {"role": "user",
-             "content": ("你刚才用 submit_review_items 提交了 0 条改进项。请在本维度 checklist 里"
-                         "逐条复核一遍,如仍认为无问题请在 items 里提交一条 severity='nit'、"
-                         "location='整体'、issue='本维度复核后确认无问题:简述检查了哪 3 条具体项'"
-                         "作为显式确认;如有遗漏请重新 submit_review_items。")},
+             "content": ("你刚才用 submit_review_items 提交了 0 条改进项。请逐条复核本维度 "
+                         "checklist。若有遗漏,请提交真实 items;若仍确认无问题,请再次调用 "
+                         "submit_review_items,保持 items=[],并填写 null_finding_reason,至少列出 "
+                         "3 条已核查规则及通过理由。不要提交\"无问题\"占位 item。")},
         ]
         time.sleep(2 + random.uniform(0, 0.5))
         try:
             response2 = _call(followup_msgs, use_compact_tool=True, call_kind="empty_retry_followup")
             retry_items = _extract_items_from_response(response2)
+            retry_reason = _empty_submission_reason(response2)
             if retry_items:
                 items = retry_items
                 response = response2
+                empty_submission_reason = ""
+                empty_submission_confirmed = False
                 log.info(f"[{_cn_label(dim_key)}] 空提交复检后出了 {len(items)} 条")
             else:
+                if _has_tool_use(response2):
+                    response = response2
+                empty_submission_reason = retry_reason
+                empty_submission_confirmed = bool(retry_reason)
                 log.info(f"[{_cn_label(dim_key)}] 空提交复检后仍为 0 条 (可能真无问题)")
         except Exception as e:
             log.warning(f"[{_cn_label(dim_key)}] 空提交复检失败: {str(e)[:80]}")
@@ -647,7 +679,11 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
     cost_usd = compute_call_cost_usd(model, worker_usage)
 
     # 3a: 结构化 telemetry (CC telemetry 模式)
-    is_degraded = (len(items) == 0 and bool(worker_usage.get("output_tokens", 0)))
+    is_degraded = (
+        len(items) == 0
+        and bool(worker_usage.get("output_tokens", 0))
+        and not empty_submission_confirmed
+    )
     telemetry = {
         "duration_ms": int((time.time() - start_time) * 1000),
         "tokens_in": worker_usage["input_tokens"],
@@ -658,6 +694,8 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
         "turns_used": current_turn,
         "truncated": getattr(response, "truncated", False),
         "empty_retry_used": empty_retry_used,
+        "empty_submission_confirmed": empty_submission_confirmed,
+        "empty_submission_reason": empty_submission_reason[:300],
         # 2026-04-28 P1 anti-corruption drop: LLM 出未知 rule_id 数 (任务 2 R3 暴露)
         "dropped_unknown_rule_count": drop_telemetry["dropped_unknown_rule_count"],
         "dropped_unknown_rule_ids": drop_telemetry["dropped_unknown_rule_ids"],

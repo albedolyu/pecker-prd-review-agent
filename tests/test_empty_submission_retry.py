@@ -21,13 +21,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 # Response fixture helpers
 # ============================================================
 
-def _tool_use_block(items_list, name="submit_review_items"):
+def _tool_use_block(items_list, name="submit_review_items", null_finding_reason=""):
     """构造 submit_review_items tool_use block。"""
     return SimpleNamespace(
         type="tool_use",
         name=name,
         id="toolu_test",
-        input={"items": items_list},
+        input={"items": items_list, "null_finding_reason": null_finding_reason},
     )
 
 
@@ -137,6 +137,32 @@ def _make_minimal_worker_env(monkeypatch):
 
 
 class TestWorkerEmptyRetry:
+    def test_empty_retry_prompt_uses_null_reason_not_fake_nit(self, monkeypatch):
+        """空提交 followup 应要求 items=[] + null_finding_reason,不能诱导非法 nit 占位 item。"""
+        _make_minimal_worker_env(monkeypatch)
+
+        from parallel_review import _worker_core
+
+        first = _response([_tool_use_block([])])
+        second = _response([_tool_use_block([])])
+        client = MagicMock()
+        client.create.side_effect = [first, second]
+
+        monkeypatch.setattr("review.worker.time.sleep", lambda _: None)
+        monkeypatch.setattr("review.worker.random.uniform", lambda a, b: 0)
+
+        _worker_core(
+            client=client, dim_key="test_dim",
+            prd_content="PRD", wiki_pages={}, model_tiers={"sonnet": "s-m"},
+        )
+
+        retry_messages = client.create.call_args_list[1].kwargs["messages"]
+        retry_prompt = retry_messages[-1]["content"]
+        assert "null_finding_reason" in retry_prompt
+        assert "items=[]" in retry_prompt
+        assert "severity='nit'" not in retry_prompt
+        assert "占位 item" in retry_prompt
+
     def test_empty_submission_triggers_retry(self, monkeypatch):
         """首轮空提交 → 触发 retry → 第二轮返回 items,最终 items 非空 + telemetry 标记。"""
         _make_minimal_worker_env(monkeypatch)
@@ -165,6 +191,31 @@ class TestWorkerEmptyRetry:
         assert result["telemetry"]["empty_retry_used"] is True
         assert result["telemetry"]["turns_used"] == 2
 
+    def test_empty_submission_retry_confirmed_empty_sets_telemetry(self, monkeypatch):
+        """retry 后仍空但填写 null_finding_reason → 标记为显式 clean,不再当作普通静默。"""
+        _make_minimal_worker_env(monkeypatch)
+
+        from parallel_review import _worker_core
+
+        first = _response([_tool_use_block([])])
+        reason = "已核查 V-02 输入输出完整、边界条件明确、错误处理说明充分,未发现本维度 fail。"
+        second = _response([_tool_use_block([], null_finding_reason=reason)])
+        client = MagicMock()
+        client.create.side_effect = [first, second]
+
+        monkeypatch.setattr("review.worker.time.sleep", lambda _: None)
+        monkeypatch.setattr("review.worker.random.uniform", lambda a, b: 0)
+
+        result = _worker_core(
+            client=client, dim_key="test_dim",
+            prd_content="PRD", wiki_pages={}, model_tiers={"sonnet": "s-m"},
+        )
+
+        assert result["items"] == []
+        assert result["telemetry"]["empty_retry_used"] is True
+        assert result["telemetry"]["empty_submission_confirmed"] is True
+        assert result["telemetry"]["empty_submission_reason"] == reason
+
     def test_empty_submission_retry_still_empty_accepted(self, monkeypatch):
         """retry 后仍空 → 接受空结果,不再重试,telemetry 仍标记。"""
         _make_minimal_worker_env(monkeypatch)
@@ -187,6 +238,7 @@ class TestWorkerEmptyRetry:
         assert client.create.call_count == 2
         assert len(result["items"]) == 0
         assert result["telemetry"]["empty_retry_used"] is True
+        assert result["telemetry"]["empty_submission_confirmed"] is False
 
     def test_productive_first_turn_no_retry(self, monkeypatch):
         """首轮就有 items → 不触发 retry,telemetry 标记为 False。"""

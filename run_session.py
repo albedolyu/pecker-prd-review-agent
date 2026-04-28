@@ -243,6 +243,8 @@ def run_parallel_review(client, workspace, wiki_path, prd_content, prd_files, wi
                 "turns_used": telemetry.get("turns_used"),
                 "duration_ms": telemetry.get("duration_ms"),
                 "cost_usd": telemetry.get("cost_usd") or r.get("cost_usd"),
+                "empty_submission_confirmed": telemetry.get("empty_submission_confirmed"),
+                "empty_submission_reason": telemetry.get("empty_submission_reason"),
             })
         else:
             evt.append("worker_done", {"dim": dim, "items_count": 0, "error": str(r)[:200]})

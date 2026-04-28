@@ -363,6 +363,8 @@ async def run_review(
                         # Round 2: 空提交重试分支 telemetry,后续由 generate_status 聚合
                         "empty_retry_used": telemetry.get("empty_retry_used") if telemetry else None,
                         "turns_used": telemetry.get("turns_used") if telemetry else None,
+                        "empty_submission_confirmed": telemetry.get("empty_submission_confirmed") if telemetry else None,
+                        "empty_submission_reason": telemetry.get("empty_submission_reason") if telemetry else None,
                     })
 
                 result = await parallel_review(

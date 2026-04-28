@@ -14,9 +14,15 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 QUOTA_ERR = 'claude -p 退出码 1: {"is_error":true,"result":"You\'ve hit your limit · resets 8am"}'
 
 
-def _w(dim: str, items: int, error: str = None):
+def _w(dim: str, items: int, error: str = None, confirmed_empty: bool = False):
     """Worker done event helper."""
-    return {"type": "worker_done", "dim": dim, "items_count": items, "error": error}
+    return {
+        "type": "worker_done",
+        "dim": dim,
+        "items_count": items,
+        "error": error,
+        "empty_submission_confirmed": confirmed_empty,
+    }
 
 
 class TestIsQuotaError:
@@ -68,6 +74,22 @@ class TestClassifySession:
             _w("data_quality", 0),
         ]
         assert classify_session(workers) == "partial_silent"
+
+    def test_confirmed_empty_is_not_silent(self):
+        """显式填写 null_finding_reason 的 0-items worker 是 clean 结果,不算静默。"""
+        from generate_status import classify_session
+        workers = [
+            _w("structure", 7),
+            _w("ai_coding", 6),
+            _w("quality", 0, confirmed_empty=True),
+            _w("data_quality", 0, confirmed_empty=True),
+        ]
+        assert classify_session(workers) == "productive"
+
+    def test_all_confirmed_empty_is_productive_clean(self):
+        from generate_status import classify_session
+        workers = [_w(d, 0, confirmed_empty=True) for d in ["structure", "quality"]]
+        assert classify_session(workers) == "productive"
 
     def test_all_silent_empty_bug(self):
         from generate_status import classify_session
@@ -220,7 +242,8 @@ class TestEmptyRetryAggregation:
             {"type": "worker_done", "dim": "ai_coding", "items_count": 3,
              "error": None, "empty_retry_used": True},   # triggered + rescued
             {"type": "worker_done", "dim": "data_quality", "items_count": 0,
-             "error": None, "empty_retry_used": True},   # triggered + kept_empty
+             "error": None, "empty_retry_used": True,
+             "empty_submission_confirmed": True},        # triggered + kept_empty + confirmed clean
             {"type": "review_completed"},
         ])
 
@@ -233,8 +256,29 @@ class TestEmptyRetryAggregation:
         assert retry["triggered"] == 3
         assert retry["rescued"] == 2
         assert retry["kept_empty"] == 1
+        assert retry["confirmed_empty"] == 1
         assert retry["trigger_rate"] == 0.75
         assert abs(retry["rescue_rate"] - 2/3) < 1e-3  # 服从 round(..., 3) 精度
+
+    def test_confirmed_empty_workers_not_counted_as_silent_rate(self, tmp_path, monkeypatch):
+        """worker silent_rate 分母纳入 clean 结果,但 confirmed empty 不进 silent 分子。"""
+        from generate_status import collect_session_stats
+        import generate_status as gs
+
+        self._session_file(tmp_path, "clean", [
+            {"type": "review_started"},
+            {"type": "worker_done", "dim": "quality", "items_count": 0,
+             "error": None, "empty_submission_confirmed": True},
+            {"type": "worker_done", "dim": "data_quality", "items_count": 0,
+             "error": None, "empty_submission_confirmed": False},
+            {"type": "review_completed"},
+        ])
+        monkeypatch.setattr(gs, "ROOT", tmp_path)
+
+        stats = collect_session_stats()
+        assert stats["worker_silent_rate"]["quality"] == 0
+        assert stats["worker_silent_rate"]["data_quality"] == 1
+        assert stats["worker_confirmed_empty"] == {"quality": 1}
 
     def test_retry_stats_no_telemetry_yields_zero_instrumented(self, tmp_path, monkeypatch):
         """老 session 没 empty_retry_used 字段 → instrumented_workers=0, rates=0."""
