@@ -124,6 +124,12 @@
  * ============================================================ */
 :root,
 [data-theme="light"] {
+  --font-geist-sans: "Segoe UI", "PingFang SC", "Microsoft YaHei",
+    "Hiragino Sans GB", Arial, sans-serif;
+  --font-geist-mono: "Cascadia Mono", "SFMono-Regular", Consolas,
+    "Liberation Mono", monospace;
+  --font-fraunces: var(--font-geist-sans);
+
   /* ── neutral(略偏冷 · slate 调) ─────────────────────────── */
   --neutral-0: #ffffff;
   --neutral-25: #fafbfc;
