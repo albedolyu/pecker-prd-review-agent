@@ -155,6 +155,7 @@ class TestInstalledArtifactImports:
             [
                 sys.executable, "-m", "pip", "install", ".",
                 "--no-deps",
+                "--no-build-isolation",
                 "--target", str(install_target),
                 "--quiet",
             ],

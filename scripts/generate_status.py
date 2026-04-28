@@ -62,7 +62,10 @@ def collect_git_activity(days: int = 14) -> dict:
 def collect_test_status() -> dict:
     """pytest --collect-only 的单测计数."""
     import re
-    out = _run([sys.executable, "-m", "pytest", "tests/", "--collect-only", "-q"])
+    out = _run([
+        sys.executable, "-m", "pytest", "tests/",
+        "--collect-only", "-q", "-p", "no:cacheprovider",
+    ])
     test_count = 0
     # pytest 输出: "180 tests collected in 0.53s"
     m = re.search(r"(\d+)\s+tests?\s+collected", out)

@@ -16,8 +16,14 @@ from difflib import SequenceMatcher
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
-load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"), override=True)
-os.environ.pop("ANTHROPIC_AUTH_TOKEN", None)
+
+_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def load_runtime_env() -> None:
+    """Load local CLI env without mutating already configured test/runtime values."""
+    load_dotenv(os.path.join(_BASE_DIR, ".env"), override=False)
+    os.environ.pop("ANTHROPIC_AUTH_TOKEN", None)
 
 
 def _review_single_standalone(client, prd_content, model):
@@ -248,6 +254,8 @@ def generate_report(prd_name, runs_items, pairwise, stable, frequency, mode, out
 
 
 def main():
+    load_runtime_env()
+
     parser = argparse.ArgumentParser(description="一致性评测：同一 PRD 跑 N 次评审")
     parser.add_argument("prd_file", help="PRD 文件路径")
     parser.add_argument("--runs", type=int, default=3, help="评审轮次（默认 3）")
@@ -255,7 +263,7 @@ def main():
     parser.add_argument("--output", help="报告输出路径（默认 eval/results/consistency_*.md）")
     args = parser.parse_args()
 
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    base_dir = _BASE_DIR
 
     # 读取 PRD
     prd_path = os.path.join(base_dir, args.prd_file) if not os.path.isabs(args.prd_file) else args.prd_file
