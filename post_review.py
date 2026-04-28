@@ -240,6 +240,14 @@ def run_post_review(workspace, wiki_path, prd_name, reviewer, model_tier, parall
                         it["status"] = "pending"
                         _auto_pending += 1
             print(f"  [auto-decide={_auto_decide}] Y={_auto_y} N={_auto_n} pending={_auto_pending}")
+
+        if items_for_report:
+            try:
+                from review.implement_convention import annotate_review_items
+                items_for_report = annotate_review_items(items_for_report)
+            except Exception as _e:
+                print(f"  [警告] 标记实现约定失败(不阻断): {str(_e)[:60]}")
+
         if items_for_report and prd_content_for_report:
             report = build_actionable_report(items_for_report, prd_content_for_report, prd_name, reviewer, peck)
             if report:

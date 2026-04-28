@@ -40,6 +40,13 @@ def build_actionable_report(items, prd_content, prd_name, reviewer="", peck_scor
         "",
     ]
 
+    try:
+        from review.implement_convention import build_report_notice
+        lines.extend(build_report_notice().splitlines())
+        lines.extend(["", "---", ""])
+    except Exception:
+        pass
+
     # 按 location 章节分组
     section_groups = _group_by_section(items)
 
