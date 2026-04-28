@@ -255,10 +255,10 @@ def compute_cost_latency(call_records: List[Dict[str, Any]]) -> Dict[str, float]
             "total_input_tokens": 0, "total_output_tokens": 0, "n_calls": 0,
         }
 
-    latencies = sorted(float(r.get("latency_ms", 0) or 0) for r in call_records)
-    costs = [float(r.get("cost_usd", 0) or 0) for r in call_records]
-    in_toks = sum(int(r.get("input_tokens", 0) or 0) for r in call_records)
-    out_toks = sum(int(r.get("output_tokens", 0) or 0) for r in call_records)
+    latencies = sorted(max(0.0, float(r.get("latency_ms", 0) or 0)) for r in call_records)
+    costs = [max(0.0, float(r.get("cost_usd", 0) or 0)) for r in call_records]
+    in_toks = sum(max(0, int(r.get("input_tokens", 0) or 0)) for r in call_records)
+    out_toks = sum(max(0, int(r.get("output_tokens", 0) or 0)) for r in call_records)
     total_cost = sum(costs)
 
     return {

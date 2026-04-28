@@ -48,6 +48,10 @@ def _flatten_responses_to_items(responses: List[Any]) -> List[Dict[str, Any]]:
                 # location 也是 cuckoo_scorer._calc_match_score 硬下标依赖
                 if not merged.get("location"):
                     merged["location"] = ""
+                if not merged.get("problem") and merged.get("issue"):
+                    merged["problem"] = merged["issue"]
+                if not merged.get("suggestion"):
+                    merged["suggestion"] = ""
                 flat.append(merged)
     return flat
 

@@ -90,3 +90,11 @@ def test_flatten_preserves_existing_id():
     responses = [[{"id": "ORIG-1", "rule_id": "R-1", "severity": "must"}]]
     flat = _flatten_responses_to_items(responses)
     assert flat[0]["id"] == "ORIG-1"
+
+
+def test_flatten_maps_issue_to_problem_for_cuckoo_matching():
+    """route_eval worker/advisor 输出常用 issue 字段, cuckoo scorer 匹配看 problem."""
+    responses = [[{"id": "R-1", "issue": "字段缺失", "location": "3.1"}]]
+    flat = _flatten_responses_to_items(responses)
+    assert flat[0]["problem"] == "字段缺失"
+    assert flat[0]["suggestion"] == ""

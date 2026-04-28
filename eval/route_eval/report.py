@@ -226,6 +226,8 @@ def write_baseline_matrix(
         "- 此表作为后续准入对比的参照基线 (scripts/eval_admission.py --compare)",
         "- task=issues 主指标 P/R/F1 (cuckoo); task=binary 主指标 accuracy/TPR/FPR;",
         "  task=multiclass 主指标 accuracy + per-class accuracy",
+        "- p95 ms 取自 runner call_record 粒度; classification pattern 的单条记录可能包含多 case,",
+        "  因此它表示 route-run 延迟, 不是单 case / 单 LLM call 延迟.",
         "- 准入阈值: F1>=base-0.05, Recall>=base-0.05, Overlap>=base-0.05,",
         "  p95<=base*1.5, $/run<=base*2.0; halluc TPR>=0.85, FPR<=0.10 (绝对)",
         "",

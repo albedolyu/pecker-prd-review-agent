@@ -195,6 +195,49 @@ def _load_dataset_safe(name: str) -> List[Dict[str, Any]]:
         return []
 
 
+def _keywords_from_issue(text: str) -> List[str]:
+    """Derive coarse keywords for advisor-resolution GT when no explicit keywords exist."""
+    if not text:
+        return []
+    words = re.findall(r"[\u4e00-\u9fffA-Za-z0-9_-]{2,}", text)
+    return words[:6]
+
+
+def _collect_ground_truth(dataset: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Collect normalized GT from all route_eval dataset shapes.
+
+    business_prd_gt uses ``ground_truth: list``. advisor_conflicts uses
+    ``ground_truth_resolution.merged`` id references into ``worker_outputs``.
+    """
+    ground_truth: List[Dict[str, Any]] = []
+    for entry in dataset:
+        gt = entry.get("ground_truth")
+        if isinstance(gt, list):
+            ground_truth.extend(gt)
+            continue
+
+        resolution = entry.get("ground_truth_resolution")
+        worker_outputs = entry.get("worker_outputs") or []
+        if not isinstance(resolution, dict) or not worker_outputs:
+            continue
+
+        merged_ids = {str(x) for x in (resolution.get("merged") or []) if isinstance(x, (str, int))}
+        id_map = {str(w.get("id", "")): w for w in worker_outputs if isinstance(w, dict)}
+        for merged_id in merged_ids:
+            worker_item = id_map.get(merged_id)
+            if not worker_item:
+                continue
+            bug = dict(worker_item)
+            workspace = entry.get("workspace", "")
+            bug["id"] = f"{workspace}::{merged_id}" if workspace else merged_id
+            bug.setdefault("problem", bug.get("issue", ""))
+            bug.setdefault("keywords", _keywords_from_issue(bug.get("issue", "")))
+            bug.setdefault("severity", resolution.get("conflict_severity_correct") or "must")
+            bug.setdefault("location", "")
+            ground_truth.append(bug)
+    return ground_truth
+
+
 # ============================================================
 # 主入口
 # ============================================================
@@ -241,12 +284,8 @@ def run_route_eval(
 
     # 加载数据集 (graceful)
     dataset = _load_dataset_safe(dataset_name)
-    # 抽 ground_truth (worker.* / advisor.* 数据集有, intent/template 没有)
-    ground_truth: List[Dict[str, Any]] = []
-    for entry in dataset:
-        gt = entry.get("ground_truth") or entry.get("ground_truth_resolution") or []
-        if isinstance(gt, list):
-            ground_truth.extend(gt)
+    # 抽 ground_truth (business_prd_gt 为 list; advisor_conflicts 为 merged id refs)
+    ground_truth = _collect_ground_truth(dataset)
 
     # 跑 N 次
     all_responses: List[List[Dict[str, Any]]] = []
@@ -459,9 +498,11 @@ def _call_nli_pattern(
                 "construction_method": entry.get("construction_method", ""),
             })
             # _llm_nli_score 内部走 route_call, 返回的 score 不带 token usage;
-            # token usage 在 token_tracker 里集中, 这里粗估 (每次 ~500/100)
-            resp.add_usage({"input_tokens": 500 * score.get("n_samples_succeeded", 0),
-                            "output_tokens": 100 * score.get("n_samples_succeeded", 0)})
+            # token usage 在 token_tracker 里集中, 这里粗估 (每次 ~500/100).
+            # -1 是 fast-path sentinel (没调 LLM), 成本应按 0 计.
+            n_samples_succeeded = max(0, int(score.get("n_samples_succeeded", 0) or 0))
+            resp.add_usage({"input_tokens": 500 * n_samples_succeeded,
+                            "output_tokens": 100 * n_samples_succeeded})
         except Exception as e:  # pragma: no cover -- 真跑兜底
             log.warning(f"[nli] case {entry.get('id')} 失败: {type(e).__name__}: {e}")
             error_type = type(e).__name__.lower()
@@ -652,6 +693,7 @@ def _call_worker_pattern(
     - 累计每条 entry 的 items 到 _BatchResponse.items
     """
     from model_router import route_call
+    from review.worker import SUBMIT_REVIEW_ITEMS_TOOL, _extract_items_from_response
 
     dim_key = route_id.split(".", 1)[1] if "." in route_id else "default"
     sub = dataset[:max_cases]
@@ -664,15 +706,12 @@ def _call_worker_pattern(
     # 解析 shell 元字符 "|" "<" ">" "&" 等 (memory: claude_cli_windows_subprocess.md
     # 同款坑). 全部用普通字符替代避免触发 shell 解析.
     system = (
-        f"你是 PRD 评审员, 专注 {dim_key} 维度审核. "
-        "审阅以下 PRD, 输出 **只含一个 JSON list** 的回复 (不要 markdown 文本). "
-        "每条 issue 字段: "
-        "rule_id (规则ID 如 V-08 / RC-014 / EV-01), "
-        "severity (取值: must / should / info), "
-        "location (章节号 如 3.2), "
-        "issue (80 字以内问题描述), "
-        "suggestion (80 字以内修复建议). "
-        "未发现问题则返 [], 不要硬凑."
+        f"You are a PRD reviewer focused on the {dim_key} dimension. "
+        "Review the PRD and submit findings with the submit_review_items schema. "
+        "Return only the tool-input JSON object, without markdown or prose. "
+        "Each issue must include rule_id, severity, location, issue, suggestion, "
+        "evidence_type, and evidence_content. If there are no findings, return "
+        "an empty items array with a clear null_finding_reason."
     )
 
     for entry in sub:
@@ -687,11 +726,15 @@ def _call_worker_pattern(
                 route_id,
                 system=system,
                 messages=[{"role": "user", "content": user}],
+                tools=[SUBMIT_REVIEW_ITEMS_TOOL],
+                tool_choice={"type": "any"},
                 max_tokens=4096,
                 temperature=0.3,
             )
-            text = _extract_text_from_resp(sub_resp)
-            items = _parse_json_list(text)
+            items = _extract_items_from_response(sub_resp)
+            if not items:
+                text = _extract_text_from_resp(sub_resp)
+                items = _parse_json_list(text)
             # 给每条 item 标 source 让后续 cuckoo 区分
             for it in items:
                 it.setdefault("dimension", dim_key)
