@@ -92,6 +92,115 @@ export function classifyFailReason(ev: WorkerDoneEvent): FailReason {
   return classifyFailure(ev) as FailReason;
 }
 
+// ============================================================
+// Worker error banner · 把 SSE 流里散落的 worker_done.error 聚合成顶部红条
+//
+// 触发场景:Claude CLI 登录态过期 / 配额耗尽时,4 个 worker 全部 success=false
+// 但前端老 UI 只看 items_count,显示"评审完成 0 条"误导 PM。
+// 这里按 not_logged_in / quota / other 分类,给出可执行的引导文案。
+
+export type WorkerErrorCategory = "not_logged_in" | "quota" | "other";
+
+export interface WorkerErrorBanner {
+  readonly category: WorkerErrorCategory;
+  /** banner 标题(分类提示) */
+  readonly title: string;
+  /** banner 副文案(可执行的修复指引) */
+  readonly hint: string;
+  /** 受影响的 worker · dedupe 后 */
+  readonly affectedDims: ReadonlyArray<{ dim: string; dimName: string }>;
+  /** 仅 other 分类带 · 错误原文截断到 120 字 */
+  readonly errorPreview?: string;
+}
+
+/** 错误前缀指纹 · 用于 dedupe 同 dim+错误的重复 worker_done */
+function errorFingerprint(error: string): string {
+  return error.slice(0, 60);
+}
+
+function categorizeError(error: string): WorkerErrorCategory {
+  // 同时匹配 "Not logged in" 和 "Please run /login",任意命中即可
+  if (error.includes("Not logged in") || error.includes("Please run /login")) {
+    return "not_logged_in";
+  }
+  if (
+    error.includes("QuotaExhaustedError") ||
+    error.toLowerCase().includes("quota") ||
+    error.toLowerCase().includes("hit your limit")
+  ) {
+    return "quota";
+  }
+  return "other";
+}
+
+/**
+ * 从 events 流抽出 worker_done.error,分类聚合为顶部 banner。
+ *
+ * - not_logged_in / quota:同分类合并成 1 条 banner,affectedDims 列出所有受影响维度
+ * - other:每个独立 (dim, error_prefix) 一条 banner(错误内容可能各不相同)
+ * - dedupe:同 dim + 同错误前缀(60 字)只保留一次,防止重发或重连重复入栈
+ */
+export function extractWorkerErrors(
+  events: ReadonlyArray<ReviewStreamEvent>,
+): ReadonlyArray<WorkerErrorBanner> {
+  const seen = new Set<string>();
+  const grouped = new Map<
+    WorkerErrorCategory,
+    Array<{ dim: string; dimName: string; error: string }>
+  >();
+
+  for (const e of events) {
+    if (e.event !== "worker_done") continue;
+    const ev = e as WorkerDoneEvent;
+    if (!ev.error) continue;
+
+    const fp = errorFingerprint(ev.error);
+    const dedupeKey = `${ev.dim_key}::${fp}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+
+    const cat = categorizeError(ev.error);
+    const arr = grouped.get(cat) ?? [];
+    arr.push({ dim: ev.dim_key, dimName: ev.dim_name, error: ev.error });
+    grouped.set(cat, arr);
+  }
+
+  const banners: WorkerErrorBanner[] = [];
+
+  // 已知分类合并成单 banner
+  const loggedInList = grouped.get("not_logged_in");
+  if (loggedInList && loggedInList.length > 0) {
+    banners.push({
+      category: "not_logged_in",
+      title: "Claude CLI 未登录",
+      hint: "在终端跑 `claude login` 后重试",
+      affectedDims: loggedInList.map((x) => ({ dim: x.dim, dimName: x.dimName })),
+    });
+  }
+  const quotaList = grouped.get("quota");
+  if (quotaList && quotaList.length > 0) {
+    banners.push({
+      category: "quota",
+      title: "Claude 账户额度耗尽",
+      hint: "请稍后重试或联系管理员升级账户",
+      affectedDims: quotaList.map((x) => ({ dim: x.dim, dimName: x.dimName })),
+    });
+  }
+  // other 分类:每个独立错误 1 条 banner(错误内容差异大,合并会丢信息)
+  const otherList = grouped.get("other") ?? [];
+  for (const o of otherList) {
+    banners.push({
+      category: "other",
+      title: `Worker ${o.dim} 失败`,
+      hint: "查看下方运行日志或重试",
+      affectedDims: [{ dim: o.dim, dimName: o.dimName }],
+      errorPreview: o.error.slice(0, 120),
+    });
+  }
+
+  return banners;
+}
+
 /**
  * worker running 中的进度估算。
  * 没有精确进度信号,用 stage-based:未收到 done 时 35%,收到 done 80%。

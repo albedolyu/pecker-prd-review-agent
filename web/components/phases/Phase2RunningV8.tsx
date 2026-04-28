@@ -58,6 +58,7 @@ import {
   classifyFailure,
   classifyFailReason,
   deriveFunnelState,
+  extractWorkerErrors,
   formatDuration,
   formatElapsed,
   formatTokens,
@@ -67,6 +68,7 @@ import {
   roleToBird,
   type FunnelStageKey,
   type FunnelState,
+  type WorkerErrorBanner,
 } from "@/lib/v8-run-helpers";
 
 // worker 侧 4 鸟 · 展示顺序和 parallel_review _DEFAULT_REVIEW_DIMENSIONS 一致
@@ -254,6 +256,13 @@ export function Phase2RunningV8() {
 
   const funnelState = useMemo(
     () => deriveFunnelState(stream.events),
+    [stream.events],
+  );
+
+  // worker error banners · 把 worker_done.error 抽出来分类成红条提示
+  // (后端早就在 SSE 里写 error,但前端老 UI 只看 items_count 漏掉登录失效)
+  const workerErrorBanners = useMemo(
+    () => extractWorkerErrors(stream.events),
     [stream.events],
   );
 
@@ -530,6 +539,15 @@ export function Phase2RunningV8() {
         </div>
       </header>
 
+      {/* ── worker error banner · 分类提示登录失效/配额耗尽/其他 ── */}
+      {workerErrorBanners.length > 0 && (
+        <div style={{ marginBottom: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+          {workerErrorBanners.map((b, i) => (
+            <WorkerErrorBannerView key={`${b.category}-${i}`} banner={b} />
+          ))}
+        </div>
+      )}
+
       {/* ── review_failed / degraded 提示 ── */}
       {hasError && (
         <div
@@ -792,6 +810,62 @@ function buildConsoleLines(
   });
 
   return lines;
+}
+
+// ============================================================
+// WorkerErrorBannerView · 顶部红条 · 分类提示登录失效/配额耗尽/其他
+
+function WorkerErrorBannerView({ banner }: { banner: WorkerErrorBanner }) {
+  const dimsLabel = banner.affectedDims
+    .map((d) => d.dimName || d.dim)
+    .join("、");
+  return (
+    <div
+      data-testid={`worker-error-banner-${banner.category}`}
+      role="alert"
+      style={{
+        padding: "10px 14px",
+        borderRadius: "var(--r-4)",
+        border: "1px solid var(--status-failed-dot)",
+        background: "var(--status-failed-bg)",
+        color: "var(--status-failed-fg)",
+        fontSize: 13,
+        lineHeight: 1.5,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+        <strong style={{ fontWeight: 600 }}>{banner.title}</strong>
+        <span style={{ opacity: 0.85 }}>· {banner.hint}</span>
+      </div>
+      <div
+        style={{
+          marginTop: 4,
+          fontSize: 12,
+          opacity: 0.85,
+          fontFamily: "var(--font-mono)",
+        }}
+      >
+        影响 {banner.affectedDims.length} 个 worker:{dimsLabel}
+      </div>
+      {banner.errorPreview && (
+        <div
+          style={{
+            marginTop: 6,
+            padding: "6px 8px",
+            borderRadius: "var(--r-2)",
+            background: "color-mix(in oklch, var(--status-failed-bg) 60%, var(--surface-canvas))",
+            fontSize: 11,
+            fontFamily: "var(--font-mono)",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            opacity: 0.9,
+          }}
+        >
+          {banner.errorPreview}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ============================================================
