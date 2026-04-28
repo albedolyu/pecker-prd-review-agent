@@ -15,7 +15,7 @@
 - 总建议处置工量: **~6 小时** (P0 修 + P1 batch 处理 + P2 收尾)
 
 **最严重 3 条** (TL;DR 重复, 具体见报告):
-1. **RC-014 删除未级联**: review/dimensions.py 硬编码 dict + 6 个 workspace/review-rules/review-checklist.yaml 都还活着 (含已删的 RC-014)
+1. **RC-014 删除未级联**: review/dimensions.py 硬编码 dict + 6 个 workspace-*/review-rules/review-checklist.yaml 都还活着 (含已删的 RC-014)
 2. **wiki authority schema 实施率 0%**: 7 workspace × 99 wiki 文件无任何 `authority:` 字段, 但 docs/wiki-frontmatter-v2.md / sprint 文档把它写成现状
 3. **STATUS.md 老快照入库**: 04-22 14:17 自动生成版本仍存在仓库 (.gitignore 写了排除但已 tracked), 内容引用 490 单测/74 commits 已严重过时
 
@@ -89,7 +89,7 @@
 
 **影响范围分析**:
 - 顶层 yaml 加载是优先逻辑 (`review/dimensions.py:228` `load_review_dimensions`), workspace yaml 优先 → 顶层 fallback. **但 `review/dimensions.py:53` 的 `_DEFAULT_REVIEW_DIMENSIONS` 硬编码 dict 仍含 RC-014, 所有顶层 yaml 加载失败时 fallback 会触发**.
-- 6 个 workspace `review-rules/review-checklist.yaml` 是**完全不同的 schema** (`rules:` 数组而非 `dimensions:` map), 用于 cuckoo_scorer / feedback / review_fixer 的 B 类依据验证 (见 cuckoo_scorer.py:159, feedback.py:1294, review_fixer.py:44). RC-014 在这套规则集仍被 evidence verify 视为合法.
+- 6 个 workspace-*/review-rules/review-checklist.yaml 是**完全不同的 schema** (`rules:` 数组而非 `dimensions:` map), 用于 cuckoo_scorer / feedback / review_fixer 的 B 类依据验证 (见 cuckoo_scorer.py:159, feedback.py:1294, review_fixer.py:44). RC-014 在这套规则集仍被 evidence verify 视为合法.
 - 结果: **新 worker 不会被 prompt 提到 RC-014 (顶层 yaml 已删), 但 review_fixer / cuckoo_scorer 在验证 evidence 时仍能匹配到 RC-014 字符串**, 形成"模型不再生成, 但旧 review_items.json 引用仍能通过验证"的半残状态.
 
 **建议处置**:
@@ -251,7 +251,7 @@ Grep memory/[a-z_]+\.md *.py = 0 命中
 
 | # | 项 | PM 需决定 |
 |---|---|---|
-| Q1 | 6 个 workspace 的 `review-rules/review-checklist.yaml` 用的是与顶层 review-dimensions.yaml **完全不同的 schema** (rules 数组 vs dimensions map)。这套是 cuckoo_scorer / feedback / review_fixer 的 B 类依据验证用的"老规则集", 文档没明确两套关系 | 是否合并成一套 schema? 或显式文档化两套并行? |
+| Q1 | 6 个 workspace 的 workspace-*/review-rules/review-checklist.yaml 用的是与顶层 review-dimensions.yaml **完全不同的 schema** (rules 数组 vs dimensions map)。这套是 cuckoo_scorer / feedback / review_fixer 的 B 类依据验证用的"老规则集", 文档没明确两套关系 | 是否合并成一套 schema? 或显式文档化两套并行? |
 | Q2 | wiki authority schema 落地策略: 7 workspace × 99 wiki 全部默认 generated, 是否值得花时间逐个 promote? 还是只对真有人用过的 wiki 处理 | PM 决定 promote 路径 |
 | Q3 | `pecker-release/` 目录是 release snapshot 但和 root 同步度未知 (e.g. parallel_review.py root 78 行 facade vs pecker-release/parallel_review.py 仍是老 1223 行版?). 不在审查范围, 但发现重复 | PM 决定 release 策略 |
 | Q4 | `workspace-points-payment` / `workspace-劳动仲裁` / `workspace-纳税人资质` 业务 wiki 数 = 0 (仅 index/log/achievements), 是否这些 workspace 应被认为"未投入使用"? rule_perf 是否应该对它们 reset? | PM 判断 |
@@ -302,4 +302,3 @@ Day5 PM 选择长期修法 schema_registry 单点 SoT. 8 substep 全完成 (comm
 - Q5 RC-014 历史 rule_performance_history.json 是否回溯清洗 — schema_registry 已挡住新数据, 历史档案保留作 audit 凭证
 
 详见: `docs/schema_registry_design_2026_04_27.md` 末尾"实施回顾"段 + `tests/test_schema_registry_e2e.py` (28 测试, pytest 1073 全绿).
-

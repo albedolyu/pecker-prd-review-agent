@@ -96,6 +96,18 @@ class Finding:
 _ROUTER_RE = re.compile(r'@(?:router|app)\.(get|post|put|delete|patch)\(\s*["\']([^"\']+)', re.M)
 _DOC_API_RE = re.compile(r'`(/api/[a-zA-Z0-9_\-./{}:?=&]+)`')
 
+_ENDPOINT_REFERENCE_DOCS = {
+    # Generated experiment report: endpoints are product-under-test specs, not
+    # FastAPI routes in this repository.
+    "docs/full_prd_endpoint_2026_04_28.md",
+    # Design spec: includes future dashboard API shape before implementation.
+    "docs/review-funnel-schema.md",
+}
+
+
+def _rel_doc_path(path: Path) -> str:
+    return path.relative_to(PROJECT_ROOT).as_posix()
+
 
 def _collect_route_paths() -> Set[str]:
     """扫 api/routes/*.py 收集 @router.METHOD("path") 的 path, 加 /api prefix(api/main.py 统一挂载)。"""
@@ -148,6 +160,9 @@ def check_endpoints() -> List[Finding]:
     findings: List[Finding] = []
     seen: Set[str] = set()
     for md in _doc_files():
+        rel = _rel_doc_path(md)
+        if rel in _ENDPOINT_REFERENCE_DOCS:
+            continue
         try:
             src = md.read_text(encoding="utf-8", errors="replace")
         except OSError:
@@ -158,7 +173,6 @@ def check_endpoints() -> List[Finding]:
                 continue
             seen.add(doc_path)
             if not _path_matches(doc_path, route_paths):
-                rel = md.relative_to(PROJECT_ROOT).as_posix()
                 findings.append(Finding(
                     "endpoints", "warn",
                     f"文档提到 endpoint `{doc_path}` 但 FastAPI 路由里不存在",
@@ -252,13 +266,41 @@ _DOC_PATH_RE = re.compile(
 )
 
 # 跳过示例型引用
-_EXAMPLE_TOKENS = {"foo", "bar", "baz", "example", "placeholder", "your_name", "<path>"}
+_EXAMPLE_TOKENS = {"foo", "bar", "baz", "example", "placeholder", "your_name", "<path>", "xxx"}
+_PLANNED_OR_TEMPLATE_TOKENS = ("YYYY", "_template.")
+_RESEARCH_DOC_PREFIXES = ("docs/research_",)
+_FUTURE_SPEC_DOCS = {
+    "docs/nli_dar_wiring_diagnosis_2026_04_26.md",
+    "docs/pm-reject-reason-schema.md",
+    "docs/review-funnel-schema.md",
+    "docs/schema_registry_design_2026_04_27.md",
+    "docs/sprint-real-prd-calibration-evidence-governance.md",
+    "docs/wiki-frontmatter-v2.md",
+}
+
+
+def _is_expected_non_repo_path(doc_rel: str, path: str) -> bool:
+    """Skip references that are intentionally not current repo files."""
+    if any(doc_rel.startswith(prefix) for prefix in _RESEARCH_DOC_PREFIXES):
+        return True
+    if any(token in path for token in _PLANNED_OR_TEMPLATE_TOKENS):
+        return True
+    if path.startswith("memory/"):
+        return True
+    if doc_rel in _FUTURE_SPEC_DOCS and path.startswith(
+        ("api/routes/", "scripts/", "tests/", "review-rules/")
+    ):
+        return True
+    if doc_rel in _FUTURE_SPEC_DOCS and path.startswith("docs/calibration-report-"):
+        return True
+    return False
 
 
 def check_file_paths() -> List[Finding]:
     findings: List[Finding] = []
     seen: Set[tuple] = set()
     for md in _doc_files():
+        rel = _rel_doc_path(md)
         try:
             src = md.read_text(encoding="utf-8", errors="replace")
         except OSError:
@@ -268,13 +310,14 @@ def check_file_paths() -> List[Finding]:
             lower = path.lower()
             if any(tok in lower for tok in _EXAMPLE_TOKENS):
                 continue
+            if _is_expected_non_repo_path(rel, path):
+                continue
             key = (str(md), path)
             if key in seen:
                 continue
             seen.add(key)
             full = PROJECT_ROOT / path
             if not full.exists():
-                rel = md.relative_to(PROJECT_ROOT).as_posix()
                 findings.append(Finding(
                     "file_paths", "warn",
                     f"文档引用的路径 `{path}` 在仓库中不存在",

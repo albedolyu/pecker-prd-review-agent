@@ -1,0 +1,148 @@
+{
+  "route_id": "advisor.goshawk",
+  "vendor": "anthropic",
+  "model": "sonnet",
+  "runs": 1,
+  "dataset": "advisor_conflicts",
+  "dry_run": true,
+  "responses": [
+    [
+      {
+        "id": "FAKE-0-0",
+        "rule_id": "V-08",
+        "location": "3.1",
+        "issue": "dry-run 假改进项 0",
+        "problem": "模拟问题 0",
+        "suggestion": "模拟建议",
+        "severity": "must",
+        "evidence_type": "B",
+        "evidence_content": "RC-014 验证规则",
+        "dimension": "structure"
+      },
+      {
+        "id": "FAKE-0-1",
+        "rule_id": "RC-014",
+        "location": "3.2",
+        "issue": "dry-run 假改进项 1",
+        "problem": "模拟问题 1",
+        "suggestion": "模拟建议",
+        "severity": "should",
+        "evidence_type": "B",
+        "evidence_content": "RC-014 验证规则",
+        "dimension": "structure"
+      },
+      {
+        "id": "FAKE-0-2",
+        "rule_id": "EV-01",
+        "location": "3.3",
+        "issue": "dry-run 假改进项 2",
+        "problem": "模拟问题 2",
+        "suggestion": "模拟建议",
+        "severity": "should",
+        "evidence_type": "B",
+        "evidence_content": "RC-014 验证规则",
+        "dimension": "structure"
+      }
+    ]
+  ],
+  "call_records": [
+    {
+      "ts": "2026-04-27T16:38:13",
+      "route_id": "advisor.goshawk",
+      "vendor": "anthropic",
+      "model": "sonnet",
+      "latency_ms": 0,
+      "input_tokens": 100,
+      "output_tokens": 50,
+      "cost_usd": 0.00105,
+      "stop_reason": "end_turn",
+      "error_type": null,
+      "fallback_triggered": false
+    }
+  ],
+  "ground_truth": [],
+  "capability": {
+    "p": 0.0,
+    "r": 0.0,
+    "f1": 0.0,
+    "severity_kl": 0.0,
+    "severity_distribution": {
+      "must": 0,
+      "should": 0,
+      "info": 0,
+      "other": 0
+    },
+    "hits": 0,
+    "misses": 0,
+    "fps": 0,
+    "total_items": 0
+  },
+  "stability": {
+    "overlap": 1.0,
+    "n0_var": 0.0,
+    "sampling_cv": 0.0,
+    "stable_count": 0,
+    "n_runs": 1
+  },
+  "cost_latency": {
+    "p50_ms": 0.0,
+    "p95_ms": 0.0,
+    "p99_ms": 0.0,
+    "cost_usd_total": 0.00105,
+    "cost_usd_per_run": 0.00105,
+    "total_input_tokens": 100,
+    "total_output_tokens": 50,
+    "n_calls": 1
+  },
+  "failure_modes": {
+    "quota_rate": 0.0,
+    "json_parse_fail_rate": 0.0,
+    "tool_use_fail_rate": 0.0,
+    "fallback_rate": 0.0,
+    "timeout_rate": 0.0,
+    "n_calls": 1
+  },
+  "metrics": {
+    "capability": {
+      "p": 0.0,
+      "r": 0.0,
+      "f1": 0.0,
+      "severity_kl": 0.0,
+      "severity_distribution": {
+        "must": 0,
+        "should": 0,
+        "info": 0,
+        "other": 0
+      },
+      "hits": 0,
+      "misses": 0,
+      "fps": 0,
+      "total_items": 0
+    },
+    "stability": {
+      "overlap": 1.0,
+      "n0_var": 0.0,
+      "sampling_cv": 0.0,
+      "stable_count": 0,
+      "n_runs": 1
+    },
+    "cost_latency": {
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "p99_ms": 0.0,
+      "cost_usd_total": 0.00105,
+      "cost_usd_per_run": 0.00105,
+      "total_input_tokens": 100,
+      "total_output_tokens": 50,
+      "n_calls": 1
+    },
+    "failure_modes": {
+      "quota_rate": 0.0,
+      "json_parse_fail_rate": 0.0,
+      "tool_use_fail_rate": 0.0,
+      "fallback_rate": 0.0,
+      "timeout_rate": 0.0,
+      "n_calls": 1
+    }
+  }
+}

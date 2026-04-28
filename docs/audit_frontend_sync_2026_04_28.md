@@ -107,7 +107,7 @@
 
 **verdict**: NEEDS WORK — Phase4 报告无法区分"合法跨章节告警"(应该保留, 设计意图) vs "维度边界外告警"(应该拒绝, 噪声). PM 收到的报告少了关键决策维度.
 
-**修法草案**: `lib/api.ts` 加 `cross_boundary?: boolean`, Phase4 `DimGroup` 加 chip 展示. 同时 stat row 加"cross_boundary 比例".
+**修法草案**: `web/lib/api.ts` 加 `cross_boundary?: boolean`, Phase4 `DimGroup` 加 chip 展示. 同时 stat row 加"cross_boundary 比例".
 
 ---
 
@@ -155,7 +155,7 @@
 **verdict**: REJECT — 设计意图与实现彻底脱节. Day3 设计的 7 类区分本意是 "false_positive 比 wiki_missing 对 rule_perf 衰减权重不同", 现在前端不发就全归 model_noise, **整个 EMA 反馈闭环吃错信号**.
 
 **修法草案** (P0):
-1. `lib/api.ts` `ItemDecision` 加 `reason_category?: "good_issue" | "false_positive" | "known_tradeoff" | "wiki_missing" | "rule_too_strict" | "impl_detail" | "model_noise"`
+1. `web/lib/api.ts` `ItemDecision` 加 `reason_category?: "good_issue" | "false_positive" | "known_tradeoff" | "wiki_missing" | "rule_too_strict" | "impl_detail" | "model_noise"`
 2. `Phase3ConfirmV8.tsx` reject 区域 textarea 上方加 7 类 radio/select (优先 select, 节省垂直空间)
 3. UX: PM 选 false_positive 自动标注 "建议升 noisy" 提示 (与 rule_lifecycle.py 联动)
 4. accept 默认 reason_category="good_issue", reject 默认必选
