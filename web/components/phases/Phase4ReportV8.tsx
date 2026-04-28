@@ -3,7 +3,7 @@
 /**
  * Phase 4 · v8 · 报告出口(工作文档气质)
  *
- * 数据契约和 v7 Phase4Report 保持一致(store + api + generateReport 零改动),
+ * 数据契约和 v7 Phase4Report 保持一致,优先使用后端确认返回的同源 markdown,
  * 只换 UI 层:
  * - 去封面纸片 / 意图散文 / colophon 署名
  * - 顶部元信息卡(meta 表格式)· 中段维度分组评审摘要(CommentThread 风格)
@@ -55,6 +55,9 @@ export function Phase4ReportV8() {
   const prdName = useReviewStore((s) => s.prdName);
   const reviewer = useReviewStore((s) => s.reviewer);
   const mode = useReviewStore((s) => s.mode);
+  const confirmedReportMarkdown = useReviewStore(
+    (s) => s.confirmedReportMarkdown,
+  );
   const resetReview = useReviewStore((s) => s.resetReview);
 
   const [showPreview, setShowPreview] = useState(false);
@@ -69,11 +72,12 @@ export function Phase4ReportV8() {
 
   const { markdown, stats } = useMemo(() => {
     if (!reviewResult) return { markdown: "", stats: null };
+    const fallbackMarkdown = generateReportMarkdown(reviewResult, decisions);
     return {
-      markdown: generateReportMarkdown(reviewResult, decisions),
+      markdown: confirmedReportMarkdown || fallbackMarkdown,
       stats: computeStats(reviewResult, decisions),
     };
-  }, [reviewResult, decisions]);
+  }, [reviewResult, decisions, confirmedReportMarkdown]);
 
   const itemsByDim = useMemo(() => {
     const map = new Map<RoleKey, ReviewItem[]>();

@@ -801,6 +801,8 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
 
     items = req.review_result.get("items", [])
     pending = len(items) - len(decisions)
+    from review.post_review_contract import build_confirm_report_markdown
+    report_markdown = build_confirm_report_markdown(req.review_result, decisions)
 
     # Step 3: P0.1 — 决策回流到 rule_performance_history
     # 这两个函数含同步文件 I/O (open/json.dump), 放线程池避免阻塞 event loop
@@ -848,4 +850,5 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
         "edited": edited,
         "pending": pending,
         "total": len(items),
+        "report_markdown": report_markdown,
     }

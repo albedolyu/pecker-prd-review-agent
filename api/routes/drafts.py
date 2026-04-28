@@ -45,6 +45,7 @@ class DraftPayload(BaseModel):
     user_notes: str = ""
     review_result: Optional[Dict[str, Any]] = None
     item_decisions: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    confirmed_report_markdown: str = ""
     workspace: str = ""
 
 

@@ -8,7 +8,7 @@
  *
  * 底部统计: 已决 / 待决 / Accept / Reject / Edit 数量。
  * 全部决策后点"生成报告",POST /api/review/confirm 把原样 reviewResult + decisions
- * 回传,后端验证 HMAC signature 后生成报告。
+ * 回传,后端验证 HMAC signature 后返回同源报告 markdown。
  */
 
 import { useMemo, useState } from "react";
@@ -48,6 +48,9 @@ export function Phase3Confirm() {
   const reviewResult = useReviewStore((s) => s.reviewResult);
   const decisions = useReviewStore((s) => s.decisions);
   const setDecision = useReviewStore((s) => s.setDecision);
+  const setConfirmedReportMarkdown = useReviewStore(
+    (s) => s.setConfirmedReportMarkdown,
+  );
   const setPhase = useReviewStore((s) => s.setPhase);
 
   // 归一化 item.dimension 到 RoleKey(后端可能写 "结构层" / "苍鹰补充" / "structure" 3 种)
@@ -82,8 +85,7 @@ export function Phase3Confirm() {
   }, [reviewResult, decisions]);
 
   // ========== 提交 ==========
-  // 后端 /api/review/confirm 只做 signature verify + 计数,不生成文件。
-  // 真正的 markdown 报告由 Phase 4 用 lib/generateReport.ts 前端合成。
+  // 后端 /api/review/confirm 负责 signature verify + 计数 + 同源报告 markdown。
   const confirmMutation = useMutation({
     mutationFn: () => {
       if (!reviewResult) throw new Error("缺少 reviewResult");
@@ -110,6 +112,7 @@ export function Phase3Confirm() {
           },
         })
         .catch(() => {});
+      setConfirmedReportMarkdown(resp.report_markdown ?? "");
       setPhase(4);
     },
     onError: (e: ApiError) => {

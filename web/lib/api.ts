@@ -140,6 +140,7 @@ export interface DraftPayload {
   user_notes: string;
   review_result: ReviewResult | null;
   item_decisions: Record<string, ItemDecision>;
+  confirmed_report_markdown: string;
   workspace: string;
 }
 
@@ -316,8 +317,8 @@ export interface ConfirmRequest {
 }
 
 /**
- * 对齐后端 /api/review/confirm — 只验证 signature + 返回统计,
- * 不生成文件。真正的 markdown 由前端 lib/generateReport.ts 合成。
+ * 对齐后端 /api/review/confirm — 验证 signature + 返回统计 + 后端同源报告 markdown。
+ * Phase 4 优先使用 report_markdown,客户端 lib/generateReport.ts 仅作为旧草稿 fallback。
  */
 export interface ConfirmResponse {
   status: string;
@@ -327,6 +328,7 @@ export interface ConfirmResponse {
   edited: number;
   pending: number;
   total: number;
+  report_markdown: string;
 }
 
 // precheck 和 SSE 一样直连后端,绕开 Next.js dev rewrite 的 30s timeout。

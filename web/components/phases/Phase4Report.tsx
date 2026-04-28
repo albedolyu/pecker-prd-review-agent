@@ -3,7 +3,7 @@
 /**
  * Phase 4 — 报告出口
  *
- * 3 条出口(都吃同一份客户端生成的 markdown):
+ * 3 条出口(优先使用后端确认返回的同源 markdown):
  * 1. 下载 .md 文件(浏览器 Blob,不走后端)
  * 2. 保存到 workspace/wiki/ (POST /api/reports/{ws}/save-to-wiki)
  * 3. 推送飞书群(POST /api/feishu/send)
@@ -52,6 +52,9 @@ export function Phase4Report() {
   const workspace = useReviewStore((s) => s.workspace);
   const prdName = useReviewStore((s) => s.prdName);
   const reviewer = useReviewStore((s) => s.reviewer);
+  const confirmedReportMarkdown = useReviewStore(
+    (s) => s.confirmedReportMarkdown,
+  );
   const setPhase = useReviewStore((s) => s.setPhase);
   const resetReview = useReviewStore((s) => s.resetReview);
 
@@ -69,11 +72,12 @@ export function Phase4Report() {
   // ========== 生成报告 markdown + 统计 ==========
   const { markdown, stats } = useMemo(() => {
     if (!reviewResult) return { markdown: "", stats: null };
+    const fallbackMarkdown = generateReportMarkdown(reviewResult, decisions);
     return {
-      markdown: generateReportMarkdown(reviewResult, decisions),
+      markdown: confirmedReportMarkdown || fallbackMarkdown,
       stats: computeStats(reviewResult, decisions),
     };
-  }, [reviewResult, decisions]);
+  }, [reviewResult, decisions, confirmedReportMarkdown]);
 
   // ========== 下载 ==========
   const handleDownload = () => {

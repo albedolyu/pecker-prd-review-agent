@@ -6,7 +6,7 @@
  * 数据契约和 v7 Phase3Confirm 一致:
  * - reviewResult.items(readonly)· 按 dimension 分组
  * - decisions 字典 · accept / reject / edit
- * - reviewApi.confirm + auditApi.log + setPhase(4)
+ * - reviewApi.confirm + auditApi.log + setConfirmedReportMarkdown + setPhase(4)
  *
  * v8 UI 规则:
  * - 顶部 stat bar(总计 / 待决 / ✓ / ✗ / ✎)+ dim tabs(含"全部")
@@ -81,6 +81,9 @@ export function Phase3ConfirmV8() {
   const reviewResult = useReviewStore((s) => s.reviewResult);
   const decisions = useReviewStore((s) => s.decisions);
   const setDecision = useReviewStore((s) => s.setDecision);
+  const setConfirmedReportMarkdown = useReviewStore(
+    (s) => s.setConfirmedReportMarkdown,
+  );
   const setPhase = useReviewStore((s) => s.setPhase);
 
   // ── 分组 & tabs ──
@@ -167,6 +170,7 @@ export function Phase3ConfirmV8() {
           },
         })
         .catch(() => {});
+      setConfirmedReportMarkdown(resp.report_markdown ?? "");
       setPhase(4);
     },
     onError: (e: ApiError) => {

@@ -72,6 +72,30 @@ class TestSignatureBindsWorkspaceAndReviewer:
 
 
 class TestReviewResultCreateBindsContext:
+    def test_create_normalizes_items_before_signing(self):
+        """ReviewResult.create 返回给 Web 的 items 同时带 issue/problem 等别名。"""
+        rr = ReviewResult.create(
+            reviewer="alice",
+            workspace="workspace-a",
+            prd_name="test.md",
+            mode="standard",
+            merged_items=[{
+                "id": "R-001",
+                "issue": "字段口径不清",
+                "evidence_content": "PRD 第 2 节",
+                "confidence_score": 0.9,
+            }],
+            workers=[],
+            usage={},
+        )
+
+        item = rr.items[0]
+        assert item["issue"] == "字段口径不清"
+        assert item["problem"] == "字段口径不清"
+        assert item["evidence"] == "PRD 第 2 节"
+        assert item["confidence"] == 0.9
+        verify_review_result(rr.model_dump())  # 签名覆盖归一化后的 items
+
     def test_create_signature_covers_workspace_reviewer(self):
         """ReviewResult.create 生成的 signature 同时覆盖 workspace + reviewer。"""
         rr = ReviewResult.create(

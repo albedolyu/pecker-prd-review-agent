@@ -233,3 +233,50 @@ def test_ground_truth_empty_decisions_does_nothing(tmp_workspace, tmp_path):
     # 没决策不应产生文件
     gt_files = list((tmp_path / "eval" / "ground_truth").glob("*.json"))
     assert len(gt_files) == 0
+
+
+@pytest.mark.asyncio
+async def test_confirm_review_returns_backend_report_markdown(tmp_workspace, monkeypatch):
+    """Web confirm 应返回后端生成的报告 markdown,供 Phase4 复用同源报告。"""
+    import os as _os
+    from api.models import ConfirmRequest, ReviewResult
+    from api.routes.review import confirm_review
+
+    _os.environ["PECKER_SIGNATURE_SECRET"] = "unit-test-signature-secret-32-chars"
+    ws, _ = tmp_workspace
+    rr = ReviewResult.create(
+        reviewer="alice",
+        workspace=ws,
+        prd_name="demo",
+        mode="standard",
+        merged_items=[{
+            "id": "R-001",
+            "rule_id": "V-05",
+            "dimension": "structure",
+            "issue": "缺少验收标准",
+            "suggestion": "补充可执行验收标准",
+            "severity": "must",
+        }],
+        workers=[],
+        usage={},
+    )
+    req = ConfirmRequest(
+        review_result=rr.model_dump(),
+        decisions={"R-001": {"action": "accept"}},
+    )
+
+    monkeypatch.setattr(
+        "api.routes.review.require_workspace_access", lambda *args, **kwargs: None,
+        raising=True,
+    )
+    monkeypatch.setattr(
+        "api.routes.review.get_workspace_dir", lambda name: name,
+        raising=True,
+    )
+
+    resp = await confirm_review(req, user={"reviewer": "alice"})
+
+    assert resp["status"] == "confirmed"
+    assert "report_markdown" in resp
+    assert "PRD 评审报告 - demo" in resp["report_markdown"]
+    assert "下游实现约定" in resp["report_markdown"]

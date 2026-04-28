@@ -57,6 +57,8 @@ interface ReviewStore extends UserInputState {
   reviewResult: ReviewResult | null;
   /** Phase 3 用户对每个 item 的决定 */
   decisions: Record<string, ItemDecision>;
+  /** Phase 3 confirm 返回的后端同源 markdown,Phase 4 优先使用 */
+  confirmedReportMarkdown: string;
   /** Phase 4 确认后后端生成的报告文件列表 */
   reportFilenames: ReadonlyArray<string>;
 
@@ -69,6 +71,7 @@ interface ReviewStore extends UserInputState {
   setDecision: (itemId: string, decision: ItemDecision) => void;
   removeDecision: (itemId: string) => void;
   clearDecisions: () => void;
+  setConfirmedReportMarkdown: (markdown: string) => void;
   setReportFilenames: (filenames: ReadonlyArray<string>) => void;
 
   /** 从后端返回的 Draft 恢复整个 wizard 状态 */
@@ -100,6 +103,7 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
   wikiPages: {},
   reviewResult: null,
   decisions: {},
+  confirmedReportMarkdown: "",
   reportFilenames: [],
 
   setPhase: (phase) => set({ phase }),
@@ -126,6 +130,9 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
 
   clearDecisions: () => set({ decisions: {} }),
 
+  setConfirmedReportMarkdown: (markdown) =>
+    set({ confirmedReportMarkdown: markdown }),
+
   setReportFilenames: (filenames) => set({ reportFilenames: filenames }),
 
   hydrateFromDraft: (draft) =>
@@ -138,6 +145,7 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
       rawMaterials: draft.raw_materials,
       reviewResult: draft.review_result,
       decisions: draft.item_decisions,
+      confirmedReportMarkdown: draft.confirmed_report_markdown ?? "",
     }),
 
   toDraftPayload: () => {
@@ -151,6 +159,7 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
       raw_materials: s.rawMaterials,
       review_result: s.reviewResult,
       item_decisions: s.decisions,
+      confirmed_report_markdown: s.confirmedReportMarkdown,
     };
   },
 
@@ -163,6 +172,7 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
       wikiPages: {},
       reviewResult: null,
       decisions: {},
+      confirmedReportMarkdown: "",
       reportFilenames: [],
     })),
 }));

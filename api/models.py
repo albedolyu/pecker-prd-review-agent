@@ -127,6 +127,9 @@ class ReviewResult(BaseModel):
     ) -> "ReviewResult":
         """后端评审完成后调用,自动生成 review_id + signature。"""
         import uuid
+        from review.post_review_contract import normalize_review_items
+
+        merged_items = normalize_review_items(merged_items)
         review_id = f"rev_{int(time.time())}_{uuid.uuid4().hex[:8]}"
         sig = compute_signature(review_id, workspace, reviewer, merged_items)
 
