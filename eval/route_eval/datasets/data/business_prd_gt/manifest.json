@@ -20,7 +20,7 @@
     },
     {
       "workspace": "workspace-fengniao-mediation",
-      "prd_path": "workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md",
+      "prd_path": "eval/route_eval/datasets/data/business_prd_gt/prd/fengniao-mediation-v1.md",
       "gt_path": null,
       "gt_source": "inline_minimal",
       "inline_ground_truth": [
@@ -76,7 +76,7 @@
     },
     {
       "workspace": "workspace-points-payment",
-      "prd_path": "workspace-points-payment/prd/积分抵扣支付-v2.md",
+      "prd_path": "eval/route_eval/datasets/data/business_prd_gt/prd/points-payment-v2.md",
       "gt_path": null,
       "gt_source": "inline_minimal",
       "inline_ground_truth": [
