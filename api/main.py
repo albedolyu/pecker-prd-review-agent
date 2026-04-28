@@ -21,7 +21,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -40,11 +40,13 @@ async def lifespan(app: FastAPI):
     errors = []
 
     use_cc = os.environ.get("USE_CLAUDE_CODE", "").strip().lower() in ("1", "true", "yes", "on")
+    claude_path = None
     if not use_cc:
         errors.append("USE_CLAUDE_CODE 必须设为 1(本项目只支持本地 Claude Code CLI)")
     else:
         import shutil
-        if not shutil.which("claude"):
+        claude_path = shutil.which("claude")
+        if not claude_path:
             errors.append("找不到 claude CLI,请先 `npm install -g @anthropic-ai/claude-code && claude login`")
 
     warnings = []
@@ -65,6 +67,22 @@ async def lifespan(app: FastAPI):
 
     _check_secret("PECKER_SIGNATURE_SECRET")
     _check_secret("PECKER_JWT_SECRET")
+
+    # claude CLI 登录态自检: 不阻塞启动,但写入 app.state 让 /api/health 暴露,
+    # 也在控制台 warning 级提醒。token 续期走 `claude setup-token` 长效模式。
+    # Windows 下 claude 是 .cmd shim, 必须用 shutil.which 解析后的完整路径。
+    app.state.claude_auth = "unknown"
+    if claude_path:
+        import subprocess
+        try:
+            r = subprocess.run([claude_path, "auth", "status"], capture_output=True, text=True, timeout=10)
+            if r.returncode == 0:
+                app.state.claude_auth = "ok"
+            else:
+                app.state.claude_auth = "expired"
+                warnings.append("Claude CLI 未登录或凭证过期 — 终端跑 `claude setup-token` 续期(长效 token)")
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
 
     if errors:
         print("\n[FastAPI 启动失败]", file=sys.stderr)
@@ -113,9 +131,14 @@ app.add_middleware(
 
 
 @app.get("/api/health")
-async def health():
-    """Liveness probe — 仅验证 FastAPI 在跑,不校验 Claude CLI 或 env"""
-    return {"status": "ok", "service": "pecker-api", "version": "2.0.0"}
+async def health(request: Request):
+    """Liveness probe — 附带 Claude CLI 登录态(启动时一次性自检结果)"""
+    return {
+        "status": "ok",
+        "service": "pecker-api",
+        "version": "2.0.0",
+        "claude_auth": getattr(request.app.state, "claude_auth", "unknown"),
+    }
 
 
 @app.get("/api/")
