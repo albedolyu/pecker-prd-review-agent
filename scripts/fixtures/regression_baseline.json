@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "timestamp": "2026-04-29T16:39:21",
+  "timestamp": "2026-04-29T17:41:52",
   "rules": {
     "V-02": {
       "dimension": "structure",
@@ -731,14 +731,139 @@
         "worker_finding_count": 3,
         "matched_finding": null
       }
+    },
+    "RC-002": {
+      "dimension": "structure",
+      "status": "ok",
+      "TP": 1,
+      "FP": 0,
+      "FN": 0,
+      "TN": 1,
+      "precision": 1.0,
+      "recall": 1.0,
+      "positive_case": {
+        "reported": true,
+        "evidence_aligned": true,
+        "error": null,
+        "worker_finding_count": 6,
+        "matched_finding": {
+          "rule_id": "RC-002",
+          "issue": "只有一句背景，没有说明用户场景、目标和业务边界。",
+          "location": "全文",
+          "severity": "must"
+        }
+      },
+      "negative_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": null,
+        "worker_finding_count": 5,
+        "matched_finding": null
+      }
+    },
+    "RC-003": {
+      "dimension": "structure",
+      "status": "ok",
+      "TP": 1,
+      "FP": 1,
+      "FN": 0,
+      "TN": 0,
+      "precision": 0.5,
+      "recall": 1.0,
+      "positive_case": {
+        "reported": true,
+        "evidence_aligned": true,
+        "error": null,
+        "worker_finding_count": 13,
+        "matched_finding": {
+          "rule_id": "RC-003",
+          "issue": "缺数据契约章节, 接口字段、来源和约束都没写。",
+          "location": "全文",
+          "severity": "must"
+        }
+      },
+      "negative_case": {
+        "reported": true,
+        "evidence_aligned": null,
+        "error": null,
+        "worker_finding_count": 5,
+        "matched_finding": {
+          "rule_id": "RC-003",
+          "issue": "数据契约只有数据源和半截 DDL，前端字段怎么取数没写。",
+          "location": "2.0 数据源定义、2.1 物理表定义",
+          "severity": "must"
+        }
+      }
+    },
+    "RC-011": {
+      "dimension": "ai_coding",
+      "status": "ok",
+      "TP": 1,
+      "FP": 1,
+      "FN": 0,
+      "TN": 0,
+      "precision": 0.5,
+      "recall": 1.0,
+      "positive_case": {
+        "reported": true,
+        "evidence_aligned": true,
+        "error": null,
+        "worker_finding_count": 4,
+        "matched_finding": {
+          "rule_id": "RC-011",
+          "issue": "接口只写“无入参、出参、错误码”，前后端没法对接。",
+          "location": "全文第 3 行",
+          "severity": "must"
+        }
+      },
+      "negative_case": {
+        "reported": true,
+        "evidence_aligned": null,
+        "error": null,
+        "worker_finding_count": 4,
+        "matched_finding": {
+          "rule_id": "RC-011",
+          "issue": "出参字段只列名字, taxid、stype、taxorg、sdate、edate 类型和含义都没写。",
+          "location": "接口 GET /api/v1/tax-state/list",
+          "severity": "must"
+        }
+      }
+    },
+    "RC-012": {
+      "dimension": "quality",
+      "status": "ok",
+      "TP": 1,
+      "FP": 0,
+      "FN": 0,
+      "TN": 1,
+      "precision": 1.0,
+      "recall": 1.0,
+      "positive_case": {
+        "reported": true,
+        "evidence_aligned": true,
+        "error": null,
+        "worker_finding_count": 1,
+        "matched_finding": {
+          "rule_id": "RC-012",
+          "issue": "这里只说少了默认按哪列排序、升降序和 NULL 怎么排，列表排序做不了。",
+          "location": "第 2.1 节 Web UI",
+          "severity": "must"
+        }
+      },
+      "negative_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": null,
+        "worker_finding_count": 1,
+        "matched_finding": null
+      }
     }
   },
   "summary": {
-    "rule_count": 25,
-    "ok_count": 24,
-    "error_count": 1,
-    "macro_precision": 0.675,
-    "macro_recall": 0.8,
-    "macro_note": "macro 仅基于 status=ok 的规则, error 规则被排除以防污染"
+    "macro_precision": 0.6875,
+    "macro_recall": 0.8333,
+    "rules_total": 29,
+    "rules_ok": 28,
+    "rules_error": 1
   }
 }

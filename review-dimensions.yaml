@@ -122,6 +122,14 @@ dimensions:
         enabled: true
         owner: structure
         status: experimental    # 2026-04-27 风鸟领域规则第一波 — 跨端"复用 Web 端"顽固痼疾
+      - rule_id: "RC-002"
+        name: "业务上下文章节存在"
+        enabled: true
+        owner: structure        # 2026-04-29 SSOT 审计激活: 需求来源/核心价值/目标用户三要素是 PRD 灵魂, 之前漏注册
+      - rule_id: "RC-003"
+        name: "数据契约章节存在"
+        enabled: true
+        owner: structure        # 2026-04-29 SSOT 审计激活: 章节存在性 vs RC-009/013 内容正确性, 角度不同非重复
 
   quality:
     name: "质量层"
@@ -204,6 +212,10 @@ dimensions:
         name: "异常处理完整性"
         enabled: true
         owner: quality
+      - rule_id: "RC-012"
+        name: "排序规则可执行"
+        enabled: true
+        owner: quality          # 2026-04-29 SSOT 审计激活: 排序键/顺序/优先级/NULL 处理是质量细节
 
   ai_coding:
     name: "AI Coding 友好度"
@@ -270,6 +282,10 @@ dimensions:
         enabled: true
         owner: ai_coding
         status: experimental    # 2026-04-27 风鸟领域规则第一波 — 鉴权 TBD 顽固痼疾, R-008 实测
+      - rule_id: "RC-011"
+        name: "接口入参与出参定义"
+        enabled: true
+        owner: ai_coding        # 2026-04-29 SSOT 审计激活: 接口契约 must, 缺它对 AI Coding 致命无替代
 
   data_quality:
     name: "数据质量"

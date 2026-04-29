@@ -391,29 +391,8 @@ rules:
   # AI Coding (渡鸦) — RC-001 ~ RC-008 + RC-013 ~ RC-015 + FN-03
   # =========================================================
 
-  - id: RC-001
-    name: PRD 模板版本声明
-    severity: should
-    description: PRD 须在文档顶部声明遵循的模板版本 (如 v3.1), 让 reviewer 知道按哪份 schema 校验。
-    impact_score: 0.3
-    positive_example:
-      source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
-      section: 顶部 (无模板版本)
-      snippet: |
-        # 【新增】风鸟增加诉前调解数据&从立案信息中去除诉前调解数据
-
-        ## 一、需求背景
-      why_fails: 文档顶部没有"基于模板 vX.X"声明, reviewer 无法知道作者按哪个版本写, 后续模板升级也难以平滑迁移。
-    negative_example:
-      source_file: workspace-纳税人资质/prd/纳税人资质需求文档-v1.0.md
-      section: 顶部 / 文档说明
-      snippet: |
-        # 纳税人资质需求文档 (v1.0)
-
-        > **文档说明**：本文档遵循 Claude Code 驱动型研发需求模板 v3.1 规范编写
-      why_passes: 显式声明模板版本 v3.1, 与 PRD 自身版本号区分, 模板 schema 升级有据可依。
-    fire_when: PRD 顶部找不到"基于模板 vX.X"或"遵循 [模板] 规范"等声明。
-    dont_fire_when: 模板版本已声明, 或 PRD 是非标准化的临时方案文档。
+  # 2026-04-29 RC-001 退役: 价值低 (reviewer 凭经验判断不靠版本号声明) + 实践中很少团队真用模板版本号
+  # 历史保留在 git log, 想恢复看 commit 6271610^
 
   - id: RC-002
     name: 业务上下文章节存在
@@ -728,30 +707,8 @@ rules:
     fire_when: PRD 含伪代码/SQL/算法块，且其中至少一个字段在物理表 DDL/接口出入参表中找不到对应。
     dont_fire_when: 字段在 DDL 找得到，或属于业务变量名（如 industry_options、level1）非数据字段。
 
-  - id: RC-014
-    name: 筛选逻辑追溯到 WHERE
-    severity: must
-    description: 筛选/查询逻辑从用户操作追溯到 SQL WHERE 条件, 中间无断点 (与 RC-008 互补但角度不同, RC-008 强调过程, RC-014 强调 SQL 落点)。
-    impact_score: 0.65
-    positive_example:
-      source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
-      section: 4.1 司法案件归类 / 筛选项
-      snippet: |
-        企业主页诉前调解列表页支持按"案由""案件状态""调解结果"筛选,
-        筛选项与立案信息保持一致。
-        (无: SQL 示例 WHERE category = ? AND status = ? AND result = ?)
-      why_fails: 仅说"筛选项保持一致", 未给最终 SQL WHERE 条件示例, 开发凭文字描述写 SQL 不可避免出错。
-    negative_example:
-      source_file: workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md
-      section: 1.7 筛选规则 / 案由
-      snippet: |
-        筛选项: 案由
-        SQL: WHERE category_id IN (用户选择的多个 category_id)
-        AND status_id = 用户选择的状态
-        AND data_status = 0
-      why_passes: 用户筛选直接对应 SQL WHERE 子句, 含枚举值 + 默认过滤, 开发拿来即用。
-    fire_when: PRD 含筛选功能但全文找不到 SQL WHERE 示例 / 等价的字段比较伪代码。
-    dont_fire_when: SQL WHERE 已显式给出, 或 PRD 不含数据筛选功能。
+  # 2026-04-29 RC-014 退役: 与 RC-008 (筛选追溯完整) 内容重复, review-dimensions.yaml
+  # 2026-04-26 sprint Day3 已删 owner. SQL WHERE 落点的检查由 RC-008 + RC-013 (伪代码字段可追溯) 共同覆盖.
 
   - id: RC-015
     name: 非常规逻辑有示例
