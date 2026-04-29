@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "timestamp": "2026-04-29T17:41:52",
+  "timestamp": "2026-04-29T18:13:20",
   "rules": {
     "V-02": {
       "dimension": "structure",
@@ -765,68 +765,58 @@
       "dimension": "structure",
       "status": "ok",
       "TP": 1,
-      "FP": 1,
+      "FP": 0,
       "FN": 0,
-      "TN": 0,
-      "precision": 0.5,
+      "TN": 1,
+      "precision": 1.0,
       "recall": 1.0,
       "positive_case": {
         "reported": true,
         "evidence_aligned": true,
         "error": null,
-        "worker_finding_count": 13,
+        "worker_finding_count": 5,
         "matched_finding": {
           "rule_id": "RC-003",
-          "issue": "缺数据契约章节, 接口字段、来源和约束都没写。",
+          "issue": "全文没有数据契约章节，接口、字段、数据来源都没法定。",
           "location": "全文",
           "severity": "must"
         }
       },
       "negative_case": {
-        "reported": true,
+        "reported": false,
         "evidence_aligned": null,
         "error": null,
-        "worker_finding_count": 5,
-        "matched_finding": {
-          "rule_id": "RC-003",
-          "issue": "数据契约只有数据源和半截 DDL，前端字段怎么取数没写。",
-          "location": "2.0 数据源定义、2.1 物理表定义",
-          "severity": "must"
-        }
+        "worker_finding_count": 3,
+        "matched_finding": null
       }
     },
     "RC-011": {
       "dimension": "ai_coding",
       "status": "ok",
       "TP": 1,
-      "FP": 1,
+      "FP": 0,
       "FN": 0,
-      "TN": 0,
-      "precision": 0.5,
+      "TN": 1,
+      "precision": 1.0,
       "recall": 1.0,
       "positive_case": {
         "reported": true,
         "evidence_aligned": true,
         "error": null,
-        "worker_finding_count": 4,
+        "worker_finding_count": 5,
         "matched_finding": {
           "rule_id": "RC-011",
-          "issue": "接口只写“无入参、出参、错误码”，前后端没法对接。",
-          "location": "全文第 3 行",
+          "issue": "全文没有接口入参出参，前后端不知道传什么、返回什么。",
+          "location": "全文",
           "severity": "must"
         }
       },
       "negative_case": {
-        "reported": true,
+        "reported": false,
         "evidence_aligned": null,
         "error": null,
-        "worker_finding_count": 4,
-        "matched_finding": {
-          "rule_id": "RC-011",
-          "issue": "出参字段只列名字, taxid、stype、taxorg、sdate、edate 类型和含义都没写。",
-          "location": "接口 GET /api/v1/tax-state/list",
-          "severity": "must"
-        }
+        "worker_finding_count": 3,
+        "matched_finding": null
       }
     },
     "RC-012": {
@@ -860,7 +850,7 @@
     }
   },
   "summary": {
-    "macro_precision": 0.6875,
+    "macro_precision": 0.7292,
     "macro_recall": 0.8333,
     "rules_total": 29,
     "rules_ok": 28,

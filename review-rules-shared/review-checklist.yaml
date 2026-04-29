@@ -427,7 +427,10 @@ rules:
   - id: RC-003
     name: 数据契约章节存在
     severity: must
-    description: 涉及数据展示的 PRD 须含数据契约章节, 包含数据源 / 物理表 / 字段映射三部分。
+    description: |
+      涉及数据展示的 PRD 须**有独立的数据契约章节** (含数据源声明 + 物理表/DDL 中至少 1 项).
+      本规则只检查"章节是否存在", 不检查"章节内容是否完整完美" (那是 RC-009 字段映射一致性
+      / RC-013 伪代码字段可追溯 的职责).
     impact_score: 0.7
     positive_example:
       source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
@@ -437,20 +440,26 @@ rules:
         ### 2.1 Web UI
         字段展示、筛选项、搜索项、导出，全都和立案信息UI保持一致
 
-        (全文无: 数据源定义, 物理表 DDL, 字段映射表)
-      why_fails: 引用了 ds_risk_court_mediation 表但没给 DDL / 数据源地址 / 字段映射, 开发无法对接数据库。
+        (全文无: 数据契约章节、数据源定义、任何物理表/DDL)
+      why_fails: 全文找不到独立的数据契约/数据建模章节, 引用了 ds_risk_court_mediation 表但**整个章节级缺失**, 开发无法对接数据库。
     negative_example:
       source_file: workspace-产品召回/prd/产品召回需求文档-v1.0-原始.md
       section: 2. 数据契约与建模
       snippet: |
+        ## 2. 数据契约与建模
+
         ### 2.0 数据源定义
         | ds_risk | MySQL | 106.75.3.103 | 12572 | ds_risk | 存储产品召回主表 |
 
         ### 2.1 物理表定义
         CREATE TABLE ds_risk_recall ( id bigint NOT NULL, title varchar(500), ... )
-      why_passes: 数据源 + 物理表 + 字段映射三部分齐全, 开发可直接对接。
-    fire_when: PRD 涉及数据展示但缺数据源/物理表/字段映射任一项。
-    dont_fire_when: 三部分齐全, 或 PRD 是纯 UI / 流程类不涉数据。
+      why_passes: 已有独立"数据契约与建模"章节 + 数据源声明 + 物理表 DDL, 章节级骨架到位即 pass (字段映射缺失是 RC-009 的职责)。
+    fire_when: |
+      PRD 涉及数据展示但**全文找不到独立的"数据契约 / 数据建模 / Data Model"章节** (即章节级 0,
+      不只是某项内容缺失). 检查方法: 看 PRD 大纲是否有独立 H1/H2 章节标题含"数据契约/数据建模/数据源"等字样.
+    dont_fire_when: |
+      已有独立的数据契约/建模章节 (即使章节内只有数据源、只有 DDL、只缺字段映射), 也不报本规则 —
+      内容完整性问题归 RC-009 (字段映射一致性) / RC-013 (伪代码字段可追溯) 接管. 或 PRD 纯 UI / 流程不涉数据.
 
   - id: RC-004
     name: 技术约定节存在
@@ -768,28 +777,52 @@ rules:
     dont_fire_when: 鉴权显式 Bearer JWT 不带 TBD, 路径以 /api/v1/<module>/ 开头。
 
   - id: RC-011
-    name: 接口入参与出参定义
+    name: 接口路径与字段名存在
     severity: must
-    description: 涉及接口的 PRD 须给出每个接口的入参 (含类型/必填/枚举值) 和出参结构。
+    description: |
+      涉及接口的 PRD 必须给出**接口路径 + 入参字段名清单 + 出参字段名清单**三件套。
+      本规则**仅且仅**检查这三件是否存在, 不检查任何其他: 类型/必填/枚举值/错误码/分页边界/校验规则
+      都不归本规则管, 即使全部缺失只要三件套齐全就 PASS。其他细节由 RC-013 (伪代码字段可追溯) 接管。
     impact_score: 0.65
     positive_example:
       source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
-      section: 全文 (无接口入参/出参定义)
+      section: 全文 (无接口规范章节)
       snippet: |
         诉前调解数据直接读取诉前调解表。
         立案信息仍读取ds_risk_court_lian表但要去除诉前调解数据。
-        (无: GET /api/v1/court/mediation 入参, 出参字段, 错误码)
-      why_fails: 隐含至少 2 个接口 (列表 / 详情) 但 PRD 完全没给入参/出参契约, 前后端联调全靠口头对齐。
+        (全文找不到任何 GET/POST/接口规范/API 章节)
+      why_fails: 隐含至少 2 个接口 (列表 / 详情) 但 PRD **章节级完全没接口规范**, 前后端联调全靠口头对齐。
     negative_example:
-      source_file: workspace-纳税人资质/prd/纳税人资质需求文档-v1.0.md
-      section: 5. 接口规范
+      source_file: workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md
+      section: 2.5 API 接口规范 / 2.5.1 送达公告列表
       snippet: |
-        GET /api/v1/tax-state/list
-        入参: entid (必填, string), pageNum (int, default 1), pageSize (int, default 20)
-        出参: { total: int, list: [{ taxid, stype, taxorg, sdate, edate }], code: 0 }
-      why_passes: 接口路径 + 入参类型/默认值 + 出参结构 + 错误码全有, 前后端可独立开发。
-    fire_when: PRD 提及 ≥1 个接口但全文找不到入参类型/必填/出参结构定义。
-    dont_fire_when: 入参出参定义齐全, 或 PRD 不涉及接口 (纯数据迁移/配置类)。
+        ### 2.5 API 接口规范
+
+        > 接口鉴权统一使用 `Authorization: Bearer {token}`,以下接口均需鉴权.
+
+        #### 2.5.1 送达公告列表
+
+        GET /api/v1/labour-arbitration/delivery/list
+
+        入参:
+          entid            long    必填  企业ID
+          page             int     必填  页码,从1开始
+          page_size        int     必填  每页条数,默认20,可选50/100
+          arbitration_org  string  选填  仲裁机构筛选(机构名称)
+          keyword          string  选填  搜索关键词(模糊匹配案号/当事人/仲裁机构/案由)
+          sort_order       string  选填  排序方向: desc(默认)/asc,按publish_date排序
+
+        出参:
+          total            int     总记录数
+          list[]:
+            table_id          long    主表ID
+            case_code         string  案号
+            applicants        string  申请人(多人顿号分隔,已脱敏)
+            arbitration_org   string  仲裁机构(空值返回"-")
+            publish_date      string  发布日期 yyyy-MM-dd
+      why_passes: 独立"API 接口规范"章节 + 接口路径 + 完整入参出参 (字段名 + 类型 + 必填 + 含义), 接口契约完整, 前后端可独立开发。
+    fire_when: PRD 涉及接口, 但**接口路径 + 入参字段名 + 出参字段名**三件套中有任一完全没有。
+    dont_fire_when: 三件套都有 (即使缺类型/必填/枚举/错误码/分页边界/校验等任何细节, 都不报本规则, 那些归 RC-013); 或 PRD 不涉及接口。
 
   - id: RC-012
     name: 排序规则可执行
