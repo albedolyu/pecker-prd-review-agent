@@ -1,0 +1,442 @@
+[
+  {
+    "id": "r_aec06130",
+    "source_id": "e_83532634",
+    "target_id": "e_1826008c",
+    "relation_type": "依赖",
+    "description": "决策引用该表结构规范",
+    "weight": 5
+  },
+  {
+    "id": "r_7c7d94de",
+    "source_id": "e_83532634",
+    "target_id": "e_7e1b8ee2",
+    "relation_type": "涉及",
+    "description": "决策涉及产品召回概念",
+    "weight": 3
+  },
+  {
+    "id": "r_38477b9f",
+    "source_id": "e_83532634",
+    "target_id": "e_9e2f286a",
+    "relation_type": "涉及",
+    "description": "决策讨论ds_risk_recall的字段",
+    "weight": 6
+  },
+  {
+    "id": "r_9d973aa1",
+    "source_id": "e_83532634",
+    "target_id": "e_a2503096",
+    "relation_type": "定义",
+    "description": "决策定义该字段的过滤规则",
+    "weight": 7
+  },
+  {
+    "id": "r_c7eb7b18",
+    "source_id": "e_9e2f286a",
+    "target_id": "e_a2503096",
+    "relation_type": "包含字段",
+    "description": "主表的riskbird_status字段",
+    "weight": 8
+  },
+  {
+    "id": "r_382df646",
+    "source_id": "e_9e2f286a",
+    "target_id": "e_431face8",
+    "relation_type": "包含字段",
+    "description": "主表的data_status字段",
+    "weight": 8
+  },
+  {
+    "id": "r_b1a2cec6",
+    "source_id": "e_a2503096",
+    "target_id": "e_431face8",
+    "relation_type": "AND过滤",
+    "description": "过滤时同时满足两者为0",
+    "weight": 5
+  },
+  {
+    "id": "r_2802606c",
+    "source_id": "e_7e1b8ee2",
+    "target_id": "e_9e2f286a",
+    "relation_type": "引用",
+    "description": "页面引用该表作为核心字段来源",
+    "weight": 5
+  },
+  {
+    "id": "r_5e0c8a51",
+    "source_id": "e_9e2f286a",
+    "target_id": "e_92485ec5",
+    "relation_type": "包含字段",
+    "description": "产品召回表包含该字段",
+    "weight": 8
+  },
+  {
+    "id": "r_286694d5",
+    "source_id": "e_9e2f286a",
+    "target_id": "e_218ad72f",
+    "relation_type": "包含字段",
+    "description": "产品召回表包含该字段",
+    "weight": 8
+  },
+  {
+    "id": "r_62a7e01d",
+    "source_id": "e_9e2f286a",
+    "target_id": "e_68977ed5",
+    "relation_type": "包含字段",
+    "description": "表包含召回产品名称字段",
+    "weight": 8
+  },
+  {
+    "id": "r_dc1d0178",
+    "source_id": "e_9e2f286a",
+    "target_id": "e_6d2cfe92",
+    "relation_type": "包含字段",
+    "description": "产品召回表包含该字段",
+    "weight": 8
+  },
+  {
+    "id": "r_cf2d24c6",
+    "source_id": "e_9e2f286a",
+    "target_id": "e_0eea12cc",
+    "relation_type": "包含字段",
+    "description": "产品召回表包含该字段",
+    "weight": 8
+  },
+  {
+    "id": "r_704e88f6",
+    "source_id": "e_9e2f286a",
+    "target_id": "e_9db38995",
+    "relation_type": "包含字段",
+    "description": "召回公告的正文存储列",
+    "weight": 8
+  },
+  {
+    "id": "r_bc801b51",
+    "source_id": "e_9e2f286a",
+    "target_id": "e_56c96458",
+    "relation_type": "包含字段",
+    "description": "表包含信息来源字段",
+    "weight": 8
+  },
+  {
+    "id": "r_9c98269f",
+    "source_id": "e_9e2f286a",
+    "target_id": "e_902ed4e3",
+    "relation_type": "包含字段",
+    "description": "表包含公告标题字段",
+    "weight": 8
+  },
+  {
+    "id": "r_52f494b6",
+    "source_id": "e_7e1b8ee2",
+    "target_id": "e_1826008c",
+    "relation_type": "引用",
+    "description": "页面引用该规范文档",
+    "weight": 5
+  },
+  {
+    "id": "r_5b8f7be7",
+    "source_id": "e_7e1b8ee2",
+    "target_id": "e_27a93f8d",
+    "relation_type": "引用",
+    "description": "页面引用该业务场景页面",
+    "weight": 5
+  },
+  {
+    "id": "r_f1d3fd7b",
+    "source_id": "e_7e1b8ee2",
+    "target_id": "e_d6ea967f",
+    "relation_type": "引用",
+    "description": "页面引用该决策记录",
+    "weight": 5
+  },
+  {
+    "id": "r_b763658a",
+    "source_id": "e_7e1b8ee2",
+    "target_id": "e_83532634",
+    "relation_type": "引用",
+    "description": "页面引用该待确认决策",
+    "weight": 5
+  },
+  {
+    "id": "r_b038493a",
+    "source_id": "e_d6ea967f",
+    "target_id": "e_7e1b8ee2",
+    "relation_type": "引用",
+    "description": "评审中提及该概念",
+    "weight": 3
+  },
+  {
+    "id": "r_8a012aeb",
+    "source_id": "e_d6ea967f",
+    "target_id": "e_1826008c",
+    "relation_type": "引用",
+    "description": "参考表结构规范",
+    "weight": 3
+  },
+  {
+    "id": "r_8a7c3d49",
+    "source_id": "e_d6ea967f",
+    "target_id": "e_83532634",
+    "relation_type": "引用",
+    "description": "关联待确认规则",
+    "weight": 3
+  },
+  {
+    "id": "r_c6511317",
+    "source_id": "e_d6ea967f",
+    "target_id": "e_27a93f8d",
+    "relation_type": "引用",
+    "description": "提到列表页场景",
+    "weight": 3
+  },
+  {
+    "id": "r_51eb87b8",
+    "source_id": "e_1826008c",
+    "target_id": "e_9e2f286a",
+    "relation_type": "关联",
+    "description": "定义该表的结构约束",
+    "weight": 5
+  },
+  {
+    "id": "r_4a117a6e",
+    "source_id": "e_27a93f8d",
+    "target_id": "e_7e1b8ee2",
+    "relation_type": "引用",
+    "description": "场景页面引用业务概念",
+    "weight": 5
+  },
+  {
+    "id": "r_02af3c5e",
+    "source_id": "e_27a93f8d",
+    "target_id": "e_1826008c",
+    "relation_type": "依赖",
+    "description": "页面展示的数据表结构由该约束文档定义",
+    "weight": 8
+  },
+  {
+    "id": "r_3110c16e",
+    "source_id": "e_27a93f8d",
+    "target_id": "e_d6ea967f",
+    "relation_type": "引用",
+    "description": "场景页面引用评审发现",
+    "weight": 5
+  },
+  {
+    "id": "r_a3133d4c",
+    "source_id": "e_1826008c",
+    "target_id": "e_9e2f286a",
+    "relation_type": "定义表",
+    "description": "约束文档定义数据表结构",
+    "weight": 9
+  },
+  {
+    "id": "r_ce5cdf6b",
+    "source_id": "e_9e2f286a",
+    "target_id": "e_deab6c2d",
+    "relation_type": "包含字段",
+    "description": "产品召回表包含该字段",
+    "weight": 8
+  },
+  {
+    "id": "r_e4551ca5",
+    "source_id": "e_27a93f8d",
+    "target_id": "e_7e1b8ee2",
+    "relation_type": "引用概念",
+    "description": "页面引用概念页面以定义业务语义",
+    "weight": 5
+  },
+  {
+    "id": "r_3900e7bb",
+    "source_id": "e_27a93f8d",
+    "target_id": "e_d6ea967f",
+    "relation_type": "参考",
+    "description": "页面过滤条件字段来源参考该决策文档",
+    "weight": 5
+  },
+  {
+    "id": "r_84665709",
+    "source_id": "e_27a93f8d",
+    "target_id": "e_9e2f286a",
+    "relation_type": "使用表",
+    "description": "页面展示字段来自该数据表",
+    "weight": 6
+  },
+  {
+    "id": "r_21fd22ff",
+    "source_id": "e_1826008c",
+    "target_id": "e_9e2f286a",
+    "relation_type": "约束",
+    "description": "规范约束表结构",
+    "weight": 8
+  },
+  {
+    "id": "r_022693bc",
+    "source_id": "e_9e2f286a",
+    "target_id": "e_cee2defe",
+    "relation_type": "包含字段",
+    "description": "主键列",
+    "weight": 8
+  },
+  {
+    "id": "r_3c496e36",
+    "source_id": "e_9e2f286a",
+    "target_id": "e_2237a14c",
+    "relation_type": "包含字段",
+    "description": "企业名称列",
+    "weight": 7
+  },
+  {
+    "id": "r_11dda20d",
+    "source_id": "e_9e2f286a",
+    "target_id": "e_1fb35a24",
+    "relation_type": "包含字段",
+    "description": "召回产品名称列",
+    "weight": 8
+  },
+  {
+    "id": "r_75ea84c8",
+    "source_id": "e_1826008c",
+    "target_id": "e_7e1b8ee2",
+    "relation_type": "引用",
+    "description": "文档中引用概念页",
+    "weight": 5
+  },
+  {
+    "id": "r_b6754cc3",
+    "source_id": "e_1826008c",
+    "target_id": "e_d6ea967f",
+    "relation_type": "引用",
+    "description": "文档中引用决策页",
+    "weight": 5
+  },
+  {
+    "id": "r_88477ffb",
+    "source_id": "e_1826008c",
+    "target_id": "e_27a93f8d",
+    "relation_type": "引用",
+    "description": "文档中引用场景页",
+    "weight": 5
+  },
+  {
+    "id": "r_3ab8f5cf",
+    "source_id": "e_819c3c30",
+    "target_id": "e_d6ea967f",
+    "relation_type": "引用",
+    "description": "引用首次评审发现页面",
+    "weight": 5
+  },
+  {
+    "id": "r_1260bdf8",
+    "source_id": "e_819c3c30",
+    "target_id": "e_83532634",
+    "relation_type": "引用",
+    "description": "引用过滤规则决策页面",
+    "weight": 5
+  },
+  {
+    "id": "r_839b333b",
+    "source_id": "e_819c3c30",
+    "target_id": "e_1826008c",
+    "relation_type": "引用",
+    "description": "引用表结构约束页面",
+    "weight": 5
+  },
+  {
+    "id": "r_19fe8fd3",
+    "source_id": "e_819c3c30",
+    "target_id": "e_c12b9cb0",
+    "relation_type": "引用",
+    "description": "引用业务场景页面",
+    "weight": 5
+  },
+  {
+    "id": "r_9fa156f9",
+    "source_id": "e_1826008c",
+    "target_id": "e_9e2f286a",
+    "relation_type": "定义",
+    "description": "定义数据表结构",
+    "weight": 8
+  },
+  {
+    "id": "r_df9fc92e",
+    "source_id": "e_9e2f286a",
+    "target_id": "e_87a71f5a",
+    "relation_type": "包含字段",
+    "description": "产品字段",
+    "weight": 8
+  },
+  {
+    "id": "r_edd8ec1a",
+    "source_id": "e_a2503096",
+    "target_id": "e_431face8",
+    "relation_type": "组合过滤",
+    "description": "AND/OR组合过滤条件",
+    "weight": 6
+  },
+  {
+    "id": "r_aa28b828",
+    "source_id": "e_c12b9cb0",
+    "target_id": "e_7e1b8ee2",
+    "relation_type": "引用概念",
+    "description": "场景定义中引用召回概念",
+    "weight": 5
+  },
+  {
+    "id": "r_2a06fdac",
+    "source_id": "e_c12b9cb0",
+    "target_id": "e_1826008c",
+    "relation_type": "依赖规范",
+    "description": "场景依赖表结构约束",
+    "weight": 5
+  },
+  {
+    "id": "r_98bd1f29",
+    "source_id": "e_c12b9cb0",
+    "target_id": "e_819c3c30",
+    "relation_type": "依赖决策",
+    "description": "场景参考评审决策",
+    "weight": 5
+  },
+  {
+    "id": "r_b761129a",
+    "source_id": "e_c12b9cb0",
+    "target_id": "e_7e1b8ee2",
+    "relation_type": "引用",
+    "description": "页面引用了业务概念页",
+    "weight": 5
+  },
+  {
+    "id": "r_00a1a1c0",
+    "source_id": "e_c12b9cb0",
+    "target_id": "e_1826008c",
+    "relation_type": "引用",
+    "description": "页面引用了表结构约束页",
+    "weight": 5
+  },
+  {
+    "id": "r_95435b46",
+    "source_id": "e_c12b9cb0",
+    "target_id": "e_819c3c30",
+    "relation_type": "引用",
+    "description": "页面引用了决策页",
+    "weight": 5
+  },
+  {
+    "id": "r_ff3fe43b",
+    "source_id": "e_c12b9cb0",
+    "target_id": "e_431face8",
+    "relation_type": "过滤依赖",
+    "description": "列表页使用data_status=0过滤数据",
+    "weight": 7
+  },
+  {
+    "id": "r_765ebbe5",
+    "source_id": "e_c12b9cb0",
+    "target_id": "e_a2503096",
+    "relation_type": "过滤依赖",
+    "description": "风味端使用riskbird_status=0过滤数据",
+    "weight": 5
+  }
+]

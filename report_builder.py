@@ -1,6 +1,10 @@
 """
 报告可执行化 -- 生成按 PRD 章节分组的开发任务报告
 输出开发人员直接可操作的改进清单，每条附带精确位置和改写建议
+
+2026-04-28 重构 (v2 路线图步骤 2+3):
+- 用 review.finding_schema 的 InternalFinding ↔ RenderedFinding 双 schema
+- profile (chill/strict) 决定哪些 severity 渲染, chill 隐藏 could
 """
 
 import os
@@ -9,18 +13,80 @@ from datetime import datetime
 from collections import defaultdict
 
 from logger import get_logger
+from review.finding_schema import (
+    PROFILE_CHILL,
+    PROFILE_STRICT,
+    filter_by_profile,
+    to_rendered,
+)
 
 log = get_logger("report")
 
 
-def build_actionable_report(items, prd_content, prd_name, reviewer="", peck_score=None):
+def _item_get(item, key, default=""):
+    """容忍 dict 和 InternalFinding — filter_by_profile 不强转类型, 这里统一访问."""
+    if isinstance(item, dict):
+        return item.get(key, default)
+    return getattr(item, key, default)
+
+
+def _feedback_links(finding_id, rule_id="", prd_name="", workspace="", severity=""):
+    """生成 finding 反馈链接 (markdown). 渲染在 finding block 末尾.
+
+    PECKER_FEEDBACK_BASE_URL 控制 host (默认 http://localhost:8000), 设为空字符串
+    禁用 (Web/邮件等不希望出现链接的渠道)。
+
+    Web 端 PM 点链接 → 后端 /api/feedback/* → 写 finding_outcomes_store.
+    """
+    base = os.environ.get("PECKER_FEEDBACK_BASE_URL", "http://localhost:8000")
+    if not base or not finding_id:
+        return ""
+    # 编码 query (规避中文 prd_name)
+    from urllib.parse import urlencode
+    qs = urlencode({
+        "finding_id": finding_id,
+        "rule_id": rule_id or "",
+        "prd_name": prd_name or "",
+        "workspace": workspace or "",
+        "severity": severity or "",
+    })
+    accept = f"{base}/api/feedback/accept?{qs}"
+    reject = f"{base}/api/feedback/reject?{qs}"
+    edit = f"{base}/api/feedback/edit?{qs}"
+    # 用 sub 字号控制视觉权重 — 反馈链接是辅助操作不抢主信息
+    return (
+        f"<sub>"
+        f"反馈: [接受]({accept}) · [误报]({reject}) · [改写]({edit})"
+        f"</sub>"
+    )
+
+
+def build_actionable_report(
+    items,
+    prd_content,
+    prd_name,
+    reviewer="",
+    peck_score=None,
+    profile=PROFILE_CHILL,
+    workspace="",
+):
     """
     生成可执行的开发任务报告
     - 按 PRD 章节分组（不按评审维度）
     - 每条 item 附带精确位置 + 原文引用 + 改写建议
     - 飞书兼容 markdown 格式
+
+    Args:
+        profile: chill (默认) — must 全展示 + should >0.8 confidence + 隐藏 could
+                 strict — 全部展示 (与 v1 行为一致)
     """
     if not items:
+        return ""
+
+    # profile 过滤 — chill 隐藏 could / 低 confidence should
+    items = filter_by_profile(items, profile=profile)
+    if not items:
+        # 过滤完空了 (e.g. 全是 could 级 + chill 模式), 返回空字符串
         return ""
 
     date_str = datetime.now().strftime("%Y-%m-%d")
@@ -32,9 +98,9 @@ def build_actionable_report(items, prd_content, prd_name, reviewer="", peck_scor
         f"**审阅人**: {reviewer}" if reviewer else "",
         f"**啄伤度**: {peck_score}" if peck_score is not None else "",
         f"**改进项总数**: {len(items)} 条（"
-        f"must: {sum(1 for i in items if i.get('severity')=='must')}, "
-        f"should: {sum(1 for i in items if i.get('severity')=='should')}, "
-        f"could: {sum(1 for i in items if i.get('severity')=='could')}）",
+        f"must: {sum(1 for i in items if _item_get(i, 'severity')=='must')}, "
+        f"should: {sum(1 for i in items if _item_get(i, 'severity')=='should')}, "
+        f"could: {sum(1 for i in items if _item_get(i, 'severity')=='could')}）",
         "",
         "---",
         "",
@@ -51,8 +117,8 @@ def build_actionable_report(items, prd_content, prd_name, reviewer="", peck_scor
     section_groups = _group_by_section(items)
 
     for section_name, section_items in section_groups.items():
-        must_count = sum(1 for i in section_items if i.get("severity") == "must")
-        could_count = sum(1 for i in section_items if i.get("severity") == "could")
+        must_count = sum(1 for i in section_items if _item_get(i, "severity") == "must")
+        could_count = sum(1 for i in section_items if _item_get(i, "severity") == "could")
         should_count = len(section_items) - must_count - could_count
 
         lines.append(f"## {section_name}")
@@ -65,92 +131,43 @@ def build_actionable_report(items, prd_content, prd_name, reviewer="", peck_scor
         lines.append("")
 
         for item in section_items:
-            item_id = item.get("id", "?")
-            severity = item.get("severity", "should")
-            if severity == "must":
-                severity_badge = "**[必须]**"
-            elif severity == "could":
-                # facet of primary, 苍鹰冲突合并保留的同源条 (2026-04-24)
-                facet_of = item.get("facet_of", "")
-                severity_badge = f"[补充·{facet_of}]" if facet_of else "[补充]"
-            else:
-                severity_badge = "[建议]"
-            rule_id = item.get("rule_id", "")
-            issue = item.get("issue", "")
-            suggestion = item.get("suggestion", "")
-            dimension = item.get("dimension", "")
-
-            # 精确位置
+            # 2026-04-28 v2: 走 RenderedFinding 单源, 不再直接读 9 个 dict 字段
+            # InternalFinding 字段全在 schema, 这里只挑 PR-Agent 风格 surface 字段渲染
             precise = extract_precise_location(item, prd_content)
-
-            lines.append(f"### {item_id} {severity_badge} {rule_id}")
-            lines.append(f"")
-            # parser 友好字段 -- 让 cuckoo_parser 能抓到 location/severity/evidence_type
-            # 这三行是给 eval 解析器看的,徽章形式 **[必须]** 给人看
-            location_raw = item.get("location", "") or ""
-            ev_type_raw = item.get("evidence_type", "") or ""
-            if location_raw:
-                lines.append(f"**位置**: {location_raw}")
-            lines.append(f"**严重度**: {severity}")
-            if ev_type_raw:
-                lines.append(f"**依据类型**: {ev_type_raw}")
-            lines.append(f"")
-            lines.append(f"**问题**: {issue}")
-            lines.append(f"")
-
-            if precise.get("quote"):
-                lines.append(f"**原文位置**: {precise.get('section', section_name)}")
-                lines.append(f"> {precise['quote']}")
-                lines.append(f"")
-
-            # 改写建议（原文 → 建议）
             rewrite = generate_rewrite_pair(item, prd_content)
-            if rewrite.get("original") and rewrite.get("suggested"):
-                lines.append(f"**建议改写**:")
-                lines.append(f"- ~~{rewrite['original']}~~")
-                lines.append(f"- **{rewrite['suggested']}**")
-            else:
-                lines.append(f"**建议**: {suggestion}")
-
-            lines.append(f"")
-
-            # 依据(evidence) -- 让 cuckoo_eval 可以回解析,也让评审人看见溯源链
-            ev_type = item.get("evidence_type", "")
-            ev_content = item.get("evidence_content", "")
-            if ev_type or ev_content:
-                type_tag = f"[{ev_type}] " if ev_type else ""
-                lines.append(f"**依据**: {type_tag}{ev_content}")
-                lines.append(f"")
-
-            if dimension:
-                lines.append(f"*来源: {dimension} | {rule_id}*")
-
-            # diff_status（如果有）
-            diff_status = item.get("diff_status", "")
-            if diff_status:
-                status_labels = {
-                    "new": "本次新发现",
-                    "unfixed": "上次已报告但未修复",
-                    "fixed": "已修复",
-                    "carry_confirmed": "上次已确认不改",
-                    "carry_rejected": "上次已驳回",
-                }
-                label = status_labels.get(diff_status, diff_status)
-                lines.append(f"*迭代状态: {label}*")
-
-            lines.append("")
-            lines.append("---")
-            lines.append("")
+            rendered = to_rendered(
+                item,
+                quote=precise.get("quote", ""),
+                rewrite=rewrite,
+            )
+            block = rendered.to_markdown_block()
+            # 反馈链接 — PECKER_FEEDBACK_BASE_URL 启用时插到 metadata sub 行后, --- 前
+            fb = _feedback_links(
+                finding_id=_item_get(item, "id", ""),
+                rule_id=_item_get(item, "rule_id", ""),
+                prd_name=prd_name,
+                workspace=workspace,
+                severity=_item_get(item, "severity", ""),
+            )
+            if fb and "---" in block:
+                # 找到末尾的 --- 分隔行, 在它前一行插入 fb
+                hr_idx = next((i for i in range(len(block) - 1, -1, -1) if block[i].strip() == "---"), None)
+                if hr_idx is not None:
+                    block.insert(hr_idx, fb)
+                    block.insert(hr_idx + 1, "")
+            lines.extend(block)
 
     # 开发任务 checklist
     lines.append("## 开发任务 Checklist")
     lines.append("")
     for section_name, section_items in section_groups.items():
-        must_items = [i for i in section_items if i.get("severity") == "must"]
+        must_items = [i for i in section_items if _item_get(i, "severity") == "must"]
         if must_items:
             lines.append(f"### {section_name}")
             for item in must_items:
-                lines.append(f"- [ ] {item.get('id', '?')} {item.get('issue', '')[:50]}")
+                _id = _item_get(item, "id", "?")
+                _issue = _item_get(item, "issue", "")[:50]
+                lines.append(f"- [ ] {_id} {_issue}")
             lines.append("")
 
     return "\n".join(lines)
@@ -160,7 +177,7 @@ def _group_by_section(items):
     """按 PRD 章节分组（从 location 字段提取）"""
     groups = defaultdict(list)
     for item in items:
-        location = item.get("location", "")
+        location = _item_get(item, "location", "")
         # 提取章节名（如 "3.7 排序规则" → "3.7 排序规则"）
         section = _normalize_section(location) or "其他"
         groups[section].append(item)
@@ -195,8 +212,8 @@ def extract_precise_location(item, prd_content):
     if not prd_content:
         return {}
 
-    location = item.get("location", "")
-    issue = item.get("issue", "")
+    location = _item_get(item, "location", "")
+    issue = _item_get(item, "issue", "")
 
     # 尝试从 issue 中提取关键短语（引号内的内容）
     quoted = re.findall(r'[「"\'](.*?)[」"\']', issue)
@@ -237,7 +254,7 @@ def generate_rewrite_pair(item, prd_content):
     生成 {原文, 建议改写} 对
     从 suggestion 中提取 "X → Y" 或 "将X改为Y" 格式
     """
-    suggestion = item.get("suggestion", "")
+    suggestion = _item_get(item, "suggestion", "")
 
     # 模式 1: "X → Y" 或 "X -> Y"
     m = re.search(r'[「"](.*?)[」"]\s*[→\->]+\s*[「"](.*?)[」"]', suggestion)

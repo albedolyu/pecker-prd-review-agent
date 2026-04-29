@@ -1,0 +1,18 @@
+{
+  "wiki_dir": "C:\\Users\\20834\\Desktop\\agent\\prd review\\workspace-劳动仲裁\\wiki",
+  "pages_scanned": 10,
+  "pages_failed": [],
+  "entities_count": 43,
+  "relations_count": 61,
+  "by_type": {
+    "spec_doc": 5,
+    "ui_state": 4,
+    "page_concept": 6,
+    "masking_rule": 1,
+    "data_table": 2,
+    "field": 25
+  },
+  "elapsed_seconds": 384.4,
+  "max_gleanings": 2,
+  "built_at": "2026-04-28 22:51:01"
+}

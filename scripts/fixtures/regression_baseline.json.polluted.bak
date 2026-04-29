@@ -1,0 +1,628 @@
+{
+  "timestamp": "2026-04-29T01:44:16",
+  "rules": {
+    "V-02": {
+      "dimension": "structure",
+      "TP": 1,
+      "FP": 0,
+      "FN": 0,
+      "TN": 1,
+      "precision": 1.0,
+      "recall": 1.0,
+      "positive_case": {
+        "reported": true,
+        "evidence_aligned": true,
+        "error": null,
+        "worker_finding_count": 4,
+        "matched_finding": {
+          "rule_id": "V-02",
+          "issue": "PRD 没有版本历史表，看不出最新版本改了什么、谁改的。",
+          "location": "全文",
+          "severity": "should"
+        }
+      },
+      "negative_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": null,
+        "worker_finding_count": 10,
+        "matched_finding": null
+      }
+    },
+    "V-03": {
+      "dimension": "structure",
+      "TP": 0,
+      "FP": 0,
+      "FN": 1,
+      "TN": 1,
+      "precision": 0.0,
+      "recall": 0.0,
+      "positive_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": null,
+        "worker_finding_count": 4,
+        "matched_finding": null
+      },
+      "negative_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": null,
+        "worker_finding_count": 3,
+        "matched_finding": null
+      }
+    },
+    "V-04": {
+      "dimension": "structure",
+      "TP": 0,
+      "FP": 1,
+      "FN": 0,
+      "TN": 1,
+      "precision": 0.0,
+      "recall": 0.0,
+      "positive_case": {
+        "reported": true,
+        "evidence_aligned": false,
+        "error": null,
+        "worker_finding_count": 7,
+        "matched_finding": {
+          "rule_id": "V-04",
+          "issue": "只写了两个 UI 章节，没有可追踪的功能清单。",
+          "location": "2.1 Web UI、2.2 移动端UI",
+          "severity": "must"
+        }
+      },
+      "negative_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": null,
+        "worker_finding_count": 3,
+        "matched_finding": null
+      }
+    },
+    "V-05": {
+      "dimension": "structure",
+      "TP": 1,
+      "FP": 0,
+      "FN": 0,
+      "TN": 1,
+      "precision": 1.0,
+      "recall": 1.0,
+      "positive_case": {
+        "reported": true,
+        "evidence_aligned": true,
+        "error": null,
+        "worker_finding_count": 12,
+        "matched_finding": {
+          "rule_id": "V-05",
+          "issue": "同一规则分数写成 +5 和 +3，调解失败到底加几分不清楚。",
+          "location": "6.2 风险扫描",
+          "severity": "must"
+        }
+      },
+      "negative_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": null,
+        "worker_finding_count": 3,
+        "matched_finding": null
+      }
+    },
+    "V-06": {
+      "dimension": "structure",
+      "TP": 0,
+      "FP": 2,
+      "FN": 0,
+      "TN": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "positive_case": {
+        "reported": true,
+        "evidence_aligned": false,
+        "error": null,
+        "worker_finding_count": 12,
+        "matched_finding": {
+          "rule_id": "V-06",
+          "issue": "缺技术约定节，开发不知道框架、鉴权和基础路径。",
+          "location": "全文",
+          "severity": "must"
+        }
+      },
+      "negative_case": {
+        "reported": true,
+        "evidence_aligned": null,
+        "error": null,
+        "worker_finding_count": 3,
+        "matched_finding": {
+          "rule_id": "V-06",
+          "issue": "只列了章节名, 没看到技术约定、字段映射、排序、筛选、分页、异常空态内容。",
+          "location": "全文",
+          "severity": "must"
+        }
+      }
+    },
+    "EV-01": {
+      "dimension": "structure",
+      "TP": 1,
+      "FP": 1,
+      "FN": 0,
+      "TN": 0,
+      "precision": 0.5,
+      "recall": 1.0,
+      "positive_case": {
+        "reported": true,
+        "evidence_aligned": true,
+        "error": null,
+        "worker_finding_count": 11,
+        "matched_finding": {
+          "rule_id": "EV-01",
+          "issue": "没有验收标准，做完后没人能按条件判定对错。",
+          "location": "全文",
+          "severity": "must"
+        }
+      },
+      "negative_case": {
+        "reported": true,
+        "evidence_aligned": null,
+        "error": null,
+        "worker_finding_count": 4,
+        "matched_finding": {
+          "rule_id": "EV-01",
+          "issue": "PRD 只有一个验证场景，没有“验收标准”章节。",
+          "location": "全文",
+          "severity": "must"
+        }
+      }
+    },
+    "FN-09": {
+      "dimension": "structure",
+      "TP": 1,
+      "FP": 0,
+      "FN": 0,
+      "TN": 1,
+      "precision": 1.0,
+      "recall": 1.0,
+      "positive_case": {
+        "reported": true,
+        "evidence_aligned": true,
+        "error": null,
+        "worker_finding_count": 5,
+        "matched_finding": {
+          "rule_id": "FN-09",
+          "issue": "只写全都和立案信息UI一致，没说对齐哪一节、怎么实现。",
+          "location": "第 2.2 节",
+          "severity": "must"
+        }
+      },
+      "negative_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": null,
+        "worker_finding_count": 4,
+        "matched_finding": null
+      }
+    },
+    "V-07": {
+      "dimension": "quality",
+      "TP": 1,
+      "FP": 1,
+      "FN": 0,
+      "TN": 0,
+      "precision": 0.5,
+      "recall": 1.0,
+      "positive_case": {
+        "reported": true,
+        "evidence_aligned": true,
+        "error": null,
+        "worker_finding_count": 1,
+        "matched_finding": {
+          "rule_id": "V-07",
+          "issue": "2.1 说全都和立案信息 UI 一致，6.2 又说少立案日期且不含案件类型。",
+          "location": "第 2.1 节 / 第 6.2 节",
+          "severity": "must"
+        }
+      },
+      "negative_case": {
+        "reported": true,
+        "evidence_aligned": null,
+        "error": null,
+        "worker_finding_count": 2,
+        "matched_finding": {
+          "rule_id": "V-07",
+          "issue": "排序用了 id，但 2.2 字段映射只列 sdate，id 从哪来没写。",
+          "location": "第 3.1.2 节 默认排序",
+          "severity": "must"
+        }
+      }
+    },
+    "V-08": {
+      "dimension": "quality",
+      "TP": 0,
+      "FP": 1,
+      "FN": 0,
+      "TN": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "positive_case": {
+        "reported": true,
+        "evidence_aligned": false,
+        "error": null,
+        "worker_finding_count": 3,
+        "matched_finding": {
+          "rule_id": "V-08",
+          "issue": "“业务规则、相关字段、参考类似 UI、适当截断”都没说清，开发不知道按什么做。",
+          "location": "第 1 段",
+          "severity": "should"
+        }
+      },
+      "negative_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      }
+    },
+    "V-09": {
+      "dimension": "quality",
+      "TP": 0,
+      "FP": 0,
+      "FN": 0,
+      "TN": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "positive_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      },
+      "negative_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      }
+    },
+    "V-10": {
+      "dimension": "quality",
+      "TP": 0,
+      "FP": 0,
+      "FN": 0,
+      "TN": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "positive_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      },
+      "negative_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      }
+    },
+    "V-11": {
+      "dimension": "quality",
+      "TP": 0,
+      "FP": 0,
+      "FN": 0,
+      "TN": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "positive_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      },
+      "negative_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      }
+    },
+    "V-12": {
+      "dimension": "quality",
+      "TP": 0,
+      "FP": 0,
+      "FN": 0,
+      "TN": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "positive_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      },
+      "negative_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      }
+    },
+    "RC-004": {
+      "dimension": "ai_coding",
+      "TP": 0,
+      "FP": 0,
+      "FN": 0,
+      "TN": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "positive_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      },
+      "negative_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      }
+    },
+    "RC-005": {
+      "dimension": "ai_coding",
+      "TP": 0,
+      "FP": 0,
+      "FN": 0,
+      "TN": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "positive_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      },
+      "negative_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      }
+    },
+    "RC-006": {
+      "dimension": "ai_coding",
+      "TP": 0,
+      "FP": 0,
+      "FN": 0,
+      "TN": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "positive_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      },
+      "negative_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      }
+    },
+    "RC-007": {
+      "dimension": "ai_coding",
+      "TP": 0,
+      "FP": 0,
+      "FN": 0,
+      "TN": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "positive_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      },
+      "negative_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      }
+    },
+    "RC-008": {
+      "dimension": "ai_coding",
+      "TP": 0,
+      "FP": 0,
+      "FN": 0,
+      "TN": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "positive_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      },
+      "negative_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      }
+    },
+    "RC-009": {
+      "dimension": "data_quality",
+      "TP": 0,
+      "FP": 0,
+      "FN": 0,
+      "TN": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "positive_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      },
+      "negative_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      }
+    },
+    "RC-010": {
+      "dimension": "data_quality",
+      "TP": 0,
+      "FP": 0,
+      "FN": 0,
+      "TN": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "positive_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      },
+      "negative_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      }
+    },
+    "RC-013": {
+      "dimension": "ai_coding",
+      "TP": 0,
+      "FP": 0,
+      "FN": 0,
+      "TN": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "positive_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      },
+      "negative_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      }
+    },
+    "RC-015": {
+      "dimension": "ai_coding",
+      "TP": 0,
+      "FP": 0,
+      "FN": 0,
+      "TN": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "positive_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      },
+      "negative_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      }
+    },
+    "FN-03": {
+      "dimension": "ai_coding",
+      "TP": 0,
+      "FP": 0,
+      "FN": 0,
+      "TN": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "positive_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      },
+      "negative_case": null
+    },
+    "EV-04": {
+      "dimension": "data_quality",
+      "TP": 0,
+      "FP": 0,
+      "FN": 0,
+      "TN": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "positive_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      },
+      "negative_case": null
+    },
+    "FN-01": {
+      "dimension": "data_quality",
+      "TP": 0,
+      "FP": 0,
+      "FN": 0,
+      "TN": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "positive_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      },
+      "negative_case": {
+        "reported": false,
+        "evidence_aligned": null,
+        "error": "APIError: codex exec 退出码 3221225794: ",
+        "worker_finding_count": 0,
+        "matched_finding": null
+      }
+    }
+  },
+  "summary": {
+    "rule_count": 25,
+    "macro_precision": 0.5,
+    "macro_recall": 0.8333
+  }
+}

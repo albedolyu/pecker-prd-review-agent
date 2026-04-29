@@ -1,0 +1,480 @@
+[
+  {
+    "id": "e_5b140b67",
+    "title": "决策-UI四态规范",
+    "type": "spec_doc",
+    "description": "定义了劳动仲裁模块及风鸟平台的四种UI状态",
+    "aliases": [],
+    "source_pages": [
+      "决策-UI四态规范.md"
+    ]
+  },
+  {
+    "id": "e_3baa030f",
+    "title": "加载中",
+    "type": "ui_state",
+    "description": "接口请求中，显示骨架屏或spinner",
+    "aliases": [],
+    "source_pages": [
+      "决策-UI四态规范.md"
+    ]
+  },
+  {
+    "id": "e_fad2a383",
+    "title": "请求失败",
+    "type": "ui_state",
+    "description": "接口返回错误，显示错误提示和重试按钮",
+    "aliases": [],
+    "source_pages": [
+      "决策-UI四态规范.md"
+    ]
+  },
+  {
+    "id": "e_664299ee",
+    "title": "筛选无结果",
+    "type": "ui_state",
+    "description": "筛选条件命中0条，显示空状态图",
+    "aliases": [],
+    "source_pages": [
+      "决策-UI四态规范.md"
+    ]
+  },
+  {
+    "id": "e_4f8ce35a",
+    "title": "空数据",
+    "type": "ui_state",
+    "description": "企业无劳动仲裁记录，显示空状态图",
+    "aliases": [],
+    "source_pages": [
+      "决策-UI四态规范.md"
+    ]
+  },
+  {
+    "id": "e_14f744e7",
+    "title": "场景-企业主页劳动仲裁模块",
+    "type": "page_concept",
+    "description": "企业主页中的劳动仲裁业务场景",
+    "aliases": [],
+    "source_pages": [
+      "决策-UI四态规范.md"
+    ]
+  },
+  {
+    "id": "e_18ce4ce0",
+    "title": "实体-风鸟平台",
+    "type": "page_concept",
+    "description": "风鸟平台整体概念",
+    "aliases": [],
+    "source_pages": [
+      "决策-UI四态规范.md"
+    ]
+  },
+  {
+    "id": "e_611a56dd",
+    "title": "决策-公告内容脱敏方式",
+    "type": "spec_doc",
+    "description": "关于公告内容中人名脱敏方式的决策文档",
+    "aliases": [],
+    "source_pages": [
+      "决策-公告内容脱敏方式.md",
+      "概念-脱敏规则.md"
+    ]
+  },
+  {
+    "id": "e_1f55d02f",
+    "title": "概念-脱敏规则",
+    "type": "page_concept",
+    "description": "脱敏规则的概念页面",
+    "aliases": [],
+    "source_pages": [
+      "决策-公告内容脱敏方式.md"
+    ]
+  },
+  {
+    "id": "e_f119f13c",
+    "title": "约束-ds_risk_labour_arbitration_ent",
+    "type": "spec_doc",
+    "description": "ds_risk_labour_arbitration_ent表的约束规范页面",
+    "aliases": [
+      "ds_risk_labour_arbitration_ent约束",
+      "约束-劳动仲裁企业信息表"
+    ],
+    "source_pages": [
+      "决策-公告内容脱敏方式.md",
+      "决策-字段来源优先级.md",
+      "决策-移动端筛选差异化.md",
+      "概念-筛选规则.md",
+      "约束-ds_risk_labour_arbitration.md",
+      "约束-ds_risk_labour_arbitration_ent.md"
+    ]
+  },
+  {
+    "id": "e_23fd3971",
+    "title": "公告内容人名脱敏规则",
+    "type": "masking_rule",
+    "description": "复用当事人名单对公告内容做字符串匹配替换，命中替换为姓+**",
+    "aliases": [],
+    "source_pages": [
+      "决策-公告内容脱敏方式.md"
+    ]
+  },
+  {
+    "id": "e_9ae74c34",
+    "title": "ds_risk_labour_arbitration_ent",
+    "type": "data_table",
+    "description": "当事人名单表，存entity_type为自然人的记录",
+    "aliases": [
+      "ent表",
+      "关联表",
+      "劳动仲裁关联表",
+      "当事人名单表"
+    ],
+    "source_pages": [
+      "决策-公告内容脱敏方式.md",
+      "决策-字段来源优先级.md",
+      "约束-ds_risk_labour_arbitration_ent.md"
+    ]
+  },
+  {
+    "id": "e_65d2e91c",
+    "title": "决策-字段来源优先级",
+    "type": "spec_doc",
+    "description": "字段映射优先级决策，ent表优先于主表",
+    "aliases": [],
+    "source_pages": [
+      "决策-字段来源优先级.md",
+      "概念-筛选规则.md"
+    ]
+  },
+  {
+    "id": "e_d97f6a4a",
+    "title": "ds_risk_labour_arbitration",
+    "type": "data_table",
+    "description": "劳动仲裁主表，存储仲裁公告基础信息",
+    "aliases": [
+      "主表",
+      "劳动仲裁主表"
+    ],
+    "source_pages": [
+      "决策-字段来源优先级.md",
+      "约束-ds_risk_labour_arbitration.md",
+      "约束-ds_risk_labour_arbitration_ent.md"
+    ]
+  },
+  {
+    "id": "e_feda1581",
+    "title": "ds_risk_labour_arbitration.arbitration_org",
+    "type": "field",
+    "description": "仲裁机构，varchar(250)",
+    "aliases": [],
+    "source_pages": [
+      "决策-字段来源优先级.md",
+      "约束-ds_risk_labour_arbitration.md"
+    ]
+  },
+  {
+    "id": "e_9adaa24f",
+    "title": "ds_risk_labour_arbitration.case_reason",
+    "type": "field",
+    "description": "仲裁原因，varchar(500)",
+    "aliases": [],
+    "source_pages": [
+      "决策-字段来源优先级.md",
+      "约束-ds_risk_labour_arbitration.md"
+    ]
+  },
+  {
+    "id": "e_ea4ab5cf",
+    "title": "ds_risk_labour_arbitration.publish_date",
+    "type": "field",
+    "description": "发布日期字段(主表)",
+    "aliases": [],
+    "source_pages": [
+      "决策-字段来源优先级.md",
+      "约束-ds_risk_labour_arbitration.md"
+    ]
+  },
+  {
+    "id": "e_71fccc50",
+    "title": "ds_risk_labour_arbitration_ent.arbitration_org",
+    "type": "field",
+    "description": "仲裁机构字段(企业表)",
+    "aliases": [],
+    "source_pages": [
+      "决策-字段来源优先级.md",
+      "约束-ds_risk_labour_arbitration_ent.md"
+    ]
+  },
+  {
+    "id": "e_94033908",
+    "title": "ds_risk_labour_arbitration_ent.case_reason",
+    "type": "field",
+    "description": "案由字段(企业表)",
+    "aliases": [],
+    "source_pages": [
+      "决策-字段来源优先级.md"
+    ]
+  },
+  {
+    "id": "e_f19aa1b5",
+    "title": "ds_risk_labour_arbitration_ent.publish_date",
+    "type": "field",
+    "description": "发布日期字段(企业表)",
+    "aliases": [],
+    "source_pages": [
+      "决策-字段来源优先级.md",
+      "约束-ds_risk_labour_arbitration_ent.md"
+    ]
+  },
+  {
+    "id": "e_a6335965",
+    "title": "约束-ds_risk_labour_arbitration",
+    "type": "spec_doc",
+    "description": "ds_risk_labour_arbitration表的约束规范文档",
+    "aliases": [
+      "劳动仲裁主表约束"
+    ],
+    "source_pages": [
+      "决策-字段来源优先级.md",
+      "概念-筛选规则.md",
+      "概念-脱敏规则.md",
+      "约束-ds_risk_labour_arbitration.md",
+      "约束-ds_risk_labour_arbitration_ent.md"
+    ]
+  },
+  {
+    "id": "e_d5291429",
+    "title": "概念-筛选规则",
+    "type": "page_concept",
+    "description": "劳动仲裁模块筛选规则, 覆盖送达公告和开庭公告",
+    "aliases": [
+      "筛选规则",
+      "筛选规则概念"
+    ],
+    "source_pages": [
+      "决策-字段来源优先级.md",
+      "决策-移动端筛选差异化.md",
+      "概念-筛选规则.md",
+      "约束-ds_risk_labour_arbitration.md",
+      "约束-ds_risk_labour_arbitration_ent.md"
+    ]
+  },
+  {
+    "id": "e_f3f9f27b",
+    "title": "决策-移动端筛选差异化",
+    "type": "page_concept",
+    "description": "移动端筛选交互与Web端差异的决策",
+    "aliases": [
+      "移动端筛选差异化",
+      "移动端筛选决策"
+    ],
+    "source_pages": [
+      "决策-移动端筛选差异化.md"
+    ]
+  },
+  {
+    "id": "e_3def9c2e",
+    "title": "脱敏规则",
+    "type": "page_concept",
+    "description": "劳动仲裁模块中对自然人隐私信息的脱敏处理规则",
+    "aliases": [],
+    "source_pages": [
+      "概念-脱敏规则.md"
+    ]
+  },
+  {
+    "id": "e_04b5d233",
+    "title": "ds_risk_labour_arbitration.id",
+    "type": "field",
+    "description": "自增主键",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_risk_labour_arbitration.md"
+    ]
+  },
+  {
+    "id": "e_14704e42",
+    "title": "ds_risk_labour_arbitration.title",
+    "type": "field",
+    "description": "公告标题，varchar(500)",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_risk_labour_arbitration.md"
+    ]
+  },
+  {
+    "id": "e_bca0c72f",
+    "title": "ds_risk_labour_arbitration.case_code",
+    "type": "field",
+    "description": "标准化案号，varchar(200)",
+    "aliases": [
+      "案号"
+    ],
+    "source_pages": [
+      "约束-ds_risk_labour_arbitration.md"
+    ]
+  },
+  {
+    "id": "e_6bfff17d",
+    "title": "ds_risk_labour_arbitration.applicant",
+    "type": "field",
+    "description": "申请人，text",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_risk_labour_arbitration.md"
+    ]
+  },
+  {
+    "id": "e_a73ec32f",
+    "title": "ds_risk_labour_arbitration.defendant",
+    "type": "field",
+    "description": "被申请人，text",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_risk_labour_arbitration.md"
+    ]
+  },
+  {
+    "id": "e_d55e5a68",
+    "title": "ds_risk_labour_arbitration.open_time",
+    "type": "field",
+    "description": "开庭时间，datetime类型",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_risk_labour_arbitration.md",
+      "约束-ds_risk_labour_arbitration_ent.md"
+    ]
+  },
+  {
+    "id": "e_8068e8df",
+    "title": "ds_risk_labour_arbitration.type",
+    "type": "field",
+    "description": "公告类型，tinyint(2)，1送达2开庭",
+    "aliases": [
+      "公告类型"
+    ],
+    "source_pages": [
+      "约束-ds_risk_labour_arbitration.md"
+    ]
+  },
+  {
+    "id": "e_13b054f1",
+    "title": "ds_risk_labour_arbitration.data_status",
+    "type": "field",
+    "description": "数据状态，tinyint(2)，0有效1历史2删除3去重",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_risk_labour_arbitration.md"
+    ]
+  },
+  {
+    "id": "e_55c46092",
+    "title": "ds_risk_labour_arbitration.riskbird_status",
+    "type": "field",
+    "description": "风鸟屏蔽字段，0展示1屏蔽",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_risk_labour_arbitration.md"
+    ]
+  },
+  {
+    "id": "e_4c73d3bc",
+    "title": "ds_risk_labour_arbitration_ent.id",
+    "type": "field",
+    "description": "自增主键",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_risk_labour_arbitration_ent.md"
+    ]
+  },
+  {
+    "id": "e_a14f8c1b",
+    "title": "ds_risk_labour_arbitration_ent.table_id",
+    "type": "field",
+    "description": "关联主表ID",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_risk_labour_arbitration_ent.md"
+    ]
+  },
+  {
+    "id": "e_1d037023",
+    "title": "ds_risk_labour_arbitration_ent.entity_name",
+    "type": "field",
+    "description": "主体名称",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_risk_labour_arbitration_ent.md"
+    ]
+  },
+  {
+    "id": "e_d75253e4",
+    "title": "ds_risk_labour_arbitration_ent.entity_type",
+    "type": "field",
+    "description": "主体类型（1人2企业）",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_risk_labour_arbitration_ent.md"
+    ]
+  },
+  {
+    "id": "e_1f40f60e",
+    "title": "ds_risk_labour_arbitration_ent.entity_id",
+    "type": "field",
+    "description": "主体ID",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_risk_labour_arbitration_ent.md"
+    ]
+  },
+  {
+    "id": "e_10d6e56a",
+    "title": "ds_risk_labour_arbitration_ent.standpoint",
+    "type": "field",
+    "description": "当事人身份（1申请人2被申请人）",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_risk_labour_arbitration_ent.md"
+    ]
+  },
+  {
+    "id": "e_444ec40f",
+    "title": "ds_risk_labour_arbitration_ent.case_code",
+    "type": "field",
+    "description": "标准化案号",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_risk_labour_arbitration_ent.md"
+    ]
+  },
+  {
+    "id": "e_ed0ac1ad",
+    "title": "ds_risk_labour_arbitration_ent.open_time",
+    "type": "field",
+    "description": "开庭时间，date类型",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_risk_labour_arbitration_ent.md"
+    ]
+  },
+  {
+    "id": "e_d91cd63a",
+    "title": "ds_risk_labour_arbitration_ent.type",
+    "type": "field",
+    "description": "公告类型（1送达2开庭）",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_risk_labour_arbitration_ent.md"
+    ]
+  },
+  {
+    "id": "e_655aacc3",
+    "title": "ds_risk_labour_arbitration_ent.data_status",
+    "type": "field",
+    "description": "数据状态（0有效1历史2删除3去重）",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_risk_labour_arbitration_ent.md"
+    ]
+  }
+]

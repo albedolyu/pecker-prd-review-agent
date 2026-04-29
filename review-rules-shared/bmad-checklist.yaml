@@ -1,0 +1,20 @@
+# =============================================================
+# 啄木鸟 v2 — BMAD 系列规则 SSOT (V-XX 验证类)
+# =============================================================
+#
+# 该文件是 BMAD (Build-Measure-Analyze-Decide) 验证类规则集,
+# 与主 review-checklist.yaml 通过 extends 机制合并 (loader 自动 merge).
+#
+# 当前 BMAD 系列 V-XX 已并入 review-checklist.yaml 主 SSOT, 本文件保留作扩展位:
+# - 新增 BMAD 类规则放这里, 不要污染主 yaml
+# - extends 机制会自动合并 (主 yaml 优先, 同 id 时主 yaml 覆盖)
+#
+# Schema: 与 review-checklist.yaml 一致 (id/name/severity/description/impact_score/...)
+# version: v1.0.0 (2026-04-28)
+# =============================================================
+
+schema_version: "2.0"
+
+# 注: 当前 V-02..V-12 在主 SSOT 中. 若后续有专门的 BMAD 类 (build-time 检查) 规则
+# 例如 V-13 验证集大小校验, V-14 baseline 漂移监控等, 加在这里。
+rules: []

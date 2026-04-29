@@ -1,0 +1,99 @@
+{
+  "workspace": "workspace-纳税人资质",
+  "built_at": "2026-04-28 23:23:13",
+  "total_elapsed_s": 235.1,
+  "page_count": 10,
+  "page_metrics": [
+    {
+      "relpath": "场景-企业主页纳税人资质展示.md",
+      "chars": 216,
+      "gleaning_rounds": 1,
+      "entities_raw": 2,
+      "relations_raw": 1,
+      "elapsed_s": 19.7,
+      "skipped": false
+    },
+    {
+      "relpath": "约束-t_ds_aggre_tags表结构.md",
+      "chars": 553,
+      "gleaning_rounds": 2,
+      "entities_raw": 6,
+      "relations_raw": 6,
+      "elapsed_s": 49.2,
+      "skipped": false
+    },
+    {
+      "relpath": "概念-数据导出规范.md",
+      "chars": 406,
+      "gleaning_rounds": 1,
+      "entities_raw": 9,
+      "relations_raw": 13,
+      "elapsed_s": 40.0,
+      "skipped": false
+    },
+    {
+      "relpath": "概念-stype枚举映射.md",
+      "chars": 422,
+      "gleaning_rounds": 1,
+      "entities_raw": 5,
+      "relations_raw": 5,
+      "elapsed_s": 32.6,
+      "skipped": false
+    },
+    {
+      "relpath": "约束-企业标签表结构.md",
+      "chars": 971,
+      "gleaning_rounds": 2,
+      "entities_raw": 10,
+      "relations_raw": 20,
+      "elapsed_s": 48.8,
+      "skipped": false
+    },
+    {
+      "relpath": "约束-ds_company_tax_state表结构.md",
+      "chars": 945,
+      "gleaning_rounds": 2,
+      "entities_raw": 8,
+      "relations_raw": 7,
+      "elapsed_s": 25.5,
+      "skipped": false
+    },
+    {
+      "relpath": "决策-纳税人资质评审发现.md",
+      "chars": 970,
+      "gleaning_rounds": 2,
+      "entities_raw": 8,
+      "relations_raw": 9,
+      "elapsed_s": 39.1,
+      "skipped": false
+    },
+    {
+      "relpath": "约束-企业标签展示规范.md",
+      "chars": 612,
+      "gleaning_rounds": 2,
+      "entities_raw": 5,
+      "relations_raw": 5,
+      "elapsed_s": 26.7,
+      "skipped": false
+    },
+    {
+      "relpath": "概念-纳税人资质.md",
+      "chars": 1186,
+      "gleaning_rounds": 2,
+      "entities_raw": 9,
+      "relations_raw": 10,
+      "elapsed_s": 68.2,
+      "skipped": false
+    },
+    {
+      "relpath": "场景-企业主页纳税人资质模块.md",
+      "chars": 1570,
+      "gleaning_rounds": 2,
+      "entities_raw": 21,
+      "relations_raw": 6,
+      "elapsed_s": 98.0,
+      "skipped": false
+    }
+  ],
+  "avg_per_page_s": 44.8
+}

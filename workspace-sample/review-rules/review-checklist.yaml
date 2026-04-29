@@ -1,0 +1,11 @@
+# =============================================================
+# workspace-sample review-checklist (SSOT extends 模式)
+# =============================================================
+# 由 scripts/migrate_to_ssot_yaml.py 自动生成 (一次性迁移).
+# 老规则定义已收敛到 review-rules-shared/review-checklist.yaml,
+# 本文件只列 workspace 独有 / 覆盖项.
+# =============================================================
+
+extends: ../../review-rules-shared/review-checklist.yaml
+
+additional_rules: []

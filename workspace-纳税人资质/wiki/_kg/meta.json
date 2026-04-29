@@ -1,0 +1,20 @@
+{
+  "wiki_dir": "C:\\Users\\20834\\Desktop\\agent\\prd review\\workspace-纳税人资质\\wiki",
+  "pages_scanned": 12,
+  "biz_pages_extracted": 10,
+  "pages_failed": [],
+  "entities_count": 38,
+  "relations_count": 69,
+  "by_type": {
+    "page_concept": 8,
+    "spec_doc": 8,
+    "data_table": 3,
+    "field": 15,
+    "ui_state": 4
+  },
+  "elapsed_seconds": 235.1,
+  "max_gleanings": 2,
+  "page_concurrency": 2,
+  "built_at": "2026-04-28 23:23:13",
+  "builder": "build_kg_all.py"
+}

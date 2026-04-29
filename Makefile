@@ -1,12 +1,27 @@
-.PHONY: help install dev-api dev-web test test-py test-web test-e2e-local lint kb-lint build secrets check-env eval-consistency init-acl clean
+.PHONY: help install install-deps install-hooks check-hooks dev-api dev-web test test-py test-web test-e2e-local lint kb-lint build secrets check-env eval-consistency init-acl clean
 
 help:  ## 列出所有命令
 	@echo "Pecker 常用命令 (运行 make <target>):"
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 
-install:  ## 安装 Python + 前端依赖
+install: install-deps install-hooks  ## 一次性 setup: pip + 前端 + git hooks (开发者首次进项目跑这条)
+	@echo ""
+	@echo "[make install] 完成."
+	@echo "[make install] 下一步:"
+	@echo "  1. 配 .env: bash scripts/gen-secrets.sh > .env (然后填 FEISHU / API_KEY 等)"
+	@echo "  2. 启后端: make dev-api"
+	@echo "  3. 启前端: make dev-web"
+
+install-deps:  ## 仅装 Python + 前端依赖 (不装 hooks)
 	pip install -r requirements.txt
 	cd web && pnpm install
+
+install-hooks:  ## 装 git pre-push hook (跨平台, 走 Python 实现)
+	@python scripts/install_git_hooks.py || \
+		echo "[make install-hooks] WARN: hook 安装失败 (不是 git repo / 已存在不同内容); 不阻塞 make install"
+
+check-hooks:  ## 检查 hook 是否漂移 (CI 用, 漂移返回 1)
+	python scripts/install_git_hooks.py --check
 
 dev-api:  ## 启动后端 FastAPI (uvicorn :8000)
 	uvicorn api.main:app --reload --port 8000 --host 0.0.0.0

@@ -132,7 +132,62 @@ _WORKER_SHARED_RULES = """## 评审要求
 
 ## 严重度
 - must:必须修改,不改会导致 PRD 无法正确指导开发
-- should:建议修改,改了会提升 PRD 质量"""
+- should:建议修改,改了会提升 PRD 质量
+
+## issue / suggestion 写作风格 (2026-04-28 PM 反馈: 学术话语太多)
+- **issue 用大白话**: 一句话说清"问题在哪 + 为什么是问题",不超过 80 字。
+  ❌ "导致开发与测试无法对齐实现, 引入潜在的语义对立风险"
+  ✅ "规则写双星号但示例只有 1 颗星, 1 字名到底打几颗?"
+- **suggestion 给具体改法**: "改成 X" / "补充 X" / "删除 X", 不超过 60 字。
+  ❌ "建议明确该字段的语义边界并补充相应说明"
+  ✅ "在 4.3 节加一行: 收藏数量上限 10 条 (VIP 100 条)"
+- **不绕弯**: 不要"潜在风险/可能影响/建议关注"这类含糊词, 直接说后果或改法。
+- **不重复 PRD 原文**: issue 里别大段抄 PRD, 给位置标识符即可。
+
+## 出口校准 (PR-Agent calibration block)
+
+**优先不报 > 误报**:
+- 如果你不能给出"具体场景"说明问题如何 manifest, **不要报**这条 finding。
+- "潜在风险/可能影响/建议关注"这类含糊词 = 不要报。
+- 跨章节联动推测如果不能从 diff context 直接定位到具体代码路径, **不要报**。
+
+**fire_when / dont_fire_when 是硬约束**:
+- 每条规则的 fire_when / dont_fire_when 是 ground truth。
+- 看到符合 dont_fire_when 的情形即使其他 worker 都在报, 你也**不能报**。
+- 不确定时 80% 倾向不报。
+
+**置信度门**:
+- 高置信 (>80%) → 报 must
+- 中置信 (50-80%) → 报 should
+- 低置信 (<50%) → 不报, 写到 null_finding_reason"""
+
+# 默认 tone_instructions — 没设 PECKER_TONE_INSTRUCTIONS env 时用 (≤250 字符)
+_DEFAULT_TONE_INSTRUCTIONS = (
+    "用'建议改为...'而不是'此处违反 X 原则', 引用 PRD 行号而不是抽象概念。"
+    "issue 一句话点透问题, suggestion 给具体改法, 避免'潜在风险/可能影响'类含糊词。"
+)
+
+
+def _get_tone_instructions() -> str:
+    """读取 tone_instructions: PECKER_TONE_INSTRUCTIONS env > 内置默认值. 截到 250 字符."""
+    tone = os.environ.get("PECKER_TONE_INSTRUCTIONS", "").strip()
+    if not tone:
+        tone = _DEFAULT_TONE_INSTRUCTIONS
+    if len(tone) > 250:
+        tone = tone[:250]
+    return tone
+
+
+def _build_tone_instructions_block() -> str:
+    """构造注入 worker system prompt 的 tone_instructions section.
+
+    单独成段, 不动 _WORKER_SHARED_RULES 已有的"prefer not reporting"校准块.
+    """
+    tone = _get_tone_instructions()
+    if not tone:
+        return ""
+    return f"\n## 团队语气约定 (tone_instructions)\n{tone}\n"
+
 
 _WORKER_SYSTEM_TEMPLATE = """你是「{codename}」，啄木鸟评审团的 {dimension_name} 评审员。
 
@@ -143,13 +198,248 @@ _WORKER_SYSTEM_TEMPLATE = """你是「{codename}」，啄木鸟评审团的 {dim
 {checklist_list}
 
 {shared_rules}
-"""
+{tone_instructions_block}"""
+
+
+# ============================================================
+# Rule examples 渲染 (L3 升级: review-checklist.yaml 新 schema)
+# ============================================================
+#
+# 新 schema 给每条规则可选地加 positive_example / negative_example / fire_when /
+# dont_fire_when 字段, 用真实 PRD 文本告诉 worker "什么样子要报 / 什么样子不报",
+# 减少幻觉触发. 老 schema 仍然兼容 — 只渲染 description + 默认校准提示.
+#
+# Token 预算:
+# - 新格式 ~200 token/条, 5 条 ≈ 1000 token
+# - 老格式 ~30 token/条, 5 条 ≈ 150 token
+# - prompt 增量 5-7x, 但 worker 推理质量 worth it
+# - 规则 > 10 条时只 must 级展开 examples, should 走 compact 降级
+
+# 校准默认文案 (老 schema 无 fire_when 时用) — PR-Agent 风格的"prefer not reporting"
+_DEFAULT_FIRE_WHEN = "PRD 显式违反此规则的描述, 且违反点能定位到具体段落/章节"
+_DEFAULT_DONT_FIRE_WHEN = "找不到具体段落支撑, 或问题靠跨章节模糊推测"
+
+# 单条规则 example snippet 的最大字符数 (中文 1 字 ≈ 1 token)
+_EXAMPLE_SNIPPET_MAX_CHARS = 80
+
+# Token 预算阈值 — 超过即触发 compact 降级 (should 走老格式)
+_PROMPT_TOKEN_BUDGET = 10_000
+
+
+def _truncate_snippet(text: str, max_chars: int = _EXAMPLE_SNIPPET_MAX_CHARS) -> str:
+    """把示例 snippet 截到 max_chars 字, 保留首部, 末尾加 ... 标识.
+    多行 snippet 会先合并空行, 再按字符截断."""
+    if not text:
+        return ""
+    # 合并多余空行 + 行内首尾空格
+    cleaned = "\n".join(line.strip() for line in str(text).splitlines() if line.strip())
+    if len(cleaned) <= max_chars:
+        return cleaned
+    return cleaned[:max_chars].rstrip() + "..."
+
+
+def _render_rule_with_examples(rule: dict, compact: bool = False) -> str:
+    """把 review-checklist.yaml 一条规则渲染成 worker prompt 里的 block.
+
+    Args:
+        rule: yaml load 后的 rule dict, 至少含 id (或 rule_id) + name + severity + description.
+              可选: positive_example / negative_example / fire_when / dont_fire_when.
+        compact: 规则数 > 10 时降级模式, 只渲染 description + fire_when, 不展开 examples.
+
+    Returns:
+        中文 markdown block 字符串. 向后兼容: 老 schema 无 examples 字段时只渲染老格式
+        + 默认 PR-Agent 风格"prefer not reporting"校准提示.
+
+    渲染策略 (新 schema):
+        ### {rule_id} {name} [{severity}]
+        {description}
+
+        🔥 何时报: {fire_when}
+        🚫 何时不报: {dont_fire_when}
+
+        ❌ 正例 (违反此规则的样子):
+        > {positive_example.snippet ≤80 字} ...
+        > {why_fails}
+
+        ✅ 反例 (满足此规则的样子):
+        > {negative_example.snippet ≤80 字} ...
+        > {why_passes}
+
+    渲染策略 (老 schema, 兼容):
+        ### {rule_id} {name} [{severity}]
+        {description}
+
+        🔥 何时报: PRD 显式违反此规则的描述, 且违反点能定位到具体段落/章节
+        🚫 何时不报: 找不到具体段落支撑, 或问题靠跨章节模糊推测
+    """
+    rule_id = (rule.get("id") or rule.get("rule_id") or "?").strip()
+    name = (rule.get("name") or "").strip()
+    severity = (rule.get("severity") or "should").strip()
+    description = (rule.get("description") or name or "").strip()
+
+    # 标题行 + 描述
+    lines = [f"### {rule_id} {name} [{severity}]", description]
+
+    # 校准 (fire_when / dont_fire_when) — 老 schema 没有就走默认
+    fire_when = (rule.get("fire_when") or "").strip() or _DEFAULT_FIRE_WHEN
+    dont_fire_when = (rule.get("dont_fire_when") or "").strip() or _DEFAULT_DONT_FIRE_WHEN
+    lines.append("")
+    lines.append(f"🔥 何时报: {fire_when}")
+    lines.append(f"🚫 何时不报: {dont_fire_when}")
+
+    # compact 模式不展开 examples (token 预算保护)
+    if compact:
+        return "\n".join(lines)
+
+    # examples 渲染 — 没有就跳过, 不破坏老 schema 兼容
+    positive = rule.get("positive_example")
+    negative = rule.get("negative_example")
+
+    if isinstance(positive, dict) and positive.get("snippet"):
+        snippet = _truncate_snippet(positive.get("snippet", ""))
+        why_fails = (positive.get("why_fails") or "").strip()
+        lines.append("")
+        lines.append("❌ 正例 (违反此规则的样子):")
+        lines.append(f"> {snippet}")
+        if why_fails:
+            lines.append(f"> {why_fails}")
+
+    if isinstance(negative, dict) and negative.get("snippet"):
+        snippet = _truncate_snippet(negative.get("snippet", ""))
+        why_passes = (negative.get("why_passes") or "").strip()
+        lines.append("")
+        lines.append("✅ 反例 (满足此规则的样子):")
+        lines.append(f"> {snippet}")
+        if why_passes:
+            lines.append(f"> {why_passes}")
+
+    return "\n".join(lines)
+
+
+def _load_rules_for_dimension(workspace, dim_key, dimensions=None):
+    """从 workspace/review-rules/review-checklist.yaml 拿出该维度的规则 dict list.
+
+    通过 SchemaRegistry 推断每条 rule 的 dimension, 过滤后返回原始 yaml dict
+    (保留 examples 等字段, 不丢信息). yaml 缺失/无 examples 字段 → 返回空 list,
+    caller 自然走老路径 (dim['rules'] 已是手写 prompt 文本).
+
+    Returns:
+        list[dict] — yaml 原始 dict 顺序保持, 每条至少含 id + name + severity + description.
+    """
+    if not workspace or not os.path.isdir(workspace):
+        return []
+    # 2026-04-28: 走 SSOT loader, 自动解析 extends 链 + additional_rules.
+    # 老 schema (workspace 直接列 rules) 100% 兼容, 不需改动 yaml.
+    try:
+        from review.rule_loader import load_review_checklist
+        raw_rules = load_review_checklist(workspace)
+    except Exception as exc:
+        log.warning(f"[prompting] SSOT loader 失败 (跳过 examples): {exc}")
+        return []
+    if not isinstance(raw_rules, list):
+        return []
+
+    # 用 SchemaRegistry 推断 dimension; 失败时按 rule_id prefix 回退
+    try:
+        from review.schema_registry import SchemaRegistry, _infer_dimension_from_prefix
+        registry = SchemaRegistry.get(workspace=workspace)
+    except Exception:
+        registry = None
+        from review.schema_registry import _infer_dimension_from_prefix
+
+    dim_rules = []
+    for item in raw_rules:
+        if not isinstance(item, dict):
+            continue
+        rid = (item.get("id") or item.get("rule_id") or "").strip()
+        if not rid:
+            continue
+        # 优先从 registry 拿真 dimension; 拿不到走 prefix 推断
+        inferred_dim = None
+        if registry is not None:
+            try:
+                inferred_dim = registry.get_rule(rid).dimension
+            except KeyError:
+                inferred_dim = None
+        if inferred_dim is None:
+            inferred_dim = _infer_dimension_from_prefix(rid)
+        if inferred_dim == dim_key:
+            dim_rules.append(item)
+    return dim_rules
+
+
+def _has_any_examples(rules: list) -> bool:
+    """判断 rule list 中是否至少有一条带 examples 字段 — 决定是否注入 examples block."""
+    for r in rules:
+        if not isinstance(r, dict):
+            continue
+        if r.get("positive_example") or r.get("negative_example"):
+            return True
+        if r.get("fire_when") or r.get("dont_fire_when"):
+            return True
+    return False
+
+
+def _build_examples_block(workspace, dim_key, base_token_estimate: int = 0):
+    """渲染当前维度的规则 examples block (新 schema 升级注入点).
+
+    向后兼容: 当前维度规则全部无 examples → 返回空字符串, prompt 不变.
+
+    Token 预算保护:
+    - 估算 base_prompt 已占 token + examples block token
+    - 总和 > _PROMPT_TOKEN_BUDGET 时:
+        * 规则 > 10 条 → 只 must 级展开 examples, should 走 compact
+        * 否则全部走 compact (只 description + fire_when)
+    - 大致字符 → token: 中文 1 字 ≈ 1 token, ascii 4 字符 ≈ 1 token. 保守估算用 char_count.
+    """
+    rules = _load_rules_for_dimension(workspace, dim_key)
+    if not rules or not _has_any_examples(rules):
+        return ""
+
+    # 估算总 token (中文为主, 1 char ≈ 1 token 保守值)
+    rule_count = len(rules)
+    must_count = sum(1 for r in rules if (r.get("severity") or "").lower() == "must")
+
+    # 第一轮: 全展开估算
+    rendered = [_render_rule_with_examples(r, compact=False) for r in rules]
+    full_chars = sum(len(s) for s in rendered)
+    estimated_tokens = base_token_estimate + full_chars
+
+    if estimated_tokens > _PROMPT_TOKEN_BUDGET:
+        # 第二轮: 规则 > 10 条 → must 全展开 + should 走 compact
+        if rule_count > 10:
+            rendered = [
+                _render_rule_with_examples(
+                    r,
+                    compact=(r.get("severity") or "").lower() != "must",
+                )
+                for r in rules
+            ]
+            log.info(
+                f"[prompting] dim={dim_key} examples 触发预算降级: must 全展开 + should compact "
+                f"(rule_count={rule_count}, must={must_count}, est={estimated_tokens})"
+            )
+        else:
+            # 规则较少但 base_prompt 已经很大 → 全部走 compact
+            rendered = [_render_rule_with_examples(r, compact=True) for r in rules]
+            log.info(
+                f"[prompting] dim={dim_key} examples 触发全 compact 降级 "
+                f"(rule_count={rule_count}, est={estimated_tokens})"
+            )
+
+    header = (
+        f"## 规则 examples 与触发边界 (L3 校准)\n\n"
+        f"以下展开是该维度规则的真实 PRD 文本案例. 看 fire_when / dont_fire_when 决定是否报, "
+        f"看正例/反例理解规则边界. 不要根据感觉报, 必须找到 PRD 里跟正例同类的具体段落才能报.\n"
+    )
+    return header + "\n\n".join(rendered) + "\n"
 
 
 def _build_worker_system(dim_key, rule_perf_history=None, dimensions=None, workspace=None):
     """为某个评审维度构建 system prompt，并动态注入：
     1. 信鸽反馈的高发问题规则（rule_perf_history）
     2. workspace 中的真实 rule_id / wiki 页面清单（防止 evidence 造假，借鉴百灵 load_real_imports）
+    3. L3 升级: review-checklist.yaml 新 schema 的 positive/negative_example + fire_when/dont_fire_when
     """
     dims = dimensions or get_review_dimensions()
     dim = dims[dim_key]
@@ -166,19 +456,127 @@ def _build_worker_system(dim_key, rule_perf_history=None, dimensions=None, works
         dimension_rules=dim["rules"],
         checklist_list=checklist_text,
         shared_rules=_WORKER_SHARED_RULES,
+        tone_instructions_block=_build_tone_instructions_block(),
     )
 
-    # --- 动态注入信鸽反馈 ---
-    feedback_section = _build_feedback_section(dim_key, rule_perf_history, dims)
-    if feedback_section:
-        base_prompt += "\n" + feedback_section
+    # --- L3 升级: 注入 examples block (workspace 有 review-checklist.yaml 新 schema 时生效) ---
+    # 估算 base_prompt 已用 token, 传给 _build_examples_block 做预算保护
+    base_token_estimate = len(base_prompt)
+    examples_section = _build_examples_block(workspace, dim_key, base_token_estimate)
+    if examples_section:
+        base_prompt += "\n" + examples_section
 
-    # --- 动态注入真实依据清单（防止 evidence 造假，对应路线图 B1 前置） ---
+    # --- 优先级注入: v2 PM 显式反馈 → v1 commit 隐式信号 → 真实依据清单 ---
+    # 设计决策 (2026-04-29 finalize, 详见 docs/v1_vs_v2_feedback_strategy.md):
+    #   - v2 (learnings) 优先级最高: PM 直接反馈, 信号最准, 放在最前面让 worker 先看到
+    #   - v1 (commit feedback) 降权为辅助信号: 历史提交反推, 可能滞后/噪声大,
+    #     放后面 + 显式注明 "辅助信号"
+    #   - 真实依据清单 (refs_section) 穿插中间, 防 evidence 造假
+    #
+    # 当 v2 与 v1 信号冲突 (e.g. v1 说"近期漏报多", v2 说"PM 反馈这条都是误报"),
+    # worker 应优先按 v2 instruction 执行 — prompting 文案里已显式标注优先级.
+
+    # --- 信鸽 v2 (优先): 注入 PM 反馈编译出的 learnings ---
+    learnings_section = _build_learnings_section(workspace, dim_key)
+    if learnings_section:
+        base_prompt += "\n" + learnings_section
+
+    # --- 真实依据清单（防止 evidence 造假，对应路线图 B1 前置） ---
     refs_section = _build_real_refs_section(workspace)
     if refs_section:
         base_prompt += "\n" + refs_section
 
+    # --- 信鸽 v1 (辅助): 代码 commit 隐式信号, 降权为参考 ---
+    feedback_section = _build_feedback_section(dim_key, rule_perf_history, dims)
+    if feedback_section:
+        base_prompt += "\n" + feedback_section
+
     return base_prompt
+
+
+def _build_learnings_section(workspace, dim_key, prd_content=None, max_count=5):
+    """信鸽 v2: 注入 PM 反馈编译出的 learnings 到 worker prompt.
+
+    与 _build_feedback_section 区别:
+      - _build_feedback_section: 代码 commit 隐式信号 (rejection_rate / missed)
+      - _build_learnings_section: PM 显式自然语言反馈编译出的 learning records
+
+    Token 预算:
+      - 单条 learning ~ 100-200 token (trigger_pattern + instruction)
+      - 每 dim 最多 5 条 → 共 < 1000 token (符合任务 SLA)
+
+    匹配策略 (无 prd_content 时):
+      - 取该 dim 相关 (含本 dim 或无显式 dim 标注) 的 learning
+      - 按 scope 优先级排序: org_global > team_local > pr_local
+      - 取前 max_count 条
+
+    匹配策略 (有 prd_content 时):
+      - 调 find_relevant_learnings 做 keyword 启发式匹配
+    """
+    if not workspace or not os.path.isdir(workspace):
+        return ""
+    learnings_dir = os.path.join(workspace, "learnings")
+    if not os.path.isdir(learnings_dir):
+        return ""
+
+    try:
+        from review.learnings_store import LearningsStore, find_relevant_learnings
+    except ImportError as e:
+        log.warning(f"learnings_store import 失败: {e}")
+        return ""
+
+    try:
+        store = LearningsStore(workspace)
+    except (OSError, ValueError) as e:
+        log.warning(f"LearningsStore 初始化失败: {e}")
+        return ""
+
+    if prd_content:
+        learnings = find_relevant_learnings(
+            store, prd_content, dim_key, max_count=max_count,
+        )
+    else:
+        # system prompt 阶段没 PRD 内容, 取该 dim 相关的全部 learning, 按 scope 优先 + usage 排序
+        all_learnings = store.list_all()
+        relevant = [l for l in all_learnings if not l.dim_keys or dim_key in l.dim_keys]
+        prio_map = {"org_global": 0, "team_local": 1, "pr_local": 2}
+        relevant.sort(key=lambda l: (
+            prio_map.get(l.scope, 9),
+            -l.usage_count,
+            l.created_at,
+        ))
+        learnings = relevant[:max_count]
+
+    if not learnings:
+        return ""
+
+    # 统计当前注入: 异步刷 usage_count (不阻塞 prompt 生成)
+    for l in learnings:
+        try:
+            store.update_usage(l.id)
+        except Exception as e:
+            log.debug(f"learning {l.id} usage 刷新失败: {e}")
+
+    lines = [
+        "## PM 反馈编译记录 (Learnings) — **高优先级 / 信鸽 v2**",
+        "以下是 PM 历史反馈编译出的 learning, **是当前最准的信号**. 出现 trigger_pattern 描述的情况时, 严格按 instruction 执行.",
+        "**优先级铁律**:",
+        "  1. learning 与默认规则冲突 → learning 优先",
+        "  2. learning 与下文「近期反馈提示」(信鸽 v1, commit 隐式信号) 冲突 → learning 优先",
+        "  3. scope 内部: org_global > team_local > pr_local",
+        "",
+    ]
+    for l in learnings:
+        scope_label = {
+            "org_global": "[组织]",
+            "team_local": "[团队]",
+            "pr_local": "[本次]",
+        }.get(l.scope, "[本次]")
+        lines.append(f"- {scope_label} **当 {l.trigger_pattern}**: {l.instruction}")
+        if l.related_rule_ids:
+            lines.append(f"  (关联规则: {', '.join(l.related_rule_ids)})")
+    lines.append("")
+    return "\n".join(lines)
 
 
 def _build_feedback_section(dim_key, rule_perf_history=None, dimensions=None):
@@ -268,7 +666,12 @@ def _build_feedback_section(dim_key, rule_perf_history=None, dimensions=None):
         flagged.sort(key=_severity, reverse=True)
         flagged = flagged[:5]
 
-        lines += ["## 近期反馈提示", "以下规则在最近的评审中表现异常，请加强审核："]
+        lines += [
+            "## 近期反馈提示 — **辅助优先级 / 信鸽 v1**",
+            "以下来自代码 commit 隐式反推 (rejection_rate / missed / eval P/R), **作为参考信号**.",
+            "**与上文「PM 反馈编译记录」(信鸽 v2) 冲突时, 以 v2 为准.**",
+            "",
+        ]
         for r in flagged:
             parts = []
             if r["name"]:
@@ -412,6 +815,85 @@ def _build_real_refs_section(workspace):
             lines.append(f"- {badge} `[[{p}]]` ({age_days}d)")
         lines.append("")
 
+    # L4 GraphRAG Phase 3: 注入 wiki KG 工具说明 (workspace/wiki/_kg/ 存在时才加).
+    # worker 拿到这段说明后, 在依据写法上可以选择两种格式:
+    #   1. 老格式 [[页面名]] — 走 manifest 字符串匹配 (向后兼容)
+    #   2. 新格式 [[entity:e_xxx]] — 走 KG entity 验证, 解决"页面名不一致"痛点
+    kg_section = _build_kg_tools_hint(workspace)
+    if kg_section:
+        lines.append(kg_section)
+
+    return "\n".join(lines)
+
+
+def _build_kg_tools_hint(workspace):
+    """L4 GraphRAG Phase 3: 给 worker 介绍 search_entity / expand_neighbors 概念.
+
+    实现注意:
+    - **不真改 worker tool list** — 只在 prompt 里告知, 让 worker "声明引用" 而不真 tool call.
+      避免改 worker.py 的 tool 调用栈, 风险最小化.
+    - 当 workspace/wiki/_kg/entities.json 存在时, 列前 20 个 entity 当样例 (按 type 多样性).
+    - worker 引用时写 `[[entity:e_xxx]]`, evidence_verify 会走 entity 验证而非 page name 匹配.
+    """
+    if not workspace or not os.path.isdir(workspace):
+        return ""
+    kg_dir = os.path.join(workspace, "wiki", "_kg")
+    ents_path = os.path.join(kg_dir, "entities.json")
+    if not os.path.isfile(ents_path):
+        return ""
+
+    try:
+        with open(ents_path, "r", encoding="utf-8") as f:
+            entities = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return ""
+
+    if not entities:
+        return ""
+
+    # 列出前 20 个 entity 当样例, round-robin 拿样本保证 type 覆盖
+    sample_n = min(20, len(entities))
+    by_type: dict = {}
+    for e in entities:
+        by_type.setdefault(e.get("type", "?"), []).append(e)
+    samples = []
+    while len(samples) < sample_n and by_type:
+        for t in list(by_type.keys()):
+            if by_type[t]:
+                samples.append(by_type[t].pop(0))
+                if not by_type[t]:
+                    del by_type[t]
+                if len(samples) >= sample_n:
+                    break
+
+    lines = [
+        "",
+        "## Wiki KG 工具 (L4 GraphRAG Phase 3 — 替代 [[页面名]] 字符串匹配)",
+        "",
+        f"workspace 已构建 KG ({len(entities)} 个 entity). 你可以引用 entity_id 替代页面名:",
+        "- 老格式 `[[页面名]]` → 仍向后兼容, 但 manifest 字符串匹配命中精度 ~60%",
+        "- 新格式 `[[entity:e_xxx]]` → 走 KG entity 验证, 修复 alias 不一致 (如 规范-字段映射 ↔ 字段映射规范) 痛点",
+        "",
+        "**两个工具概念 (你声明引用即可, 无需真 tool call)**:",
+        "- `search_entity(query)`: 在 KG 中搜实体, 返回 top-5 匹配 (含 title + aliases + 来源页)",
+        "- `expand_neighbors(entity_id, hops=1)`: 拓展 1-hop 邻居, 用于跨 wiki 页推理 (如 \"字段 X 是否在表 Y\")",
+        "",
+        "**用法**: 先用 search_entity 找到精确实体 ID, 再用 expand_neighbors 做多跳查询.",
+        "引用时在 evidence_content 里写 `[[entity:e_xxx]]`, 验证器会查 _kg/entities.json:",
+        "  ✅ `**依据**: [A] [[entity:e_a1b2c3d4]] (字段映射规范) 明确要求所有字段标 source_table`",
+        "  ✅ `**依据**: [A] [[约束-接口命名规范]]` (老格式仍可用)",
+        "  ❌ `**依据**: [A] [[entity:e_99999999]]` (entity_id 不存在 → 标 failed)",
+        "",
+        f"**KG 实体样例 ({len(samples)} 条, 完整列表见 wiki/_kg/entities.json)**:",
+    ]
+    for ent in samples[:sample_n]:
+        title = ent.get("title", "")
+        etype = ent.get("type", "")
+        eid = ent.get("id", "")
+        aliases = ent.get("aliases", [])
+        alias_str = f" (别名: {', '.join(aliases[:3])})" if aliases else ""
+        lines.append(f"- `{eid}` [{etype}] {title}{alias_str}")
+    lines.append("")
     return "\n".join(lines)
 
 

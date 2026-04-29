@@ -20,6 +20,13 @@ from logger import get_logger
 
 log = get_logger("goshawk")
 
+# Metrics 埋点 — 失败 silent skip, 不阻交叉校验主流程
+try:
+    from review.metrics_store import record_event as _record_event
+except Exception:
+    def _record_event(*args, **kwargs):  # noqa: ARG001
+        return False
+
 # ============================================================
 # 苍鹰 ASCII Art
 # ============================================================
@@ -253,6 +260,19 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
 
     print(GOSHAWK_ART)
 
+    # Metrics 埋点: goshawk.started (workspace 来自 env, advisor 上下文 wiki_pages 不带 path)
+    _gs_workspace = os.environ.get("WORKSPACE")
+    _gs_started_at = _time.time()
+    try:
+        _record_event(
+            "goshawk.started",
+            workspace=_gs_workspace,
+            model=model,
+            details={"n_worker_items": len(worker_results) if worker_results else 0},
+        )
+    except Exception:
+        pass
+
     user_msg = _build_advisor_user_message(prd_content, worker_results, wiki_pages)
     messages = [{"role": "user", "content": user_msg}]
 
@@ -426,6 +446,27 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
         "output_tokens": response.usage.get("output_tokens", 0) if hasattr(response.usage, 'get') else getattr(response.usage, 'output_tokens', 0),
     }
 
+    # Metrics 埋点: goshawk.completed
+    try:
+        _record_event(
+            "goshawk.completed",
+            workspace=_gs_workspace,
+            duration_ms=int((_time.time() - _gs_started_at) * 1000),
+            model=model,
+            status="success",
+            details={
+                "verdict": result.get("verdict"),
+                "confidence": result.get("confidence"),
+                "false_positive_count": len(result.get("flagged_as_false_positive", []) or []),
+                "additional_count": len(result.get("additional_findings", []) or []),
+                "conflict_count": len(result.get("conflict_resolutions", []) or []),
+                "empty_retry_used": empty_retry_used,
+                "truncated_by_deadline": result.get("truncated_by_deadline", False),
+            },
+        )
+    except Exception:
+        pass
+
     return result
 
 
@@ -455,6 +496,17 @@ async def advisor_review_async(client, prd_content, worker_results, wiki_pages=N
         )
     except asyncio.TimeoutError:
         log.warning(f"苍鹰交叉校验超时({GOSHAWK_TIMEOUT}s),跳过终审,直接用 worker 合并结果")
+        try:
+            _record_event(
+                "goshawk.failed",
+                workspace=os.environ.get("WORKSPACE"),
+                duration_ms=int(GOSHAWK_TIMEOUT * 1000),
+                model=model,
+                status="timeout",
+                details={"error": f"goshawk timeout {GOSHAWK_TIMEOUT}s"},
+            )
+        except Exception:
+            pass
         return {
             "flagged_as_false_positive": [],
             "additional_findings": [],
@@ -760,6 +812,17 @@ async def advisor_review_default_async(client, prd_content, worker_results, wiki
         )
     except asyncio.TimeoutError:
         log.warning(f"苍鹰交叉校验超时({GOSHAWK_TIMEOUT}s),跳过终审,直接用 worker 合并结果")
+        try:
+            _record_event(
+                "goshawk.failed",
+                workspace=os.environ.get("WORKSPACE"),
+                duration_ms=int(GOSHAWK_TIMEOUT * 1000),
+                model=model,
+                status="timeout",
+                details={"error": f"goshawk timeout {GOSHAWK_TIMEOUT}s"},
+            )
+        except Exception:
+            pass
         return {
             "flagged_as_false_positive": [],
             "additional_findings": [],

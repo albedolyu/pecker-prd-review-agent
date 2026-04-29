@@ -38,6 +38,13 @@ from review.types import WorkerResult
 
 log = get_logger("parallel")
 
+# Metrics 埋点 — 失败 silent skip, 不阻 review 主流程
+try:
+    from review.metrics_store import record_event as _record_event
+except Exception:
+    def _record_event(*args, **kwargs):  # noqa: ARG001
+        return False
+
 
 # ============================================================
 # _worker_core 的两个抽出 helpers (2026-04-23 #1 refactor):
@@ -500,11 +507,35 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
     # 3a: telemetry — 记录 worker 开始时间
     start_time = time.time()
 
+    # Metrics 埋点: worker.started (workspace 从 wiki_path 反推)
+    _ws_for_metrics = os.path.dirname(wiki_path) if wiki_path else None
+    try:
+        _record_event(
+            "worker.started",
+            workspace=_ws_for_metrics,
+            details={"dim_key": dim_key},
+        )
+    except Exception:
+        pass
+
     # 上下文构建抽到 _prepare_worker_context (见本文件前部定义)
-    ctx = _prepare_worker_context(
-        dim_key, model_tiers, rule_perf_history, wiki_path, wiki_pages,
-        prd_content, diff_context,
-    )
+    try:
+        ctx = _prepare_worker_context(
+            dim_key, model_tiers, rule_perf_history, wiki_path, wiki_pages,
+            prd_content, diff_context,
+        )
+    except Exception as _ctx_err:
+        try:
+            _record_event(
+                "worker.failed",
+                workspace=_ws_for_metrics,
+                duration_ms=int((time.time() - start_time) * 1000),
+                status="failed",
+                details={"dim_key": dim_key, "error": str(_ctx_err)[:200], "stage": "prepare_context"},
+            )
+        except Exception:
+            pass
+        raise
     dim = ctx["dim"]
     model = ctx["model"]
     dim_tier_alias = ctx["dim_tier_alias"]
@@ -581,7 +612,21 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
         return resp
 
     # client.create 内部已有分级重试，不再外层重复
-    response = _call(messages)
+    try:
+        response = _call(messages)
+    except Exception as _call_err:
+        try:
+            _record_event(
+                "worker.failed",
+                workspace=_ws_for_metrics,
+                duration_ms=int((time.time() - start_time) * 1000),
+                model=model,
+                status="failed",
+                details={"dim_key": dim_key, "error": str(_call_err)[:200], "stage": "initial_call"},
+            )
+        except Exception:
+            pass
+        raise
 
     items = _extract_items_from_response(response)
     empty_submission_reason = _empty_submission_reason(response)
@@ -701,6 +746,29 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
         "dropped_unknown_rule_ids": drop_telemetry["dropped_unknown_rule_ids"],
     }
 
+    # Metrics 埋点: worker.completed (含 telemetry 关键字段)
+    try:
+        _record_event(
+            "worker.completed",
+            workspace=_ws_for_metrics,
+            duration_ms=telemetry["duration_ms"],
+            model=model,
+            cost_usd=cost_usd,
+            status="success",
+            details={
+                "dim_key": dim_key,
+                "items_count": len(items),
+                "tokens_in": telemetry["tokens_in"],
+                "tokens_out": telemetry["tokens_out"],
+                "empty_retry_used": empty_retry_used,
+                "degraded": is_degraded,
+                "turns_used": current_turn,
+                "truncated": telemetry.get("truncated", False),
+            },
+        )
+    except Exception:
+        pass
+
     return {
         "dimension": dim_key,
         "dimension_name": dim["name"],
@@ -731,6 +799,16 @@ async def _run_worker_async(client, dim_key, prd_content, wiki_pages, model_tier
         # 超时 Worker 不抛出,返回错误结构,让 gather 正常汇总其他 Worker 结果
         dim_name = get_review_dimensions().get(dim_key, {}).get("name", dim_key)
         log.warning(f"[{_cn_label(dim_key)}] Worker 超时({WORKER_TIMEOUT}s),跳过")
+        try:
+            _record_event(
+                "worker.failed",
+                workspace=os.path.dirname(wiki_path) if wiki_path else None,
+                duration_ms=int(WORKER_TIMEOUT * 1000),
+                status="timeout",
+                details={"dim_key": dim_key, "error": f"Worker 超时({WORKER_TIMEOUT}s)"},
+            )
+        except Exception:
+            pass
         return {
             "dimension": dim_key,
             "dimension_name": dim_name,

@@ -1,0 +1,345 @@
+[
+  {
+    "id": "e_87e157c8",
+    "title": "决策-riskbird_status过滤规则待确认",
+    "type": "spec_doc",
+    "description": "关于riskbird_status过滤规则的决策页面",
+    "aliases": [
+      "过滤规则待确认页面"
+    ],
+    "source_pages": [
+      "决策-riskbird_status过滤规则待确认.md",
+      "决策-产品召回评审发现.md",
+      "决策-产品召回评审发现-20260412.md"
+    ]
+  },
+  {
+    "id": "e_9e2f286a",
+    "title": "ds_risk_recall",
+    "type": "data_table",
+    "description": "产品召回数据表，存储召回公告信息",
+    "aliases": [
+      "ds_risk_recall表",
+      "risk_recall",
+      "召回表"
+    ],
+    "source_pages": [
+      "决策-riskbird_status过滤规则待确认.md",
+      "概念-产品召回.md",
+      "决策-产品召回评审发现.md",
+      "场景-产品召回列表页.md",
+      "约束-ds_risk_recall表结构.md",
+      "决策-产品召回评审发现-20260412.md",
+      "场景-产品召回列表与详情.md"
+    ]
+  },
+  {
+    "id": "e_a2503096",
+    "title": "ds_risk_recall.riskbird_status",
+    "type": "field",
+    "description": "风鸟端状态字段，过滤条件riskbird_status=0，DDL未定义",
+    "aliases": [
+      "riskbird状态",
+      "风鸟状态"
+    ],
+    "source_pages": [
+      "决策-riskbird_status过滤规则待确认.md",
+      "决策-产品召回评审发现.md",
+      "场景-产品召回列表页.md",
+      "决策-产品召回评审发现-20260412.md",
+      "场景-产品召回列表与详情.md"
+    ]
+  },
+  {
+    "id": "e_431face8",
+    "title": "ds_risk_recall.data_status",
+    "type": "field",
+    "description": "数据状态字段，与riskbird_status联合过滤",
+    "aliases": [
+      "data状态",
+      "数据状态",
+      "状态字段"
+    ],
+    "source_pages": [
+      "决策-riskbird_status过滤规则待确认.md",
+      "概念-产品召回.md",
+      "场景-产品召回列表页.md",
+      "约束-ds_risk_recall表结构.md",
+      "决策-产品召回评审发现-20260412.md",
+      "场景-产品召回列表与详情.md"
+    ]
+  },
+  {
+    "id": "e_1826008c",
+    "title": "约束-ds_risk_recall表结构",
+    "type": "spec_doc",
+    "description": "技术约束规范，定义ds_risk_recall表结构",
+    "aliases": [
+      "ds_risk_recall约束",
+      "表结构约束"
+    ],
+    "source_pages": [
+      "决策-riskbird_status过滤规则待确认.md",
+      "概念-产品召回.md",
+      "决策-产品召回评审发现.md",
+      "场景-产品召回列表页.md",
+      "约束-ds_risk_recall表结构.md",
+      "决策-产品召回评审发现-20260412.md",
+      "场景-产品召回列表与详情.md"
+    ]
+  },
+  {
+    "id": "e_7e1b8ee2",
+    "title": "概念-产品召回",
+    "type": "page_concept",
+    "description": "产品召回业务概念页，定义及核心字段",
+    "aliases": [],
+    "source_pages": [
+      "决策-riskbird_status过滤规则待确认.md",
+      "概念-产品召回.md",
+      "决策-产品召回评审发现.md",
+      "场景-产品召回列表页.md",
+      "约束-ds_risk_recall表结构.md",
+      "场景-产品召回列表与详情.md"
+    ]
+  },
+  {
+    "id": "e_92485ec5",
+    "title": "ds_risk_recall.entid",
+    "type": "field",
+    "description": "企业ID，关联主体",
+    "aliases": [],
+    "source_pages": [
+      "概念-产品召回.md",
+      "场景-产品召回列表页.md",
+      "约束-ds_risk_recall表结构.md"
+    ]
+  },
+  {
+    "id": "e_218ad72f",
+    "title": "ds_risk_recall.rdate",
+    "type": "field",
+    "description": "发布日期字段，默认DESC排序",
+    "aliases": [],
+    "source_pages": [
+      "概念-产品召回.md",
+      "场景-产品召回列表页.md",
+      "约束-ds_risk_recall表结构.md"
+    ]
+  },
+  {
+    "id": "e_68977ed5",
+    "title": "ds_risk_recall.recall_product",
+    "type": "field",
+    "description": "召回产品名称字段",
+    "aliases": [],
+    "source_pages": [
+      "概念-产品召回.md",
+      "场景-产品召回列表页.md"
+    ]
+  },
+  {
+    "id": "e_6d2cfe92",
+    "title": "ds_risk_recall.recall_num",
+    "type": "field",
+    "description": "召回数量字段",
+    "aliases": [],
+    "source_pages": [
+      "概念-产品召回.md",
+      "场景-产品召回列表页.md",
+      "约束-ds_risk_recall表结构.md"
+    ]
+  },
+  {
+    "id": "e_0eea12cc",
+    "title": "ds_risk_recall.recall_reason",
+    "type": "field",
+    "description": "召回原因字段，超2行展开收起",
+    "aliases": [],
+    "source_pages": [
+      "概念-产品召回.md",
+      "场景-产品召回列表页.md",
+      "约束-ds_risk_recall表结构.md"
+    ]
+  },
+  {
+    "id": "e_9db38995",
+    "title": "ds_risk_recall.content",
+    "type": "field",
+    "description": "公告正文内容字段，完整展示于详情页",
+    "aliases": [
+      "content",
+      "公告正文"
+    ],
+    "source_pages": [
+      "概念-产品召回.md",
+      "约束-ds_risk_recall表结构.md",
+      "场景-产品召回列表与详情.md"
+    ]
+  },
+  {
+    "id": "e_56c96458",
+    "title": "ds_risk_recall.source",
+    "type": "field",
+    "description": "信息来源",
+    "aliases": [],
+    "source_pages": [
+      "概念-产品召回.md",
+      "约束-ds_risk_recall表结构.md"
+    ]
+  },
+  {
+    "id": "e_902ed4e3",
+    "title": "ds_risk_recall.title",
+    "type": "field",
+    "description": "公告标题，varchar",
+    "aliases": [],
+    "source_pages": [
+      "概念-产品召回.md",
+      "约束-ds_risk_recall表结构.md"
+    ]
+  },
+  {
+    "id": "e_c567b9fd",
+    "title": "场景-产品召回列表页",
+    "type": "page_concept",
+    "description": "产品召回列表页面的业务场景",
+    "aliases": [],
+    "source_pages": [
+      "概念-产品召回.md",
+      "决策-产品召回评审发现.md",
+      "约束-ds_risk_recall表结构.md"
+    ]
+  },
+  {
+    "id": "e_c87734c8",
+    "title": "决策-产品召回评审发现",
+    "type": "page_concept",
+    "description": "产品召回评审发现的决策记录",
+    "aliases": [],
+    "source_pages": [
+      "概念-产品召回.md",
+      "约束-ds_risk_recall表结构.md"
+    ]
+  },
+  {
+    "id": "e_83532634",
+    "title": "决策-riskbird_status过滤规则待确认",
+    "type": "page_concept",
+    "description": "riskbird_status字段过滤规则的待确认决策",
+    "aliases": [],
+    "source_pages": [
+      "概念-产品召回.md"
+    ]
+  },
+  {
+    "id": "e_d6ea967f",
+    "title": "决策-产品召回评审发现",
+    "type": "spec_doc",
+    "description": "记录2026-04-12产品召回评审发现的设计决策与待确认事项",
+    "aliases": [
+      "召回评审发现",
+      "首次召回评审"
+    ],
+    "source_pages": [
+      "决策-产品召回评审发现.md",
+      "场景-产品召回列表页.md",
+      "决策-产品召回评审发现-20260412.md"
+    ]
+  },
+  {
+    "id": "e_27a93f8d",
+    "title": "场景-产品召回列表页",
+    "type": "spec_doc",
+    "description": "产品召回列表页场景描述",
+    "aliases": [],
+    "source_pages": [
+      "场景-产品召回列表页.md"
+    ]
+  },
+  {
+    "id": "e_deab6c2d",
+    "title": "ds_risk_recall.supervision_department",
+    "type": "field",
+    "description": "监管部门字段",
+    "aliases": [],
+    "source_pages": [
+      "场景-产品召回列表页.md"
+    ]
+  },
+  {
+    "id": "e_cee2defe",
+    "title": "ds_risk_recall.id",
+    "type": "field",
+    "description": "主键字段",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_risk_recall表结构.md"
+    ]
+  },
+  {
+    "id": "e_2237a14c",
+    "title": "ds_risk_recall.entname",
+    "type": "field",
+    "description": "企业名称",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_risk_recall表结构.md"
+    ]
+  },
+  {
+    "id": "e_1fb35a24",
+    "title": "ds_risk_recall.recall_name",
+    "type": "field",
+    "description": "召回名称字段，历史矛盾",
+    "aliases": [
+      "recall名称",
+      "召回名称"
+    ],
+    "source_pages": [
+      "约束-ds_risk_recall表结构.md",
+      "决策-产品召回评审发现-20260412.md"
+    ]
+  },
+  {
+    "id": "e_819c3c30",
+    "title": "决策-产品召回评审发现-20260412",
+    "type": "spec_doc",
+    "description": "产品召回第二次评审发现，含13条改进项",
+    "aliases": [
+      "召回评审发现20260412",
+      "评审记录"
+    ],
+    "source_pages": [
+      "决策-产品召回评审发现-20260412.md",
+      "场景-产品召回列表与详情.md"
+    ]
+  },
+  {
+    "id": "e_c12b9cb0",
+    "title": "场景-产品召回列表与详情",
+    "type": "page_concept",
+    "description": "产品召回列表与详情页面的业务场景定义",
+    "aliases": [
+      "召回列表与详情",
+      "召回场景"
+    ],
+    "source_pages": [
+      "决策-产品召回评审发现-20260412.md",
+      "场景-产品召回列表与详情.md"
+    ]
+  },
+  {
+    "id": "e_87a71f5a",
+    "title": "ds_risk_recall.rc_product",
+    "type": "field",
+    "description": "召回产品字段，与recall_name历史矛盾",
+    "aliases": [
+      "rc产品",
+      "产品字段"
+    ],
+    "source_pages": [
+      "决策-产品召回评审发现-20260412.md"
+    ]
+  }
+]

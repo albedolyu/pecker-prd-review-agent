@@ -1,0 +1,371 @@
+[
+  {
+    "id": "e_182d3225",
+    "title": "决策-侵权软件PRD评审发现",
+    "type": "spec_doc",
+    "description": "已废弃的侵权软件PRD评审发现页面",
+    "aliases": [],
+    "source_pages": [
+      "决策-侵权软件PRD评审发现.md"
+    ]
+  },
+  {
+    "id": "e_1e93941b",
+    "title": "决策-侵权软件评审发现",
+    "type": "spec_doc",
+    "description": "侵权软件PRD评审决策记录，含排序规则与屏蔽规则",
+    "aliases": [],
+    "source_pages": [
+      "决策-侵权软件PRD评审发现.md",
+      "决策-侵权软件评审发现.md"
+    ]
+  },
+  {
+    "id": "e_3de67551",
+    "title": "竞品-企查查-侵权软件",
+    "type": "spec_doc",
+    "description": "企查查侵权软件功能分析文档",
+    "aliases": [],
+    "source_pages": [
+      "竞品-企查查-侵权软件.md"
+    ]
+  },
+  {
+    "id": "e_8ae60cd0",
+    "title": "概念-侵权软件",
+    "type": "page_concept",
+    "description": "被工信部通报的侵害用户权益APP记录的定义与业务价值",
+    "aliases": [
+      "侵权软件",
+      "侵权软件数据",
+      "侵权软件概念"
+    ],
+    "source_pages": [
+      "竞品-企查查-侵权软件.md",
+      "概念-侵权软件.md",
+      "场景-企业主页侵权软件.md",
+      "场景-风险扫描侵权软件.md",
+      "决策-侵权软件评审发现.md",
+      "约束-ds_risk_software_infringement_data.md"
+    ]
+  },
+  {
+    "id": "e_317e40b4",
+    "title": "场景-企业主页侵权软件模块",
+    "type": "page_concept",
+    "description": "企业主页侵权软件模块场景页面",
+    "aliases": [],
+    "source_pages": [
+      "竞品-企查查-侵权软件.md",
+      "决策-侵权软件评审发现.md"
+    ]
+  },
+  {
+    "id": "e_18ce4ce0",
+    "title": "实体-风鸟平台",
+    "type": "page_concept",
+    "description": "风鸟平台业务实体页面（自动创建的占位页面）",
+    "aliases": [
+      "风鸟平台"
+    ],
+    "source_pages": [
+      "实体-风鸟平台.md",
+      "概念-侵权软件.md"
+    ]
+  },
+  {
+    "id": "e_decb06d2",
+    "title": "约束-ds_risk_software_infringement_data表结构",
+    "type": "spec_doc",
+    "description": "该规范文档已废弃，合并至约束-ds_risk_software_infringement_data",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_risk_software_infringement_data表结构.md",
+      "决策-侵权软件评审发现.md",
+      "概念-riskbird_status枚举.md"
+    ]
+  },
+  {
+    "id": "e_0c047747",
+    "title": "约束-ds_risk_software_infringement_data",
+    "type": "spec_doc",
+    "description": "关于 ds_risk_software_infringement_data 表的约束规范",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_risk_software_infringement_data表结构.md",
+      "概念-侵权软件.md",
+      "场景-企业主页侵权软件.md",
+      "约束-ds_risk_software_infringement_data.md"
+    ]
+  },
+  {
+    "id": "e_2332d940",
+    "title": "场景-企业主页侵权软件",
+    "type": "page_concept",
+    "description": "企业主页经营风险下的侵权软件记录场景",
+    "aliases": [
+      "企业主页侵权软件"
+    ],
+    "source_pages": [
+      "概念-侵权软件.md",
+      "场景-企业主页侵权软件.md",
+      "场景-风险扫描侵权软件.md",
+      "约束-ds_risk_software_infringement_data.md"
+    ]
+  },
+  {
+    "id": "e_add2765b",
+    "title": "场景-风险扫描侵权软件",
+    "type": "page_concept",
+    "description": "风险扫描侵权软件场景页面，描述用户查看侵权软件风险汇总和详情",
+    "aliases": [
+      "风险扫描侵权软件"
+    ],
+    "source_pages": [
+      "概念-侵权软件.md",
+      "场景-企业主页侵权软件.md",
+      "场景-风险扫描侵权软件.md"
+    ]
+  },
+  {
+    "id": "e_ecd940eb",
+    "title": "ds_risk_software_infringement_data",
+    "type": "data_table",
+    "description": "侵权软件数据主表，通过entid关联企业",
+    "aliases": [
+      "主表",
+      "侵权软件主表",
+      "侵权软件数据表",
+      "侵权软件表"
+    ],
+    "source_pages": [
+      "场景-企业主页侵权软件.md",
+      "场景-风险扫描侵权软件.md",
+      "决策-侵权软件评审发现.md",
+      "约束-ds_risk_software_infringement_data.md",
+      "概念-riskbird_status枚举.md"
+    ]
+  },
+  {
+    "id": "e_bb9b4343",
+    "title": "ds_risk_software_infringement_data.app_name",
+    "type": "field",
+    "description": "应用名称字段，varchar",
+    "aliases": [],
+    "source_pages": [
+      "场景-企业主页侵权软件.md",
+      "约束-ds_risk_software_infringement_data.md"
+    ]
+  },
+  {
+    "id": "e_33410257",
+    "title": "ds_risk_software_infringement_data.app_development_market",
+    "type": "field",
+    "description": "应用来源字段，varchar",
+    "aliases": [],
+    "source_pages": [
+      "场景-企业主页侵权软件.md",
+      "约束-ds_risk_software_infringement_data.md"
+    ]
+  },
+  {
+    "id": "e_082d38f3",
+    "title": "ds_risk_software_infringement_data.app_version",
+    "type": "field",
+    "description": "应用版本字段，varchar",
+    "aliases": [],
+    "source_pages": [
+      "场景-企业主页侵权软件.md",
+      "约束-ds_risk_software_infringement_data.md"
+    ]
+  },
+  {
+    "id": "e_076b446c",
+    "title": "ds_risk_software_infringement_data.app_question",
+    "type": "field",
+    "description": "所涉及问题字段，text",
+    "aliases": [],
+    "source_pages": [
+      "场景-企业主页侵权软件.md",
+      "约束-ds_risk_software_infringement_data.md"
+    ]
+  },
+  {
+    "id": "e_275b7328",
+    "title": "ds_risk_software_infringement_data.publish_date",
+    "type": "field",
+    "description": "发布日期字段，date",
+    "aliases": [],
+    "source_pages": [
+      "场景-企业主页侵权软件.md",
+      "决策-侵权软件评审发现.md",
+      "约束-ds_risk_software_infringement_data.md"
+    ]
+  },
+  {
+    "id": "e_475820a3",
+    "title": "侵权软件列表-加载中",
+    "type": "ui_state",
+    "description": "骨架屏加载状态",
+    "aliases": [],
+    "source_pages": [
+      "场景-企业主页侵权软件.md"
+    ]
+  },
+  {
+    "id": "e_165e65a2",
+    "title": "侵权软件列表-请求失败",
+    "type": "ui_state",
+    "description": "数据加载失败提示状态",
+    "aliases": [],
+    "source_pages": [
+      "场景-企业主页侵权软件.md"
+    ]
+  },
+  {
+    "id": "e_91dc36ae",
+    "title": "侵权软件列表-空数据",
+    "type": "ui_state",
+    "description": "暂无记录提示状态",
+    "aliases": [],
+    "source_pages": [
+      "场景-企业主页侵权软件.md"
+    ]
+  },
+  {
+    "id": "e_857168bc",
+    "title": "侵权软件列表-筛选无结果",
+    "type": "ui_state",
+    "description": "筛选无结果状态，无筛选项，展示空态",
+    "aliases": [],
+    "source_pages": [
+      "场景-企业主页侵权软件.md"
+    ]
+  },
+  {
+    "id": "e_0c5b711d",
+    "title": "ds_risk_software_infringement_data.data_status",
+    "type": "field",
+    "description": "数据有效标志字段，0表示有效",
+    "aliases": [],
+    "source_pages": [
+      "场景-企业主页侵权软件.md",
+      "约束-ds_risk_software_infringement_data.md"
+    ]
+  },
+  {
+    "id": "e_2460774d",
+    "title": "ds_risk_software_infringement_data.riskbird_status",
+    "type": "field",
+    "description": "状态控制字段，tinyint(1)，0正常1屏蔽",
+    "aliases": [],
+    "source_pages": [
+      "场景-企业主页侵权软件.md",
+      "决策-侵权软件评审发现.md",
+      "约束-ds_risk_software_infringement_data.md",
+      "概念-riskbird_status枚举.md"
+    ]
+  },
+  {
+    "id": "e_e361cd12",
+    "title": "ds_risk_software_infringement_data.entid",
+    "type": "field",
+    "description": "企业关联ID字段，用于关联企业",
+    "aliases": [],
+    "source_pages": [
+      "场景-企业主页侵权软件.md",
+      "决策-侵权软件评审发现.md",
+      "约束-ds_risk_software_infringement_data.md"
+    ]
+  },
+  {
+    "id": "e_79d5e73f",
+    "title": "概念-riskbird_status枚举",
+    "type": "page_concept",
+    "description": "riskbird_status枚举值概念页面",
+    "aliases": [],
+    "source_pages": [
+      "决策-侵权软件评审发现.md"
+    ]
+  },
+  {
+    "id": "e_4b35348f",
+    "title": "ds_risk_software_infringement_data.id",
+    "type": "field",
+    "description": "自增主键 bigint",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_risk_software_infringement_data.md"
+    ]
+  },
+  {
+    "id": "e_9c5ef0f5",
+    "title": "场景-企业主页侵权软件模块",
+    "type": "spec_doc",
+    "description": "已废弃，内容合并到场景-企业主页侵权软件",
+    "aliases": [],
+    "source_pages": [
+      "场景-企业主页侵权软件模块.md"
+    ]
+  },
+  {
+    "id": "e_8157cab9",
+    "title": "场景-企业主页侵权软件",
+    "type": "spec_doc",
+    "description": "企业主页侵权软件场景文档",
+    "aliases": [],
+    "source_pages": [
+      "场景-企业主页侵权软件模块.md"
+    ]
+  },
+  {
+    "id": "e_0f4e483f",
+    "title": "riskbird_status枚举",
+    "type": "page_concept",
+    "description": "定义侵权软件主表状态字段枚举值",
+    "aliases": [],
+    "source_pages": [
+      "概念-riskbird_status枚举.md"
+    ]
+  },
+  {
+    "id": "e_f720f75e",
+    "title": "侵权软件",
+    "type": "page_concept",
+    "description": "侵权软件相关业务概念",
+    "aliases": [],
+    "source_pages": [
+      "概念-riskbird_status枚举.md"
+    ]
+  },
+  {
+    "id": "e_205a8774",
+    "title": "企业主页",
+    "type": "page_concept",
+    "description": "风鸟端的企业主页模块，展示侵权软件数据",
+    "aliases": [],
+    "source_pages": [
+      "概念-riskbird_status枚举.md"
+    ]
+  },
+  {
+    "id": "e_5af7f195",
+    "title": "风险扫描",
+    "type": "page_concept",
+    "description": "风鸟端的风险扫描模块，展示侵权软件数据",
+    "aliases": [],
+    "source_pages": [
+      "概念-riskbird_status枚举.md"
+    ]
+  },
+  {
+    "id": "e_cadf48ef",
+    "title": "全文检索",
+    "type": "page_concept",
+    "description": "风鸟端的全文检索模块，展示侵权软件数据",
+    "aliases": [],
+    "source_pages": [
+      "概念-riskbird_status枚举.md"
+    ]
+  }
+]

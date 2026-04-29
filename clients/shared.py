@@ -27,8 +27,16 @@ MAX_CONSECUTIVE_OVERLOADS = 3  # 连续 N 次 529 后自动降级
 # 成本定价（USD per million tokens）
 MODEL_PRICING = {
     "claude-opus-4-6":            {"input": 15.0, "output": 75.0, "cache_read": 1.5, "cache_write": 18.75},
+    "claude-opus-4-7":            {"input": 15.0, "output": 75.0, "cache_read": 1.5, "cache_write": 18.75},
     "claude-sonnet-4-6":          {"input": 3.0,  "output": 15.0, "cache_read": 0.3, "cache_write": 3.75},
     "claude-haiku-4-5-20251001":  {"input": 0.8,  "output": 4.0,  "cache_read": 0.08, "cache_write": 1.0},
+    # DeepSeek 官网公开价 (2026-04 quote, USD/M tokens). cache_write=0 因 DeepSeek 自动管理不计费
+    "deepseek-chat":              {"input": 0.27, "output": 1.10, "cache_read": 0.07, "cache_write": 0.0},
+    "deepseek-v4-flash":          {"input": 0.27, "output": 1.10, "cache_read": 0.07, "cache_write": 0.0},
+    "deepseek-reasoner":          {"input": 0.55, "output": 2.19, "cache_read": 0.14, "cache_write": 0.0},
+    # ChatGPT Pro 订阅自带, 实际 0 边际成本; 仅占位避免 cost dashboard warning
+    "gpt-5.5":                    {"input": 0.0, "output": 0.0, "cache_read": 0.0, "cache_write": 0.0},
+    "gpt-5.4":                    {"input": 0.0, "output": 0.0, "cache_read": 0.0, "cache_write": 0.0},
 }
 FLOOR_MAX_TOKENS = 3000  # 动态调整 max_tokens 的下限
 

@@ -1,0 +1,110 @@
+name: Rule Regression (static gate)
+
+# 步骤 5: CI gate 完整落地.
+# CI 不能跑真实 worker (codex CLI ChatGPT Pro OAuth + DeepSeek API 不在 GH runner),
+# 所以只跑 static 检查 (yaml schema / baseline 同步 / token 预算 / learnings 健康).
+# 真实 worker P/R 测试由本地 git pre-commit hook (.git/hooks/pre-commit.sample) 跑.
+#
+# Trigger: PR 修改 review-rules / review/prompting.py / review/worker.py / yaml baseline 时
+# Gate: errors > 0 即 exit 1, 阻塞 merge
+
+on:
+  pull_request:
+    paths:
+      - "review-rules/**"
+      - "workspace-sample/review-rules/**"
+      - "workspace-sample/learnings/**"
+      - "review/prompting.py"
+      - "review/worker.py"
+      - "review/learnings_store.py"
+      - "review-dimensions.yaml"
+      - "scripts/rule_regression.py"
+      - "scripts/static_rule_check.py"
+      - "scripts/fixtures/regression_baseline.json"
+  workflow_dispatch:
+
+jobs:
+  static-rule-check:
+    name: Static rule check (no LLM)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install minimal deps
+        run: |
+          python -m pip install --upgrade pip
+          # 只装 schema check 必要的依赖, 跳过 anthropic / Claude API 这些
+          pip install pyyaml
+          # 如果 prompting.py / dimensions.py 有其他 import 依赖, 走完整 install
+          pip install -r requirements.txt || true
+
+      - name: Run static_rule_check
+        id: static
+        run: |
+          python scripts/static_rule_check.py \
+            --workspace workspace-sample \
+            --baseline scripts/fixtures/regression_baseline.json
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+
+      - name: Upload artifact (rule check log)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: static-rule-check-log
+          path: |
+            scripts/fixtures/regression_baseline.json
+            workspace-sample/learnings/dashboard.md
+          retention-days: 90
+
+      - name: Comment PR on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = `## Rule Regression FAILED (static gate)\n\n` +
+              `\`scripts/static_rule_check.py\` 检测到 yaml schema / baseline 同步问题.\n\n` +
+              `修复后 push 到本 PR 重跑. 如果新增了规则/改了 schema, 同步:\n` +
+              `1. 本地跑 \`python scripts/rule_regression.py --update-baseline\` (调真实 worker)\n` +
+              `2. commit 新 \`scripts/fixtures/regression_baseline.json\`\n` +
+              `3. CHANGELOG 提及本次规则改动\n\n` +
+              `详细日志见 Actions 页面的 \`static-rule-check-log\` artifact.`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
+
+  # 第二段 (本地/dev 跑真实 worker) 在 .git/hooks/pre-commit 中, 不在 GH 跑.
+  # 文档见 scripts/CI_gate_example.md  Section 2.
+
+  hook-drift-check:
+    name: pre-push hook drift check
+    runs-on: ubuntu-latest
+    # 防止有人本地装了老版 hook, push 不阻塞但漏触发 regression.
+    # 这里只 warn (continue-on-error), 漂移本身不算 PR fail.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check pre-push hook drift (warn-only)
+        run: |
+          # CI 上 .git/hooks 不会跟着检出, 这里检测的是 .githooks/ (shared 路径).
+          # 个人 .git/hooks/pre-push 本来就不进版本控制, 检测不到也不算异常.
+          if [ -f ".githooks/pre-push" ]; then
+            python scripts/install_git_hooks.py --shared --check
+          else
+            echo "[hook-drift] 仓库未启用 .githooks/ shared 模式, 跳过检测"
+            echo "[hook-drift] 团队建议: python scripts/install_git_hooks.py --shared"
+          fi

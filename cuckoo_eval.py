@@ -1,6 +1,20 @@
 """
 杜鹃 (Cuckoo) Eval Agent — 啄木鸟评审质量评测
 
+⚠ 已废弃 (DEPRECATED, 2026-04-29):
+  - 本工具是早期手卷 eval, 与规则无强绑定, 缺乏 P/R baseline 概念
+  - **替代品**: scripts/rule_regression.py — 规则级 P/R 回归 + baseline gate + CI 集成
+  - **保留原因**:
+    1. 向后兼容: 历史 test_case JSON 还在被引用, 不强行删
+    2. cuckoo_scorer 内部函数 (match_items_to_bugs / calculate_scores) 还被
+       eval/route_eval/scorers/cuckoo_adapter.py 复用 — 那是 adapter 层有效用
+    3. _safe_get / _atomic_write_json / append_eval_history 等 helper 仍是
+       cuckoo_eval_hardening 测试覆盖范围
+  - **退役 trigger**: 当 rule_regression baseline 覆盖所有现役规则
+    (workspace-sample/review-rules/review-checklist.yaml 全部 rule 都有
+    positive_example + negative_example), 且历史 test_case JSON 全迁移完毕,
+    再删本文件. 详见 docs/v1_vs_v2_feedback_strategy.md
+
 对抗性验证：试图推翻啄木鸟的评审结果，而非确认。
 三态判定：PASS / FAIL / PARTIAL
 
@@ -20,7 +34,23 @@ import json
 import os
 import re
 import sys
+import warnings
 from datetime import datetime
+
+# 模块级 deprecation warning — 仅在 CLI 直接调用时打印, 避免污染 cuckoo_scorer adapter 路径
+# 调用 main() 时会显式 emit, import 路径不打扰 (otherwise 测试输出会被噪音淹没).
+#
+# 但 import 路径仍 emit 一次轻量 DeprecationWarning, 让走 -W error::DeprecationWarning
+# 跑测试 / lint 的人能 catch 到误用 (而不是直接 silently 让老调用 fall-through).
+# 关键点: 用 stacklevel=2 让 warning 指向 importer 而不是本文件;
+# 而且 default filter 下 DeprecationWarning 仅在 __main__ 触发时打印,
+# 测试 / 普通 import 不会被噪音淹没. 详见 docs/MIGRATION_v1_to_v2.md.
+warnings.warn(
+    "cuckoo_eval 已废弃 — 改用 scripts/rule_regression.py (P/R baseline + CI gate). "
+    "详见 docs/MIGRATION_v1_to_v2.md.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 from cuckoo_parser import parse_review_report
 from cuckoo_scorer import (
@@ -439,9 +469,22 @@ def print_eval_trend(workspace, test_case_name=None, last_n=5):
 
 # ── CLI 入口 ──
 
+def _emit_deprecation_notice():
+    """CLI 入口打印 deprecation notice. import 路径不打扰."""
+    msg = (
+        "[DEPRECATED] cuckoo_eval.py 已废弃, 建议迁移到 scripts/rule_regression.py "
+        "(规则级 P/R 回归 + baseline gate). 详见 docs/v1_vs_v2_feedback_strategy.md."
+    )
+    # 走 stderr 避免污染 stdout 报告; 同时 warnings 让 -W error 模式能 catch
+    print(msg, file=sys.stderr)
+    warnings.warn(msg, DeprecationWarning, stacklevel=2)
+
+
 def main():
+    _emit_deprecation_notice()
+
     parser = argparse.ArgumentParser(
-        description="杜鹃 (Cuckoo) — 啄木鸟 PRD 评审质量评测",
+        description="杜鹃 (Cuckoo) — 啄木鸟 PRD 评审质量评测 [DEPRECATED, 用 scripts/rule_regression.py]",
         epilog=(
             "示例:\n"
             "  python cuckoo_eval.py --report output/PRD_改动报告_20260411.md --test-case eval/test_cases/劳动仲裁.json\n"

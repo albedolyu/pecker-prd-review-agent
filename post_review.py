@@ -249,7 +249,12 @@ def run_post_review(workspace, wiki_path, prd_name, reviewer, model_tier, parall
                 print(f"  [警告] 标记实现约定失败(不阻断): {str(_e)[:60]}")
 
         if items_for_report and prd_content_for_report:
-            report = build_actionable_report(items_for_report, prd_content_for_report, prd_name, reviewer, peck)
+            # 步骤 3: profile (chill/strict) 从 env 读, session_setup 已设 PECKER_PROFILE
+            _profile = os.environ.get("PECKER_PROFILE", "chill")
+            report = build_actionable_report(
+                items_for_report, prd_content_for_report,
+                prd_name, reviewer, peck, profile=_profile,
+            )
             if report:
                 from datetime import datetime as _dt
                 import json as _json

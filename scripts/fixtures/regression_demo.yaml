@@ -1,0 +1,156 @@
+# 啄木鸟 Rule Regression Harness — Demo fixture
+# 用于在真实 review-checklist.yaml 升级 schema 之前先 dev test harness。
+# 5 条 mock 规则 × (positive_example + negative_example), 覆盖 4 个维度。
+#
+# 字段说明:
+#   id: rule_id (必须能在 review-dimensions.yaml 任一 dimension.checklist 中找到 owner)
+#   positive_example.snippet: 一段会触发该规则 fail 的 PRD 片段 (worker 必须报)
+#   negative_example.snippet: 一段不应触发该规则的 PRD 片段 (worker 必须不报)
+#   fire_when / dont_fire_when: 给二层 LLM-as-judge (verify.nli) 做语义对齐判断
+
+rules:
+  - id: RC-005
+    name: 四态 UI 规范已定义
+    severity: must
+    description: PRD 必须定义加载中/请求失败/筛选无结果/空数据四种 UI 状态的文案与样式
+    fire_when: PRD 描述了数据加载或列表展示但未定义 loading / empty / error / no-result 四态 UI
+    dont_fire_when: PRD 已显式列出四态 UI 文案或引用了通用四态规范文档
+    positive_example:
+      snippet: |
+        # 案件查询页 PRD
+
+        ## 功能描述
+        用户输入关键词后,展示匹配的案件列表 (前 20 条),支持翻页。
+        点击列表项跳转详情页。
+      why_fails: 描述了列表加载但完全没提 loading/empty/error/no-result 四态 UI
+    negative_example:
+      snippet: |
+        # 案件查询页 PRD
+
+        ## 功能描述
+        用户输入关键词后展示匹配案件列表。
+
+        ## 四态 UI
+        - 加载中: 顶部骨架屏 (skeleton),3 行占位
+        - 请求失败: 居中提示"加载失败,请重试" + 重试按钮
+        - 筛选无结果: 居中提示"没有符合条件的案件,试试其他筛选条件"
+        - 空数据: 居中插画 + 文案"暂无数据"
+      why_passes: 完整列出了四态 UI 的文案与样式
+
+  - id: V-08
+    name: 歧义检测
+    severity: should
+    description: 标记影响开发实现的模糊指代
+    fire_when: PRD 大量使用 "等" / "相关" / "类似" / "适当" / "参考" 等模糊词且没有具体说明范围
+    dont_fire_when: PRD 用词具体明确,所有筛选项 / 字段都有完整列举
+    positive_example:
+      snippet: |
+        # 企业风险查询 PRD
+
+        ## 功能
+        - 支持按案由、仲裁机构等筛选
+        - 展示相关字段
+        - 类似企查查的展示方式
+        - 长文本适当截断
+        - 参考现有模块的交互
+      why_fails: 5 处模糊指代 (等 / 相关 / 类似 / 适当 / 参考) 都没具体说明
+    negative_example:
+      snippet: |
+        # 企业风险查询 PRD
+
+        ## 功能
+        - 筛选维度: 案由 (枚举: 合同 / 侵权 / 婚姻)、仲裁机构 (枚举: 北仲 / 上仲)
+        - 展示字段: 案号 / 当事人 / 立案日期 / 案由
+        - UI 风格: 表格 + 上下分栏 (参考设计稿 figma.com/abc/page2)
+        - 长文本截断: 案由超 30 字省略号 + Tooltip 全文
+      why_passes: 所有维度都具体列举,没有模糊指代
+
+  - id: RC-008
+    name: 筛选追溯完整
+    severity: must
+    description: 筛选/查询逻辑须从用户操作追溯到 WHERE 条件,中间无断点
+    fire_when: PRD 描述了筛选项但没说筛选条件如何映射到查询 WHERE 子句或 ES query
+    dont_fire_when: 每个筛选项都标注了对应的字段名和 WHERE / ES filter 写法
+    positive_example:
+      snippet: |
+        # 立案信息查询 PRD
+
+        ## 筛选项
+        - 省份
+        - 立案年份
+        - 公告类型
+
+        ## 数据源
+        ds_risk_court_case 表
+      why_fails: 筛选项列出但没标注 WHERE 子句映射关系,开发无法落地
+    negative_example:
+      snippet: |
+        # 立案信息查询 PRD
+
+        ## 筛选项 → WHERE 映射
+        - 省份: WHERE province_code = :province
+        - 立案年份: WHERE YEAR(filing_date) = :year
+        - 公告类型: WHERE notice_type IN (:types)
+
+        ## 数据源
+        ds_risk_court_case (entid > 0 AND data_status = 0)
+      why_passes: 每个筛选项都映射到具体 WHERE 子句
+
+  - id: V-04
+    name: 功能清单完整性
+    severity: must
+    description: PRD 必须有功能清单 / 编号体系,每条功能可寻址追溯
+    fire_when: PRD 仅用散文描述功能,没有编号 / bullet / 章节号等位置标识符
+    dont_fire_when: PRD 每条功能有 FR 编号 / PRD-XXX / 章节号 / bullet 任一组织方式
+    positive_example:
+      snippet: |
+        # 个人页 PRD
+
+        我们要做一个个人页,展示用户头像、用户名、积分余额。点击头像可以修改昵称。
+        还要支持修改密码和绑定手机号。退出登录在右上角。最近订单列表展示前 5 条。
+      why_fails: 整段散文,没有任何编号或位置标识符
+    negative_example:
+      snippet: |
+        # 个人页 PRD
+
+        ## 功能清单
+        - FR-01 头像与基础信息展示 (P0)
+        - FR-02 修改昵称 (P0,依赖 FR-01)
+        - FR-03 修改密码 (P1)
+        - FR-04 绑定手机号 (P1)
+        - FR-05 退出登录 (P0)
+        - FR-06 最近订单列表 top 5 (P1)
+      why_passes: 每条功能有 FR 编号 + 优先级 + 依赖标注
+
+  - id: RC-009
+    name: 物理表定义一致性
+    severity: must
+    description: 字段名 / 类型 / 可空性 / 索引 / JOIN 来源须与 DDL 一致
+    fire_when: PRD 引用了具体物理表名但字段映射表只列字段名没列类型 / 索引 / JOIN
+    dont_fire_when: 字段映射表完整列出 (字段名 / 类型 / 可空 / 索引 / JOIN 来源) 五项
+    positive_example:
+      snippet: |
+        # 司法案件详情 PRD
+
+        ## 数据源
+        ds_risk_court_case 表
+
+        ## 字段映射
+        - 案号: case_no
+        - 立案日期: filing_date
+        - 当事人: party_name
+      why_fails: 引用了 ds_risk_court_case 物理表但字段映射只有名字,缺类型 / 索引 / JOIN
+    negative_example:
+      snippet: |
+        # 司法案件详情 PRD
+
+        ## 数据源
+        ds_risk_court_case (entid > 0 AND data_status = 0)
+
+        ## 字段映射
+        | 展示字段 | 物理字段 | 类型 | 可空 | 索引 | JOIN 来源 |
+        |---|---|---|---|---|---|
+        | 案号 | case_no | VARCHAR(64) | NOT NULL | UNIQUE | (本表) |
+        | 立案日期 | filing_date | DATE | NULL | INDEX | (本表) |
+        | 当事人 | party_name | VARCHAR(200) | NOT NULL | - | LEFT JOIN ds_risk_party ON case_id |
+      why_passes: 完整 5 项 (字段名 / 类型 / 可空 / 索引 / JOIN)

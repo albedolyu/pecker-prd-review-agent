@@ -4,6 +4,37 @@
 
 ---
 
+## 开发者一次性 setup
+
+首次进项目的 dev / PM:
+
+```bash
+make install   # 一次完成: pip 装 deps + 前端 pnpm install + git pre-push hook
+```
+
+`make install` 内部依次跑:
+
+1. `make install-deps` — `pip install -r requirements.txt` + `cd web && pnpm install`
+2. `make install-hooks` — `python scripts/install_git_hooks.py` (装 .git/hooks/pre-push)
+
+完成后还要做 (脚本会提示):
+
+1. 配 `.env`: `bash scripts/gen-secrets.sh > .env`, 然后填 `FEISHU_*` / `API_KEY` / 数据库等
+2. 启后端: `make dev-api` (uvicorn :8000)
+3. 启前端: `make dev-web` (Next.js :3000)
+
+> hook 已存在不同内容时, installer 会 diff 给你看 + 询问是否覆盖, 不会 silently 摧毁你的本地 hook.
+> 装 hook 后 `git push` 会自动跑 P/R 回归 (改 prompt / worker / 规则时), 跌 > tolerance 阻塞.
+> bypass 场景 (PM 自由裁量): `git push --no-verify`.
+
+进阶配置:
+
+- CI self-hosted runner: `docs/CI_SELF_HOSTED_RUNNER_SETUP.md`
+- 飞书 PM 反馈接入: `docs/FEISHU_WEBHOOK_SETUP.md`
+- v1 → v2 迁移: `docs/MIGRATION_v1_to_v2.md`
+
+---
+
 ## 一图看懂架构
 
 ```

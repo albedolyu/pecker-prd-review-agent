@@ -1,0 +1,19 @@
+{
+  "wiki_dir": "C:\\Users\\20834\\Desktop\\agent\\prd review\\workspace-产品召回\\wiki",
+  "pages_scanned": 9,
+  "biz_pages_extracted": 7,
+  "pages_failed": [],
+  "entities_count": 26,
+  "relations_count": 55,
+  "by_type": {
+    "spec_doc": 5,
+    "data_table": 1,
+    "field": 15,
+    "page_concept": 5
+  },
+  "elapsed_seconds": 216.0,
+  "max_gleanings": 2,
+  "page_concurrency": 2,
+  "built_at": "2026-04-28 23:22:54",
+  "builder": "build_kg_all.py"
+}

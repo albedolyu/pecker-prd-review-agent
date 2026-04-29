@@ -1,0 +1,108 @@
+{
+  "workspace": "workspace-侵权软件",
+  "built_at": "2026-04-28 23:23:23",
+  "total_elapsed_s": 245.6,
+  "page_count": 11,
+  "page_metrics": [
+    {
+      "relpath": "决策-侵权软件PRD评审发现.md",
+      "chars": 224,
+      "gleaning_rounds": 1,
+      "entities_raw": 2,
+      "relations_raw": 1,
+      "elapsed_s": 28.3,
+      "skipped": false
+    },
+    {
+      "relpath": "竞品-企查查-侵权软件.md",
+      "chars": 522,
+      "gleaning_rounds": 2,
+      "entities_raw": 3,
+      "relations_raw": 2,
+      "elapsed_s": 33.5,
+      "skipped": false
+    },
+    {
+      "relpath": "实体-风鸟平台.md",
+      "chars": 246,
+      "gleaning_rounds": 1,
+      "entities_raw": 1,
+      "relations_raw": 0,
+      "elapsed_s": 7.4,
+      "skipped": false
+    },
+    {
+      "relpath": "约束-ds_risk_software_infringement_data表结构.md",
+      "chars": 278,
+      "gleaning_rounds": 1,
+      "entities_raw": 2,
+      "relations_raw": 1,
+      "elapsed_s": 15.7,
+      "skipped": false
+    },
+    {
+      "relpath": "概念-侵权软件.md",
+      "chars": 826,
+      "gleaning_rounds": 2,
+      "entities_raw": 5,
+      "relations_raw": 4,
+      "elapsed_s": 44.0,
+      "skipped": false
+    },
+    {
+      "relpath": "场景-企业主页侵权软件.md",
+      "chars": 1700,
+      "gleaning_rounds": 2,
+      "entities_raw": 17,
+      "relations_raw": 21,
+      "elapsed_s": 79.2,
+      "skipped": false
+    },
+    {
+      "relpath": "场景-风险扫描侵权软件.md",
+      "chars": 964,
+      "gleaning_rounds": 2,
+      "entities_raw": 4,
+      "relations_raw": 3,
+      "elapsed_s": 19.9,
+      "skipped": false
+    },
+    {
+      "relpath": "决策-侵权软件评审发现.md",
+      "chars": 897,
+      "gleaning_rounds": 2,
+      "entities_raw": 9,
+      "relations_raw": 21,
+      "elapsed_s": 69.0,
+      "skipped": false
+    },
+    {
+      "relpath": "约束-ds_risk_software_infringement_data.md",
+      "chars": 2054,
+      "gleaning_rounds": 3,
+      "entities_raw": 13,
+      "relations_raw": 22,
+      "elapsed_s": 82.1,
+      "skipped": false
+    },
+    {
+      "relpath": "场景-企业主页侵权软件模块.md",
+      "chars": 273,
+      "gleaning_rounds": 1,
+      "entities_raw": 2,
+      "relations_raw": 1,
+      "elapsed_s": 19.2,
+      "skipped": false
+    },
+    {
+      "relpath": "概念-riskbird_status枚举.md",
+      "chars": 740,
+      "gleaning_rounds": 2,
+      "entities_raw": 8,
+      "relations_raw": 14,
+      "elapsed_s": 63.9,
+      "skipped": false
+    }
+  ],
+  "avg_per_page_s": 42.0
+}

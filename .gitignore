@@ -69,3 +69,30 @@ docker-compose.override.yml
 # artifact. 仓库里跟踪会永远落后真实状态 (2026-04-22 的版本躺在 main 上而数据
 # 早已 608+ passed 个测试). 改为 CI artifact-only 作为唯一真相来源, 仓库不再跟踪.
 STATUS.md
+
+# 2026-04-29 v2 收尾增补:
+# sqlite 运行时数据库 (metrics / learnings / finding_outcomes 都是部署后真数据)
+*.db
+*.db-shm
+*.db-wal
+
+# yaml 备份 (SSOT 迁移工具产物, 不入库避免漂移)
+*.yaml.bak
+
+# 临时分析中间文件 (_ 前缀约定 + 工具生成的 *.json 在仓库根)
+_*.json
+_l3_analysis_*/
+_ssot_analysis/
+.tmp-demo/
+workspace_hardening_demo/
+
+# 回归 baseline 重跑产物 (固定 baseline 在 scripts/fixtures/ 跟踪, 重跑输出忽略)
+regression_*.json
+regression_real*.json
+
+# workspace 运行时产物 (除已跟踪的 prd/ wiki/ raw/ rules)
+workspace-*/learnings/
+workspace-*/dashboard.html
+
+# Office 临时锁文件 (Word / Excel 打开时生成)
+~$*

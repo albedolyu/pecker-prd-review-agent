@@ -1,0 +1,460 @@
+[
+  {
+    "id": "e_10ea8304",
+    "title": "场景-企业主页纳税人资质展示",
+    "type": "page_concept",
+    "description": "企业主页纳税人资质展示场景，已过时",
+    "aliases": [
+      "纳税人资质展示场景"
+    ],
+    "source_pages": [
+      "场景-企业主页纳税人资质展示.md",
+      "约束-ds_company_tax_state表结构.md",
+      "概念-纳税人资质.md"
+    ]
+  },
+  {
+    "id": "e_aeefa4d2",
+    "title": "场景-企业主页纳税人资质模块",
+    "type": "page_concept",
+    "description": "企业主页纳税人资质模块，合并后的新页面",
+    "aliases": [
+      "企业主页纳税资质场景",
+      "纳税人资质需求模块"
+    ],
+    "source_pages": [
+      "场景-企业主页纳税人资质展示.md",
+      "概念-数据导出规范.md",
+      "场景-企业主页纳税人资质模块.md"
+    ]
+  },
+  {
+    "id": "e_8b9ee5e2",
+    "title": "约束-t_ds_aggre_tags表结构",
+    "type": "spec_doc",
+    "description": "约束文档，描述t_ds_aggre_tags和t_ds_aggre_tags_assigned表结构",
+    "aliases": [],
+    "source_pages": [
+      "约束-t_ds_aggre_tags表结构.md",
+      "约束-企业标签展示规范.md",
+      "场景-企业主页纳税人资质模块.md"
+    ]
+  },
+  {
+    "id": "e_8caef33a",
+    "title": "t_ds_aggre_tags",
+    "type": "data_table",
+    "description": "存储企业标签定义，通过tagid区分类型",
+    "aliases": [
+      "约束-t_ds_aggre_tags表结构"
+    ],
+    "source_pages": [
+      "约束-t_ds_aggre_tags表结构.md",
+      "约束-企业标签表结构.md",
+      "约束-企业标签展示规范.md",
+      "场景-企业主页纳税人资质模块.md"
+    ]
+  },
+  {
+    "id": "e_fd4a275a",
+    "title": "t_ds_aggre_tags_assigned",
+    "type": "data_table",
+    "description": "存储企业已分配标签记录，用于查询",
+    "aliases": [],
+    "source_pages": [
+      "约束-t_ds_aggre_tags表结构.md",
+      "约束-企业标签表结构.md",
+      "约束-企业标签展示规范.md"
+    ]
+  },
+  {
+    "id": "e_590bb8e4",
+    "title": "t_ds_aggre_tags.tagid",
+    "type": "field",
+    "description": "标签ID字段，已知值99999997、99999998",
+    "aliases": [],
+    "source_pages": [
+      "约束-t_ds_aggre_tags表结构.md",
+      "约束-企业标签表结构.md"
+    ]
+  },
+  {
+    "id": "e_3db90172",
+    "title": "概念-纳税人资质",
+    "type": "page_concept",
+    "description": "企业纳税人身份类型，反映税务合规及经营规模",
+    "aliases": [
+      "纳税人资质",
+      "资质概念"
+    ],
+    "source_pages": [
+      "约束-t_ds_aggre_tags表结构.md",
+      "概念-stype枚举映射.md",
+      "约束-企业标签表结构.md",
+      "约束-ds_company_tax_state表结构.md",
+      "决策-纳税人资质评审发现.md",
+      "约束-企业标签展示规范.md",
+      "概念-纳税人资质.md",
+      "场景-企业主页纳税人资质模块.md"
+    ]
+  },
+  {
+    "id": "e_bd28f884",
+    "title": "约束-ds_company_tax_state表结构",
+    "type": "spec_doc",
+    "description": "定义ds_company_tax_state表结构和约束的规范",
+    "aliases": [],
+    "source_pages": [
+      "约束-t_ds_aggre_tags表结构.md",
+      "概念-数据导出规范.md",
+      "概念-stype枚举映射.md",
+      "约束-企业标签表结构.md",
+      "约束-ds_company_tax_state表结构.md",
+      "决策-纳税人资质评审发现.md",
+      "概念-纳税人资质.md",
+      "场景-企业主页纳税人资质模块.md"
+    ]
+  },
+  {
+    "id": "e_e4f071eb",
+    "title": "概念-数据导出规范",
+    "type": "spec_doc",
+    "description": "数据导出规范文档, 定义导出功能与字段",
+    "aliases": [
+      "数据导出规范"
+    ],
+    "source_pages": [
+      "概念-数据导出规范.md"
+    ]
+  },
+  {
+    "id": "e_e1b8bf47",
+    "title": "ds_company_tax_state",
+    "type": "data_table",
+    "description": "公司税务状态表，包含stype等字段",
+    "aliases": [
+      "约束-ds_company_tax_state表结构"
+    ],
+    "source_pages": [
+      "概念-数据导出规范.md",
+      "概念-stype枚举映射.md",
+      "约束-ds_company_tax_state表结构.md",
+      "概念-纳税人资质.md",
+      "场景-企业主页纳税人资质模块.md"
+    ]
+  },
+  {
+    "id": "e_e9172dbf",
+    "title": "ds_company_tax_state.纳税人识别号",
+    "type": "field",
+    "description": "纳税人在税务机关的登记识别号",
+    "aliases": [],
+    "source_pages": [
+      "概念-数据导出规范.md",
+      "场景-企业主页纳税人资质模块.md"
+    ]
+  },
+  {
+    "id": "e_87124b61",
+    "title": "ds_company_tax_state.纳税人资格类型",
+    "type": "field",
+    "description": "纳税人资格类型，枚举映射到stype",
+    "aliases": [
+      "stype"
+    ],
+    "source_pages": [
+      "概念-数据导出规范.md",
+      "场景-企业主页纳税人资质模块.md"
+    ]
+  },
+  {
+    "id": "e_1d00f079",
+    "title": "ds_company_tax_state.主管税务机关",
+    "type": "field",
+    "description": "主管税务机关字段",
+    "aliases": [],
+    "source_pages": [
+      "概念-数据导出规范.md",
+      "场景-企业主页纳税人资质模块.md"
+    ]
+  },
+  {
+    "id": "e_bb3f66d2",
+    "title": "ds_company_tax_state.认定有效期起",
+    "type": "field",
+    "description": "认定有效起始日期，格式yyyy-MM-dd",
+    "aliases": [],
+    "source_pages": [
+      "概念-数据导出规范.md",
+      "场景-企业主页纳税人资质模块.md"
+    ]
+  },
+  {
+    "id": "e_d9ebfe27",
+    "title": "ds_company_tax_state.认定有效期止",
+    "type": "field",
+    "description": "认定有效截止日期，格式yyyy-MM-dd",
+    "aliases": [],
+    "source_pages": [
+      "概念-数据导出规范.md",
+      "场景-企业主页纳税人资质模块.md"
+    ]
+  },
+  {
+    "id": "e_c4c75e5d",
+    "title": "概念-stype枚举映射",
+    "type": "page_concept",
+    "description": "stype枚举值到前端展示文本的映射规范",
+    "aliases": [],
+    "source_pages": [
+      "概念-stype枚举映射.md",
+      "场景-企业主页纳税人资质模块.md"
+    ]
+  },
+  {
+    "id": "e_feb24eab",
+    "title": "ds_company_tax_state.stype",
+    "type": "field",
+    "description": "纳税人资格类型枚举字段，varchar",
+    "aliases": [
+      "stype"
+    ],
+    "source_pages": [
+      "概念-stype枚举映射.md"
+    ]
+  },
+  {
+    "id": "e_d64478a4",
+    "title": "约束-企业标签表结构",
+    "type": "spec_doc",
+    "description": "约束页面，描述企业标签表结构及字段待验证",
+    "aliases": [],
+    "source_pages": [
+      "约束-企业标签表结构.md",
+      "约束-ds_company_tax_state表结构.md"
+    ]
+  },
+  {
+    "id": "e_f05ad62d",
+    "title": "t_ds_aggre_tags.tag_name",
+    "type": "field",
+    "description": "标签名称字段，字段名待验证",
+    "aliases": [],
+    "source_pages": [
+      "约束-企业标签表结构.md"
+    ]
+  },
+  {
+    "id": "e_55a91074",
+    "title": "t_ds_aggre_tags_assigned.tagid",
+    "type": "field",
+    "description": "标签ID字段，与定义表关联",
+    "aliases": [],
+    "source_pages": [
+      "约束-企业标签表结构.md"
+    ]
+  },
+  {
+    "id": "e_af574fe2",
+    "title": "t_ds_aggre_tags_assigned.entid",
+    "type": "field",
+    "description": "企业ID字段，字段名待验证",
+    "aliases": [],
+    "source_pages": [
+      "约束-企业标签表结构.md"
+    ]
+  },
+  {
+    "id": "e_82b558b2",
+    "title": "决策-纳税人资质评审发现-20260412",
+    "type": "page_concept",
+    "description": "决策记录，纳税人资质评审发现",
+    "aliases": [],
+    "source_pages": [
+      "约束-企业标签表结构.md"
+    ]
+  },
+  {
+    "id": "e_361e64ce",
+    "title": "ds_company_tax_state.entid",
+    "type": "field",
+    "description": "企业唯一标识字段",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_company_tax_state表结构.md",
+      "概念-纳税人资质.md"
+    ]
+  },
+  {
+    "id": "e_ea852f36",
+    "title": "ds_company_tax_state.tax_type",
+    "type": "field",
+    "description": "纳税人性质，枚举：小规模/一般/取消一般/null",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_company_tax_state表结构.md",
+      "概念-纳税人资质.md"
+    ]
+  },
+  {
+    "id": "e_0deb3fd2",
+    "title": "ds_company_tax_state.edate",
+    "type": "field",
+    "description": "认定或取消日期，yyyy-MM-dd格式",
+    "aliases": [
+      "edate"
+    ],
+    "source_pages": [
+      "约束-ds_company_tax_state表结构.md",
+      "决策-纳税人资质评审发现.md",
+      "概念-纳税人资质.md"
+    ]
+  },
+  {
+    "id": "e_dbfb5b96",
+    "title": "决策-纳税人资质评审发现",
+    "type": "spec_doc",
+    "description": "PRD评审识别的纳税人资质决策点",
+    "aliases": [],
+    "source_pages": [
+      "决策-纳税人资质评审发现.md"
+    ]
+  },
+  {
+    "id": "e_b4bc8ca4",
+    "title": "约束-企业标签展示规范",
+    "type": "spec_doc",
+    "description": "企业标签在网页端和移动端的展示规范，含样式",
+    "aliases": [
+      "企业标签展示规范",
+      "纳税人资质标签规范"
+    ],
+    "source_pages": [
+      "决策-纳税人资质评审发现.md",
+      "约束-企业标签展示规范.md",
+      "场景-企业主页纳税人资质模块.md"
+    ]
+  },
+  {
+    "id": "e_ddadced6",
+    "title": "概念-数据导出规范",
+    "type": "page_concept",
+    "description": "数据导出相关规范概念页",
+    "aliases": [],
+    "source_pages": [
+      "决策-纳税人资质评审发现.md",
+      "场景-企业主页纳税人资质模块.md"
+    ]
+  },
+  {
+    "id": "e_44893f9b",
+    "title": "四态UI规范",
+    "type": "spec_doc",
+    "description": "UI四态(loading/empty/error/success)规范",
+    "aliases": [],
+    "source_pages": [
+      "决策-纳税人资质评审发现.md"
+    ]
+  },
+  {
+    "id": "e_96e2b377",
+    "title": "ds_company_tax_state.tstatus",
+    "type": "field",
+    "description": "状态字段,1正常0不正常",
+    "aliases": [
+      "tstatus"
+    ],
+    "source_pages": [
+      "决策-纳税人资质评审发现.md",
+      "场景-企业主页纳税人资质模块.md"
+    ]
+  },
+  {
+    "id": "e_5abc0f89",
+    "title": "决策-edate字段语义歧义",
+    "type": "spec_doc",
+    "description": "关于edate字段不同含义的决策文档",
+    "aliases": [],
+    "source_pages": [
+      "概念-纳税人资质.md"
+    ]
+  },
+  {
+    "id": "e_a310e916",
+    "title": "概念-企业标签体系",
+    "type": "page_concept",
+    "description": "企业标签体系业务概念",
+    "aliases": [],
+    "source_pages": [
+      "概念-纳税人资质.md"
+    ]
+  },
+  {
+    "id": "e_9c3a89dc",
+    "title": "决策-纳税人资质评审发现",
+    "type": "page_concept",
+    "description": "纳税人资质评审的决策记录",
+    "aliases": [],
+    "source_pages": [
+      "场景-企业主页纳税人资质模块.md"
+    ]
+  },
+  {
+    "id": "e_ee907972",
+    "title": "ds_company_tax_state.sdate",
+    "type": "field",
+    "description": "sdate字段，NULL值排序未定义",
+    "aliases": [],
+    "source_pages": [
+      "场景-企业主页纳税人资质模块.md"
+    ]
+  },
+  {
+    "id": "e_e0f45104",
+    "title": "场景-企业主页纳税人资质模块.加载中",
+    "type": "ui_state",
+    "description": "接口请求中状态，显示骨架屏/spinner",
+    "aliases": [
+      "加载中状态"
+    ],
+    "source_pages": [
+      "场景-企业主页纳税人资质模块.md"
+    ]
+  },
+  {
+    "id": "e_7ea1024e",
+    "title": "场景-企业主页纳税人资质模块.请求失败",
+    "type": "ui_state",
+    "description": "接口异常状态，显示错误提示和重试按钮",
+    "aliases": [
+      "请求失败状态"
+    ],
+    "source_pages": [
+      "场景-企业主页纳税人资质模块.md"
+    ]
+  },
+  {
+    "id": "e_efbd90af",
+    "title": "场景-企业主页纳税人资质模块.无数据",
+    "type": "ui_state",
+    "description": "entid无记录，显示暂无纳税人资质数据",
+    "aliases": [
+      "无数据状态"
+    ],
+    "source_pages": [
+      "场景-企业主页纳税人资质模块.md"
+    ]
+  },
+  {
+    "id": "e_e28a05dc",
+    "title": "场景-企业主页纳税人资质模块.空字段",
+    "type": "ui_state",
+    "description": "字段为null时显示'-",
+    "aliases": [
+      "空字段状态"
+    ],
+    "source_pages": [
+      "场景-企业主页纳税人资质模块.md"
+    ]
+  }
+]

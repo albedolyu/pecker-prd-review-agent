@@ -1,0 +1,522 @@
+[
+  {
+    "id": "r_c57eecef",
+    "source_id": "e_182d3225",
+    "target_id": "e_1e93941b",
+    "relation_type": "合并至",
+    "description": "内容已合并至该页面",
+    "weight": 5
+  },
+  {
+    "id": "r_b13c3ab9",
+    "source_id": "e_3de67551",
+    "target_id": "e_8ae60cd0",
+    "relation_type": "提及",
+    "description": "文档引用了侵权软件概念",
+    "weight": 5
+  },
+  {
+    "id": "r_2ac02fd8",
+    "source_id": "e_3de67551",
+    "target_id": "e_9c5ef0f5",
+    "relation_type": "提及",
+    "description": "文档引用了企业主页侵权软件模块场景",
+    "weight": 5
+  },
+  {
+    "id": "r_e5e784d2",
+    "source_id": "e_decb06d2",
+    "target_id": "e_0c047747",
+    "relation_type": "合并至",
+    "description": "当前文档已合并到目标文档",
+    "weight": 5
+  },
+  {
+    "id": "r_543dbd45",
+    "source_id": "e_8ae60cd0",
+    "target_id": "e_0c047747",
+    "relation_type": "关联",
+    "description": "概念引用约束规范",
+    "weight": 5
+  },
+  {
+    "id": "r_801f8178",
+    "source_id": "e_8ae60cd0",
+    "target_id": "e_8157cab9",
+    "relation_type": "关联",
+    "description": "概念对应的展示场景",
+    "weight": 5
+  },
+  {
+    "id": "r_7cb75a24",
+    "source_id": "e_8ae60cd0",
+    "target_id": "e_add2765b",
+    "relation_type": "关联",
+    "description": "概念对应的风险扫描场景",
+    "weight": 5
+  },
+  {
+    "id": "r_b671af78",
+    "source_id": "e_8ae60cd0",
+    "target_id": "e_18ce4ce0",
+    "relation_type": "依赖",
+    "description": "概念数据在风鸟平台展示",
+    "weight": 5
+  },
+  {
+    "id": "r_687de1df",
+    "source_id": "e_8157cab9",
+    "target_id": "e_ecd940eb",
+    "relation_type": "依赖数据表",
+    "description": "场景调用该数据表展示数据",
+    "weight": 7
+  },
+  {
+    "id": "r_67f30f19",
+    "source_id": "e_ecd940eb",
+    "target_id": "e_bb9b4343",
+    "relation_type": "包含字段",
+    "description": "主表包含应用名称字段",
+    "weight": 8
+  },
+  {
+    "id": "r_9ada2831",
+    "source_id": "e_ecd940eb",
+    "target_id": "e_33410257",
+    "relation_type": "包含字段",
+    "description": "主表包含应用来源字段",
+    "weight": 8
+  },
+  {
+    "id": "r_809955ee",
+    "source_id": "e_ecd940eb",
+    "target_id": "e_082d38f3",
+    "relation_type": "包含字段",
+    "description": "主表包含应用版本字段",
+    "weight": 8
+  },
+  {
+    "id": "r_00ed4ff6",
+    "source_id": "e_ecd940eb",
+    "target_id": "e_076b446c",
+    "relation_type": "包含字段",
+    "description": "主表包含所涉问题字段",
+    "weight": 8
+  },
+  {
+    "id": "r_179dd5e8",
+    "source_id": "e_ecd940eb",
+    "target_id": "e_275b7328",
+    "relation_type": "包含字段",
+    "description": "主表包含发布日期的字段",
+    "weight": 8
+  },
+  {
+    "id": "r_e50271c6",
+    "source_id": "e_8157cab9",
+    "target_id": "e_8ae60cd0",
+    "relation_type": "关联概念",
+    "description": "场景引用侵权软件概念",
+    "weight": 5
+  },
+  {
+    "id": "r_763990d0",
+    "source_id": "e_8157cab9",
+    "target_id": "e_0c047747",
+    "relation_type": "遵循约束",
+    "description": "场景需遵守数据约束规范",
+    "weight": 6
+  },
+  {
+    "id": "r_6c912a17",
+    "source_id": "e_8157cab9",
+    "target_id": "e_add2765b",
+    "relation_type": "关联场景",
+    "description": "风险扫描场景关联此展示场景",
+    "weight": 6
+  },
+  {
+    "id": "r_18914cdd",
+    "source_id": "e_0c047747",
+    "target_id": "e_ecd940eb",
+    "relation_type": "约束数据表",
+    "description": "规范文档约束数据表结构",
+    "weight": 8
+  },
+  {
+    "id": "r_14119c0f",
+    "source_id": "e_8157cab9",
+    "target_id": "e_475820a3",
+    "relation_type": "拥有状态",
+    "description": "场景具备加载中UI状态",
+    "weight": 5
+  },
+  {
+    "id": "r_0abd2d9b",
+    "source_id": "e_8157cab9",
+    "target_id": "e_165e65a2",
+    "relation_type": "拥有状态",
+    "description": "场景具备请求失败UI状态",
+    "weight": 5
+  },
+  {
+    "id": "r_1c325ad6",
+    "source_id": "e_8157cab9",
+    "target_id": "e_91dc36ae",
+    "relation_type": "拥有状态",
+    "description": "场景具备空数据UI状态",
+    "weight": 5
+  },
+  {
+    "id": "r_a75c72b8",
+    "source_id": "e_8157cab9",
+    "target_id": "e_8ae60cd0",
+    "relation_type": "引用",
+    "description": "场景引用了侵权软件概念",
+    "weight": 5
+  },
+  {
+    "id": "r_58c3aa74",
+    "source_id": "e_8157cab9",
+    "target_id": "e_0c047747",
+    "relation_type": "依赖",
+    "description": "场景依赖约束文档定义的数据表结构",
+    "weight": 7
+  },
+  {
+    "id": "r_dc4d72e5",
+    "source_id": "e_0c047747",
+    "target_id": "e_ecd940eb",
+    "relation_type": "包含数据表",
+    "description": "约束文档定义的主数据表",
+    "weight": 8
+  },
+  {
+    "id": "r_2a8d9d29",
+    "source_id": "e_ecd940eb",
+    "target_id": "e_0c5b711d",
+    "relation_type": "包含字段",
+    "description": "数据表的有效数据标志字段",
+    "weight": 8
+  },
+  {
+    "id": "r_aadb5dd6",
+    "source_id": "e_ecd940eb",
+    "target_id": "e_2460774d",
+    "relation_type": "包含字段",
+    "description": "数据表的展示状态过滤字段",
+    "weight": 8
+  },
+  {
+    "id": "r_7f5adb9b",
+    "source_id": "e_ecd940eb",
+    "target_id": "e_e361cd12",
+    "relation_type": "包含字段",
+    "description": "数据表的企业关联ID字段",
+    "weight": 8
+  },
+  {
+    "id": "r_3a53d626",
+    "source_id": "e_8157cab9",
+    "target_id": "e_857168bc",
+    "relation_type": "包含状态",
+    "description": "场景无筛选项，此状态不适用",
+    "weight": 5
+  },
+  {
+    "id": "r_95f514f3",
+    "source_id": "e_add2765b",
+    "target_id": "e_8ae60cd0",
+    "relation_type": "引用",
+    "description": "场景页面引用概念页面",
+    "weight": 5
+  },
+  {
+    "id": "r_c3f5aa81",
+    "source_id": "e_add2765b",
+    "target_id": "e_8157cab9",
+    "relation_type": "关联",
+    "description": "同领域关联场景",
+    "weight": 5
+  },
+  {
+    "id": "r_c672974b",
+    "source_id": "e_add2765b",
+    "target_id": "e_ecd940eb",
+    "relation_type": "依赖",
+    "description": "场景依赖该数据表",
+    "weight": 6
+  },
+  {
+    "id": "r_1ef6c260",
+    "source_id": "e_1e93941b",
+    "target_id": "e_ecd940eb",
+    "relation_type": "引用",
+    "description": "决策记录中提及主表",
+    "weight": 5
+  },
+  {
+    "id": "r_17447c10",
+    "source_id": "e_1e93941b",
+    "target_id": "e_8ae60cd0",
+    "relation_type": "引用",
+    "description": "决策记录引用侵权软件概念页面",
+    "weight": 5
+  },
+  {
+    "id": "r_6a1d1b7f",
+    "source_id": "e_1e93941b",
+    "target_id": "e_decb06d2",
+    "relation_type": "引用",
+    "description": "决策记录引用表结构约束文档",
+    "weight": 5
+  },
+  {
+    "id": "r_530956c6",
+    "source_id": "e_1e93941b",
+    "target_id": "e_79d5e73f",
+    "relation_type": "引用",
+    "description": "决策记录引用状态枚举概念",
+    "weight": 5
+  },
+  {
+    "id": "r_f130137a",
+    "source_id": "e_1e93941b",
+    "target_id": "e_9c5ef0f5",
+    "relation_type": "引用",
+    "description": "引用场景页",
+    "weight": 3
+  },
+  {
+    "id": "r_77adcbc3",
+    "source_id": "e_decb06d2",
+    "target_id": "e_ecd940eb",
+    "relation_type": "约束",
+    "description": "规范约束表结构",
+    "weight": 7
+  },
+  {
+    "id": "r_8fcfdc8b",
+    "source_id": "e_2460774d",
+    "target_id": "e_79d5e73f",
+    "relation_type": "引用枚举",
+    "description": "字段使用枚举值定义",
+    "weight": 5
+  },
+  {
+    "id": "r_71474f60",
+    "source_id": "e_1e93941b",
+    "target_id": "e_9c5ef0f5",
+    "relation_type": "属于",
+    "description": "该决策属于企业主页侵权软件场景",
+    "weight": 5
+  },
+  {
+    "id": "r_4bcdc10e",
+    "source_id": "e_1e93941b",
+    "target_id": "e_8ae60cd0",
+    "relation_type": "依赖",
+    "description": "决策记录依赖于侵权软件概念",
+    "weight": 7
+  },
+  {
+    "id": "r_00a4dff6",
+    "source_id": "e_1e93941b",
+    "target_id": "e_decb06d2",
+    "relation_type": "依赖",
+    "description": "决策涉及表结构约束",
+    "weight": 7
+  },
+  {
+    "id": "r_1b0b211c",
+    "source_id": "e_1e93941b",
+    "target_id": "e_79d5e73f",
+    "relation_type": "依赖",
+    "description": "决策引用riskbird_status枚举",
+    "weight": 6
+  },
+  {
+    "id": "r_469c7a3b",
+    "source_id": "e_1e93941b",
+    "target_id": "e_9c5ef0f5",
+    "relation_type": "依赖",
+    "description": "决策关联业务场景",
+    "weight": 6
+  },
+  {
+    "id": "r_895147c1",
+    "source_id": "e_0c047747",
+    "target_id": "e_ecd940eb",
+    "relation_type": "约束定义",
+    "description": "约束文档定义该数据表的结构与过滤条件",
+    "weight": 8
+  },
+  {
+    "id": "r_8ddd5f21",
+    "source_id": "e_ecd940eb",
+    "target_id": "e_4b35348f",
+    "relation_type": "包含字段",
+    "description": "包含自增主键字段",
+    "weight": 8
+  },
+  {
+    "id": "r_a7aaa685",
+    "source_id": "e_ecd940eb",
+    "target_id": "e_8ae60cd0",
+    "relation_type": "涉及概念",
+    "description": "该数据表用于存储侵权软件相关记录",
+    "weight": 6
+  },
+  {
+    "id": "r_bc24d310",
+    "source_id": "e_ecd940eb",
+    "target_id": "e_8157cab9",
+    "relation_type": "使用场景",
+    "description": "该数据表被企业主页侵权软件场景引用",
+    "weight": 6
+  },
+  {
+    "id": "r_56419c9c",
+    "source_id": "e_0c047747",
+    "target_id": "e_8ae60cd0",
+    "relation_type": "引用概念",
+    "description": "约束文档引用了侵权软件概念页面",
+    "weight": 5
+  },
+  {
+    "id": "r_8bbb4d58",
+    "source_id": "e_0c047747",
+    "target_id": "e_8157cab9",
+    "relation_type": "引用场景",
+    "description": "约束文档引用了企业主页侵权软件场景页面",
+    "weight": 5
+  },
+  {
+    "id": "r_dc19190d",
+    "source_id": "e_0c047747",
+    "target_id": "e_ecd940eb",
+    "relation_type": "约束",
+    "description": "该规范页定义了ds_risk_software_infringement_data表的约束条件",
+    "weight": 8
+  },
+  {
+    "id": "r_4480da7e",
+    "source_id": "e_ecd940eb",
+    "target_id": "e_8ae60cd0",
+    "relation_type": "关联概念",
+    "description": "侵权软件数据表属于侵权软件业务概念",
+    "weight": 7
+  },
+  {
+    "id": "r_349cb725",
+    "source_id": "e_ecd940eb",
+    "target_id": "e_8157cab9",
+    "relation_type": "用于场景",
+    "description": "该表数据用于企业主页侵权软件展示场景",
+    "weight": 6
+  },
+  {
+    "id": "r_31a39635",
+    "source_id": "e_0c047747",
+    "target_id": "e_8ae60cd0",
+    "relation_type": "引用",
+    "description": "规范页引用了侵权软件概念页面",
+    "weight": 5
+  },
+  {
+    "id": "r_8bc38c87",
+    "source_id": "e_0c047747",
+    "target_id": "e_8157cab9",
+    "relation_type": "引用",
+    "description": "规范页引用了企业主页侵权软件场景页面",
+    "weight": 5
+  },
+  {
+    "id": "r_3924c793",
+    "source_id": "e_ecd940eb",
+    "target_id": "e_8157cab9",
+    "relation_type": "关联场景",
+    "description": "该数据表被企业主页侵权软件场景引用",
+    "weight": 5
+  },
+  {
+    "id": "r_40285f5c",
+    "source_id": "e_9c5ef0f5",
+    "target_id": "e_8157cab9",
+    "relation_type": "废弃合并",
+    "description": "当前页面内容已合并到目标页面",
+    "weight": 9
+  },
+  {
+    "id": "r_206ef0a2",
+    "source_id": "e_0f4e483f",
+    "target_id": "e_2460774d",
+    "relation_type": "定义枚举",
+    "description": "定义该字段的枚举值0/1",
+    "weight": 9
+  },
+  {
+    "id": "r_485be1bd",
+    "source_id": "e_0f4e483f",
+    "target_id": "e_ecd940eb",
+    "relation_type": "定义字段枚举",
+    "description": "定义了该表status字段的枚举",
+    "weight": 8
+  },
+  {
+    "id": "r_671b9273",
+    "source_id": "e_0f4e483f",
+    "target_id": "e_decb06d2",
+    "relation_type": "关联",
+    "description": "与表结构规范相关联",
+    "weight": 5
+  },
+  {
+    "id": "r_8eb6da6e",
+    "source_id": "e_0f4e483f",
+    "target_id": "e_f720f75e",
+    "relation_type": "属于",
+    "description": "属于侵权软件领域",
+    "weight": 5
+  },
+  {
+    "id": "r_860a36a0",
+    "source_id": "e_205a8774",
+    "target_id": "e_ecd940eb",
+    "relation_type": "依赖",
+    "description": "企业主页查询该表状态字段riskbird_status=0的数据",
+    "weight": 5
+  },
+  {
+    "id": "r_916ee3d2",
+    "source_id": "e_5af7f195",
+    "target_id": "e_ecd940eb",
+    "relation_type": "依赖",
+    "description": "风险扫描查询该表状态字段riskbird_status=0的数据",
+    "weight": 5
+  },
+  {
+    "id": "r_1d65252a",
+    "source_id": "e_cadf48ef",
+    "target_id": "e_ecd940eb",
+    "relation_type": "依赖",
+    "description": "全文检索查询该表状态字段riskbird_status=0的数据",
+    "weight": 5
+  },
+  {
+    "id": "r_9a4b50af",
+    "source_id": "e_decb06d2",
+    "target_id": "e_0f4e483f",
+    "relation_type": "包含",
+    "description": "约束文档中定义了该枚举",
+    "weight": 6
+  },
+  {
+    "id": "r_c2527491",
+    "source_id": "e_f720f75e",
+    "target_id": "e_0f4e483f",
+    "relation_type": "包含",
+    "description": "侵权软件概念下包含状态枚举",
+    "weight": 7
+  }
+]

@@ -1,0 +1,2330 @@
+[
+  {
+    "id": "r_8030f056",
+    "source_id": "e_7033991e",
+    "target_id": "e_998d560a",
+    "relation_type": "提取自",
+    "description": "本决策页面从评审对外投资PRD提取",
+    "weight": 5
+  },
+  {
+    "id": "r_c3cbe45d",
+    "source_id": "e_699368ab",
+    "target_id": "e_23b6631e",
+    "relation_type": "提取自",
+    "description": "该概念由啄木鸟从基线v3评审会话自动提取",
+    "weight": 8
+  },
+  {
+    "id": "r_69aa40d6",
+    "source_id": "e_9ac92627",
+    "target_id": "e_23b6631e",
+    "relation_type": "提取自",
+    "description": "该映射由啄木鸟从对外投资基线v3评审会话中自动提取",
+    "weight": 6
+  },
+  {
+    "id": "r_17d8ba12",
+    "source_id": "e_9ac92627",
+    "target_id": "e_a9bd1979",
+    "relation_type": "包含规则概念",
+    "description": "映射文档包含字段来源规则",
+    "weight": 5
+  },
+  {
+    "id": "r_3a8a5235",
+    "source_id": "e_9ac92627",
+    "target_id": "e_4d5bd47e",
+    "relation_type": "包含规则概念",
+    "description": "映射文档包含JOIN标注规则",
+    "weight": 5
+  },
+  {
+    "id": "r_ee062ccd",
+    "source_id": "e_9ac92627",
+    "target_id": "e_f6a472a1",
+    "relation_type": "包含规则概念",
+    "description": "映射文档包含字段映射规则",
+    "weight": 5
+  },
+  {
+    "id": "r_0fdbf291",
+    "source_id": "e_464c53c4",
+    "target_id": "e_62cd0841",
+    "relation_type": "引自",
+    "description": "此决策规则提取自对外投资基线v4评审会话",
+    "weight": 6
+  },
+  {
+    "id": "r_0b9a9628",
+    "source_id": "e_464c53c4",
+    "target_id": "e_37b800d7",
+    "relation_type": "包含规则",
+    "description": "决策规则中包含该检查维度",
+    "weight": 7
+  },
+  {
+    "id": "r_947118dc",
+    "source_id": "e_7c934653",
+    "target_id": "e_06fa77a3",
+    "relation_type": "提及",
+    "description": "风险页面提到数据源列表",
+    "weight": 5
+  },
+  {
+    "id": "r_c37d00c6",
+    "source_id": "e_7c934653",
+    "target_id": "e_c617010a",
+    "relation_type": "提及",
+    "description": "风险页面提到连接信息详细说明",
+    "weight": 5
+  },
+  {
+    "id": "r_391c171a",
+    "source_id": "e_7c934653",
+    "target_id": "e_f31df14a",
+    "relation_type": "参考",
+    "description": "风险页面参考R-001规则",
+    "weight": 5
+  },
+  {
+    "id": "r_49420306",
+    "source_id": "e_7c934653",
+    "target_id": "e_23b6631e",
+    "relation_type": "来源于",
+    "description": "风险页面由对外投资基线v3评审提取",
+    "weight": 5
+  },
+  {
+    "id": "r_4e99b8e9",
+    "source_id": "e_58aeef23",
+    "target_id": "e_ac303452",
+    "relation_type": "涉及表",
+    "description": "当前规范文档说明该表属于MySQL库",
+    "weight": 6
+  },
+  {
+    "id": "r_86379d3a",
+    "source_id": "e_58aeef23",
+    "target_id": "e_6c2e7773",
+    "relation_type": "涉及表",
+    "description": "当前规范文档说明该表属于MySQL库",
+    "weight": 6
+  },
+  {
+    "id": "r_87635ef5",
+    "source_id": "e_58aeef23",
+    "target_id": "e_8998c7be",
+    "relation_type": "涉及表",
+    "description": "当前规范文档说明该表属于PostgreSQL库",
+    "weight": 6
+  },
+  {
+    "id": "r_92ba4c9f",
+    "source_id": "e_58aeef23",
+    "target_id": "e_297d0ac1",
+    "relation_type": "提及字段差异",
+    "description": "文档中指出该字段与PostgreSQL字段值域不同",
+    "weight": 5
+  },
+  {
+    "id": "r_be099c2e",
+    "source_id": "e_58aeef23",
+    "target_id": "e_1eef3c12",
+    "relation_type": "提及字段差异",
+    "description": "文档中指出该字段与MySQL字段值域不同",
+    "weight": 5
+  },
+  {
+    "id": "r_ecef9457",
+    "source_id": "e_ac303452",
+    "target_id": "e_297d0ac1",
+    "relation_type": "包含字段",
+    "description": "表包含字段conprop",
+    "weight": 8
+  },
+  {
+    "id": "r_1b5bb595",
+    "source_id": "e_8998c7be",
+    "target_id": "e_1eef3c12",
+    "relation_type": "包含字段",
+    "description": "ds_invest_alpha表包含invest_ratio字段",
+    "weight": 8
+  },
+  {
+    "id": "r_9c91c033",
+    "source_id": "e_58aeef23",
+    "target_id": "e_87d11eae",
+    "relation_type": "引用",
+    "description": "当前规范引用该表结构文档",
+    "weight": 5
+  },
+  {
+    "id": "r_3ccb9c97",
+    "source_id": "e_58aeef23",
+    "target_id": "e_ddc7d6c9",
+    "relation_type": "引用",
+    "description": "当前规范引用该表结构文档",
+    "weight": 5
+  },
+  {
+    "id": "r_2559d8fb",
+    "source_id": "e_58aeef23",
+    "target_id": "e_ea5eae16",
+    "relation_type": "引用",
+    "description": "当前规范引用该表结构文档",
+    "weight": 5
+  },
+  {
+    "id": "r_75b23a96",
+    "source_id": "e_58aeef23",
+    "target_id": "e_e5909611",
+    "relation_type": "遵守",
+    "description": "当前规范遵循该决策，连接信息不应出现在PRD正文",
+    "weight": 7
+  },
+  {
+    "id": "r_34a0575f",
+    "source_id": "e_ddc7d6c9",
+    "target_id": "e_8998c7be",
+    "relation_type": "定义",
+    "description": "定义ds_invest_alpha表的结构规范",
+    "weight": 5
+  },
+  {
+    "id": "r_ceeb735f",
+    "source_id": "e_8998c7be",
+    "target_id": "e_1b9c2056",
+    "relation_type": "包含字段",
+    "description": "ds_invest_alpha表包含id字段",
+    "weight": 8
+  },
+  {
+    "id": "r_dcd044b0",
+    "source_id": "e_8998c7be",
+    "target_id": "e_8fc04958",
+    "relation_type": "包含字段",
+    "description": "ds_invest_alpha表包含entid字段",
+    "weight": 8
+  },
+  {
+    "id": "r_74c63f06",
+    "source_id": "e_8998c7be",
+    "target_id": "e_7c3bfd55",
+    "relation_type": "包含字段",
+    "description": "ds_invest_alpha表包含invest_id字段",
+    "weight": 8
+  },
+  {
+    "id": "r_bcc75854",
+    "source_id": "e_8998c7be",
+    "target_id": "e_07d1ca3f",
+    "relation_type": "包含字段",
+    "description": "ds_invest_alpha表包含invest_name字段",
+    "weight": 8
+  },
+  {
+    "id": "r_00df6eb1",
+    "source_id": "e_8998c7be",
+    "target_id": "e_a1309890",
+    "relation_type": "包含字段",
+    "description": "ds_invest_alpha表包含path_cnt字段",
+    "weight": 8
+  },
+  {
+    "id": "r_5d7776f0",
+    "source_id": "e_8998c7be",
+    "target_id": "e_bedcbeaf",
+    "relation_type": "包含字段",
+    "description": "ds_invest_alpha表包含invest_paths字段",
+    "weight": 8
+  },
+  {
+    "id": "r_b73b70fe",
+    "source_id": "e_8998c7be",
+    "target_id": "e_836bfb46",
+    "relation_type": "包含字段",
+    "description": "ds_invest_alpha表包含data_status字段",
+    "weight": 8
+  },
+  {
+    "id": "r_73833000",
+    "source_id": "e_8998c7be",
+    "target_id": "e_a141232c",
+    "relation_type": "包含字段",
+    "description": "ds_invest_alpha表包含create_time字段",
+    "weight": 8
+  },
+  {
+    "id": "r_1c6746c1",
+    "source_id": "e_8998c7be",
+    "target_id": "e_b11942e8",
+    "relation_type": "包含字段",
+    "description": "ds_invest_alpha表包含update_time字段",
+    "weight": 8
+  },
+  {
+    "id": "r_102dbe1b",
+    "source_id": "e_ddc7d6c9",
+    "target_id": "e_020c5919",
+    "relation_type": "属于领域",
+    "description": "该规范属于对外投资领域",
+    "weight": 5
+  },
+  {
+    "id": "r_6d3d8c63",
+    "source_id": "e_ddc7d6c9",
+    "target_id": "e_87d11eae",
+    "relation_type": "关联",
+    "description": "关联的约束规范",
+    "weight": 5
+  },
+  {
+    "id": "r_9684d26b",
+    "source_id": "e_ddc7d6c9",
+    "target_id": "e_ea5eae16",
+    "relation_type": "关联",
+    "description": "关联的约束规范",
+    "weight": 5
+  },
+  {
+    "id": "r_5377f846",
+    "source_id": "e_ddc7d6c9",
+    "target_id": "e_add6e8c9",
+    "relation_type": "关联",
+    "description": "关联的业务场景",
+    "weight": 3
+  },
+  {
+    "id": "r_92c4c06c",
+    "source_id": "e_3573eaf1",
+    "target_id": "e_3a5c73a7",
+    "relation_type": "来源于",
+    "description": "评审严格度等级从该基线提取",
+    "weight": 5
+  },
+  {
+    "id": "r_7eb0a485",
+    "source_id": "e_3a5c73a7",
+    "target_id": "e_946d9bfe",
+    "relation_type": "版本对应",
+    "description": "v8是PRD的一个版本",
+    "weight": 7
+  },
+  {
+    "id": "r_1ac8f533",
+    "source_id": "e_3573eaf1",
+    "target_id": "e_946d9bfe",
+    "relation_type": "评审对象",
+    "description": "该评审人的评审对象为对外投资基线PRD",
+    "weight": 6
+  },
+  {
+    "id": "r_09634a1a",
+    "source_id": "e_c980e15d",
+    "target_id": "e_ac303452",
+    "relation_type": "引用数据表",
+    "description": "直接投资列表使用该表",
+    "weight": 8
+  },
+  {
+    "id": "r_b0629373",
+    "source_id": "e_c980e15d",
+    "target_id": "e_8998c7be",
+    "relation_type": "引用数据表",
+    "description": "间接投资列表使用该表",
+    "weight": 8
+  },
+  {
+    "id": "r_5d31648d",
+    "source_id": "e_c980e15d",
+    "target_id": "e_020c5919",
+    "relation_type": "引用概念",
+    "description": "页面引用对外投资概念",
+    "weight": 5
+  },
+  {
+    "id": "r_7dbf1417",
+    "source_id": "e_c980e15d",
+    "target_id": "e_de6a55dc",
+    "relation_type": "引用概念",
+    "description": "页面引用持股合计概念",
+    "weight": 5
+  },
+  {
+    "id": "r_9cfb514b",
+    "source_id": "e_c980e15d",
+    "target_id": "e_87d11eae",
+    "relation_type": "依赖规范",
+    "description": "依赖该表结构规范",
+    "weight": 6
+  },
+  {
+    "id": "r_cc99e05c",
+    "source_id": "e_c980e15d",
+    "target_id": "e_ddc7d6c9",
+    "relation_type": "依赖规范",
+    "description": "依赖该表结构规范",
+    "weight": 6
+  },
+  {
+    "id": "r_ba0d0016",
+    "source_id": "e_c980e15d",
+    "target_id": "e_5f5c30bc",
+    "relation_type": "关联场景",
+    "description": "页面关联投资详情弹窗",
+    "weight": 5
+  },
+  {
+    "id": "r_02563d39",
+    "source_id": "e_305e0efb",
+    "target_id": "e_c980e15d",
+    "relation_type": "属于",
+    "description": "该状态属于此场景",
+    "weight": 5
+  },
+  {
+    "id": "r_f56d597d",
+    "source_id": "e_b08dc9a3",
+    "target_id": "e_c980e15d",
+    "relation_type": "属于",
+    "description": "该状态属于此场景",
+    "weight": 5
+  },
+  {
+    "id": "r_a2ed47b3",
+    "source_id": "e_84c5a378",
+    "target_id": "e_c980e15d",
+    "relation_type": "属于",
+    "description": "该状态属于此场景",
+    "weight": 5
+  },
+  {
+    "id": "r_6c41614a",
+    "source_id": "e_7eafcb2c",
+    "target_id": "e_c980e15d",
+    "relation_type": "属于",
+    "description": "该状态属于此场景",
+    "weight": 5
+  },
+  {
+    "id": "r_6dfc0391",
+    "source_id": "e_ac303452",
+    "target_id": "e_87d11eae",
+    "relation_type": "被约束",
+    "description": "该表由对应的结构规范约束",
+    "weight": 8
+  },
+  {
+    "id": "r_6b6bfa05",
+    "source_id": "e_8998c7be",
+    "target_id": "e_ddc7d6c9",
+    "relation_type": "被约束",
+    "description": "该表由对应的结构规范约束",
+    "weight": 8
+  },
+  {
+    "id": "r_5f31a99b",
+    "source_id": "e_51844952",
+    "target_id": "e_09e5d3bb",
+    "relation_type": "包含功能",
+    "description": "模块包含该核心功能",
+    "weight": 8
+  },
+  {
+    "id": "r_5f263d30",
+    "source_id": "e_51844952",
+    "target_id": "e_aba6d3a5",
+    "relation_type": "包含功能",
+    "description": "模块包含该筛选功能",
+    "weight": 7
+  },
+  {
+    "id": "r_baf2e030",
+    "source_id": "e_51844952",
+    "target_id": "e_da4d1947",
+    "relation_type": "包含功能",
+    "description": "模块包含该搜索功能",
+    "weight": 7
+  },
+  {
+    "id": "r_35a32ffc",
+    "source_id": "e_51844952",
+    "target_id": "e_297e2e89",
+    "relation_type": "包含功能",
+    "description": "模块包含该导出功能",
+    "weight": 6
+  },
+  {
+    "id": "r_853d1d51",
+    "source_id": "e_51844952",
+    "target_id": "e_0e5d935b",
+    "relation_type": "包含功能",
+    "description": "模块包含该详情功能",
+    "weight": 7
+  },
+  {
+    "id": "r_207a0572",
+    "source_id": "e_51844952",
+    "target_id": "e_1a08ba2a",
+    "relation_type": "依赖",
+    "description": "模块依赖多数据源架构实现",
+    "weight": 8
+  },
+  {
+    "id": "r_4a852179",
+    "source_id": "e_1a08ba2a",
+    "target_id": "e_8998c7be",
+    "relation_type": "涉及",
+    "description": "架构涉及该数据表",
+    "weight": 8
+  },
+  {
+    "id": "r_940b3de8",
+    "source_id": "e_1a08ba2a",
+    "target_id": "e_8cae9d46",
+    "relation_type": "涉及",
+    "description": "架构包含投资数据源",
+    "weight": 7
+  },
+  {
+    "id": "r_edf55784",
+    "source_id": "e_1a08ba2a",
+    "target_id": "e_a93e4d38",
+    "relation_type": "涉及",
+    "description": "架构包含企业信息源",
+    "weight": 7
+  },
+  {
+    "id": "r_48f490c1",
+    "source_id": "e_998d560a",
+    "target_id": "e_51844952",
+    "relation_type": "涉及",
+    "description": "PRD评审模块",
+    "weight": 8
+  },
+  {
+    "id": "r_1826dee0",
+    "source_id": "e_998d560a",
+    "target_id": "e_1a08ba2a",
+    "relation_type": "提出",
+    "description": "PRD评审提出架构要求",
+    "weight": 7
+  },
+  {
+    "id": "r_792bc351",
+    "source_id": "e_0a78e97c",
+    "target_id": "e_3a5c73a7",
+    "relation_type": "来源于",
+    "description": "本页面从该规范文档评审会话中提取",
+    "weight": 5
+  },
+  {
+    "id": "r_68053231",
+    "source_id": "e_94cfbf2c",
+    "target_id": "e_998d560a",
+    "relation_type": "提取自",
+    "description": "从该PRD的评审会话中自动提取生成概念页",
+    "weight": 6
+  },
+  {
+    "id": "r_de5ea56c",
+    "source_id": "e_dcaf15a7",
+    "target_id": "e_998d560a",
+    "relation_type": "提取自",
+    "description": "该检查点从PRD评审会话中提取",
+    "weight": 5
+  },
+  {
+    "id": "r_ea54b5e1",
+    "source_id": "e_dcaf15a7",
+    "target_id": "e_51b098a1",
+    "relation_type": "涉及",
+    "description": "检查点要求版本号与版本历史表一致",
+    "weight": 7
+  },
+  {
+    "id": "r_3673fabd",
+    "source_id": "e_998d560a",
+    "target_id": "e_51b098a1",
+    "relation_type": "包含",
+    "description": "PRD中包含版本历史表",
+    "weight": 8
+  },
+  {
+    "id": "r_6e3449e0",
+    "source_id": "e_dcaf15a7",
+    "target_id": "e_9852cf91",
+    "relation_type": "建议新增于",
+    "description": "在评审清单中新增此检查",
+    "weight": 6
+  },
+  {
+    "id": "r_9a410045",
+    "source_id": "e_dcaf15a7",
+    "target_id": "e_624cd516",
+    "relation_type": "属于",
+    "description": "检查点属于文档元数据分类",
+    "weight": 5
+  },
+  {
+    "id": "r_c01fc8fa",
+    "source_id": "e_ea5eae16",
+    "target_id": "e_6c2e7773",
+    "relation_type": "规范描述",
+    "description": "约束文档描述表结构",
+    "weight": 5
+  },
+  {
+    "id": "r_32bc8df2",
+    "source_id": "e_6c2e7773",
+    "target_id": "e_fb39ad5f",
+    "relation_type": "包含字段",
+    "description": "表的主键字段",
+    "weight": 8
+  },
+  {
+    "id": "r_bffaf037",
+    "source_id": "e_6c2e7773",
+    "target_id": "e_58e28ce7",
+    "relation_type": "包含字段",
+    "description": "主表的被投资企业名称列",
+    "weight": 8
+  },
+  {
+    "id": "r_3eb45fba",
+    "source_id": "e_6c2e7773",
+    "target_id": "e_e75bd7b2",
+    "relation_type": "包含字段",
+    "description": "主表的法人代表列",
+    "weight": 8
+  },
+  {
+    "id": "r_e3ef1ab7",
+    "source_id": "e_6c2e7773",
+    "target_id": "e_aad2edd3",
+    "relation_type": "包含字段",
+    "description": "主表的注册资本列",
+    "weight": 8
+  },
+  {
+    "id": "r_4a82e1c7",
+    "source_id": "e_6c2e7773",
+    "target_id": "e_c8e73e98",
+    "relation_type": "包含字段",
+    "description": "注册资本币种字段",
+    "weight": 8
+  },
+  {
+    "id": "r_0c160f67",
+    "source_id": "e_6c2e7773",
+    "target_id": "e_dee74c95",
+    "relation_type": "包含字段",
+    "description": "主表的成立日期列",
+    "weight": 8
+  },
+  {
+    "id": "r_41873dce",
+    "source_id": "e_6c2e7773",
+    "target_id": "e_a4fb5abb",
+    "relation_type": "包含字段",
+    "description": "所属省份列",
+    "weight": 8
+  },
+  {
+    "id": "r_b52243b3",
+    "source_id": "e_6c2e7773",
+    "target_id": "e_3e1db9ba",
+    "relation_type": "包含字段",
+    "description": "城市字段",
+    "weight": 5
+  },
+  {
+    "id": "r_2c34a81c",
+    "source_id": "e_6c2e7773",
+    "target_id": "e_f4495d3a",
+    "relation_type": "包含字段",
+    "description": "企业基本信息表包含行业分类代码字段",
+    "weight": 8
+  },
+  {
+    "id": "r_38c4c85f",
+    "source_id": "e_6c2e7773",
+    "target_id": "e_7fa3c3e6",
+    "relation_type": "包含字段",
+    "description": "企业基本信息表包含行业分类备用代码字段",
+    "weight": 8
+  },
+  {
+    "id": "r_95440593",
+    "source_id": "e_6c2e7773",
+    "target_id": "e_46d9f728",
+    "relation_type": "包含字段",
+    "description": "组织机构代码非行业字段",
+    "weight": 8
+  },
+  {
+    "id": "r_8a6bea6c",
+    "source_id": "e_020c5919",
+    "target_id": "e_6c2e7773",
+    "relation_type": "依赖",
+    "description": "对外投资模块使用该表进行JOIN",
+    "weight": 7
+  },
+  {
+    "id": "r_f14e6499",
+    "source_id": "e_72423e24",
+    "target_id": "e_23b6631e",
+    "relation_type": "来源于",
+    "description": "该概念页从对外投资基线v3评审会话提取",
+    "weight": 5
+  },
+  {
+    "id": "r_375709e8",
+    "source_id": "e_683feb97",
+    "target_id": "e_998d560a",
+    "relation_type": "来源于",
+    "description": "该决策从评审会话中提取",
+    "weight": 8
+  },
+  {
+    "id": "r_ff596d85",
+    "source_id": "e_683feb97",
+    "target_id": "e_3a794fe8",
+    "relation_type": "包含规则",
+    "description": "决策中引用了苍鹰补充的检查规则",
+    "weight": 7
+  },
+  {
+    "id": "r_b1ac88b8",
+    "source_id": "e_998d560a",
+    "target_id": "e_c5a73873",
+    "relation_type": "使用概念",
+    "description": "PRD依赖API端点概念",
+    "weight": 5
+  },
+  {
+    "id": "r_349e4384",
+    "source_id": "e_998d560a",
+    "target_id": "e_094596c1",
+    "relation_type": "使用概念",
+    "description": "PRD依赖HTTP方法概念",
+    "weight": 5
+  },
+  {
+    "id": "r_2185f7b5",
+    "source_id": "e_a1c66a19",
+    "target_id": "e_020c5919",
+    "relation_type": "属于",
+    "description": "持股合计是对外投资的子概念",
+    "weight": 6
+  },
+  {
+    "id": "r_6089a9be",
+    "source_id": "e_a1c66a19",
+    "target_id": "e_87d11eae",
+    "relation_type": "依赖",
+    "description": "持股合计使用该表结构定义",
+    "weight": 5
+  },
+  {
+    "id": "r_4f8b05c8",
+    "source_id": "e_a1c66a19",
+    "target_id": "e_ddc7d6c9",
+    "relation_type": "依赖",
+    "description": "持股合计使用该表结构定义",
+    "weight": 5
+  },
+  {
+    "id": "r_4ddf0a3f",
+    "source_id": "e_a1c66a19",
+    "target_id": "e_89b25773",
+    "relation_type": "关联",
+    "description": "持股合计在直接投资列表页展示",
+    "weight": 5
+  },
+  {
+    "id": "r_f6bfe87b",
+    "source_id": "e_a1c66a19",
+    "target_id": "e_add6e8c9",
+    "relation_type": "关联",
+    "description": "持股合计在间接投资列表页展示",
+    "weight": 5
+  },
+  {
+    "id": "r_00b604ae",
+    "source_id": "e_a1c66a19",
+    "target_id": "e_ac303452",
+    "relation_type": "依赖",
+    "description": "直接投资持股比例源表",
+    "weight": 7
+  },
+  {
+    "id": "r_27069a85",
+    "source_id": "e_a1c66a19",
+    "target_id": "e_8998c7be",
+    "relation_type": "依赖",
+    "description": "间接投资持股比例源表",
+    "weight": 7
+  },
+  {
+    "id": "r_3fd1e2a1",
+    "source_id": "e_a1c66a19",
+    "target_id": "e_6c2e7773",
+    "relation_type": "提及",
+    "description": "盲区中提及上市判断表",
+    "weight": 3
+  },
+  {
+    "id": "r_e0dc243b",
+    "source_id": "e_ac303452",
+    "target_id": "e_f409e9f2",
+    "relation_type": "包含字段",
+    "description": "直接投资持股比例字段",
+    "weight": 8
+  },
+  {
+    "id": "r_31e1c88e",
+    "source_id": "e_de6a55dc",
+    "target_id": "e_020c5919",
+    "relation_type": "关联",
+    "description": "持股合计属于对外投资概念范畴",
+    "weight": 6
+  },
+  {
+    "id": "r_774388d1",
+    "source_id": "e_de6a55dc",
+    "target_id": "e_ac303452",
+    "relation_type": "依赖表",
+    "description": "直接投资持股数据源",
+    "weight": 7
+  },
+  {
+    "id": "r_405bec6f",
+    "source_id": "e_de6a55dc",
+    "target_id": "e_8998c7be",
+    "relation_type": "依赖表",
+    "description": "间接投资持股数据源",
+    "weight": 7
+  },
+  {
+    "id": "r_220281fc",
+    "source_id": "e_de6a55dc",
+    "target_id": "e_f409e9f2",
+    "relation_type": "引用字段",
+    "description": "直接投资持股比例来源",
+    "weight": 8
+  },
+  {
+    "id": "r_bcbe9359",
+    "source_id": "e_de6a55dc",
+    "target_id": "e_1eef3c12",
+    "relation_type": "引用字段",
+    "description": "间接投资持股比例来源",
+    "weight": 8
+  },
+  {
+    "id": "r_a3866edb",
+    "source_id": "e_de6a55dc",
+    "target_id": "e_87d11eae",
+    "relation_type": "遵循约束",
+    "description": "依赖该表结构规范",
+    "weight": 5
+  },
+  {
+    "id": "r_8cad136f",
+    "source_id": "e_de6a55dc",
+    "target_id": "e_ddc7d6c9",
+    "relation_type": "遵循约束",
+    "description": "依赖该表结构规范",
+    "weight": 5
+  },
+  {
+    "id": "r_14188f0c",
+    "source_id": "e_de6a55dc",
+    "target_id": "e_89b25773",
+    "relation_type": "应用于场景",
+    "description": "在直接投资列表页展示",
+    "weight": 5
+  },
+  {
+    "id": "r_4a4a873c",
+    "source_id": "e_de6a55dc",
+    "target_id": "e_add6e8c9",
+    "relation_type": "应用于场景",
+    "description": "在间接投资列表页展示",
+    "weight": 5
+  },
+  {
+    "id": "r_ccf6460a",
+    "source_id": "e_de6a55dc",
+    "target_id": "e_f409e9f2",
+    "relation_type": "包含字段",
+    "description": "用于计算直接投资持股合计",
+    "weight": 7
+  },
+  {
+    "id": "r_7a6aedfb",
+    "source_id": "e_de6a55dc",
+    "target_id": "e_1eef3c12",
+    "relation_type": "包含字段",
+    "description": "用于计算间接投资持股合计",
+    "weight": 7
+  },
+  {
+    "id": "r_5f96faab",
+    "source_id": "e_de6a55dc",
+    "target_id": "e_6c2e7773",
+    "relation_type": "依赖",
+    "description": "需从此表确定上市判断字段",
+    "weight": 3
+  },
+  {
+    "id": "r_de33d84e",
+    "source_id": "e_e5909611",
+    "target_id": "e_87d11eae",
+    "relation_type": "关联",
+    "description": "页面提及关联改进项",
+    "weight": 5
+  },
+  {
+    "id": "r_a7381c91",
+    "source_id": "e_e5909611",
+    "target_id": "e_ddc7d6c9",
+    "relation_type": "关联",
+    "description": "页面提及关联改进项",
+    "weight": 5
+  },
+  {
+    "id": "r_99aae47f",
+    "source_id": "e_7c6d9903",
+    "target_id": "e_62cd0841",
+    "relation_type": "来源于",
+    "description": "页面由啄木鸟从该规范提取",
+    "weight": 5
+  },
+  {
+    "id": "r_37e47dc4",
+    "source_id": "e_779a214e",
+    "target_id": "e_4a934b2d",
+    "relation_type": "包含流程步骤",
+    "description": "规范文档定义了该步骤",
+    "weight": 5
+  },
+  {
+    "id": "r_2b7663d6",
+    "source_id": "e_779a214e",
+    "target_id": "e_00b791a8",
+    "relation_type": "包含流程步骤",
+    "description": "规范文档定义了该步骤",
+    "weight": 5
+  },
+  {
+    "id": "r_b8f2bea7",
+    "source_id": "e_779a214e",
+    "target_id": "e_3a39f696",
+    "relation_type": "包含流程步骤",
+    "description": "规范文档定义了该步骤",
+    "weight": 5
+  },
+  {
+    "id": "r_f42ebbdc",
+    "source_id": "e_779a214e",
+    "target_id": "e_d1ef64e4",
+    "relation_type": "包含流程步骤",
+    "description": "规范文档定义了该步骤",
+    "weight": 5
+  },
+  {
+    "id": "r_4741e4e1",
+    "source_id": "e_779a214e",
+    "target_id": "e_ae5851ea",
+    "relation_type": "包含流程步骤",
+    "description": "规范文档定义了该步骤",
+    "weight": 5
+  },
+  {
+    "id": "r_fe5556de",
+    "source_id": "e_779a214e",
+    "target_id": "e_8998c7be",
+    "relation_type": "引用数据源",
+    "description": "规范文档中数据源为ds_invest_alpha",
+    "weight": 8
+  },
+  {
+    "id": "r_43e0a75c",
+    "source_id": "e_4a934b2d",
+    "target_id": "e_00b791a8",
+    "relation_type": "流程顺序",
+    "description": "Tab分类后进行列表查询",
+    "weight": 5
+  },
+  {
+    "id": "r_5370d928",
+    "source_id": "e_00b791a8",
+    "target_id": "e_3a39f696",
+    "relation_type": "流程顺序",
+    "description": "列表查询后进行筛选/搜索",
+    "weight": 5
+  },
+  {
+    "id": "r_fb344e4e",
+    "source_id": "e_3a39f696",
+    "target_id": "e_d1ef64e4",
+    "relation_type": "流程顺序",
+    "description": "筛选/搜索后进行导出",
+    "weight": 5
+  },
+  {
+    "id": "r_e535cccd",
+    "source_id": "e_d1ef64e4",
+    "target_id": "e_ae5851ea",
+    "relation_type": "流程顺序",
+    "description": "导出后进行详情弹窗",
+    "weight": 5
+  },
+  {
+    "id": "r_03770de8",
+    "source_id": "e_779a214e",
+    "target_id": "e_3a5c73a7",
+    "relation_type": "提取自",
+    "description": "本流程规范从基线v8评审会话中提取",
+    "weight": 8
+  },
+  {
+    "id": "r_1c6e147d",
+    "source_id": "e_779a214e",
+    "target_id": "e_8998c7be",
+    "relation_type": "数据源",
+    "description": "流程使用的核心数据表",
+    "weight": 7
+  },
+  {
+    "id": "r_9995b247",
+    "source_id": "e_779a214e",
+    "target_id": "e_c66ad1a8",
+    "relation_type": "遵循模式",
+    "description": "此流程遵循标准列表-详情交互模式",
+    "weight": 6
+  },
+  {
+    "id": "r_8af77497",
+    "source_id": "e_ab8b485d",
+    "target_id": "e_9607b3eb",
+    "relation_type": "包含概念",
+    "description": "决策页中提及的问题类别",
+    "weight": 5
+  },
+  {
+    "id": "r_7241438f",
+    "source_id": "e_3082adfc",
+    "target_id": "e_ac303452",
+    "relation_type": "包含表",
+    "description": "规范文档定义了直接投资表结构",
+    "weight": 6
+  },
+  {
+    "id": "r_3ad213cb",
+    "source_id": "e_ac303452",
+    "target_id": "e_1566c47e",
+    "relation_type": "包含字段",
+    "description": "表的主键列",
+    "weight": 8
+  },
+  {
+    "id": "r_e34cf72a",
+    "source_id": "e_ac303452",
+    "target_id": "e_32a90888",
+    "relation_type": "包含字段",
+    "description": "查询企业ID字段",
+    "weight": 8
+  },
+  {
+    "id": "r_e9f28927",
+    "source_id": "e_ac303452",
+    "target_id": "e_545bffe8",
+    "relation_type": "包含字段",
+    "description": "表的被投资企业UID列",
+    "weight": 8
+  },
+  {
+    "id": "r_c1162e21",
+    "source_id": "e_ac303452",
+    "target_id": "e_c3f74d17",
+    "relation_type": "包含字段",
+    "description": "被投资企业名称字段",
+    "weight": 8
+  },
+  {
+    "id": "r_25b41e9a",
+    "source_id": "e_ac303452",
+    "target_id": "e_525a2fc6",
+    "relation_type": "包含字段",
+    "description": "状态枚举字段",
+    "weight": 8
+  },
+  {
+    "id": "r_0b4d74a1",
+    "source_id": "e_ac303452",
+    "target_id": "e_638f9821",
+    "relation_type": "包含字段",
+    "description": "表的状态中文列",
+    "weight": 8
+  },
+  {
+    "id": "r_fae7960e",
+    "source_id": "e_ac303452",
+    "target_id": "e_69f34577",
+    "relation_type": "包含字段",
+    "description": "GS口径状态字段",
+    "weight": 8
+  },
+  {
+    "id": "r_c6829756",
+    "source_id": "e_ac303452",
+    "target_id": "e_9762e434",
+    "relation_type": "包含字段",
+    "description": "表的成立日期列",
+    "weight": 8
+  },
+  {
+    "id": "r_e33eb182",
+    "source_id": "e_ac303452",
+    "target_id": "e_b19db1b4",
+    "relation_type": "包含字段",
+    "description": "表的数据状态列",
+    "weight": 8
+  },
+  {
+    "id": "r_e087c181",
+    "source_id": "e_ac303452",
+    "target_id": "e_9c397cd0",
+    "relation_type": "包含字段",
+    "description": "表的创建时间列",
+    "weight": 8
+  },
+  {
+    "id": "r_68f4945e",
+    "source_id": "e_ac303452",
+    "target_id": "e_1c1b8453",
+    "relation_type": "包含字段",
+    "description": "表的更新时间列",
+    "weight": 8
+  },
+  {
+    "id": "r_7d960f07",
+    "source_id": "e_3082adfc",
+    "target_id": "e_8998c7be",
+    "relation_type": "定义",
+    "description": "规范文档定义该表结构",
+    "weight": 8
+  },
+  {
+    "id": "r_5b8aa943",
+    "source_id": "e_3082adfc",
+    "target_id": "e_6c2e7773",
+    "relation_type": "包含数据表",
+    "description": "文档定义了该表",
+    "weight": 8
+  },
+  {
+    "id": "r_d9ea0f7e",
+    "source_id": "e_6c2e7773",
+    "target_id": "e_350abd4f",
+    "relation_type": "包含字段",
+    "description": "注册地址列",
+    "weight": 8
+  },
+  {
+    "id": "r_aff1ca9f",
+    "source_id": "e_6c2e7773",
+    "target_id": "e_5aaa8b1a",
+    "relation_type": "包含字段",
+    "description": "统一社会信用代码列",
+    "weight": 8
+  },
+  {
+    "id": "r_382416fc",
+    "source_id": "e_1d98da35",
+    "target_id": "e_3a5c73a7",
+    "relation_type": "来源于",
+    "description": "该概念从该文档的评审会话中提取",
+    "weight": 5
+  },
+  {
+    "id": "r_e688ba60",
+    "source_id": "e_0b3301c6",
+    "target_id": "e_de6a55dc",
+    "relation_type": "关联",
+    "description": "决策页定义持股合计映射",
+    "weight": 5
+  },
+  {
+    "id": "r_034543d7",
+    "source_id": "e_0b3301c6",
+    "target_id": "e_87d11eae",
+    "relation_type": "引用",
+    "description": "决策依赖表结构约束",
+    "weight": 5
+  },
+  {
+    "id": "r_272ace1c",
+    "source_id": "e_0b3301c6",
+    "target_id": "e_ddc7d6c9",
+    "relation_type": "引用",
+    "description": "决策依赖表结构约束",
+    "weight": 5
+  },
+  {
+    "id": "r_ec671160",
+    "source_id": "e_0b3301c6",
+    "target_id": "e_89b25773",
+    "relation_type": "关联",
+    "description": "该映射应用于列表页",
+    "weight": 5
+  },
+  {
+    "id": "r_bcdf7b3c",
+    "source_id": "e_0b3301c6",
+    "target_id": "e_ac303452",
+    "relation_type": "涉及",
+    "description": "决策涉及该表字段",
+    "weight": 6
+  },
+  {
+    "id": "r_cbfedbb8",
+    "source_id": "e_0b3301c6",
+    "target_id": "e_8998c7be",
+    "relation_type": "涉及",
+    "description": "决策涉及该表字段",
+    "weight": 6
+  },
+  {
+    "id": "r_75d3b4ce",
+    "source_id": "e_0b3301c6",
+    "target_id": "e_297d0ac1",
+    "relation_type": "指定映射",
+    "description": "决策明确映射到该字段",
+    "weight": 8
+  },
+  {
+    "id": "r_b54df3f0",
+    "source_id": "e_0b3301c6",
+    "target_id": "e_1eef3c12",
+    "relation_type": "提及",
+    "description": "决策提及该字段作为间接投资映射",
+    "weight": 5
+  },
+  {
+    "id": "r_51487823",
+    "source_id": "e_de6a55dc",
+    "target_id": "e_297d0ac1",
+    "relation_type": "映射到",
+    "description": "持股合计概念映射到conprop字段",
+    "weight": 7
+  },
+  {
+    "id": "r_20950f88",
+    "source_id": "e_de6a55dc",
+    "target_id": "e_1eef3c12",
+    "relation_type": "映射到",
+    "description": "持股合计概念在间接投资中映射到invest_ratio字段",
+    "weight": 5
+  },
+  {
+    "id": "r_34f77810",
+    "source_id": "e_de6a55dc",
+    "target_id": "e_89b25773",
+    "relation_type": "应用于",
+    "description": "持股合计在列表页显示",
+    "weight": 5
+  },
+  {
+    "id": "r_443f743c",
+    "source_id": "e_89b25773",
+    "target_id": "e_6c2e7773",
+    "relation_type": "引用表",
+    "description": "页面展示字段均来自该表",
+    "weight": 8
+  },
+  {
+    "id": "r_c2122a67",
+    "source_id": "e_89b25773",
+    "target_id": "e_ac303452",
+    "relation_type": "引用表",
+    "description": "展示直接投资比例字段",
+    "weight": 8
+  },
+  {
+    "id": "r_e1d24e05",
+    "source_id": "e_6c2e7773",
+    "target_id": "e_1b88d64b",
+    "relation_type": "包含字段",
+    "description": "主表的地区列",
+    "weight": 6
+  },
+  {
+    "id": "r_132ed2ba",
+    "source_id": "e_6c2e7773",
+    "target_id": "e_1b87f2b8",
+    "relation_type": "包含字段",
+    "description": "主表的经营状态列",
+    "weight": 8
+  },
+  {
+    "id": "r_2e343c39",
+    "source_id": "e_89b25773",
+    "target_id": "e_020c5919",
+    "relation_type": "引用概念",
+    "description": "页面业务归属概念",
+    "weight": 7
+  },
+  {
+    "id": "r_20f300f7",
+    "source_id": "e_89b25773",
+    "target_id": "e_87d11eae",
+    "relation_type": "引用规范",
+    "description": "页面依赖该约束文档",
+    "weight": 6
+  },
+  {
+    "id": "r_1d68bf73",
+    "source_id": "e_89b25773",
+    "target_id": "e_ea5eae16",
+    "relation_type": "引用规范",
+    "description": "页面依赖该约束文档",
+    "weight": 6
+  },
+  {
+    "id": "r_7e97a7aa",
+    "source_id": "e_89b25773",
+    "target_id": "e_add6e8c9",
+    "relation_type": "关联场景",
+    "description": "同系列不同维度的列表页",
+    "weight": 6
+  },
+  {
+    "id": "r_545c059a",
+    "source_id": "e_89b25773",
+    "target_id": "e_9d188566",
+    "relation_type": "引用决策",
+    "description": "涉及股权展示上限决策",
+    "weight": 5
+  },
+  {
+    "id": "r_2cc9ccc1",
+    "source_id": "e_46d9f728",
+    "target_id": "e_f4495d3a",
+    "relation_type": "错误映射",
+    "description": "已知问题R-005：nacaoid误用为nic_id",
+    "weight": 3
+  },
+  {
+    "id": "r_6b6cb710",
+    "source_id": "e_89b25773",
+    "target_id": "e_58e28ce7",
+    "relation_type": "展示字段",
+    "description": "页面展示被投资企业名称",
+    "weight": 5
+  },
+  {
+    "id": "r_36c02bdb",
+    "source_id": "e_89b25773",
+    "target_id": "e_e75bd7b2",
+    "relation_type": "展示字段",
+    "description": "页面展示法人代表",
+    "weight": 5
+  },
+  {
+    "id": "r_b70e5f75",
+    "source_id": "e_89b25773",
+    "target_id": "e_aad2edd3",
+    "relation_type": "展示字段",
+    "description": "页面展示注册资本",
+    "weight": 5
+  },
+  {
+    "id": "r_0a342ea9",
+    "source_id": "e_89b25773",
+    "target_id": "e_dee74c95",
+    "relation_type": "展示字段",
+    "description": "页面展示成立日期",
+    "weight": 5
+  },
+  {
+    "id": "r_bbb94781",
+    "source_id": "e_89b25773",
+    "target_id": "e_1b88d64b",
+    "relation_type": "展示字段",
+    "description": "页面展示地区",
+    "weight": 5
+  },
+  {
+    "id": "r_e17008ee",
+    "source_id": "e_89b25773",
+    "target_id": "e_f4495d3a",
+    "relation_type": "展示字段",
+    "description": "页面展示行业",
+    "weight": 5
+  },
+  {
+    "id": "r_dd5f3407",
+    "source_id": "e_89b25773",
+    "target_id": "e_f409e9f2",
+    "relation_type": "展示字段",
+    "description": "页面展示直接投资和持股合计",
+    "weight": 5
+  },
+  {
+    "id": "r_37364cad",
+    "source_id": "e_89b25773",
+    "target_id": "e_1b87f2b8",
+    "relation_type": "筛选字段",
+    "description": "经营状态筛选维度",
+    "weight": 5
+  },
+  {
+    "id": "r_326de5e8",
+    "source_id": "e_5ca78b64",
+    "target_id": "e_3a5c73a7",
+    "relation_type": "衍生自",
+    "description": "该决策页的评审数据来源于对外投资基线v8",
+    "weight": 5
+  },
+  {
+    "id": "r_60b9af4b",
+    "source_id": "e_7964047c",
+    "target_id": "e_2597d62f",
+    "relation_type": "定义",
+    "description": "该文档定义了基础路径为/api/v1",
+    "weight": 7
+  },
+  {
+    "id": "r_b8e864ae",
+    "source_id": "e_a00d0d6a",
+    "target_id": "e_6c2e7773",
+    "relation_type": "引用",
+    "description": "PRD文档涉及企业基本信息表",
+    "weight": 5
+  },
+  {
+    "id": "r_f3999047",
+    "source_id": "e_a00d0d6a",
+    "target_id": "e_ac303452",
+    "relation_type": "引用",
+    "description": "PRD文档涉及投资关联表",
+    "weight": 5
+  },
+  {
+    "id": "r_97543eb3",
+    "source_id": "e_a00d0d6a",
+    "target_id": "e_62cd0841",
+    "relation_type": "抽取自",
+    "description": "本页面从该评审文档自动提取",
+    "weight": 7
+  },
+  {
+    "id": "r_f610a367",
+    "source_id": "e_6c2e7773",
+    "target_id": "e_fc4e8fc9",
+    "relation_type": "包含字段",
+    "description": "企业基本信息表包含行业分类中文名字段",
+    "weight": 8
+  },
+  {
+    "id": "r_a7f16a10",
+    "source_id": "e_6c2e7773",
+    "target_id": "e_58587c9d",
+    "relation_type": "包含字段",
+    "description": "企业基本信息表包含行业分类备用中文名字段",
+    "weight": 8
+  },
+  {
+    "id": "r_8b2ccdf6",
+    "source_id": "e_2cb88cf7",
+    "target_id": "e_020c5919",
+    "relation_type": "参考",
+    "description": "页面引用概念页面",
+    "weight": 5
+  },
+  {
+    "id": "r_d968ce9e",
+    "source_id": "e_2cb88cf7",
+    "target_id": "e_9d188566",
+    "relation_type": "参考",
+    "description": "页面引用决策规范页面",
+    "weight": 5
+  },
+  {
+    "id": "r_f0349590",
+    "source_id": "e_2cb88cf7",
+    "target_id": "e_89b25773",
+    "relation_type": "参考",
+    "description": "页面引用场景页面",
+    "weight": 5
+  },
+  {
+    "id": "r_81c504a0",
+    "source_id": "e_2cb88cf7",
+    "target_id": "e_add6e8c9",
+    "relation_type": "参考",
+    "description": "页面引用场景页面",
+    "weight": 5
+  },
+  {
+    "id": "r_beaf0a3c",
+    "source_id": "e_6a1425f2",
+    "target_id": "e_020c5919",
+    "relation_type": "引用",
+    "description": "决策文档中引用对外投资概念",
+    "weight": 5
+  },
+  {
+    "id": "r_ab94910d",
+    "source_id": "e_6a1425f2",
+    "target_id": "e_de6a55dc",
+    "relation_type": "引用",
+    "description": "决策文档中引用持股合计概念",
+    "weight": 5
+  },
+  {
+    "id": "r_a974d01d",
+    "source_id": "e_6a1425f2",
+    "target_id": "e_c980e15d",
+    "relation_type": "引用",
+    "description": "决策文档中引用该场景",
+    "weight": 5
+  },
+  {
+    "id": "r_49d010d8",
+    "source_id": "e_020c5919",
+    "target_id": "e_ac303452",
+    "relation_type": "数据来源",
+    "description": "直接投资数据来源于该表",
+    "weight": 8
+  },
+  {
+    "id": "r_b039324b",
+    "source_id": "e_020c5919",
+    "target_id": "e_8998c7be",
+    "relation_type": "数据来源",
+    "description": "间接投资数据来源于该表",
+    "weight": 8
+  },
+  {
+    "id": "r_26aab123",
+    "source_id": "e_020c5919",
+    "target_id": "e_6c2e7773",
+    "relation_type": "数据来源",
+    "description": "被投资企业信息来源于该表",
+    "weight": 5
+  },
+  {
+    "id": "r_be646a49",
+    "source_id": "e_020c5919",
+    "target_id": "e_de6a55dc",
+    "relation_type": "关联概念",
+    "description": "持股合计是对外投资的重要计算",
+    "weight": 6
+  },
+  {
+    "id": "r_7380eff1",
+    "source_id": "e_020c5919",
+    "target_id": "e_87d11eae",
+    "relation_type": "约束",
+    "description": "该概念受表结构约束规范",
+    "weight": 5
+  },
+  {
+    "id": "r_509ae303",
+    "source_id": "e_020c5919",
+    "target_id": "e_ddc7d6c9",
+    "relation_type": "约束",
+    "description": "该概念受表结构约束规范",
+    "weight": 5
+  },
+  {
+    "id": "r_5cd970b0",
+    "source_id": "e_020c5919",
+    "target_id": "e_ea5eae16",
+    "relation_type": "约束",
+    "description": "该概念受表结构约束规范",
+    "weight": 5
+  },
+  {
+    "id": "r_026d1002",
+    "source_id": "e_020c5919",
+    "target_id": "e_89b25773",
+    "relation_type": "关联场景",
+    "description": "该概念在直接投资列表页呈现",
+    "weight": 6
+  },
+  {
+    "id": "r_6a49594f",
+    "source_id": "e_020c5919",
+    "target_id": "e_add6e8c9",
+    "relation_type": "关联场景",
+    "description": "该概念在间接投资列表页呈现",
+    "weight": 6
+  },
+  {
+    "id": "r_654dd303",
+    "source_id": "e_020c5919",
+    "target_id": "e_2cb88cf7",
+    "relation_type": "竞品参考",
+    "description": "参考竞品功能设计",
+    "weight": 4
+  },
+  {
+    "id": "r_3094017b",
+    "source_id": "e_020c5919",
+    "target_id": "e_9d188566",
+    "relation_type": "决策依据",
+    "description": "股权链展示上限决策依赖于该概念",
+    "weight": 5
+  },
+  {
+    "id": "r_9a8599f0",
+    "source_id": "e_d3a3d93b",
+    "target_id": "e_23b6631e",
+    "relation_type": "提取自",
+    "description": "路由模式文档从该评审计录中提取",
+    "weight": 5
+  },
+  {
+    "id": "r_7ce4b254",
+    "source_id": "e_d3a3d93b",
+    "target_id": "e_51844952",
+    "relation_type": "属于",
+    "description": "路由模式属于对外投资模块的架构",
+    "weight": 7
+  },
+  {
+    "id": "r_1bf28feb",
+    "source_id": "e_add6e8c9",
+    "target_id": "e_020c5919",
+    "relation_type": "引用",
+    "description": "场景引用对外投资概念",
+    "weight": 5
+  },
+  {
+    "id": "r_7d7bd292",
+    "source_id": "e_add6e8c9",
+    "target_id": "e_de6a55dc",
+    "relation_type": "引用",
+    "description": "场景引用持股合计概念",
+    "weight": 5
+  },
+  {
+    "id": "r_9b3e4ee5",
+    "source_id": "e_add6e8c9",
+    "target_id": "e_ddc7d6c9",
+    "relation_type": "引用",
+    "description": "场景引用表结构约束",
+    "weight": 5
+  },
+  {
+    "id": "r_f87c0b1b",
+    "source_id": "e_add6e8c9",
+    "target_id": "e_ea5eae16",
+    "relation_type": "引用",
+    "description": "场景引用表结构约束",
+    "weight": 5
+  },
+  {
+    "id": "r_784728e8",
+    "source_id": "e_add6e8c9",
+    "target_id": "e_89b25773",
+    "relation_type": "关联",
+    "description": "与直接投资列表页关联，可能相互跳转",
+    "weight": 3
+  },
+  {
+    "id": "r_4ae79f74",
+    "source_id": "e_add6e8c9",
+    "target_id": "e_9d188566",
+    "relation_type": "引用",
+    "description": "场景引用股权链展示规范",
+    "weight": 5
+  },
+  {
+    "id": "r_4dc69ff2",
+    "source_id": "e_add6e8c9",
+    "target_id": "e_8998c7be",
+    "relation_type": "依赖表",
+    "description": "场景使用主表数据",
+    "weight": 6
+  },
+  {
+    "id": "r_c8985984",
+    "source_id": "e_add6e8c9",
+    "target_id": "e_6c2e7773",
+    "relation_type": "依赖表",
+    "description": "场景使用基础信息表数据",
+    "weight": 6
+  },
+  {
+    "id": "r_a55def9d",
+    "source_id": "e_add6e8c9",
+    "target_id": "e_07d1ca3f",
+    "relation_type": "展示字段",
+    "description": "页面直接展示该字段值",
+    "weight": 7
+  },
+  {
+    "id": "r_dcb94619",
+    "source_id": "e_add6e8c9",
+    "target_id": "e_1eef3c12",
+    "relation_type": "展示字段",
+    "description": "页面直接展示该字段值",
+    "weight": 7
+  },
+  {
+    "id": "r_f3f92750",
+    "source_id": "e_add6e8c9",
+    "target_id": "e_a1309890",
+    "relation_type": "展示字段",
+    "description": "页面直接展示该字段值",
+    "weight": 7
+  },
+  {
+    "id": "r_1d2334f7",
+    "source_id": "e_add6e8c9",
+    "target_id": "e_bedcbeaf",
+    "relation_type": "展示字段",
+    "description": "页面直接展示该字段值",
+    "weight": 7
+  },
+  {
+    "id": "r_590c7a42",
+    "source_id": "e_add6e8c9",
+    "target_id": "e_1b87f2b8",
+    "relation_type": "筛选字段",
+    "description": "页面用于经营状态筛选",
+    "weight": 6
+  },
+  {
+    "id": "r_c5f09bd7",
+    "source_id": "e_add6e8c9",
+    "target_id": "e_f4495d3a",
+    "relation_type": "筛选字段",
+    "description": "页面用于行业筛选（待确认）",
+    "weight": 3
+  },
+  {
+    "id": "r_af5937cc",
+    "source_id": "e_add6e8c9",
+    "target_id": "e_7fa3c3e6",
+    "relation_type": "筛选字段",
+    "description": "页面用于行业备选筛选",
+    "weight": 3
+  },
+  {
+    "id": "r_894d7b36",
+    "source_id": "e_23b6631e",
+    "target_id": "e_089ea078",
+    "relation_type": "提取自",
+    "description": "规范文档描述了该概念页面",
+    "weight": 7
+  },
+  {
+    "id": "r_8182dbeb",
+    "source_id": "e_c249d29b",
+    "target_id": "e_3a5c73a7",
+    "relation_type": "提取自",
+    "description": "本决策从对外投资基线v8评审中提取",
+    "weight": 7
+  },
+  {
+    "id": "r_af2af293",
+    "source_id": "e_c249d29b",
+    "target_id": "e_f31df14a",
+    "relation_type": "包含规则",
+    "description": "决策定义的规则编号",
+    "weight": 8
+  },
+  {
+    "id": "r_b46545f9",
+    "source_id": "e_c249d29b",
+    "target_id": "e_3a5c73a7",
+    "relation_type": "来源于",
+    "description": "该决策规则来源于对外投资基线v8文档",
+    "weight": 7
+  },
+  {
+    "id": "r_62f94a3f",
+    "source_id": "e_c249d29b",
+    "target_id": "e_f31df14a",
+    "relation_type": "包含",
+    "description": "决策规则包含规则编号R-001",
+    "weight": 5
+  },
+  {
+    "id": "r_41ea05fa",
+    "source_id": "e_f441b37d",
+    "target_id": "e_8998c7be",
+    "relation_type": "定义",
+    "description": "约定定义数据源",
+    "weight": 5
+  },
+  {
+    "id": "r_868d21f0",
+    "source_id": "e_f441b37d",
+    "target_id": "e_2597d62f",
+    "relation_type": "定义",
+    "description": "约定定义 API 路径",
+    "weight": 5
+  },
+  {
+    "id": "r_cfccfcce",
+    "source_id": "e_8998c7be",
+    "target_id": "e_2597d62f",
+    "relation_type": "对接",
+    "description": "API 操作该数据源",
+    "weight": 5
+  },
+  {
+    "id": "r_3aeabba9",
+    "source_id": "e_f441b37d",
+    "target_id": "e_3a5c73a7",
+    "relation_type": "依赖",
+    "description": "约束页面引用基线文档",
+    "weight": 6
+  },
+  {
+    "id": "r_b2369bb4",
+    "source_id": "e_f441b37d",
+    "target_id": "e_8998c7be",
+    "relation_type": "定义数据源",
+    "description": "约束页面定义了数据源ds_invest_alpha的基本信息",
+    "weight": 5
+  },
+  {
+    "id": "r_e7b685ce",
+    "source_id": "e_f441b37d",
+    "target_id": "e_2597d62f",
+    "relation_type": "定义API路径",
+    "description": "约束页面规定了API基础路径为/api/v1",
+    "weight": 5
+  },
+  {
+    "id": "r_54ff9965",
+    "source_id": "e_f441b37d",
+    "target_id": "e_3a5c73a7",
+    "relation_type": "引用自",
+    "description": "约束页面参考PRD对外投资基线v8的技术约定节",
+    "weight": 6
+  },
+  {
+    "id": "r_53ae01a4",
+    "source_id": "e_bd05c828",
+    "target_id": "e_62cd0841",
+    "relation_type": "提取自",
+    "description": "决策页面从对外投资基线v4的评审会话提取",
+    "weight": 5
+  },
+  {
+    "id": "r_c5751d3f",
+    "source_id": "e_62cd0841",
+    "target_id": "e_c058a107",
+    "relation_type": "包含章节",
+    "description": "技术约定是对外投资基线v4的一个章节",
+    "weight": 8
+  },
+  {
+    "id": "r_45f2f6d0",
+    "source_id": "e_c058a107",
+    "target_id": "e_1c18d092",
+    "relation_type": "定义",
+    "description": "技术约定章节中定义接口契约内容",
+    "weight": 6
+  },
+  {
+    "id": "r_48f56aac",
+    "source_id": "e_bf383de2",
+    "target_id": "e_1c18d092",
+    "relation_type": "依赖",
+    "description": "FR功能需要对应的接口契约来补齐",
+    "weight": 7
+  },
+  {
+    "id": "r_42923daa",
+    "source_id": "e_c8a9e101",
+    "target_id": "e_bf383de2",
+    "relation_type": "检查",
+    "description": "规则检查功能需求列表的FR是否与接口契约匹配",
+    "weight": 5
+  },
+  {
+    "id": "r_014a8a04",
+    "source_id": "e_c8a9e101",
+    "target_id": "e_c058a107",
+    "relation_type": "检查",
+    "description": "规则检查技术约定是否补齐对应接口契约",
+    "weight": 5
+  },
+  {
+    "id": "r_728a0427",
+    "source_id": "e_bf383de2",
+    "target_id": "e_c058a107",
+    "relation_type": "要求",
+    "description": "FR要求技术约定必须包含对应接口契约",
+    "weight": 6
+  },
+  {
+    "id": "r_145a976e",
+    "source_id": "e_9d188566",
+    "target_id": "e_2cb88cf7",
+    "relation_type": "参考",
+    "description": "决策依据与竞品对齐",
+    "weight": 5
+  },
+  {
+    "id": "r_36ecd6fb",
+    "source_id": "e_9d188566",
+    "target_id": "e_020c5919",
+    "relation_type": "关联",
+    "description": "决策关联的业务概念",
+    "weight": 5
+  },
+  {
+    "id": "r_ce619105",
+    "source_id": "e_9d188566",
+    "target_id": "e_89b25773",
+    "relation_type": "关联",
+    "description": "决策适用的页面场景",
+    "weight": 5
+  },
+  {
+    "id": "r_eb1b5372",
+    "source_id": "e_5c2752ae",
+    "target_id": "e_6c2e7773",
+    "relation_type": "包含",
+    "description": "文档包含此表",
+    "weight": 5
+  },
+  {
+    "id": "r_3fe12fcd",
+    "source_id": "e_5c2752ae",
+    "target_id": "e_ac303452",
+    "relation_type": "包含",
+    "description": "文档包含此表",
+    "weight": 5
+  },
+  {
+    "id": "r_a9515b9d",
+    "source_id": "e_5c2752ae",
+    "target_id": "e_8998c7be",
+    "relation_type": "包含",
+    "description": "文档包含此表",
+    "weight": 5
+  },
+  {
+    "id": "r_5397815b",
+    "source_id": "e_6c2e7773",
+    "target_id": "e_ac303452",
+    "relation_type": "左连接关联",
+    "description": "通过entid关联被投资企业基本信息",
+    "weight": 5
+  },
+  {
+    "id": "r_6755aa56",
+    "source_id": "e_6c2e7773",
+    "target_id": "e_8998c7be",
+    "relation_type": "左连接关联",
+    "description": "通过entid关联间接投资被投资企业信息",
+    "weight": 5
+  },
+  {
+    "id": "r_5d34484f",
+    "source_id": "e_fb39ad5f",
+    "target_id": "e_545bffe8",
+    "relation_type": "相等关联",
+    "description": "两字段相等用于连接",
+    "weight": 3
+  },
+  {
+    "id": "r_f6bd109c",
+    "source_id": "e_fb39ad5f",
+    "target_id": "e_7c3bfd55",
+    "relation_type": "相等关联",
+    "description": "两字段相等用于连接",
+    "weight": 3
+  },
+  {
+    "id": "r_cb7fe322",
+    "source_id": "e_5c2752ae",
+    "target_id": "e_ac303452",
+    "relation_type": "包含定义",
+    "description": "规范文档定义了该表的使用",
+    "weight": 5
+  },
+  {
+    "id": "r_478cce4a",
+    "source_id": "e_5c2752ae",
+    "target_id": "e_6c2e7773",
+    "relation_type": "包含定义",
+    "description": "规范文档定义了该表的使用",
+    "weight": 5
+  },
+  {
+    "id": "r_96c1a536",
+    "source_id": "e_5c2752ae",
+    "target_id": "e_8998c7be",
+    "relation_type": "包含定义",
+    "description": "规范文档定义了该表的使用",
+    "weight": 5
+  },
+  {
+    "id": "r_32dcf7f9",
+    "source_id": "e_ac303452",
+    "target_id": "e_6c2e7773",
+    "relation_type": "JOIN关联",
+    "description": "通过entid_inv=entid LEFT JOIN",
+    "weight": 8
+  },
+  {
+    "id": "r_aeb3874b",
+    "source_id": "e_8998c7be",
+    "target_id": "e_6c2e7773",
+    "relation_type": "JOIN关联",
+    "description": "通过invest_id=entid LEFT JOIN",
+    "weight": 8
+  },
+  {
+    "id": "r_28857efe",
+    "source_id": "e_545bffe8",
+    "target_id": "e_fb39ad5f",
+    "relation_type": "等于关联",
+    "description": "JOIN条件等值",
+    "weight": 9
+  },
+  {
+    "id": "r_904b7f27",
+    "source_id": "e_7c3bfd55",
+    "target_id": "e_fb39ad5f",
+    "relation_type": "等于关联",
+    "description": "JOIN条件等值",
+    "weight": 9
+  },
+  {
+    "id": "r_afa102be",
+    "source_id": "e_7ff047cc",
+    "target_id": "e_ac303452",
+    "relation_type": "使用主表",
+    "description": "列表查询主表",
+    "weight": 7
+  },
+  {
+    "id": "r_09bd4fa8",
+    "source_id": "e_7ff047cc",
+    "target_id": "e_6c2e7773",
+    "relation_type": "使用JOIN表",
+    "description": "列表查询关联基础信息",
+    "weight": 6
+  },
+  {
+    "id": "r_b5b5d91b",
+    "source_id": "e_5c2752ae",
+    "target_id": "e_6c2e7773",
+    "relation_type": "依赖",
+    "description": "跨表字段来源表",
+    "weight": 6
+  },
+  {
+    "id": "r_12af7ebc",
+    "source_id": "e_5c2752ae",
+    "target_id": "e_58e28ce7",
+    "relation_type": "引用",
+    "description": "跨表字段映射中引用该字段",
+    "weight": 5
+  },
+  {
+    "id": "r_79d8c5da",
+    "source_id": "e_5c2752ae",
+    "target_id": "e_e75bd7b2",
+    "relation_type": "引用",
+    "description": "跨表字段映射中引用该字段",
+    "weight": 5
+  },
+  {
+    "id": "r_74eb681e",
+    "source_id": "e_5c2752ae",
+    "target_id": "e_aad2edd3",
+    "relation_type": "引用",
+    "description": "跨表字段映射中引用该字段",
+    "weight": 5
+  },
+  {
+    "id": "r_024dc51b",
+    "source_id": "e_5c2752ae",
+    "target_id": "e_c8e73e98",
+    "relation_type": "引用",
+    "description": "跨表字段映射中引用该字段",
+    "weight": 5
+  },
+  {
+    "id": "r_8cfc7e49",
+    "source_id": "e_5c2752ae",
+    "target_id": "e_dee74c95",
+    "relation_type": "引用",
+    "description": "跨表字段映射中引用该字段",
+    "weight": 5
+  },
+  {
+    "id": "r_be5d14a8",
+    "source_id": "e_5c2752ae",
+    "target_id": "e_a4fb5abb",
+    "relation_type": "引用",
+    "description": "跨表字段映射中引用该字段",
+    "weight": 5
+  },
+  {
+    "id": "r_07d1d8ad",
+    "source_id": "e_5c2752ae",
+    "target_id": "e_f4495d3a",
+    "relation_type": "引用",
+    "description": "跨表字段映射中引用该字段",
+    "weight": 5
+  },
+  {
+    "id": "r_57336f27",
+    "source_id": "e_e3522dcb",
+    "target_id": "e_58e28ce7",
+    "relation_type": "展示字段",
+    "description": "被投资企业字段",
+    "weight": 5
+  },
+  {
+    "id": "r_de07cab3",
+    "source_id": "e_e3522dcb",
+    "target_id": "e_e75bd7b2",
+    "relation_type": "展示字段",
+    "description": "法人代表字段",
+    "weight": 5
+  },
+  {
+    "id": "r_36ad4206",
+    "source_id": "e_e3522dcb",
+    "target_id": "e_aad2edd3",
+    "relation_type": "展示字段",
+    "description": "注册资本数值字段",
+    "weight": 5
+  },
+  {
+    "id": "r_e2ad7535",
+    "source_id": "e_e3522dcb",
+    "target_id": "e_c8e73e98",
+    "relation_type": "展示字段",
+    "description": "注册资本币种字段",
+    "weight": 5
+  },
+  {
+    "id": "r_be8d1361",
+    "source_id": "e_e3522dcb",
+    "target_id": "e_dee74c95",
+    "relation_type": "展示字段",
+    "description": "成立日期字段",
+    "weight": 5
+  },
+  {
+    "id": "r_2c65ff65",
+    "source_id": "e_e3522dcb",
+    "target_id": "e_a4fb5abb",
+    "relation_type": "展示字段",
+    "description": "所属地区字段",
+    "weight": 5
+  },
+  {
+    "id": "r_6145b8a6",
+    "source_id": "e_e3522dcb",
+    "target_id": "e_f4495d3a",
+    "relation_type": "展示字段",
+    "description": "所属行业字段",
+    "weight": 5
+  },
+  {
+    "id": "r_1eaf2b2d",
+    "source_id": "e_0b621608",
+    "target_id": "e_58e28ce7",
+    "relation_type": "展示字段",
+    "description": "被投资企业字段",
+    "weight": 5
+  },
+  {
+    "id": "r_6b04e055",
+    "source_id": "e_0b621608",
+    "target_id": "e_e75bd7b2",
+    "relation_type": "展示字段",
+    "description": "法人代表字段",
+    "weight": 5
+  },
+  {
+    "id": "r_82010413",
+    "source_id": "e_0b621608",
+    "target_id": "e_aad2edd3",
+    "relation_type": "展示字段",
+    "description": "注册资本数值字段",
+    "weight": 5
+  },
+  {
+    "id": "r_7bbf82ca",
+    "source_id": "e_0b621608",
+    "target_id": "e_c8e73e98",
+    "relation_type": "展示字段",
+    "description": "注册资本币种字段",
+    "weight": 5
+  },
+  {
+    "id": "r_e07ade2a",
+    "source_id": "e_0b621608",
+    "target_id": "e_dee74c95",
+    "relation_type": "展示字段",
+    "description": "成立日期字段",
+    "weight": 5
+  },
+  {
+    "id": "r_4fb45809",
+    "source_id": "e_0b621608",
+    "target_id": "e_a4fb5abb",
+    "relation_type": "展示字段",
+    "description": "所属地区字段",
+    "weight": 5
+  },
+  {
+    "id": "r_6491a56d",
+    "source_id": "e_0b621608",
+    "target_id": "e_f4495d3a",
+    "relation_type": "展示字段",
+    "description": "所属行业字段",
+    "weight": 5
+  },
+  {
+    "id": "r_16c2d2f1",
+    "source_id": "e_5c2752ae",
+    "target_id": "e_e3522dcb",
+    "relation_type": "包含",
+    "description": "规范中描述直接对外投资展示",
+    "weight": 5
+  },
+  {
+    "id": "r_900393c1",
+    "source_id": "e_5c2752ae",
+    "target_id": "e_0b621608",
+    "relation_type": "包含",
+    "description": "规范中描述间接对外投资展示",
+    "weight": 5
+  },
+  {
+    "id": "r_cca176d6",
+    "source_id": "e_87d11eae",
+    "target_id": "e_ac303452",
+    "relation_type": "规范约束",
+    "description": "规范文档描述该表结构",
+    "weight": 8
+  },
+  {
+    "id": "r_93c0ec4d",
+    "source_id": "e_ac303452",
+    "target_id": "e_6c2e7773",
+    "relation_type": "外键关联",
+    "description": "通过entid字段关联企业基本信息表",
+    "weight": 7
+  },
+  {
+    "id": "r_06c0d9f4",
+    "source_id": "e_87d11eae",
+    "target_id": "e_ea5eae16",
+    "relation_type": "依赖",
+    "description": "该规范引用另一表约束文档",
+    "weight": 5
+  },
+  {
+    "id": "r_0cc36bfc",
+    "source_id": "e_87d11eae",
+    "target_id": "e_020c5919",
+    "relation_type": "属于",
+    "description": "该文档属于对外投资概念",
+    "weight": 5
+  },
+  {
+    "id": "r_912b97bb",
+    "source_id": "e_87d11eae",
+    "target_id": "e_89b25773",
+    "relation_type": "关联场景",
+    "description": "该表用于直接投资列表页场景",
+    "weight": 5
+  },
+  {
+    "id": "r_25463fc1",
+    "source_id": "e_87d11eae",
+    "target_id": "e_ac303452",
+    "relation_type": "定义表",
+    "description": "规范文件描述该数据表",
+    "weight": 8
+  },
+  {
+    "id": "r_248267e1",
+    "source_id": "e_32a90888",
+    "target_id": "e_6c2e7773",
+    "relation_type": "外键依赖",
+    "description": "entid关联企业基础表entid",
+    "weight": 7
+  },
+  {
+    "id": "r_9e3ec071",
+    "source_id": "e_545bffe8",
+    "target_id": "e_6c2e7773",
+    "relation_type": "外键依赖",
+    "description": "entid_inv关联企业基础表entid获取详情",
+    "weight": 7
+  },
+  {
+    "id": "r_fb79df83",
+    "source_id": "e_ac303452",
+    "target_id": "e_6c2e7773",
+    "relation_type": "依赖",
+    "description": "需JOIN获取行业字段",
+    "weight": 6
+  },
+  {
+    "id": "r_586bc0ca",
+    "source_id": "e_87d11eae",
+    "target_id": "e_020c5919",
+    "relation_type": "引用",
+    "description": "规范页引用业务概念",
+    "weight": 5
+  },
+  {
+    "id": "r_504808c3",
+    "source_id": "e_87d11eae",
+    "target_id": "e_ea5eae16",
+    "relation_type": "引用",
+    "description": "规范页引用关联表约束",
+    "weight": 5
+  },
+  {
+    "id": "r_117e4af7",
+    "source_id": "e_87d11eae",
+    "target_id": "e_89b25773",
+    "relation_type": "引用",
+    "description": "规范页引用查询场景",
+    "weight": 5
+  },
+  {
+    "id": "r_33b5e8ca",
+    "source_id": "e_32a90888",
+    "target_id": "e_fb39ad5f",
+    "relation_type": "外键关联",
+    "description": "entid字段关联t_ds_company_basic.entid",
+    "weight": 8
+  },
+  {
+    "id": "r_aa578555",
+    "source_id": "e_545bffe8",
+    "target_id": "e_fb39ad5f",
+    "relation_type": "外键关联",
+    "description": "entid_inv字段关联t_ds_company_basic.entid",
+    "weight": 8
+  }
+]

@@ -1,0 +1,20 @@
+{
+  "wiki_dir": "C:\\Users\\20834\\Desktop\\agent\\prd review\\workspace-侵权软件\\wiki",
+  "pages_scanned": 13,
+  "biz_pages_extracted": 11,
+  "pages_failed": [],
+  "entities_count": 32,
+  "relations_count": 65,
+  "by_type": {
+    "spec_doc": 7,
+    "page_concept": 11,
+    "data_table": 1,
+    "field": 9,
+    "ui_state": 4
+  },
+  "elapsed_seconds": 245.6,
+  "max_gleanings": 2,
+  "page_concurrency": 2,
+  "built_at": "2026-04-28 23:23:23",
+  "builder": "build_kg_all.py"
+}

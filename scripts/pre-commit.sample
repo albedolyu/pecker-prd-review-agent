@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# 啄木鸟 git pre-commit hook 模板.
+# 安装方式 (一次性, 每个开发者 git clone 后跑一次):
+#   cp scripts/pre-commit.sample .git/hooks/pre-commit
+#   chmod +x .git/hooks/pre-commit
+#
+# 行为:
+#   1. 检测改动文件, 如果改了规则 yaml / prompting / worker → 跑 static check
+#   2. 如果改了规则 yaml 中带 examples 的 rule, 进一步跑 rule_regression --rule-id (限定改动 rule_id)
+#   3. 如果改了 review-checklist.yaml 全文, 提示 "考虑跑全量 rule_regression"
+#
+# 不强制跑 LLM (会让 commit 等几分钟), 静态检查 + 单 rule 真实 worker 是默认.
+# 改了 prompt 想全量跑, 手动: python scripts/rule_regression.py
+set -e
+
+# ---------- 1. 改动文件 ----------
+CHANGED=$(git diff --cached --name-only)
+RULES_CHANGED=$(echo "$CHANGED" | grep -E "(review-checklist|review-dimensions)\.yaml$" || true)
+PROMPTING_CHANGED=$(echo "$CHANGED" | grep -E "review/(prompting|worker|learnings_store)\.py$" || true)
+
+if [ -z "$RULES_CHANGED" ] && [ -z "$PROMPTING_CHANGED" ]; then
+  exit 0
+fi
+
+# ---------- 2. 静态检查 (快, 必跑) ----------
+echo "[pre-commit] 检测到 rule/prompt 改动, 跑 static_rule_check..."
+python scripts/static_rule_check.py \
+  --workspace workspace-sample \
+  --baseline scripts/fixtures/regression_baseline.json || {
+  echo "[pre-commit] FAIL: static_rule_check 失败"
+  echo "  按报错修 yaml schema, 或者 git commit --no-verify (不推荐)"
+  exit 1
+}
+
+# ---------- 3. 如果只改了一条 rule, 跑这条 rule 的 regression ----------
+if [ -n "$RULES_CHANGED" ]; then
+  # 抽改动的 rule_id (扫 cached diff, 找形如 "  - id: RC-005" 的新增/修改行)
+  CHANGED_RULES=$(git diff --cached -- workspace-sample/review-rules/review-checklist.yaml \
+                  | grep -E "^\+.*-?\s*id:\s*[A-Z]+-[0-9]+" \
+                  | sed -E 's/^\+\s*-?\s*id:\s*([A-Z]+-[0-9]+).*/\1/' \
+                  | sort -u || true)
+  if [ -n "$CHANGED_RULES" ]; then
+    RULE_COUNT=$(echo "$CHANGED_RULES" | wc -l)
+    if [ "$RULE_COUNT" -eq 1 ]; then
+      RULE_ID=$(echo "$CHANGED_RULES" | head -1)
+      echo "[pre-commit] 单条 rule 改动 ($RULE_ID), 跑 rule_regression --rule-id $RULE_ID..."
+      python scripts/rule_regression.py \
+        --rules-yaml workspace-sample/review-rules/review-checklist.yaml \
+        --rule-id "$RULE_ID" \
+        --tolerance 0.05 || {
+          echo "[pre-commit] FAIL: 规则 $RULE_ID P/R 跌 > 5%"
+          echo "  如果是预期 (改 prompt 后 baseline 应更新), 跑:"
+          echo "    python scripts/rule_regression.py --update-baseline"
+          exit 1
+      }
+    else
+      echo "[pre-commit] 多条 rule 改动, 跳过单 rule regression. 建议 commit 后手动跑全量:"
+      echo "  python scripts/rule_regression.py"
+    fi
+  fi
+fi
+
+if [ -n "$PROMPTING_CHANGED" ]; then
+  echo "[pre-commit] 改了 prompting/worker/learnings_store, 强烈建议手动跑全量 regression:"
+  echo "  python scripts/rule_regression.py"
+fi
+
+echo "[pre-commit] OK"
+exit 0

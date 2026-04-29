@@ -1,0 +1,490 @@
+[
+  {
+    "id": "r_4de6ebd7",
+    "source_id": "e_5b140b67",
+    "target_id": "e_3baa030f",
+    "relation_type": "定义",
+    "description": "规范了加载中状态的触发条件和展示",
+    "weight": 7
+  },
+  {
+    "id": "r_7504b03b",
+    "source_id": "e_5b140b67",
+    "target_id": "e_fad2a383",
+    "relation_type": "定义",
+    "description": "规范了请求失败状态的触发条件和展示",
+    "weight": 7
+  },
+  {
+    "id": "r_b84ae28a",
+    "source_id": "e_5b140b67",
+    "target_id": "e_664299ee",
+    "relation_type": "定义",
+    "description": "规范了筛选无结果状态的触发条件和展示",
+    "weight": 7
+  },
+  {
+    "id": "r_1601e9e7",
+    "source_id": "e_5b140b67",
+    "target_id": "e_4f8ce35a",
+    "relation_type": "定义",
+    "description": "规范了空数据状态的触发条件和展示",
+    "weight": 7
+  },
+  {
+    "id": "r_60b5eba8",
+    "source_id": "e_5b140b67",
+    "target_id": "e_14f744e7",
+    "relation_type": "关联",
+    "description": "引用了该场景页面",
+    "weight": 5
+  },
+  {
+    "id": "r_3d369d6b",
+    "source_id": "e_5b140b67",
+    "target_id": "e_18ce4ce0",
+    "relation_type": "关联",
+    "description": "引用了风鸟平台页面",
+    "weight": 5
+  },
+  {
+    "id": "r_d2b14aea",
+    "source_id": "e_611a56dd",
+    "target_id": "e_1f55d02f",
+    "relation_type": "引用",
+    "description": "决策页面引用了脱敏规则概念",
+    "weight": 5
+  },
+  {
+    "id": "r_b39d64e5",
+    "source_id": "e_611a56dd",
+    "target_id": "e_f119f13c",
+    "relation_type": "引用",
+    "description": "决策页面引用了约束规范",
+    "weight": 5
+  },
+  {
+    "id": "r_0dd42c36",
+    "source_id": "e_611a56dd",
+    "target_id": "e_23fd3971",
+    "relation_type": "定义",
+    "description": "决策页面定义了该脱敏规则",
+    "weight": 8
+  },
+  {
+    "id": "r_6c0b597b",
+    "source_id": "e_23fd3971",
+    "target_id": "e_9ae74c34",
+    "relation_type": "依赖",
+    "description": "规则使用该表当事人名单数据",
+    "weight": 7
+  },
+  {
+    "id": "r_2e5609c2",
+    "source_id": "e_23fd3971",
+    "target_id": "e_1f55d02f",
+    "relation_type": "属于",
+    "description": "该规则是脱敏规则概念的一个实例",
+    "weight": 6
+  },
+  {
+    "id": "r_40c8a0af",
+    "source_id": "e_f119f13c",
+    "target_id": "e_9ae74c34",
+    "relation_type": "约束",
+    "description": "约束规范约束数据表的字段和记录",
+    "weight": 8
+  },
+  {
+    "id": "r_78a788b7",
+    "source_id": "e_65d2e91c",
+    "target_id": "e_d97f6a4a",
+    "relation_type": "涉及",
+    "description": "决策涉及该表",
+    "weight": 5
+  },
+  {
+    "id": "r_8b75c125",
+    "source_id": "e_65d2e91c",
+    "target_id": "e_9ae74c34",
+    "relation_type": "涉及",
+    "description": "决策涉及该表",
+    "weight": 5
+  },
+  {
+    "id": "r_8e1ccc76",
+    "source_id": "e_65d2e91c",
+    "target_id": "e_a6335965",
+    "relation_type": "关联",
+    "description": "关联的约束文档",
+    "weight": 5
+  },
+  {
+    "id": "r_ed477618",
+    "source_id": "e_65d2e91c",
+    "target_id": "e_f119f13c",
+    "relation_type": "关联",
+    "description": "关联的约束文档",
+    "weight": 5
+  },
+  {
+    "id": "r_a115a783",
+    "source_id": "e_65d2e91c",
+    "target_id": "e_d5291429",
+    "relation_type": "关联",
+    "description": "关联的筛选规则概念",
+    "weight": 5
+  },
+  {
+    "id": "r_62c23206",
+    "source_id": "e_65d2e91c",
+    "target_id": "e_feda1581",
+    "relation_type": "定义优先级",
+    "description": "定义了该字段的优先级规则",
+    "weight": 8
+  },
+  {
+    "id": "r_942d4be6",
+    "source_id": "e_65d2e91c",
+    "target_id": "e_9adaa24f",
+    "relation_type": "定义优先级",
+    "description": "定义了该字段的优先级规则",
+    "weight": 8
+  },
+  {
+    "id": "r_cc6b2123",
+    "source_id": "e_65d2e91c",
+    "target_id": "e_ea4ab5cf",
+    "relation_type": "定义优先级",
+    "description": "定义了该字段的优先级规则",
+    "weight": 8
+  },
+  {
+    "id": "r_17e3614d",
+    "source_id": "e_65d2e91c",
+    "target_id": "e_71fccc50",
+    "relation_type": "定义优先级",
+    "description": "定义了该字段的优先级规则",
+    "weight": 8
+  },
+  {
+    "id": "r_b114b67e",
+    "source_id": "e_65d2e91c",
+    "target_id": "e_94033908",
+    "relation_type": "定义优先级",
+    "description": "定义了该字段的优先级规则",
+    "weight": 8
+  },
+  {
+    "id": "r_f6dee997",
+    "source_id": "e_65d2e91c",
+    "target_id": "e_f19aa1b5",
+    "relation_type": "定义优先级",
+    "description": "定义了该字段的优先级规则",
+    "weight": 8
+  },
+  {
+    "id": "r_af88feac",
+    "source_id": "e_a6335965",
+    "target_id": "e_d97f6a4a",
+    "relation_type": "约束",
+    "description": "约束文档描述该表的约束",
+    "weight": 7
+  },
+  {
+    "id": "r_bb382162",
+    "source_id": "e_d97f6a4a",
+    "target_id": "e_feda1581",
+    "relation_type": "包含字段",
+    "description": "主表的arbitration_org列",
+    "weight": 8
+  },
+  {
+    "id": "r_97594d22",
+    "source_id": "e_d97f6a4a",
+    "target_id": "e_9adaa24f",
+    "relation_type": "包含字段",
+    "description": "主表的case_reason列",
+    "weight": 8
+  },
+  {
+    "id": "r_077f77e4",
+    "source_id": "e_d97f6a4a",
+    "target_id": "e_ea4ab5cf",
+    "relation_type": "包含字段",
+    "description": "主表的publish_date列",
+    "weight": 8
+  },
+  {
+    "id": "r_5b0f54e4",
+    "source_id": "e_9ae74c34",
+    "target_id": "e_71fccc50",
+    "relation_type": "包含字段",
+    "description": "表包含该字段",
+    "weight": 8
+  },
+  {
+    "id": "r_58c339ad",
+    "source_id": "e_9ae74c34",
+    "target_id": "e_94033908",
+    "relation_type": "包含字段",
+    "description": "表包含该字段",
+    "weight": 8
+  },
+  {
+    "id": "r_e1cfc5f4",
+    "source_id": "e_9ae74c34",
+    "target_id": "e_f19aa1b5",
+    "relation_type": "包含字段",
+    "description": "表包含该字段",
+    "weight": 8
+  },
+  {
+    "id": "r_02e05061",
+    "source_id": "e_f3f9f27b",
+    "target_id": "e_d5291429",
+    "relation_type": "引用",
+    "description": "移动端筛选决策依赖筛选规则概念",
+    "weight": 5
+  },
+  {
+    "id": "r_453cd37c",
+    "source_id": "e_f3f9f27b",
+    "target_id": "e_f119f13c",
+    "relation_type": "关联",
+    "description": "移动端筛选决策引用约束规范",
+    "weight": 4
+  },
+  {
+    "id": "r_b42fa9c2",
+    "source_id": "e_d5291429",
+    "target_id": "e_a6335965",
+    "relation_type": "依赖",
+    "description": "筛选规则依赖仲裁公告表约束",
+    "weight": 7
+  },
+  {
+    "id": "r_fd170765",
+    "source_id": "e_d5291429",
+    "target_id": "e_f119f13c",
+    "relation_type": "依赖",
+    "description": "筛选规则依赖企业信息表约束",
+    "weight": 7
+  },
+  {
+    "id": "r_6f87b0ea",
+    "source_id": "e_d5291429",
+    "target_id": "e_65d2e91c",
+    "relation_type": "依赖",
+    "description": "筛选规则参考该决策规范",
+    "weight": 5
+  },
+  {
+    "id": "r_38645e01",
+    "source_id": "e_d5291429",
+    "target_id": "e_65d2e91c",
+    "relation_type": "关联",
+    "description": "筛选规则涉及字段来源优先级决策",
+    "weight": 5
+  },
+  {
+    "id": "r_0af57c92",
+    "source_id": "e_3def9c2e",
+    "target_id": "e_611a56dd",
+    "relation_type": "参考决策",
+    "description": "脱敏规则参考该决策文档的脱敏方式",
+    "weight": 5
+  },
+  {
+    "id": "r_5a9fc457",
+    "source_id": "e_3def9c2e",
+    "target_id": "e_a6335965",
+    "relation_type": "约束规则",
+    "description": "脱敏规则约束该数据表的字段",
+    "weight": 7
+  },
+  {
+    "id": "r_26972812",
+    "source_id": "e_a6335965",
+    "target_id": "e_d97f6a4a",
+    "relation_type": "约束对象",
+    "description": "该约束页面规范此数据表",
+    "weight": 8
+  },
+  {
+    "id": "r_440492f2",
+    "source_id": "e_d97f6a4a",
+    "target_id": "e_04b5d233",
+    "relation_type": "包含字段",
+    "description": "主表的id列",
+    "weight": 8
+  },
+  {
+    "id": "r_1f4b1640",
+    "source_id": "e_d97f6a4a",
+    "target_id": "e_14704e42",
+    "relation_type": "包含字段",
+    "description": "主表的title列",
+    "weight": 8
+  },
+  {
+    "id": "r_def4b7a7",
+    "source_id": "e_d97f6a4a",
+    "target_id": "e_bca0c72f",
+    "relation_type": "包含字段",
+    "description": "主表的case_code列",
+    "weight": 8
+  },
+  {
+    "id": "r_6eb9611a",
+    "source_id": "e_d97f6a4a",
+    "target_id": "e_6bfff17d",
+    "relation_type": "包含字段",
+    "description": "主表的applicant列",
+    "weight": 8
+  },
+  {
+    "id": "r_b0a1be86",
+    "source_id": "e_d97f6a4a",
+    "target_id": "e_a73ec32f",
+    "relation_type": "包含字段",
+    "description": "主表的defendant列",
+    "weight": 8
+  },
+  {
+    "id": "r_cc5470dc",
+    "source_id": "e_d97f6a4a",
+    "target_id": "e_d55e5a68",
+    "relation_type": "包含字段",
+    "description": "主表的open_time列",
+    "weight": 8
+  },
+  {
+    "id": "r_821c0b13",
+    "source_id": "e_d97f6a4a",
+    "target_id": "e_8068e8df",
+    "relation_type": "包含字段",
+    "description": "主表的type列",
+    "weight": 8
+  },
+  {
+    "id": "r_093c19ff",
+    "source_id": "e_d97f6a4a",
+    "target_id": "e_13b054f1",
+    "relation_type": "包含字段",
+    "description": "主表的data_status列",
+    "weight": 8
+  },
+  {
+    "id": "r_d5966df6",
+    "source_id": "e_d97f6a4a",
+    "target_id": "e_55c46092",
+    "relation_type": "包含字段",
+    "description": "主表的riskbird_status列",
+    "weight": 8
+  },
+  {
+    "id": "r_c561b435",
+    "source_id": "e_a6335965",
+    "target_id": "e_f119f13c",
+    "relation_type": "关联",
+    "description": "关联的约束页面",
+    "weight": 5
+  },
+  {
+    "id": "r_7a56341c",
+    "source_id": "e_a6335965",
+    "target_id": "e_d5291429",
+    "relation_type": "引用",
+    "description": "页面引用筛选规则概念",
+    "weight": 3
+  },
+  {
+    "id": "r_a4425008",
+    "source_id": "e_13b054f1",
+    "target_id": "e_55c46092",
+    "relation_type": "联合约束",
+    "description": "两者同时为0才展示",
+    "weight": 6
+  },
+  {
+    "id": "r_605f5997",
+    "source_id": "e_a6335965",
+    "target_id": "e_d55e5a68",
+    "relation_type": "类型注意",
+    "description": "与ent表同名字段存在类型差异",
+    "weight": 4
+  },
+  {
+    "id": "r_bdb7b5a6",
+    "source_id": "e_f119f13c",
+    "target_id": "e_9ae74c34",
+    "relation_type": "描述约束",
+    "description": "规范页描述关联表",
+    "weight": 8
+  },
+  {
+    "id": "r_cf1899f6",
+    "source_id": "e_9ae74c34",
+    "target_id": "e_4c73d3bc",
+    "relation_type": "包含字段",
+    "description": "自增主键列",
+    "weight": 8
+  },
+  {
+    "id": "r_9037a8af",
+    "source_id": "e_9ae74c34",
+    "target_id": "e_a14f8c1b",
+    "relation_type": "包含字段",
+    "description": "关联主表ID列",
+    "weight": 8
+  },
+  {
+    "id": "r_b68b0216",
+    "source_id": "e_9ae74c34",
+    "target_id": "e_1d037023",
+    "relation_type": "包含字段",
+    "description": "主体名称列",
+    "weight": 8
+  },
+  {
+    "id": "r_d0bf4669",
+    "source_id": "e_9ae74c34",
+    "target_id": "e_d75253e4",
+    "relation_type": "包含字段",
+    "description": "主体类型列",
+    "weight": 8
+  },
+  {
+    "id": "r_07eb48a1",
+    "source_id": "e_9ae74c34",
+    "target_id": "e_1f40f60e",
+    "relation_type": "包含字段",
+    "description": "主体ID列",
+    "weight": 8
+  },
+  {
+    "id": "r_e0915271",
+    "source_id": "e_9ae74c34",
+    "target_id": "e_10d6e56a",
+    "relation_type": "包含字段",
+    "description": "当事人身份列",
+    "weight": 8
+  },
+  {
+    "id": "r_a350f30d",
+    "source_id": "e_9ae74c34",
+    "target_id": "e_444ec40f",
+    "relation_type": "包含字段",
+    "description": "标准化案号列",
+    "weight": 8
+  },
+  {
+    "id": "r_4eadb38d",
+    "source_id": "e_9ae74c34",
+    "target_id": "e_ed0ac1ad",
+    "relation_type": "包含字段",
+    "description": "开庭时间列（date）",
+    "weight": 8
+  }
+]

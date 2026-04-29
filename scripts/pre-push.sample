@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# 啄木鸟 git pre-push hook.
+# 在 push 前跑一次 rule_regression (真实 worker), P/R 跌 > tolerance 阻塞 push.
+#
+# 适用场景: 没有 self-hosted runner 跑 rule_regression_real.yml 时的兜底.
+# 装上之后, 改了 prompt / worker / dimensions yaml 的分支 push 时触发完整 P/R.
+#
+# 安装方式 (推荐用安装器):
+#   python scripts/install_git_hooks.py            (装到 .git/hooks/, 个人级)
+#   python scripts/install_git_hooks.py --shared   (装到 .githooks/, 团队共享)
+#
+# 跳过本次 push:
+#   git push --no-verify            (本 hook 设计成可绕过, 偶发情况下 PM 自由裁量)
+#
+# 调试:
+#   PECKER_PRE_PUSH_DEBUG=1 git push 看每步状态
+#
+# 加速本地 dev (跳 NLI 二层校验):
+#   PECKER_PRE_PUSH_SKIP_NLI=1 git push    (默认开启 — 详见下面)
+
+set -e
+
+DEBUG="${PECKER_PRE_PUSH_DEBUG:-0}"
+TOLERANCE="${PECKER_PRE_PUSH_TOLERANCE:-0.05}"
+# 默认跳 NLI — 本地 dev 不强制跑 NLI 二层校验, push 时跑 P/R 兜底就够
+# (NLI 主要用于 baseline promote 时的严格度量, 见 scripts/rule_regression.py)
+SKIP_NLI="${PECKER_PRE_PUSH_SKIP_NLI:-1}"
+
+log() {
+  echo "[pre-push] $*"
+}
+
+dbg() {
+  [ "$DEBUG" = "1" ] && echo "[pre-push:debug] $*"
+}
+
+# ---------- 0. --help 支持 (给 install_git_hooks.py 自检) ----------
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+  echo "啄木鸟 pre-push hook — 在 push 前跑 rule_regression."
+  echo ""
+  echo "Env vars:"
+  echo "  PECKER_PRE_PUSH_DEBUG=1       — 显示每步执行细节"
+  echo "  PECKER_PRE_PUSH_TOLERANCE=0.05 — P/R 跌幅容忍阈值"
+  echo "  PECKER_PRE_PUSH_SKIP_NLI=1    — 跳 NLI 二层校验加速 (默认开)"
+  echo ""
+  echo "Bypass: git push --no-verify"
+  exit 0
+fi
+
+# ---------- 1. 检查这次 push 是否包含触发 regression 的文件 ----------
+REMOTE="${1:-origin}"
+URL="${2:-}"
+
+# 本地与远端追踪分支的 diff (没有远端时跑全量)
+DIFF_RANGE="HEAD"
+if git rev-parse --abbrev-ref --symbolic-full-name "@{u}" > /dev/null 2>&1; then
+  UPSTREAM=$(git rev-parse --abbrev-ref --symbolic-full-name "@{u}")
+  DIFF_RANGE="${UPSTREAM}..HEAD"
+fi
+
+CHANGED=$(git diff --name-only $DIFF_RANGE 2>/dev/null || git diff --name-only HEAD)
+dbg "diff range: $DIFF_RANGE"
+dbg "changed files: $CHANGED"
+
+# 触发文件白名单 (与 rule_regression_real.yml 的 paths 对齐)
+# 关键路径: prompt / worker / dimensions / 规则定义 / model 路由 / agent 配置
+TRIGGER_PATTERN="(review/(prompting|worker|dimensions|learnings_store)\.py|review-rules/|review-dimensions\.yaml|workspace-sample/review-rules/|model_router\.py|model_routes\.yaml|agent_config\.py|scripts/rule_regression\.py)"
+HIT=$(echo "$CHANGED" | grep -E "$TRIGGER_PATTERN" || true)
+
+if [ -z "$HIT" ]; then
+  dbg "无触发改动, 跳过 regression"
+  exit 0
+fi
+
+log "检测到 regression 触发改动, 跑真实 worker P/R..."
+log "  改动文件: $(echo "$HIT" | tr '\n' ' ')"
+[ "$SKIP_NLI" = "1" ] && log "  (默认跳 NLI 加速; 不想跳设 PECKER_PRE_PUSH_SKIP_NLI=0)"
+
+# ---------- 2. 跑 rule_regression ----------
+PYTHON="${PYTHON:-python}"
+REPO_ROOT=$(git rev-parse --show-toplevel)
+
+cd "$REPO_ROOT"
+
+SKIP_NLI_FLAG=""
+[ "$SKIP_NLI" = "1" ] && SKIP_NLI_FLAG="--skip-nli"
+
+set +e
+$PYTHON scripts/rule_regression.py \
+  --rules-yaml workspace-sample/review-rules/review-checklist.yaml \
+  --baseline scripts/fixtures/regression_baseline.json \
+  --tolerance "$TOLERANCE" \
+  --output scripts/fixtures/regression_results.json \
+  $SKIP_NLI_FLAG
+RC=$?
+set -e
+
+if [ "$RC" -ne 0 ]; then
+  log ""
+  log "✗ FAIL: P/R 跌 > $TOLERANCE — push 被阻塞"
+  log ""
+  log "排查方向:"
+  log "  1. 改 prompt 后 baseline 需更新?"
+  log "     python scripts/rule_regression.py --update-baseline"
+  log "  2. 改 worker 引入回归?"
+  log "     看 scripts/fixtures/regression_results.json 找哪条 rule 跌了"
+  log "  3. 真要 bypass:"
+  log "     git push --no-verify    (CI self-hosted runner 仍会再跑一次)"
+  log "  4. 想看完整 markdown 报告 (适合贴 PR description):"
+  log "     python scripts/manual_pre_pr_check.py --output pr_check_report.md"
+  log ""
+  exit 1
+fi
+
+log "✓ OK: 真实 P/R 通过, 继续 push"
+exit 0

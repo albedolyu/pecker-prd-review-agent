@@ -5,10 +5,34 @@
 
 B4 (Phase 5): 解析时根据 evidence_type 附加 confidence_score 字段,
 供伯劳门禁分档和 merge_reviews 合并共识项加权使用。
+
+⚠ DEPRECATED (2026-04-29): parse_review_report 是老报告格式解析器,
+新规则级 P/R 回归已不再依赖本模块. 历史 caller (cuckoo_eval / merge_reviews)
+仍用, 不强删. 替代方案: scripts/rule_regression.py 直接消费 worker JSON 输出,
+不需要再做正则解析. 详见 docs/MIGRATION_v1_to_v2.md.
 """
 
 import os
 import re
+import warnings
+
+
+# 仅在直接调用 parse_review_report 时 emit 一次, import 不打扰
+# (importer 太多, 启动期 emit 一遍会刷屏)
+_PARSE_DEPRECATION_EMITTED = False
+
+
+def _emit_parse_deprecation():
+    global _PARSE_DEPRECATION_EMITTED
+    if _PARSE_DEPRECATION_EMITTED:
+        return
+    _PARSE_DEPRECATION_EMITTED = True
+    warnings.warn(
+        "cuckoo_parser.parse_review_report 已废弃 — 新流程用 scripts/rule_regression.py "
+        "直接消费 worker JSON 输出, 不再做报告正则解析. 详见 docs/MIGRATION_v1_to_v2.md.",
+        DeprecationWarning,
+        stacklevel=3,
+    )
 
 
 # B4: 依据类型到置信度的映射
@@ -50,6 +74,7 @@ def parse_review_report(report_path):
     解析 R-XXX 编号、位置、问题描述、严重度、依据
     返回结构化列表
     """
+    _emit_parse_deprecation()
     with open(report_path, "r", encoding="utf-8") as f:
         content = f.read()
 
@@ -147,17 +172,23 @@ def _extract_fields_from_block(item_id, block_text):
     - 位置：xxx（YAML 风格）
     """
     def _find(field_name, text):
-        """在文本中搜索字段值，兼容 **字段** 和 字段 两种格式"""
+        """在文本中搜索字段值，兼容 **字段** 和 字段 两种格式
+
+        2026-04-28 PM 报告优化: 新增 ' · ' 分隔符边界识别, 支持单行多字段紧凑格式:
+            <sub>**位置**: X · **严重度**: must · **依据类型**: A</sub>
+        """
+        # 边界: 行末 / ' · ' (PM 友好紧凑行) / '</sub>' (sub 标签收尾)
+        boundary = r'(?:\n|$|\s+·\s+|</sub>)'
         # 先试 **字段**：格式
-        m = re.search(rf'\*\*{field_name}\*\*[：:]\s*(.+?)(?:\n|$)', text)
+        m = re.search(rf'\*\*{field_name}\*\*[：:]\s*(.+?){boundary}', text)
         if m:
             return m.group(1).strip()
         # 再试 - **字段**：格式（列表项）
-        m = re.search(rf'-\s*\*\*{field_name}\*\*[：:]\s*(.+?)(?:\n|$)', text)
+        m = re.search(rf'-\s*\*\*{field_name}\*\*[：:]\s*(.+?){boundary}', text)
         if m:
             return m.group(1).strip()
         # 最后试纯文本格式
-        m = re.search(rf'{field_name}[：:]\s*(.+?)(?:\n|$)', text)
+        m = re.search(rf'{field_name}[：:]\s*(.+?){boundary}', text)
         if m:
             return m.group(1).strip()
         return ""

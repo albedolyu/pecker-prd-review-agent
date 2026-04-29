@@ -17,6 +17,13 @@
 import json
 import os
 
+# Metrics 埋点 — 失败 silent skip, 不阻 LLM 调用主流程
+try:
+    from review.metrics_store import record_event as _record_event
+except Exception:
+    def _record_event(*args, **kwargs):  # noqa: ARG001
+        return False
+
 
 def _ensure_git_bash_in_path(env: dict) -> dict:
     """Windows 兜底: Claude CLI 要求 git-bash,多进程并发时 PATH 继承偶发丢失。
@@ -145,6 +152,36 @@ class ClaudeCodeCLIClient:
 
     def _create_once(self, model, max_tokens, system, messages, tools=None, tool_choice=None,
                      temperature=0.2, retry_policy="foreground"):
+        """Metrics 包装 _create_once_inner: 在 try/except 边界统一 record llm.api_call."""
+        import time as _t
+        _start = _t.time()
+        _ws = os.environ.get("WORKSPACE")
+        try:
+            return self._create_once_inner(model, max_tokens, system, messages,
+                                            tools=tools, tool_choice=tool_choice,
+                                            temperature=temperature, retry_policy=retry_policy,
+                                            _metric_start=_start, _metric_workspace=_ws)
+        except Exception as _e:
+            try:
+                _record_event(
+                    "llm.api_call",
+                    workspace=_ws,
+                    duration_ms=int((_t.time() - _start) * 1000),
+                    model=model,
+                    status="failure",
+                    details={
+                        "vendor": "claude_cli",
+                        "error": str(_e)[:200],
+                        "retry_policy": retry_policy,
+                    },
+                )
+            except Exception:
+                pass
+            raise
+
+    def _create_once_inner(self, model, max_tokens, system, messages, tools=None, tool_choice=None,
+                           temperature=0.2, retry_policy="foreground",
+                           _metric_start=None, _metric_workspace=None):
         from logger import get_logger
         from clients.shared import UnifiedResponse, _gen_req_id
 
@@ -192,8 +229,18 @@ class ClaudeCodeCLIClient:
         else:
             # 无自定义工具：显式列出 CC 内建工具全部 disallow，确保模型只输出文本
             cmd += ["--disallowed-tools", self._ALL_BUILTIN_TOOLS]
+
+        # 2026-04-29 Windows argv 32K 限制修复:
+        # cmd 已有参数累计 ~2K, system_text > 8K 就可能撞上限. SSOT 31 规则 + KG +
+        # tone + 工具说明常达 30K. 阈值 6K 保守 inline, 走 stdin 永不撞 argv 上限.
+        # 短 system (typical < 6K) 仍走 --system-prompt 保持原优先级语义.
+        _SYSTEM_INLINE_THRESHOLD = 6000  # 字符
         if system_text:
-            cmd += ["--system-prompt", system_text]
+            if len(system_text) > _SYSTEM_INLINE_THRESHOLD:
+                # inline 到 prompt 头部, 用 [SYSTEM] 标头 (Anthropic 模型理解)
+                prompt_text = f"[SYSTEM]\n{system_text}\n\n[USER]\n{prompt_text}"
+            else:
+                cmd += ["--system-prompt", system_text]
         # prompt 走 stdin（不作为 argv positional），规避 Windows argv 长度与换行问题
 
         # 环境：清掉 Anthropic API 变量，强制走 CC OAuth 登录态
@@ -313,6 +360,27 @@ class ClaudeCodeCLIClient:
             unified_usage["cache_creation_input_tokens"],
             unified_usage["cache_read_input_tokens"],
         )
+
+        # Metrics 埋点: llm.api_call (claude_cli success)
+        try:
+            import time as _t
+            _record_event(
+                "llm.api_call",
+                workspace=_metric_workspace,
+                duration_ms=int((_t.time() - _metric_start) * 1000) if _metric_start else 0,
+                model=used_model,
+                status="success",
+                details={
+                    "vendor": "claude_cli",
+                    "tokens_in": unified_usage["input_tokens"],
+                    "tokens_out": unified_usage["output_tokens"],
+                    "cache_read": unified_usage["cache_read_input_tokens"],
+                    "retry_policy": retry_policy,
+                    "truncated": is_truncated,
+                },
+            )
+        except Exception:
+            pass
 
         return UnifiedResponse(
             text_blocks=text_blocks,

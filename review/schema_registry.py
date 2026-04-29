@@ -442,30 +442,33 @@ def _load_legacy_workspace_yaml(workspace: str) -> list[RuleDef]:
         - rule_id 非法前缀 (如 ZZ-99) → skip + warn
         - 整个 yaml 损坏 → raise (PM 必须修)
     """
-    import yaml
+    import yaml as _yaml
 
     yaml_path = os.path.join(workspace, "review-rules", _LEGACY_YAML_FILENAME)
     if not os.path.isfile(yaml_path):
         return []
 
+    # 2026-04-28: 先做硬校验 (语法损坏直接 raise, 与历史 behavior 一致),
+    # 再走新 SSOT loader 拿到合并后的 rules (带 extends 自动展开).
     try:
         with open(yaml_path, "r", encoding="utf-8") as f:
-            content = yaml.safe_load(f)
-    except (yaml.YAMLError, OSError) as exc:
+            _yaml.safe_load(f)  # 仅做语法校验, 不用返回值
+    except (_yaml.YAMLError, OSError) as exc:
         raise SchemaRegistryError(
             f"老 workspace yaml 损坏: {yaml_path}: {exc}"
         ) from exc
 
-    if not content or not isinstance(content, dict):
-        log.warning(
-            f"[anti-corruption] {yaml_path} 内容为空或非 dict, 跳过 (返回空 list)"
-        )
-        return []
+    try:
+        from review.rule_loader import load_review_checklist
+        raw_rules = load_review_checklist(workspace)
+    except Exception as exc:
+        raise SchemaRegistryError(
+            f"老 workspace yaml 损坏 (SSOT loader 失败): {yaml_path}: {exc}"
+        ) from exc
 
-    raw_rules = content.get("rules", [])
     if not isinstance(raw_rules, list):
         log.warning(
-            f"[anti-corruption] {yaml_path}: 'rules' 字段非 list (实为 {type(raw_rules).__name__}), 跳过"
+            f"[anti-corruption] {yaml_path}: SSOT loader 返回非 list, 跳过"
         )
         return []
 

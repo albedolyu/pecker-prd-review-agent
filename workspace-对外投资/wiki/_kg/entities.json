@@ -1,0 +1,1834 @@
+[
+  {
+    "id": "e_bfb4e464",
+    "title": "对外投资模块的核心数据实体",
+    "type": "page_concept",
+    "description": "描述对外投资模块的核心数据实体，包括投资阶段、资金流向等",
+    "aliases": [],
+    "source_pages": [
+      "实体-对外投资模块的核心数据实体.md"
+    ]
+  },
+  {
+    "id": "e_7033991e",
+    "title": "决策-数据源定义易出现类型矛盾",
+    "type": "spec_doc",
+    "description": "关于数据源定义类型矛盾的决策记录及评审建议",
+    "aliases": [],
+    "source_pages": [
+      "决策-数据源定义易出现类型矛盾.md"
+    ]
+  },
+  {
+    "id": "e_998d560a",
+    "title": "评审对外投资 PRD",
+    "type": "spec_doc",
+    "description": "对外投资模块的PRD评审文档, 含多数据源架构要求",
+    "aliases": [
+      "PRD",
+      "对外投资 PRD",
+      "对外投资PRD",
+      "对外投资PRD评审",
+      "被评审PRD"
+    ],
+    "source_pages": [
+      "决策-数据源定义易出现类型矛盾.md",
+      "实体-对外投资模块：多数据源架构.md",
+      "概念-xinshu 评审偏好：结构严谨性优先.md",
+      "决策-版本号一致性检查点（结构层）.md",
+      "决策-后端接口型 PRD 易漏接口契约定义.md"
+    ]
+  },
+  {
+    "id": "e_699368ab",
+    "title": "概念-default 审阅人的 must 级关注维度",
+    "type": "page_concept",
+    "description": "对外投资PRD评审中default审阅人关注的must级维度",
+    "aliases": [
+      "default审阅人关注维度",
+      "must级关注维度"
+    ],
+    "source_pages": [
+      "概念-default 审阅人的 must 级关注维度.md"
+    ]
+  },
+  {
+    "id": "e_23b6631e",
+    "title": "对外投资基线v3",
+    "type": "spec_doc",
+    "description": "对外投资评审计录文档，包含系统设计决策",
+    "aliases": [
+      "对外投资基线",
+      "对外投资基线v3文档",
+      "对外投资基线v3规范",
+      "投资基线v3"
+    ],
+    "source_pages": [
+      "概念-default 审阅人的 must 级关注维度.md",
+      "约束-评审规则编号体系映射.md",
+      "决策-混合数据源 PRD 的一致性漏报风险.md",
+      "概念-苍鹰交叉校验的关键检查点.md",
+      "决策-字段映射规则容易重复识别同一问题.md",
+      "实体-混合数据源的集成路由模式.md",
+      "实体-对外投资模块的核心数据关系.md"
+    ]
+  },
+  {
+    "id": "e_9ac92627",
+    "title": "约束-评审规则编号体系映射",
+    "type": "spec_doc",
+    "description": "评审规则编号RC-005/009/013的映射与适用场景",
+    "aliases": [
+      "RC映射规范",
+      "评审规则编号体系映射"
+    ],
+    "source_pages": [
+      "约束-评审规则编号体系映射.md"
+    ]
+  },
+  {
+    "id": "e_a9bd1979",
+    "title": "字段来源",
+    "type": "page_concept",
+    "description": "评审规则RC-005，字段来源规则",
+    "aliases": [
+      "RC-005",
+      "字段来源规则"
+    ],
+    "source_pages": [
+      "约束-评审规则编号体系映射.md"
+    ]
+  },
+  {
+    "id": "e_4d5bd47e",
+    "title": "JOIN标注",
+    "type": "page_concept",
+    "description": "评审规则RC-009，JOIN标注规则",
+    "aliases": [
+      "RC-009",
+      "JOIN标注规则"
+    ],
+    "source_pages": [
+      "约束-评审规则编号体系映射.md"
+    ]
+  },
+  {
+    "id": "e_f6a472a1",
+    "title": "字段映射",
+    "type": "page_concept",
+    "description": "评审规则RC-013，字段映射规则",
+    "aliases": [
+      "RC-013",
+      "字段映射规则"
+    ],
+    "source_pages": [
+      "约束-评审规则编号体系映射.md"
+    ]
+  },
+  {
+    "id": "e_464c53c4",
+    "title": "伪代码字段验证规则",
+    "type": "spec_doc",
+    "description": "关于伪代码中字段验证的决策规则，来源于对外投资基线v4评审",
+    "aliases": [
+      "字段校验规则",
+      "伪代码字段验证"
+    ],
+    "source_pages": [
+      "决策-伪代码字段验证规则.md"
+    ]
+  },
+  {
+    "id": "e_62cd0841",
+    "title": "对外投资基线v4",
+    "type": "spec_doc",
+    "description": "对外投资基线的版本4，是评审会话的源",
+    "aliases": [
+      "对外投资基线",
+      "对外投资基线v4规范"
+    ],
+    "source_pages": [
+      "决策-伪代码字段验证规则.md",
+      "概念-交叉校验（苍鹰）的重点方向.md",
+      "实体-投资类 PRD 的数据源特性.md",
+      "决策-FR 与技术约定的联动检查.md"
+    ]
+  },
+  {
+    "id": "e_37b800d7",
+    "title": "check_pseudo_fields_against_ddl",
+    "type": "page_concept",
+    "description": "伪代码字段与DDL对照检查的规则编号维度",
+    "aliases": [
+      "伪代码字段DDL检查规则"
+    ],
+    "source_pages": [
+      "决策-伪代码字段验证规则.md"
+    ]
+  },
+  {
+    "id": "e_7c934653",
+    "title": "混合数据源 PRD 的一致性漏报风险",
+    "type": "page_concept",
+    "description": "关于混合数据源PRD一致性漏报风险的分析页",
+    "aliases": [],
+    "source_pages": [
+      "决策-混合数据源 PRD 的一致性漏报风险.md"
+    ]
+  },
+  {
+    "id": "e_06fa77a3",
+    "title": "数据源列表",
+    "type": "page_concept",
+    "description": "PRD中数据源列表示例",
+    "aliases": [],
+    "source_pages": [
+      "决策-混合数据源 PRD 的一致性漏报风险.md"
+    ]
+  },
+  {
+    "id": "e_c617010a",
+    "title": "连接信息详细说明",
+    "type": "page_concept",
+    "description": "PRD中连接信息详细说明部分",
+    "aliases": [],
+    "source_pages": [
+      "决策-混合数据源 PRD 的一致性漏报风险.md"
+    ]
+  },
+  {
+    "id": "e_8ba93d76",
+    "title": "RC-* 规则",
+    "type": "page_concept",
+    "description": "RC-*系列校验规则",
+    "aliases": [],
+    "source_pages": [
+      "决策-混合数据源 PRD 的一致性漏报风险.md"
+    ]
+  },
+  {
+    "id": "e_f31df14a",
+    "title": "R-001",
+    "type": "page_concept",
+    "description": "类型一致性检查规则编号",
+    "aliases": [
+      "一致性检查规则R-001",
+      "规则编号R-001"
+    ],
+    "source_pages": [
+      "决策-混合数据源 PRD 的一致性漏报风险.md",
+      "决策-数据源定义中的类型一致性检查.md"
+    ]
+  },
+  {
+    "id": "e_58aeef23",
+    "title": "约束-对外投资数据库连接",
+    "type": "spec_doc",
+    "description": "对外投资模块数据库连接规范，包含MySQL和PostgreSQL连接信息",
+    "aliases": [],
+    "source_pages": [
+      "约束-对外投资数据库连接.md"
+    ]
+  },
+  {
+    "id": "e_ac303452",
+    "title": "ds_company_discover_invest",
+    "type": "data_table",
+    "description": "直接投资发现表，包含持股合计字段conprop",
+    "aliases": [
+      "投资表",
+      "直接投资表"
+    ],
+    "source_pages": [
+      "约束-对外投资数据库连接.md",
+      "场景-对外投资列表浏览与筛选.md",
+      "概念-持股合计.md",
+      "约束-对外投资DDL.md",
+      "决策-直接投资持股合计字段映射.md",
+      "场景-直接投资列表页.md",
+      "实体-投资类 PRD 的数据源特性.md",
+      "概念-对外投资.md",
+      "约束-对外投资跨表关系.md",
+      "约束-ds_company_discover_invest表结构.md"
+    ]
+  },
+  {
+    "id": "e_6c2e7773",
+    "title": "t_ds_company_basic",
+    "type": "data_table",
+    "description": "企业基本信息表，包含名称、法人、注册资本等",
+    "aliases": [
+      "企业基本信息表",
+      "企业基础表",
+      "公司基本信息表"
+    ],
+    "source_pages": [
+      "约束-对外投资数据库连接.md",
+      "约束-t_ds_company_basic表结构.md",
+      "概念-持股合计.md",
+      "约束-对外投资DDL.md",
+      "场景-直接投资列表页.md",
+      "实体-投资类 PRD 的数据源特性.md",
+      "概念-对外投资.md",
+      "场景-间接投资列表页.md",
+      "约束-对外投资跨表关系.md",
+      "约束-ds_company_discover_invest表结构.md"
+    ]
+  },
+  {
+    "id": "e_8998c7be",
+    "title": "ds_invest_alpha",
+    "type": "data_table",
+    "description": "投资数据源表, 涉及MySQL与PostgreSQL声明冲突",
+    "aliases": [],
+    "source_pages": [
+      "约束-对外投资数据库连接.md",
+      "约束-ds_invest_alpha表结构.md",
+      "场景-对外投资列表浏览与筛选.md",
+      "实体-对外投资模块：多数据源架构.md",
+      "概念-持股合计.md",
+      "实体-投资管理模块的标准功能流程.md",
+      "约束-对外投资DDL.md",
+      "决策-直接投资持股合计字段映射.md",
+      "概念-对外投资.md",
+      "场景-间接投资列表页.md",
+      "约束-投资数据源和 API 基础约定.md",
+      "约束-对外投资跨表关系.md"
+    ]
+  },
+  {
+    "id": "e_297d0ac1",
+    "title": "ds_company_discover_invest.conprop",
+    "type": "field",
+    "description": "持股比例字段，MySQL中0-100直接拼接%",
+    "aliases": [],
+    "source_pages": [
+      "约束-对外投资数据库连接.md",
+      "决策-直接投资持股合计字段映射.md",
+      "约束-对外投资跨表关系.md"
+    ]
+  },
+  {
+    "id": "e_1eef3c12",
+    "title": "ds_invest_alpha.invest_ratio",
+    "type": "field",
+    "description": "间接投资比例字段，PostgreSQL中0-1需×100后拼接%",
+    "aliases": [],
+    "source_pages": [
+      "约束-对外投资数据库连接.md",
+      "约束-ds_invest_alpha表结构.md",
+      "概念-持股合计.md",
+      "约束-对外投资DDL.md",
+      "决策-直接投资持股合计字段映射.md",
+      "场景-间接投资列表页.md",
+      "约束-对外投资跨表关系.md"
+    ]
+  },
+  {
+    "id": "e_87d11eae",
+    "title": "约束-ds_company_discover_invest表结构",
+    "type": "spec_doc",
+    "description": "约束ds_company_discover_invest表结构的规范页面",
+    "aliases": [
+      "ds_company_discover_invest表结构",
+      "直接投资表约束",
+      "约束-ds_company_discover_invest",
+      "约束-直接投资表结构",
+      "规范-直接投资表结构"
+    ],
+    "source_pages": [
+      "约束-对外投资数据库连接.md",
+      "约束-ds_invest_alpha表结构.md",
+      "场景-对外投资列表浏览与筛选.md",
+      "约束-t_ds_company_basic表结构.md",
+      "概念-持股合计.md",
+      "决策-生产数据库地址暴露规范.md",
+      "决策-直接投资持股合计字段映射.md",
+      "场景-直接投资列表页.md",
+      "概念-对外投资.md",
+      "约束-ds_company_discover_invest表结构.md"
+    ]
+  },
+  {
+    "id": "e_ddc7d6c9",
+    "title": "约束-ds_invest_alpha表结构",
+    "type": "spec_doc",
+    "description": "定义ds_invest_alpha表的约束和字段说明",
+    "aliases": [
+      "ds_invest_alpha表结构",
+      "规范-间接投资表结构"
+    ],
+    "source_pages": [
+      "约束-对外投资数据库连接.md",
+      "约束-ds_invest_alpha表结构.md",
+      "场景-对外投资列表浏览与筛选.md",
+      "约束-t_ds_company_basic表结构.md",
+      "概念-持股合计.md",
+      "决策-生产数据库地址暴露规范.md",
+      "决策-直接投资持股合计字段映射.md",
+      "概念-对外投资.md",
+      "场景-间接投资列表页.md"
+    ]
+  },
+  {
+    "id": "e_ea5eae16",
+    "title": "约束-t_ds_company_basic表结构",
+    "type": "spec_doc",
+    "description": "t_ds_company_basic表结构约束规范文档",
+    "aliases": [
+      "t_ds_company_basic表结构",
+      "约束-t_ds_company_basic",
+      "规范-公司基础信息表结构"
+    ],
+    "source_pages": [
+      "约束-对外投资数据库连接.md",
+      "约束-ds_invest_alpha表结构.md",
+      "约束-t_ds_company_basic表结构.md",
+      "场景-直接投资列表页.md",
+      "概念-对外投资.md",
+      "场景-间接投资列表页.md",
+      "约束-ds_company_discover_invest表结构.md"
+    ]
+  },
+  {
+    "id": "e_e5909611",
+    "title": "决策-生产数据库地址暴露规范",
+    "type": "spec_doc",
+    "description": "关于生产数据库地址不应出现在PRD正文中的决策规范",
+    "aliases": [],
+    "source_pages": [
+      "约束-对外投资数据库连接.md",
+      "决策-生产数据库地址暴露规范.md"
+    ]
+  },
+  {
+    "id": "e_1b9c2056",
+    "title": "ds_invest_alpha.id",
+    "type": "field",
+    "description": "自增主键，int8",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_invest_alpha表结构.md",
+      "约束-对外投资DDL.md"
+    ]
+  },
+  {
+    "id": "e_8fc04958",
+    "title": "ds_invest_alpha.entid",
+    "type": "field",
+    "description": "企业UID（主体企业），int8",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_invest_alpha表结构.md",
+      "约束-对外投资DDL.md",
+      "约束-对外投资跨表关系.md"
+    ]
+  },
+  {
+    "id": "e_7c3bfd55",
+    "title": "ds_invest_alpha.invest_id",
+    "type": "field",
+    "description": "被投资企业UID，int8",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_invest_alpha表结构.md",
+      "约束-对外投资DDL.md",
+      "约束-对外投资跨表关系.md"
+    ]
+  },
+  {
+    "id": "e_07d1ca3f",
+    "title": "ds_invest_alpha.invest_name",
+    "type": "field",
+    "description": "被投资企业名称，varchar(200)",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_invest_alpha表结构.md",
+      "约束-对外投资DDL.md",
+      "场景-间接投资列表页.md",
+      "约束-对外投资跨表关系.md"
+    ]
+  },
+  {
+    "id": "e_a1309890",
+    "title": "ds_invest_alpha.path_cnt",
+    "type": "field",
+    "description": "股权路径数字段，表示路径数",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_invest_alpha表结构.md",
+      "约束-对外投资DDL.md",
+      "场景-间接投资列表页.md",
+      "约束-对外投资跨表关系.md"
+    ]
+  },
+  {
+    "id": "e_bedcbeaf",
+    "title": "ds_invest_alpha.invest_paths",
+    "type": "field",
+    "description": "股权链字段，结构待定(JSON或分隔符)",
+    "aliases": [
+      "invest_paths"
+    ],
+    "source_pages": [
+      "约束-ds_invest_alpha表结构.md",
+      "约束-对外投资DDL.md",
+      "概念-对外投资.md",
+      "场景-间接投资列表页.md",
+      "约束-对外投资跨表关系.md"
+    ]
+  },
+  {
+    "id": "e_836bfb46",
+    "title": "ds_invest_alpha.data_status",
+    "type": "field",
+    "description": "数据状态，int2",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_invest_alpha表结构.md",
+      "约束-对外投资DDL.md"
+    ]
+  },
+  {
+    "id": "e_a141232c",
+    "title": "ds_invest_alpha.create_time",
+    "type": "field",
+    "description": "创建时间，timestamp",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_invest_alpha表结构.md",
+      "约束-对外投资DDL.md"
+    ]
+  },
+  {
+    "id": "e_b11942e8",
+    "title": "ds_invest_alpha.update_time",
+    "type": "field",
+    "description": "更新时间，timestamp",
+    "aliases": [],
+    "source_pages": [
+      "约束-ds_invest_alpha表结构.md",
+      "约束-对外投资DDL.md"
+    ]
+  },
+  {
+    "id": "e_020c5919",
+    "title": "概念-对外投资",
+    "type": "page_concept",
+    "description": "企业对外股权投资行为，分直接和间接",
+    "aliases": [
+      "对外投资",
+      "直接投资",
+      "间接投资"
+    ],
+    "source_pages": [
+      "约束-ds_invest_alpha表结构.md",
+      "场景-对外投资列表浏览与筛选.md",
+      "约束-t_ds_company_basic表结构.md",
+      "概念-持股合计.md",
+      "约束-对外投资DDL.md",
+      "场景-直接投资列表页.md",
+      "竞品-企查查-对外投资.md",
+      "决策-移动端保留认缴出资额.md",
+      "概念-对外投资.md",
+      "场景-间接投资列表页.md",
+      "决策-股权链展示上限.md",
+      "约束-ds_company_discover_invest表结构.md"
+    ]
+  },
+  {
+    "id": "e_add6e8c9",
+    "title": "场景-间接投资列表页",
+    "type": "page_concept",
+    "description": "展示企业间接投资列表的应用页面",
+    "aliases": [
+      "间接投资列表",
+      "间接投资列表页"
+    ],
+    "source_pages": [
+      "约束-ds_invest_alpha表结构.md",
+      "约束-t_ds_company_basic表结构.md",
+      "概念-持股合计.md",
+      "场景-直接投资列表页.md",
+      "竞品-企查查-对外投资.md",
+      "概念-对外投资.md",
+      "场景-间接投资列表页.md"
+    ]
+  },
+  {
+    "id": "e_3573eaf1",
+    "title": "default 评审人的严格度等级",
+    "type": "page_concept",
+    "description": "对对外投资基线PRD评审的严格度等级，must级改进项占100%",
+    "aliases": [],
+    "source_pages": [
+      "概念-default 评审人的严格度等级.md"
+    ]
+  },
+  {
+    "id": "e_3a5c73a7",
+    "title": "对外投资基线v8",
+    "type": "spec_doc",
+    "description": "对外投资模块的基线版本规范文档，v8版本",
+    "aliases": [
+      "基线v8",
+      "对外投资基线",
+      "对外投资基线v8文档",
+      "投资基线",
+      "投资基线v8"
+    ],
+    "source_pages": [
+      "概念-default 评审人的严格度等级.md",
+      "决策-功能需求与技术约定的对应性缺陷.md",
+      "实体-投资管理模块的标准功能流程.md",
+      "概念-元评审者（Opus）的交叉校验聚焦.md",
+      "决策-并行评审后的漏报补充概率.md",
+      "决策-数据源定义中的类型一致性检查.md",
+      "约束-投资数据源和 API 基础约定.md"
+    ]
+  },
+  {
+    "id": "e_946d9bfe",
+    "title": "对外投资基线 PRD",
+    "type": "spec_doc",
+    "description": "对外投资基线产品需求文档",
+    "aliases": [
+      "对外投资基线文档",
+      "对外投资基线PRD"
+    ],
+    "source_pages": [
+      "概念-default 评审人的严格度等级.md"
+    ]
+  },
+  {
+    "id": "e_c980e15d",
+    "title": "场景-对外投资列表浏览与筛选",
+    "type": "page_concept",
+    "description": "对外投资列表浏览与筛选场景",
+    "aliases": [
+      "对外投资列表",
+      "直接投资列表",
+      "间接投资列表"
+    ],
+    "source_pages": [
+      "场景-对外投资列表浏览与筛选.md",
+      "决策-移动端保留认缴出资额.md"
+    ]
+  },
+  {
+    "id": "e_de6a55dc",
+    "title": "概念-持股合计",
+    "type": "page_concept",
+    "description": "定义持股合计概念及其分类",
+    "aliases": [
+      "持股合计",
+      "持股合计概念"
+    ],
+    "source_pages": [
+      "场景-对外投资列表浏览与筛选.md",
+      "概念-持股合计.md",
+      "决策-直接投资持股合计字段映射.md",
+      "决策-移动端保留认缴出资额.md",
+      "概念-对外投资.md",
+      "场景-间接投资列表页.md"
+    ]
+  },
+  {
+    "id": "e_305e0efb",
+    "title": "对外投资列表加载中",
+    "type": "ui_state",
+    "description": "表格行显示骨架屏",
+    "aliases": [],
+    "source_pages": [
+      "场景-对外投资列表浏览与筛选.md"
+    ]
+  },
+  {
+    "id": "e_b08dc9a3",
+    "title": "对外投资列表加载失败",
+    "type": "ui_state",
+    "description": "显示「数据加载失败，请刷新重试」，提供刷新按钮",
+    "aliases": [],
+    "source_pages": [
+      "场景-对外投资列表浏览与筛选.md"
+    ]
+  },
+  {
+    "id": "e_84c5a378",
+    "title": "对外投资列表筛选无结果",
+    "type": "ui_state",
+    "description": "显示「暂无符合条件的数据」，保留筛选区可操作",
+    "aliases": [],
+    "source_pages": [
+      "场景-对外投资列表浏览与筛选.md"
+    ]
+  },
+  {
+    "id": "e_7eafcb2c",
+    "title": "对外投资列表空数据",
+    "type": "ui_state",
+    "description": "显示「暂无对外投资数据」",
+    "aliases": [],
+    "source_pages": [
+      "场景-对外投资列表浏览与筛选.md"
+    ]
+  },
+  {
+    "id": "e_5f5c30bc",
+    "title": "场景-投资详情弹窗",
+    "type": "page_concept",
+    "description": "投资详情弹窗场景页面，待补充内容",
+    "aliases": [
+      "投资详情弹窗",
+      "投资详情弹窗场景"
+    ],
+    "source_pages": [
+      "场景-对外投资列表浏览与筛选.md",
+      "场景-投资详情弹窗.md"
+    ]
+  },
+  {
+    "id": "e_3de1bc3d",
+    "title": "场景-对外投资筛选逻辑",
+    "type": "page_concept",
+    "description": "对外投资筛选逻辑的业务场景页面",
+    "aliases": [],
+    "source_pages": [
+      "场景-对外投资筛选逻辑.md",
+      "约束-对外投资DDL.md"
+    ]
+  },
+  {
+    "id": "e_51844952",
+    "title": "对外投资模块",
+    "type": "page_concept",
+    "description": "PRD评审的业务模块, 包含投资列表/筛选/详情等功能",
+    "aliases": [
+      "实体-对外投资模块：多数据源架构",
+      "投资模块"
+    ],
+    "source_pages": [
+      "实体-对外投资模块：多数据源架构.md",
+      "实体-混合数据源的集成路由模式.md"
+    ]
+  },
+  {
+    "id": "e_1a08ba2a",
+    "title": "多数据源架构",
+    "type": "page_concept",
+    "description": "混合MySQL与PostgreSQL声明冲突的架构方案",
+    "aliases": [],
+    "source_pages": [
+      "实体-对外投资模块：多数据源架构.md"
+    ]
+  },
+  {
+    "id": "e_8cae9d46",
+    "title": "投资数据源",
+    "type": "page_concept",
+    "description": "对外投资模块的数据来源之一",
+    "aliases": [],
+    "source_pages": [
+      "实体-对外投资模块：多数据源架构.md"
+    ]
+  },
+  {
+    "id": "e_a93e4d38",
+    "title": "企业信息源",
+    "type": "page_concept",
+    "description": "对外投资模块的企业数据来源",
+    "aliases": [],
+    "source_pages": [
+      "实体-对外投资模块：多数据源架构.md"
+    ]
+  },
+  {
+    "id": "e_09e5d3bb",
+    "title": "直接/间接投资列表",
+    "type": "page_concept",
+    "description": "显示直接与间接投资信息的核心功能",
+    "aliases": [
+      "直接投资列表",
+      "间接投资列表"
+    ],
+    "source_pages": [
+      "实体-对外投资模块：多数据源架构.md"
+    ]
+  },
+  {
+    "id": "e_aba6d3a5",
+    "title": "动态筛选",
+    "type": "page_concept",
+    "description": "支持多个条件动态过滤投资数据的功能",
+    "aliases": [
+      "筛选"
+    ],
+    "source_pages": [
+      "实体-对外投资模块：多数据源架构.md"
+    ]
+  },
+  {
+    "id": "e_da4d1947",
+    "title": "企业搜索",
+    "type": "page_concept",
+    "description": "对外投资模块的企业搜索功能",
+    "aliases": [],
+    "source_pages": [
+      "实体-对外投资模块：多数据源架构.md"
+    ]
+  },
+  {
+    "id": "e_297e2e89",
+    "title": "数据导出",
+    "type": "page_concept",
+    "description": "对外投资模块的数据导出功能",
+    "aliases": [
+      "导出"
+    ],
+    "source_pages": [
+      "实体-对外投资模块：多数据源架构.md"
+    ]
+  },
+  {
+    "id": "e_0e5d935b",
+    "title": "投资详情",
+    "type": "page_concept",
+    "description": "对外投资模块的详情查看功能",
+    "aliases": [],
+    "source_pages": [
+      "实体-对外投资模块：多数据源架构.md"
+    ]
+  },
+  {
+    "id": "e_0a78e97c",
+    "title": "功能需求与技术约定的对应性缺陷",
+    "type": "page_concept",
+    "description": "功能需求与技术约定对应性缺陷的检查规则",
+    "aliases": [],
+    "source_pages": [
+      "决策-功能需求与技术约定的对应性缺陷.md"
+    ]
+  },
+  {
+    "id": "e_94cfbf2c",
+    "title": "xinshu 评审偏好：结构严谨性优先",
+    "type": "page_concept",
+    "description": "审阅人xinshu的评审偏好: 文档结构/数据定义/接口契约一致性优先",
+    "aliases": [],
+    "source_pages": [
+      "概念-xinshu 评审偏好：结构严谨性优先.md"
+    ]
+  },
+  {
+    "id": "e_dcaf15a7",
+    "title": "决策-版本号一致性检查点（结构层）",
+    "type": "spec_doc",
+    "description": "版本号一致性的检查规则，包含检查点和建议",
+    "aliases": [],
+    "source_pages": [
+      "决策-版本号一致性检查点（结构层）.md"
+    ]
+  },
+  {
+    "id": "e_51b098a1",
+    "title": "版本历史表",
+    "type": "data_table",
+    "description": "记录版本历史信息的表格",
+    "aliases": [],
+    "source_pages": [
+      "决策-版本号一致性检查点（结构层）.md"
+    ]
+  },
+  {
+    "id": "e_9852cf91",
+    "title": "评审清单",
+    "type": "page_concept",
+    "description": "用于评审的检查清单",
+    "aliases": [],
+    "source_pages": [
+      "决策-版本号一致性检查点（结构层）.md"
+    ]
+  },
+  {
+    "id": "e_624cd516",
+    "title": "文档元数据",
+    "type": "page_concept",
+    "description": "文档的元数据分类",
+    "aliases": [],
+    "source_pages": [
+      "决策-版本号一致性检查点（结构层）.md"
+    ]
+  },
+  {
+    "id": "e_a980e824",
+    "title": "对外投资的关键约束条件",
+    "type": "page_concept",
+    "description": "对外投资模块的约束条件,包括审批权限、合规检查、关联交易披露等",
+    "aliases": [
+      "对外投资约束条件",
+      "约束条件页面"
+    ],
+    "source_pages": [
+      "实体-对外投资的关键约束条件.md"
+    ]
+  },
+  {
+    "id": "e_9215979c",
+    "title": "对外投资PRD的重点审阅维度",
+    "type": "page_concept",
+    "description": "对外投资PRD的审阅重点：资金安全、审批流程、数据权限隔离等",
+    "aliases": [
+      "对外投资PRD",
+      "对外投资类PRD"
+    ],
+    "source_pages": [
+      "概念-对外投资PRD的重点审阅维度.md"
+    ]
+  },
+  {
+    "id": "e_fb39ad5f",
+    "title": "t_ds_company_basic.entid",
+    "type": "field",
+    "description": "企业UID主键, bigint",
+    "aliases": [],
+    "source_pages": [
+      "约束-t_ds_company_basic表结构.md",
+      "约束-对外投资DDL.md",
+      "约束-对外投资跨表关系.md",
+      "约束-ds_company_discover_invest表结构.md"
+    ]
+  },
+  {
+    "id": "e_58e28ce7",
+    "title": "t_ds_company_basic.entname",
+    "type": "field",
+    "description": "企业名称, varchar(200)",
+    "aliases": [
+      "被投资企业"
+    ],
+    "source_pages": [
+      "约束-t_ds_company_basic表结构.md",
+      "约束-对外投资DDL.md",
+      "场景-直接投资列表页.md",
+      "约束-对外投资跨表关系.md"
+    ]
+  },
+  {
+    "id": "e_e75bd7b2",
+    "title": "t_ds_company_basic.oper_name",
+    "type": "field",
+    "description": "法人代表, varchar(100)",
+    "aliases": [
+      "法人代表"
+    ],
+    "source_pages": [
+      "约束-t_ds_company_basic表结构.md",
+      "约束-对外投资DDL.md",
+      "场景-直接投资列表页.md",
+      "约束-对外投资跨表关系.md"
+    ]
+  },
+  {
+    "id": "e_aad2edd3",
+    "title": "t_ds_company_basic.regcap",
+    "type": "field",
+    "description": "注册资本, decimal",
+    "aliases": [
+      "注册资本(数值)"
+    ],
+    "source_pages": [
+      "约束-t_ds_company_basic表结构.md",
+      "约束-对外投资DDL.md",
+      "场景-直接投资列表页.md",
+      "约束-对外投资跨表关系.md"
+    ]
+  },
+  {
+    "id": "e_c8e73e98",
+    "title": "t_ds_company_basic.regcap_cur",
+    "type": "field",
+    "description": "注册资本币种, varchar(20)",
+    "aliases": [
+      "注册资本币种"
+    ],
+    "source_pages": [
+      "约束-t_ds_company_basic表结构.md",
+      "约束-对外投资跨表关系.md"
+    ]
+  },
+  {
+    "id": "e_dee74c95",
+    "title": "t_ds_company_basic.esdate",
+    "type": "field",
+    "description": "成立日期, date",
+    "aliases": [
+      "成立日期"
+    ],
+    "source_pages": [
+      "约束-t_ds_company_basic表结构.md",
+      "约束-对外投资DDL.md",
+      "场景-直接投资列表页.md",
+      "约束-对外投资跨表关系.md"
+    ]
+  },
+  {
+    "id": "e_a4fb5abb",
+    "title": "t_ds_company_basic.prov_name",
+    "type": "field",
+    "description": "省份, varchar(50)",
+    "aliases": [
+      "所属地区"
+    ],
+    "source_pages": [
+      "约束-t_ds_company_basic表结构.md",
+      "约束-对外投资DDL.md",
+      "约束-对外投资跨表关系.md"
+    ]
+  },
+  {
+    "id": "e_3e1db9ba",
+    "title": "t_ds_company_basic.city_name",
+    "type": "field",
+    "description": "城市, varchar(50)",
+    "aliases": [],
+    "source_pages": [
+      "约束-t_ds_company_basic表结构.md"
+    ]
+  },
+  {
+    "id": "e_f4495d3a",
+    "title": "t_ds_company_basic.nic_id",
+    "type": "field",
+    "description": "行业分类代码17版, varchar(10)",
+    "aliases": [
+      "所属行业(代码)"
+    ],
+    "source_pages": [
+      "约束-t_ds_company_basic表结构.md",
+      "约束-对外投资DDL.md",
+      "场景-直接投资列表页.md",
+      "实体-投资类 PRD 的数据源特性.md",
+      "场景-间接投资列表页.md",
+      "约束-对外投资跨表关系.md"
+    ]
+  },
+  {
+    "id": "e_7fa3c3e6",
+    "title": "t_ds_company_basic.nic_id_bak",
+    "type": "field",
+    "description": "行业分类代码13版, varchar(10)",
+    "aliases": [],
+    "source_pages": [
+      "约束-t_ds_company_basic表结构.md",
+      "约束-对外投资DDL.md",
+      "实体-投资类 PRD 的数据源特性.md",
+      "场景-间接投资列表页.md"
+    ]
+  },
+  {
+    "id": "e_46d9f728",
+    "title": "t_ds_company_basic.nacaoid",
+    "type": "field",
+    "description": "组织机构代码非行业字段, varchar(11)",
+    "aliases": [
+      "nacaoid"
+    ],
+    "source_pages": [
+      "约束-t_ds_company_basic表结构.md",
+      "约束-对外投资DDL.md",
+      "场景-直接投资列表页.md"
+    ]
+  },
+  {
+    "id": "e_89b25773",
+    "title": "场景-直接投资列表页",
+    "type": "page_concept",
+    "description": "企业直接对外投资列表展示与筛选页面",
+    "aliases": [
+      "直接投资列表",
+      "直接投资列表页"
+    ],
+    "source_pages": [
+      "约束-t_ds_company_basic表结构.md",
+      "概念-持股合计.md",
+      "决策-直接投资持股合计字段映射.md",
+      "场景-直接投资列表页.md",
+      "竞品-企查查-对外投资.md",
+      "概念-对外投资.md",
+      "场景-间接投资列表页.md",
+      "决策-股权链展示上限.md",
+      "约束-ds_company_discover_invest表结构.md"
+    ]
+  },
+  {
+    "id": "e_72423e24",
+    "title": "概念-苍鹰交叉校验的关键检查点",
+    "type": "page_concept",
+    "description": "苍鹰meta-reviewer的交叉校验重点规则冗余检测与漏报补充",
+    "aliases": [
+      "关键检查点",
+      "苍鹰交叉校验"
+    ],
+    "source_pages": [
+      "概念-苍鹰交叉校验的关键检查点.md"
+    ]
+  },
+  {
+    "id": "e_683feb97",
+    "title": "决策-后端接口型 PRD 易漏接口契约定义",
+    "type": "spec_doc",
+    "description": "关于后端接口型PRD中接口契约定义的决策记录",
+    "aliases": [
+      "后端接口PRD契约定义决策"
+    ],
+    "source_pages": [
+      "决策-后端接口型 PRD 易漏接口契约定义.md"
+    ]
+  },
+  {
+    "id": "e_3a794fe8",
+    "title": "RC-005",
+    "type": "spec_doc",
+    "description": "苍鹰补充的检查规则RC-005",
+    "aliases": [
+      "RC005",
+      "苍鹰规则"
+    ],
+    "source_pages": [
+      "决策-后端接口型 PRD 易漏接口契约定义.md"
+    ]
+  },
+  {
+    "id": "e_c5a73873",
+    "title": "API端点",
+    "type": "page_concept",
+    "description": "后端接口的访问端点",
+    "aliases": [
+      "endpoint",
+      "端点"
+    ],
+    "source_pages": [
+      "决策-后端接口型 PRD 易漏接口契约定义.md"
+    ]
+  },
+  {
+    "id": "e_094596c1",
+    "title": "HTTP方法",
+    "type": "page_concept",
+    "description": "HTTP请求方法类型",
+    "aliases": [],
+    "source_pages": [
+      "决策-后端接口型 PRD 易漏接口契约定义.md"
+    ]
+  },
+  {
+    "id": "e_a1c66a19",
+    "title": "持股合计",
+    "type": "page_concept",
+    "description": "某企业在被投资企业中的最终持股比例概念",
+    "aliases": [],
+    "source_pages": [
+      "概念-持股合计.md"
+    ]
+  },
+  {
+    "id": "e_f409e9f2",
+    "title": "ds_company_discover_invest.invest_ratio",
+    "type": "field",
+    "description": "直接投资持股比例字段，保留4位小数百分比",
+    "aliases": [
+      "持股合计",
+      "直接投资"
+    ],
+    "source_pages": [
+      "概念-持股合计.md",
+      "约束-对外投资DDL.md",
+      "场景-直接投资列表页.md",
+      "约束-对外投资跨表关系.md",
+      "约束-ds_company_discover_invest表结构.md"
+    ]
+  },
+  {
+    "id": "e_7c6d9903",
+    "title": "交叉校验（苍鹰）的重点方向",
+    "type": "page_concept",
+    "description": "Opus级交叉校验方向，发现架构协调性问题",
+    "aliases": [
+      "苍鹰交叉校验方向",
+      "交叉校验重点方向"
+    ],
+    "source_pages": [
+      "概念-交叉校验（苍鹰）的重点方向.md"
+    ]
+  },
+  {
+    "id": "e_779a214e",
+    "title": "投资管理模块的标准功能流程",
+    "type": "spec_doc",
+    "description": "投资管理模块的功能流程规范文档",
+    "aliases": [
+      "标准列表-详情模式",
+      "标准功能流程"
+    ],
+    "source_pages": [
+      "实体-投资管理模块的标准功能流程.md"
+    ]
+  },
+  {
+    "id": "e_4a934b2d",
+    "title": "Tab分类",
+    "type": "page_concept",
+    "description": "功能流程中的Tab分类步骤",
+    "aliases": [],
+    "source_pages": [
+      "实体-投资管理模块的标准功能流程.md"
+    ]
+  },
+  {
+    "id": "e_00b791a8",
+    "title": "列表查询",
+    "type": "page_concept",
+    "description": "功能流程中的列表查询步骤",
+    "aliases": [],
+    "source_pages": [
+      "实体-投资管理模块的标准功能流程.md"
+    ]
+  },
+  {
+    "id": "e_3a39f696",
+    "title": "筛选/搜索",
+    "type": "page_concept",
+    "description": "功能流程中的筛选或搜索步骤",
+    "aliases": [
+      "过滤搜索",
+      "筛选搜索"
+    ],
+    "source_pages": [
+      "实体-投资管理模块的标准功能流程.md"
+    ]
+  },
+  {
+    "id": "e_d1ef64e4",
+    "title": "导出",
+    "type": "page_concept",
+    "description": "功能流程中的导出步骤",
+    "aliases": [],
+    "source_pages": [
+      "实体-投资管理模块的标准功能流程.md"
+    ]
+  },
+  {
+    "id": "e_ae5851ea",
+    "title": "详情弹窗",
+    "type": "page_concept",
+    "description": "功能流程中的详情弹窗步骤",
+    "aliases": [],
+    "source_pages": [
+      "实体-投资管理模块的标准功能流程.md"
+    ]
+  },
+  {
+    "id": "e_c66ad1a8",
+    "title": "标准列表-详情模式",
+    "type": "page_concept",
+    "description": "企业管理C端通用的列表查询与详情弹窗交互模式",
+    "aliases": [],
+    "source_pages": [
+      "实体-投资管理模块的标准功能流程.md"
+    ]
+  },
+  {
+    "id": "e_ab8b485d",
+    "title": "字段映射规则容易重复识别同一问题",
+    "type": "spec_doc",
+    "description": "关于字段映射规则重复识别问题的决策页",
+    "aliases": [],
+    "source_pages": [
+      "决策-字段映射规则容易重复识别同一问题.md"
+    ]
+  },
+  {
+    "id": "e_9607b3eb",
+    "title": "字段来源可追溯性",
+    "type": "page_concept",
+    "description": "字段来源可追溯性类问题，需规则聚合",
+    "aliases": [],
+    "source_pages": [
+      "决策-字段映射规则容易重复识别同一问题.md"
+    ]
+  },
+  {
+    "id": "e_8d039c3a",
+    "title": "R-005",
+    "type": "page_concept",
+    "description": "规则编号R-005 重复识别问题",
+    "aliases": [],
+    "source_pages": [
+      "决策-字段映射规则容易重复识别同一问题.md"
+    ]
+  },
+  {
+    "id": "e_1aecd04c",
+    "title": "R-008",
+    "type": "page_concept",
+    "description": "规则编号R-008 重复识别问题",
+    "aliases": [],
+    "source_pages": [
+      "决策-字段映射规则容易重复识别同一问题.md"
+    ]
+  },
+  {
+    "id": "e_9ad2fd19",
+    "title": "RC-009",
+    "type": "page_concept",
+    "description": "规则编号RC-009 重复识别问题",
+    "aliases": [],
+    "source_pages": [
+      "决策-字段映射规则容易重复识别同一问题.md"
+    ]
+  },
+  {
+    "id": "e_8417ea49",
+    "title": "RC-013",
+    "type": "page_concept",
+    "description": "规则编号RC-013 重复识别问题",
+    "aliases": [],
+    "source_pages": [
+      "决策-字段映射规则容易重复识别同一问题.md"
+    ]
+  },
+  {
+    "id": "e_6d5e7d40",
+    "title": "概念-间接投资持股计算",
+    "type": "page_concept",
+    "description": "间接投资持股计算的概念页面，待补充内容",
+    "aliases": [
+      "间接投资持股计算",
+      "间接持股计算"
+    ],
+    "source_pages": [
+      "概念-间接投资持股计算.md",
+      "约束-对外投资DDL.md"
+    ]
+  },
+  {
+    "id": "e_3082adfc",
+    "title": "约束-对外投资DDL",
+    "type": "spec_doc",
+    "description": "对外投资约束规范文档，定义ds_invest_alpha表结构",
+    "aliases": [
+      "对外投资DDL规范",
+      "对外投资表结构"
+    ],
+    "source_pages": [
+      "约束-对外投资DDL.md"
+    ]
+  },
+  {
+    "id": "e_1566c47e",
+    "title": "ds_company_discover_invest.id",
+    "type": "field",
+    "description": "自增主键，bigint",
+    "aliases": [],
+    "source_pages": [
+      "约束-对外投资DDL.md",
+      "约束-ds_company_discover_invest表结构.md"
+    ]
+  },
+  {
+    "id": "e_32a90888",
+    "title": "ds_company_discover_invest.entid",
+    "type": "field",
+    "description": "企业UID，关联t_ds_company_basic.entid",
+    "aliases": [],
+    "source_pages": [
+      "约束-对外投资DDL.md",
+      "约束-对外投资跨表关系.md",
+      "约束-ds_company_discover_invest表结构.md"
+    ]
+  },
+  {
+    "id": "e_545bffe8",
+    "title": "ds_company_discover_invest.entid_inv",
+    "type": "field",
+    "description": "被投资企业ID，用于JOIN",
+    "aliases": [],
+    "source_pages": [
+      "约束-对外投资DDL.md",
+      "约束-对外投资跨表关系.md",
+      "约束-ds_company_discover_invest表结构.md"
+    ]
+  },
+  {
+    "id": "e_c3f74d17",
+    "title": "ds_company_discover_invest.invest_name",
+    "type": "field",
+    "description": "对外投资企业名称，varchar",
+    "aliases": [],
+    "source_pages": [
+      "约束-对外投资DDL.md",
+      "约束-对外投资跨表关系.md",
+      "约束-ds_company_discover_invest表结构.md"
+    ]
+  },
+  {
+    "id": "e_525a2fc6",
+    "title": "ds_company_discover_invest.entstatus",
+    "type": "field",
+    "description": "被投资企业状态（枚举值未定义⚠️）",
+    "aliases": [],
+    "source_pages": [
+      "约束-对外投资DDL.md",
+      "约束-对外投资跨表关系.md",
+      "约束-ds_company_discover_invest表结构.md"
+    ]
+  },
+  {
+    "id": "e_638f9821",
+    "title": "ds_company_discover_invest.entstatus_cn",
+    "type": "field",
+    "description": "被投资企业状态中文",
+    "aliases": [],
+    "source_pages": [
+      "约束-对外投资DDL.md",
+      "约束-对外投资跨表关系.md",
+      "约束-ds_company_discover_invest表结构.md"
+    ]
+  },
+  {
+    "id": "e_69f34577",
+    "title": "ds_company_discover_invest.entstatus_gs",
+    "type": "field",
+    "description": "被投资企业状态（GS口径）",
+    "aliases": [],
+    "source_pages": [
+      "约束-对外投资DDL.md",
+      "约束-ds_company_discover_invest表结构.md"
+    ]
+  },
+  {
+    "id": "e_9762e434",
+    "title": "ds_company_discover_invest.esdate",
+    "type": "field",
+    "description": "成立日期，date",
+    "aliases": [],
+    "source_pages": [
+      "约束-对外投资DDL.md",
+      "约束-对外投资跨表关系.md",
+      "约束-ds_company_discover_invest表结构.md"
+    ]
+  },
+  {
+    "id": "e_b19db1b4",
+    "title": "ds_company_discover_invest.data_status",
+    "type": "field",
+    "description": "数据状态（0有效,1历史,2删除,3去重）",
+    "aliases": [],
+    "source_pages": [
+      "约束-对外投资DDL.md",
+      "约束-ds_company_discover_invest表结构.md"
+    ]
+  },
+  {
+    "id": "e_9c397cd0",
+    "title": "ds_company_discover_invest.create_time",
+    "type": "field",
+    "description": "创建时间，timestamp",
+    "aliases": [],
+    "source_pages": [
+      "约束-对外投资DDL.md",
+      "约束-ds_company_discover_invest表结构.md"
+    ]
+  },
+  {
+    "id": "e_1c1b8453",
+    "title": "ds_company_discover_invest.update_time",
+    "type": "field",
+    "description": "更新时间，timestamp",
+    "aliases": [],
+    "source_pages": [
+      "约束-对外投资DDL.md",
+      "约束-ds_company_discover_invest表结构.md"
+    ]
+  },
+  {
+    "id": "e_350abd4f",
+    "title": "t_ds_company_basic.dom",
+    "type": "field",
+    "description": "注册地址",
+    "aliases": [],
+    "source_pages": [
+      "约束-对外投资DDL.md"
+    ]
+  },
+  {
+    "id": "e_5aaa8b1a",
+    "title": "t_ds_company_basic.uniscid",
+    "type": "field",
+    "description": "统一社会信用代码",
+    "aliases": [],
+    "source_pages": [
+      "约束-对外投资DDL.md"
+    ]
+  },
+  {
+    "id": "e_cf2929c6",
+    "title": "t_ds_company_basic.data_status",
+    "type": "field",
+    "description": "数据状态",
+    "aliases": [],
+    "source_pages": [
+      "约束-对外投资DDL.md"
+    ]
+  },
+  {
+    "id": "e_1d98da35",
+    "title": "元评审者（Opus）的交叉校验聚焦",
+    "type": "page_concept",
+    "description": "误报检测与漏报补充，适用于高复杂度PRD",
+    "aliases": [
+      "交叉校验聚焦"
+    ],
+    "source_pages": [
+      "概念-元评审者（Opus）的交叉校验聚焦.md"
+    ]
+  },
+  {
+    "id": "e_0b3301c6",
+    "title": "决策-直接投资持股合计字段映射",
+    "type": "spec_doc",
+    "description": "字段映射决策页，明确持股合计映射到conprop",
+    "aliases": [],
+    "source_pages": [
+      "决策-直接投资持股合计字段映射.md"
+    ]
+  },
+  {
+    "id": "e_e50f8e83",
+    "title": "决策-股权链展示上限",
+    "type": "spec_doc",
+    "description": "Web端股权链最多展示10条链路的决策文档",
+    "aliases": [],
+    "source_pages": [
+      "场景-直接投资列表页.md",
+      "竞品-企查查-对外投资.md",
+      "场景-间接投资列表页.md",
+      "决策-股权链展示上限.md"
+    ]
+  },
+  {
+    "id": "e_1b88d64b",
+    "title": "t_ds_company_basic.prov",
+    "type": "field",
+    "description": "地区字段",
+    "aliases": [],
+    "source_pages": [
+      "场景-直接投资列表页.md"
+    ]
+  },
+  {
+    "id": "e_1b87f2b8",
+    "title": "t_ds_company_basic.entstatus_cn",
+    "type": "field",
+    "description": "企业经营状态字段，中文描述",
+    "aliases": [],
+    "source_pages": [
+      "场景-直接投资列表页.md",
+      "场景-间接投资列表页.md"
+    ]
+  },
+  {
+    "id": "e_5ca78b64",
+    "title": "并行评审后的漏报补充概率",
+    "type": "page_concept",
+    "description": "关于评审漏报率的决策页，描述并行评审可将漏报率降至10-20%",
+    "aliases": [],
+    "source_pages": [
+      "决策-并行评审后的漏报补充概率.md"
+    ]
+  },
+  {
+    "id": "e_7964047c",
+    "title": "技术约定基础路径：/api/v1",
+    "type": "spec_doc",
+    "description": "对外投资模块接口基础路径约束文档，鉴权方式为JWT",
+    "aliases": [
+      "_api_v1",
+      "约束-技术约定基础路径：_api_v1"
+    ],
+    "source_pages": [
+      "约束-技术约定基础路径：_api_v1.md"
+    ]
+  },
+  {
+    "id": "e_2597d62f",
+    "title": "/api/v1",
+    "type": "api_endpoint",
+    "description": "对外投资模块接口基础路径，鉴权方式JWT",
+    "aliases": [],
+    "source_pages": [
+      "约束-技术约定基础路径：_api_v1.md",
+      "约束-投资数据源和 API 基础约定.md"
+    ]
+  },
+  {
+    "id": "e_a00d0d6a",
+    "title": "投资类 PRD 的数据源特性",
+    "type": "spec_doc",
+    "description": "描述投资类PRD的数据源特性及行业分类陷阱",
+    "aliases": [],
+    "source_pages": [
+      "实体-投资类 PRD 的数据源特性.md"
+    ]
+  },
+  {
+    "id": "e_fc4e8fc9",
+    "title": "t_ds_company_basic.nic_id_cn",
+    "type": "field",
+    "description": "行业分类中文名称",
+    "aliases": [],
+    "source_pages": [
+      "实体-投资类 PRD 的数据源特性.md"
+    ]
+  },
+  {
+    "id": "e_58587c9d",
+    "title": "t_ds_company_basic.nic_id_bak_cn",
+    "type": "field",
+    "description": "行业分类备用中文名称",
+    "aliases": [],
+    "source_pages": [
+      "实体-投资类 PRD 的数据源特性.md"
+    ]
+  },
+  {
+    "id": "e_2cb88cf7",
+    "title": "竞品-企查查-对外投资",
+    "type": "page_concept",
+    "description": "企查查对外投资竞品分析页，含直接/间接/历史三sheet",
+    "aliases": [
+      "企查查对外投资",
+      "竞品参考-对外投资"
+    ],
+    "source_pages": [
+      "竞品-企查查-对外投资.md",
+      "概念-对外投资.md",
+      "决策-股权链展示上限.md"
+    ]
+  },
+  {
+    "id": "e_6a1425f2",
+    "title": "决策-移动端保留认缴出资额",
+    "type": "spec_doc",
+    "description": "规定移动端保留认缴出资额字段的决策文档",
+    "aliases": [
+      "移动端保留认缴出资额",
+      "端差异决策"
+    ],
+    "source_pages": [
+      "决策-移动端保留认缴出资额.md"
+    ]
+  },
+  {
+    "id": "e_9d188566",
+    "title": "决策-股权链展示上限",
+    "type": "page_concept",
+    "description": "股权链展示层级上限决策概念",
+    "aliases": [
+      "股权链展示上限"
+    ],
+    "source_pages": [
+      "概念-对外投资.md"
+    ]
+  },
+  {
+    "id": "e_d3a3d93b",
+    "title": "混合数据源的集成路由模式",
+    "type": "page_concept",
+    "description": "对外投资模块分布式读取模式及查询路由规则",
+    "aliases": [],
+    "source_pages": [
+      "实体-混合数据源的集成路由模式.md"
+    ]
+  },
+  {
+    "id": "e_089ea078",
+    "title": "对外投资模块的核心数据关系",
+    "type": "page_concept",
+    "description": "描述投资方/被投资方、投资关系、股权链路等核心数据关系",
+    "aliases": [
+      "对外投资模块",
+      "对外投资数据关系"
+    ],
+    "source_pages": [
+      "实体-对外投资模块的核心数据关系.md"
+    ]
+  },
+  {
+    "id": "e_f96f0ab7",
+    "title": "决策-数据源定义中的类型一致性检查",
+    "type": "spec_doc",
+    "description": "数据源类型一致性检查的决策记录，规则R-001",
+    "aliases": [],
+    "source_pages": [
+      "决策-数据源定义中的类型一致性检查.md"
+    ]
+  },
+  {
+    "id": "e_c249d29b",
+    "title": "决策-数据源定义中的类型一致性检查",
+    "type": "page_concept",
+    "description": "数据源定义中类型一致性检查的决策规则",
+    "aliases": [
+      "数据源类型一致性检查",
+      "类型一致性检查"
+    ],
+    "source_pages": [
+      "决策-数据源定义中的类型一致性检查.md"
+    ]
+  },
+  {
+    "id": "e_f441b37d",
+    "title": "约束-投资数据源和 API 基础约定",
+    "type": "spec_doc",
+    "description": "定义投资数据源和API基础约束",
+    "aliases": [],
+    "source_pages": [
+      "约束-投资数据源和 API 基础约定.md"
+    ]
+  },
+  {
+    "id": "e_bd05c828",
+    "title": "FR 与技术约定的联动检查",
+    "type": "page_concept",
+    "description": "关于FR与技术约定接口契约完整性的决策页面",
+    "aliases": [],
+    "source_pages": [
+      "决策-FR 与技术约定的联动检查.md"
+    ]
+  },
+  {
+    "id": "e_bf383de2",
+    "title": "功能需求列表",
+    "type": "page_concept",
+    "description": "定义FR的功能需求列表",
+    "aliases": [
+      "FR列表"
+    ],
+    "source_pages": [
+      "决策-FR 与技术约定的联动检查.md"
+    ]
+  },
+  {
+    "id": "e_c058a107",
+    "title": "技术约定",
+    "type": "page_concept",
+    "description": "技术约定章节，定义接口契约",
+    "aliases": [
+      "技术约定章节"
+    ],
+    "source_pages": [
+      "决策-FR 与技术约定的联动检查.md"
+    ]
+  },
+  {
+    "id": "e_1c18d092",
+    "title": "接口契约",
+    "type": "page_concept",
+    "description": "API接口定义，包括endpoint、方法、数据结构",
+    "aliases": [
+      "API契约"
+    ],
+    "source_pages": [
+      "决策-FR 与技术约定的联动检查.md"
+    ]
+  },
+  {
+    "id": "e_c8a9e101",
+    "title": "FR_API_contract_completeness",
+    "type": "spec_doc",
+    "description": "检查FR与技术约定接口契约完整性的规则",
+    "aliases": [
+      "FR接口契约完整性规则"
+    ],
+    "source_pages": [
+      "决策-FR 与技术约定的联动检查.md"
+    ]
+  },
+  {
+    "id": "e_5c2752ae",
+    "title": "约束-对外投资跨表关系",
+    "type": "spec_doc",
+    "description": "对外投资领域跨表关系约束规范文档",
+    "aliases": [
+      "对外投资跨表关系规范"
+    ],
+    "source_pages": [
+      "约束-对外投资跨表关系.md"
+    ]
+  },
+  {
+    "id": "e_7ff047cc",
+    "title": "直接投资列表",
+    "type": "page_concept",
+    "description": "直接投资列表查询场景",
+    "aliases": [],
+    "source_pages": [
+      "约束-对外投资跨表关系.md"
+    ]
+  },
+  {
+    "id": "e_df24af34",
+    "title": "间接投资列表",
+    "type": "page_concept",
+    "description": "间接投资列表查询场景",
+    "aliases": [],
+    "source_pages": [
+      "约束-对外投资跨表关系.md"
+    ]
+  },
+  {
+    "id": "e_44f9076e",
+    "title": "直接投资筛选",
+    "type": "page_concept",
+    "description": "直接投资筛选查询场景",
+    "aliases": [],
+    "source_pages": [
+      "约束-对外投资跨表关系.md"
+    ]
+  },
+  {
+    "id": "e_84a113ca",
+    "title": "间接投资筛选",
+    "type": "page_concept",
+    "description": "间接投资筛选查询场景",
+    "aliases": [],
+    "source_pages": [
+      "约束-对外投资跨表关系.md"
+    ]
+  },
+  {
+    "id": "e_e3522dcb",
+    "title": "直接投资页面",
+    "type": "page_concept",
+    "description": "对外投资中直接投资展示页",
+    "aliases": [
+      "直接对外投资页面"
+    ],
+    "source_pages": [
+      "约束-对外投资跨表关系.md"
+    ]
+  },
+  {
+    "id": "e_0b621608",
+    "title": "间接投资页面",
+    "type": "page_concept",
+    "description": "对外投资中间接投资展示页",
+    "aliases": [
+      "间接对外投资页面"
+    ],
+    "source_pages": [
+      "约束-对外投资跨表关系.md"
+    ]
+  }
+]

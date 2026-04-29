@@ -22,6 +22,36 @@ from logger import get_logger
 
 log = get_logger("parallel")
 
+# Metrics 埋点 — 失败 silent skip, 不阻 evidence verify 主流程
+try:
+    from review.metrics_store import record_event as _record_event
+except Exception:
+    def _record_event(*args, **kwargs):  # noqa: ARG001
+        return False
+
+
+# 中文分词: 用 jieba 替代滑动窗口 (2026-04-28). 老滑窗 r'[\u4e00-\u9fff]{2,4}'
+# 把"位置标识符"切成 ["位置标识","置标识符"] 噪声子串, 导致 issue 即便逐字
+# 引用 evidence 也常 overlap=0. jieba 出真实词后 overlap 信号才有意义.
+try:
+    import jieba
+    jieba.setLogLevel(40)  # 屏蔽 jieba INFO 日志
+    _JIEBA_AVAILABLE = True
+except ImportError:
+    log.warning("jieba 未安装, B 类语义 overlap 回退到滑动窗口算法")
+    _JIEBA_AVAILABLE = False
+
+
+def _extract_cn_keywords(text: str) -> set:
+    """中文 keyword 提取: jieba 切真实词, 长度 ≥ 2 且全中文."""
+    if not text:
+        return set()
+    if _JIEBA_AVAILABLE:
+        return {w for w in jieba.lcut(text)
+                if len(w) >= 2 and re.fullmatch(r'[\u4e00-\u9fff]+', w)}
+    # 回退: 老滑窗算法
+    return set(re.findall(r'[\u4e00-\u9fff]{2,4}', text))
+
 
 # ============================================================
 # rule_id 抽取: 走 SchemaRegistry 单点 SoT (step 3.4)
@@ -264,13 +294,18 @@ def _find_wiki_page_with_signal(evidence_content, wiki_dir, wiki_index=None):
     Sprint #6 EvidenceRL 升级 (2026-04-26):
     输出连续匹配信号取代 binary, 让下游 EMA delta 能区分"精确引用"vs"模糊关键词命中".
 
+    L4 GraphRAG Phase 3 (2026-04-28):
+    支持 `[[entity:e_xxx]]` 引用 — 走 wiki_kg_tools.entity_exists() 而非页面名匹配.
+    向后兼容: 老 [[页面名]] 引用仍按老逻辑走 manifest 字符串匹配.
+
     Returns:
         tuple (found: bool, signal: dict)
         signal = {
-            "method": "ref_exact" | "ref_substring" | "keyword" | "no_match",
+            "method": "entity_exact" | "entity_missing" | "ref_exact" | "ref_substring" | "keyword" | "no_match",
             "matched_pages": [basename, ...],   # 最多前 3 个匹配页面
             "ref_count": int,                    # [[ref]] 引用数
             "keyword_count": int,                # 兜底关键词搜数
+            "entity_ids": [eid, ...],            # 抽到的 entity_id 列表 (新格式)
         }
     """
     signal = {
@@ -278,12 +313,35 @@ def _find_wiki_page_with_signal(evidence_content, wiki_dir, wiki_index=None):
         "matched_pages": [],
         "ref_count": 0,
         "keyword_count": 0,
+        "entity_ids": [],
     }
 
     if not os.path.isdir(wiki_dir):
         return False, signal
 
+    # L4 Phase 3: 优先检查 [[entity:e_xxx]] 引用 — workspace 走 wiki_dir 反推
+    workspace = os.path.dirname(wiki_dir.rstrip(os.sep))
+    try:
+        from review.wiki_kg_tools import parse_entity_refs, entity_exists
+        entity_refs = parse_entity_refs(evidence_content)
+        signal["entity_ids"] = entity_refs
+        if entity_refs:
+            # 有 entity 引用 — 检查是否都存在
+            all_exist = all(entity_exists(eid, workspace=workspace) for eid in entity_refs)
+            if all_exist:
+                signal["method"] = "entity_exact"
+                signal["matched_pages"] = entity_refs[:3]
+                return True, signal
+            else:
+                signal["method"] = "entity_missing"
+                # 不直接 return — 让下面老格式 page name 匹配也跑一遍, 容许混合引用
+    except ImportError:
+        # wiki_kg_tools 没装 (老 workspace) — 跳过 entity 路径, 走老逻辑
+        pass
+
     page_refs = re.findall(r"\[\[(.+?)\]\]", evidence_content)
+    # 把 entity:xxx 形式的 ref 从 page_refs 里剔除 (避免重复处理)
+    page_refs = [r for r in page_refs if not r.startswith("entity:")]
     signal["ref_count"] = len(page_refs)
 
     if page_refs:
@@ -528,11 +586,43 @@ def _llm_nli_score(client, item, wiki_pages, n_samples=4, model=None):
             _log.info(f"[nli] {d}")
 
     if succeeded == 0:
+        # Metrics 埋点: nli.score - 0 succeeded (LLM 输出全被解析吃掉)
+        try:
+            _record_event(
+                "nli.score",
+                status="failed",
+                details={
+                    "n_samples": n_samples,
+                    "n_samples_succeeded": 0,
+                    "entail": 0, "contradict": 0, "neutral": 0,
+                },
+            )
+        except Exception:
+            pass
         return default
 
     entail = counts["entail"] / succeeded
     contradict = counts["contradict"] / succeeded
     neutral = counts["neutral"] / succeeded
+
+    # Metrics 埋点: nli.score (entail/contradict/neutral 分布)
+    try:
+        # status 字段简化记 winning verdict (entail/contradict/neutral)
+        _winner = max(counts.items(), key=lambda kv: kv[1])[0] if any(counts.values()) else "neutral"
+        _record_event(
+            "nli.score",
+            status=_winner,
+            details={
+                "n_samples": n_samples,
+                "n_samples_succeeded": succeeded,
+                "entail": counts["entail"],
+                "contradict": counts["contradict"],
+                "neutral": counts["neutral"],
+                "max_signal": round(abs(entail - contradict), 3),
+            },
+        )
+    except Exception:
+        pass
 
     return {
         "entail_score": round(entail, 3),
@@ -649,7 +739,24 @@ def _find_rule_reference(evidence_content, rules_dir):
         # 没有明确规则编号，视为验证失败
         return False
 
-    # 在 review-rules 目录下递归搜索
+    # 2026-04-29 SSOT 修复: extends 模式下 workspace yaml 只含 extends + additional_rules
+    # 直接字符串搜会全 miss → 走 rule_loader 拿全集 rule_id 集合 (含 SSOT)
+    try:
+        from review.rule_loader import load_review_checklist
+        all_rules = load_review_checklist(workspace) or []
+        valid_ids = {r.get("id") for r in all_rules if r.get("id")}
+        if valid_ids:
+            for rid in rule_ids:
+                clean_rid = rid.replace("BMAD ", "")
+                if clean_rid in valid_ids:
+                    return True
+            # rule_loader 加载到了规则但都不匹配 → 真不存在
+            return False
+    except Exception:
+        # rule_loader 失败 → 回退老字符串搜索路径
+        pass
+
+    # 老路径: 在 review-rules 目录下递归字符串搜索 (老 inline yaml 仍 work)
     all_rules_files = glob_module.glob(os.path.join(rules_dir, "**", "*"), recursive=True)
     for rules_file in all_rules_files:
         if not os.path.isfile(rules_file):
@@ -658,7 +765,6 @@ def _find_rule_reference(evidence_content, rules_dir):
             with open(rules_file, "r", encoding="utf-8", errors="replace") as f:
                 content = f.read()
             for rid in rule_ids:
-                # 去掉 "BMAD " 前缀做匹配
                 clean_rid = rid.replace("BMAD ", "")
                 if clean_rid in content:
                     return True
@@ -715,9 +821,9 @@ def _verify_b_class_semantic(item, rules_dir):
     if not rule_text:
         return True, ""  # 规则文件找不到,跳过语义验证(存在性已被 _find_rule_reference 检查)
 
-    # 提取 item 的关键词(中文 2-4 字词 + 英文 3+ 字母词)
+    # 提取 item 的关键词 (jieba 真实词切分 + 英文 3+ 字母词)
     item_text = f"{item.get('issue', '')} {item.get('suggestion', '')}"
-    cn_kw = set(re.findall(r'[\u4e00-\u9fff]{2,4}', item_text))
+    cn_kw = _extract_cn_keywords(item_text)
     en_kw = set(w.lower() for w in re.findall(r'[a-zA-Z_-]{3,}', item_text))
     item_keywords = cn_kw | en_kw
 
@@ -731,7 +837,7 @@ def _verify_b_class_semantic(item, rules_dir):
         return True, ""
 
     # 提取 rule 原文的关键词
-    rule_cn_kw = set(re.findall(r'[\u4e00-\u9fff]{2,4}', rule_text))
+    rule_cn_kw = _extract_cn_keywords(rule_text)
     rule_en_kw = set(w.lower() for w in re.findall(r'[a-zA-Z_-]{3,}', rule_text))
     rule_keywords = (rule_cn_kw | rule_en_kw) - stop_words
 
@@ -742,10 +848,16 @@ def _verify_b_class_semantic(item, rules_dir):
     overlap = item_keywords & rule_keywords
     ratio = len(overlap) / len(item_keywords) if item_keywords else 0
 
-    if ratio < 0.1:
+    # 阈值 0.05 (2026-04-28 jieba 修复后调优):
+    # - 老滑窗 + 0.10 阈值: 误降级率 80% (50/51), 几乎全部 finding 被误判
+    # - jieba + 0.10 阈值: 仍误降级 23% (10/43), 救回 0.07-0.10 真有效 finding
+    # - jieba + 0.05 阈值: 误降级 4.7% (2/43), 剩下边缘案例苍鹰兜底
+    # 详见 scripts/tune_overlap_threshold.py 的 oracle 分析
+    SEMANTIC_OVERLAP_THRESHOLD = 0.05
+    if ratio < SEMANTIC_OVERLAP_THRESHOLD:
         note = (
             f"B 类依据语义薄弱: {target_rid} 原文与 item 关键词 overlap={ratio:.2f} "
-            f"(阈值 0.1), item 可能引用了不相关规则"
+            f"(阈值 {SEMANTIC_OVERLAP_THRESHOLD}), item 可能引用了不相关规则"
         )
         return False, note
 
@@ -787,6 +899,9 @@ def verify_evidence(items, workspace, client=None, wiki_pages=None, prd_content=
     Returns:
         验证后的 items 列表(失败的标记 RETRACTED)
     """
+    import time as _t
+    _ev_started_at = _t.time()
+    _ev_input_count = len(items) if items else 0
     wiki_dir = os.path.join(workspace, "wiki")
     rules_dir = os.path.join(workspace, "review-rules")
     wiki_index = _build_wiki_index(wiki_dir)
@@ -834,12 +949,21 @@ def verify_evidence(items, workspace, client=None, wiki_pages=None, prd_content=
                     # 会把合理 item 一并抹杀(侵权软件模板 PRD 实测 4 条 A 类被撤).
                     # 新逻辑: confidence × 0.7 降权保留,让 PM 自己判断.
                     v_status = "verified_with_caveat"
-                    v_reason = (
-                        "A 类依据: wiki 未找到匹配页面, 降权保留 "
-                        "(证据链弱但 item 可能仍有效, 由 PM 复核)"
-                    )
+                    # L4 Phase 3: 区分 entity_missing (entity_id 不存在) vs page_not_found (页面名错).
+                    # entity_missing 比 page_not_found 更严重 — worker 引用了不存在的 KG 节点.
+                    if _match_signal.get("method") == "entity_missing":
+                        v_reason = (
+                            f"A 类依据: 引用的 entity_id 不存在于 KG "
+                            f"({_match_signal.get('entity_ids', [])}), 降权保留"
+                        )
+                        v_details["reason_code"] = "A_entity_id_not_found_weak"
+                    else:
+                        v_reason = (
+                            "A 类依据: wiki 未找到匹配页面, 降权保留 "
+                            "(证据链弱但 item 可能仍有效, 由 PM 复核)"
+                        )
+                        v_details["reason_code"] = "A_wiki_page_not_found_weak"
                     v_details["found"] = False
-                    v_details["reason_code"] = "A_wiki_page_not_found_weak"
                     v_details["match_signal"] = _match_signal
                     old_conf = item.get("confidence_score", 0.8)
                     item["confidence_score"] = round(old_conf * 0.7, 2)
@@ -926,6 +1050,31 @@ def verify_evidence(items, workspace, client=None, wiki_pages=None, prd_content=
         item["verification_details"] = v_details
 
         verified.append(item)
+
+    # Metrics 埋点: evidence_verify.completed (汇总 retracted / downgraded 分布)
+    try:
+        _retracted = sum(1 for i in verified if i.get("verification_status") == "retracted")
+        _downgraded = sum(1 for i in verified if i.get("verification_status") == "verified_with_caveat")
+        _retracted_by_reason: Dict[str, int] = {}
+        for i in verified:
+            if i.get("verification_status") == "retracted":
+                _code = (i.get("verification_details") or {}).get("reason_code", "unknown")
+                _retracted_by_reason[_code] = _retracted_by_reason.get(_code, 0) + 1
+        _record_event(
+            "evidence_verify.completed",
+            workspace=workspace,
+            duration_ms=int((_t.time() - _ev_started_at) * 1000),
+            status="success",
+            details={
+                "input_count": _ev_input_count,
+                "retracted": _retracted,
+                "downgraded": _downgraded,
+                "retracted_by_reason": _retracted_by_reason,
+                "wiki_sparse": wiki_sparse,
+            },
+        )
+    except Exception:
+        pass
 
     return verified
 

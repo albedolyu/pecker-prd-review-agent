@@ -1,5 +1,5 @@
 """
-啄木鸟 PRD 评审反馈闭环模块
+啄木鸟 PRD 评审反馈闭环模块 — 信鸽 v1 (commit-watch 模式)
 
 独立脚本，在 AI Coding 完成后手动运行。
 从代码目录中采集下游信号，反哺评审规则改进。
@@ -7,6 +7,13 @@
 用法:
     python feedback.py --code-dir /path/to/code --report output/PRD_改动报告_20260411.md
     python feedback.py --code-dir /path/to/code  # 只采集信号
+
+⚠ DEPRECATED (2026-04-29): 信鸽 v1 (commit-watch) 已被 信鸽 v2 (NL learnings) 取代.
+  - 替代品: scripts/feedback_v2.py + review/learnings_store.py
+  - 共存策略: v2 主导, v1 兜底 (覆盖 v2 没反馈过的规则)
+  - 完整退役 trigger: 见 docs/v1_vs_v2_feedback_strategy.md §3
+  - 迁移步骤: 见 docs/MIGRATION_v1_to_v2.md
+  - main() / scan 模式入口会显式 emit DeprecationWarning + 控制台提示
 """
 
 import argparse
@@ -14,8 +21,18 @@ import json
 import os
 import re
 import subprocess
+import sys
+import warnings
 from datetime import datetime
 from pathlib import Path
+
+# 模块级轻量 warning — 仅 CLI 直接 import 时见到; 测试 import 因 stacklevel=2 不刷屏
+warnings.warn(
+    "feedback.py (信鸽 v1, commit-watch) 已废弃 — 改用 scripts/feedback_v2.py "
+    "(NL learnings, sqlite). 详见 docs/MIGRATION_v1_to_v2.md.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 # ── 常量 ──
 
@@ -1228,9 +1245,21 @@ def _print_proposals(proposals):
         print(f"  信号类型: {p['sig_type']} | 支撑信号数: {p['count']}")
 
 
+def _emit_v1_deprecation_notice():
+    """CLI 入口的 stderr 提示, 让用户看到迁移引导. 不阻塞执行."""
+    msg = (
+        "[DEPRECATED] feedback.py (信鸽 v1, commit-watch) 已废弃, 建议迁移到 "
+        "scripts/feedback_v2.py (NL learnings + sqlite store). "
+        "详见 docs/MIGRATION_v1_to_v2.md."
+    )
+    print(msg, file=sys.stderr)
+    warnings.warn(msg, DeprecationWarning, stacklevel=2)
+
+
 def main():
+    _emit_v1_deprecation_notice()
     parser = argparse.ArgumentParser(
-        description="啄木鸟 PRD 评审反馈闭环 — 从 AI Coding 结果采集反馈信号"
+        description="啄木鸟 PRD 评审反馈闭环 — 信鸽 v1 [DEPRECATED, 用 scripts/feedback_v2.py]"
     )
     parser.add_argument(
         "--code-dir", required=False,

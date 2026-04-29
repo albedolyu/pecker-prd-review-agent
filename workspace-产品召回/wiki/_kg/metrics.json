@@ -1,0 +1,72 @@
+{
+  "workspace": "workspace-产品召回",
+  "built_at": "2026-04-28 23:22:54",
+  "total_elapsed_s": 216.0,
+  "page_count": 7,
+  "page_metrics": [
+    {
+      "relpath": "决策-riskbird_status过滤规则待确认.md",
+      "chars": 661,
+      "gleaning_rounds": 2,
+      "entities_raw": 6,
+      "relations_raw": 7,
+      "elapsed_s": 34.4,
+      "skipped": false
+    },
+    {
+      "relpath": "概念-产品召回.md",
+      "chars": 759,
+      "gleaning_rounds": 2,
+      "entities_raw": 15,
+      "relations_raw": 14,
+      "elapsed_s": 44.0,
+      "skipped": false
+    },
+    {
+      "relpath": "决策-产品召回评审发现.md",
+      "chars": 573,
+      "gleaning_rounds": 2,
+      "entities_raw": 7,
+      "relations_raw": 6,
+      "elapsed_s": 31.8,
+      "skipped": false
+    },
+    {
+      "relpath": "场景-产品召回列表页.md",
+      "chars": 677,
+      "gleaning_rounds": 2,
+      "entities_raw": 13,
+      "relations_raw": 18,
+      "elapsed_s": 61.6,
+      "skipped": false
+    },
+    {
+      "relpath": "约束-ds_risk_recall表结构.md",
+      "chars": 811,
+      "gleaning_rounds": 2,
+      "entities_raw": 16,
+      "relations_raw": 15,
+      "elapsed_s": 33.4,
+      "skipped": false
+    },
+    {
+      "relpath": "决策-产品召回评审发现-20260412.md",
+      "chars": 1493,
+      "gleaning_rounds": 2,
+      "entities_raw": 10,
+      "relations_raw": 10,
+      "elapsed_s": 74.7,
+      "skipped": false
+    },
+    {
+      "relpath": "场景-产品召回列表与详情.md",
+      "chars": 930,
+      "gleaning_rounds": 2,
+      "entities_raw": 8,
+      "relations_raw": 13,
+      "elapsed_s": 77.0,
+      "skipped": false
+    }
+  ],
+  "avg_per_page_s": 51.0
+}

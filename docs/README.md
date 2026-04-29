@@ -41,6 +41,23 @@
 | [deployment.md](deployment.md) | 部署指南 | Docker Compose / GHCR 镜像 / 生产环境配置 |
 | [cloudflare-tunnel-setup.md](cloudflare-tunnel-setup.md) | Tunnel 配置 | `pecker-preview.*` 同源路径分流，PM 内测用 |
 | [pm-preview-guide.md](pm-preview-guide.md) | PM 内测指南 | 给非工程 PM 的登录 / 跑 review / 反馈流程 |
+| [feishu_integration.md](feishu_integration.md) | 飞书机器人接入 | 创建机器人 → URL 配置 → verify token → smoke test 全流程 |
+| [v1_vs_v2_feedback_strategy.md](v1_vs_v2_feedback_strategy.md) | 反馈系统策略 | 信鸽 v1 (commit 隐式) vs v2 (PM 显式) 共存策略 + v1 退役 trigger |
+| [../scripts/CI_self_hosted_setup.md](../scripts/CI_self_hosted_setup.md) | Self-hosted runner 操作手册 | 真实 worker P/R 回归 CI gate 部署 (Win + Linux) + fallback 模式 |
+
+### Quickstart (新机器接入啄木鸟开发)
+
+```bash
+# 1. 装 pre-push hook (本地 P/R 回归兜底)
+python scripts/install_git_hooks.py
+
+# 2. 想跑 self-hosted runner CI? (可选)
+bash scripts/setup_runner_linux.sh    # 或 Windows: powershell -File scripts\setup_runner_windows.ps1
+
+# 3. 没装 runner 时, 提 PR 前手动跑一份报告
+python scripts/manual_pre_pr_check.py --output pr_check_report.md
+# 把内容贴到 PR description 作为 review 证据
+```
 
 ### 归档
 

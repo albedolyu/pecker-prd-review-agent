@@ -25,6 +25,13 @@ from review.dimensions import (
 from review.types import ParallelReviewResult
 from review.worker import _run_worker_async, _run_worker_sync
 
+# Metrics 埋点 (零开销 — 失败 silent skip, 不阻 review 主流程)
+try:
+    from review.metrics_store import record_event as _metrics_record
+except Exception:  # noqa: BLE001
+    def _metrics_record(*_a, **_kw):  # type: ignore[no-redef]
+        return False
+
 log = get_logger("parallel")
 
 
@@ -50,6 +57,7 @@ async def _single_round_async(client, prd_content, wiki_pages, model_tiers, wiki
     # (UV_HANDLE_CLOSING / 0xC0000409 STATUS_STACK_BUFFER_OVERRUN),给每个 worker 加 stagger
     async def _staggered(idx, dim_key):
         await asyncio.sleep(idx * 0.3)  # 0.5→0.3: 省 0.8s 总启动时间
+        _w_t0 = time.time()
         try:
             result = await _run_worker_async(
                 client, dim_key, prd_content, wiki_pages, model_tiers, rule_perf_history, wiki_path, diff_context, on_tool_call
@@ -60,6 +68,22 @@ async def _single_round_async(client, prd_content, wiki_pages, model_tiers, wiki
                     on_worker_done(dim_key, result)
                 except Exception:
                     pass  # callback 异常绝不影响主流程
+            # Metrics: worker 完成 (含 token / 成本)
+            _u = result.get("usage") or {}
+            _metrics_record(
+                "worker.completed",
+                workspace=workspace,
+                duration_ms=int((time.time() - _w_t0) * 1000),
+                model=(result.get("model") or model_tiers.get("sonnet")),
+                cost_usd=result.get("cost_usd"),
+                status="success",
+                details={
+                    "dim_key": dim_key,
+                    "items": len(result.get("items") or []),
+                    "input_tokens": _u.get("input_tokens"),
+                    "output_tokens": _u.get("output_tokens"),
+                },
+            )
             return result
         except Exception as e:
             # 失败也要通知,这样 UI 能显示 worker 失败状态而不是永远挂 pending
@@ -68,6 +92,13 @@ async def _single_round_async(client, prd_content, wiki_pages, model_tiers, wiki
                     on_worker_done(dim_key, {"error": str(e)[:200]})
                 except Exception:
                     pass
+            _metrics_record(
+                "worker.completed",
+                workspace=workspace,
+                duration_ms=int((time.time() - _w_t0) * 1000),
+                status="failed",
+                details={"dim_key": dim_key, "error": str(e)[:200]},
+            )
             raise
 
     tasks = [
@@ -157,9 +188,29 @@ async def parallel_review(client, prd_content, wiki_pages, model_tiers, voting_r
     """
     if voting_rounds <= 1:
         # 单轮评审，保持原有行为
-        workers, merged, total_input, total_output = await _single_round_async(
-            client, prd_content, wiki_pages, model_tiers, wiki_path, diff_context,
-            on_worker_done=on_worker_done, workspace=workspace, on_tool_call=on_tool_call,
+        _metrics_record("review.started", workspace=workspace, details={"voting_rounds": 1})
+        _t0 = time.time()
+        try:
+            workers, merged, total_input, total_output = await _single_round_async(
+                client, prd_content, wiki_pages, model_tiers, wiki_path, diff_context,
+                on_worker_done=on_worker_done, workspace=workspace, on_tool_call=on_tool_call,
+            )
+        except Exception as e:
+            _metrics_record(
+                "review.failed", workspace=workspace, status="failed",
+                duration_ms=int((time.time() - _t0) * 1000),
+                details={"error": str(e)[:200]},
+            )
+            raise
+        _metrics_record(
+            "review.completed", workspace=workspace, status="success",
+            duration_ms=int((time.time() - _t0) * 1000),
+            details={
+                "merged_items": len(merged),
+                "input_tokens": total_input,
+                "output_tokens": total_output,
+                "failed_workers": sum(1 for w in workers if w.get("error")),
+            },
         )
         return {
             "workers": workers,

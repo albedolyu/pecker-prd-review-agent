@@ -23,18 +23,60 @@ from clients.shared import (
 )
 from clients.token_tracker import TokenTracker
 
+# Metrics 埋点 — 失败 silent skip, 不阻 LLM 调用主流程
+try:
+    from review.metrics_store import record_event as _record_event
+except Exception:
+    def _record_event(*args, **kwargs):  # noqa: ARG001
+        return False
+
 
 class AnthropicNativeClient:
     """直接用 Anthropic SDK"""
 
-    def __init__(self, api_key, base_url):
+    def __init__(self, api_key=None, base_url=None):
+        # factory.get_client 用 cls() 0 参实例化, 这里从 env 兜底读
+        # 优先级: 显式传参 > ANTHROPIC_API_KEY > API_KEY (.env 别名)
         import anthropic
+        api_key = api_key or os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "AnthropicNativeClient 未拿到 API key — "
+                "在 .env 设 API_KEY=sk-ant-... 或 export ANTHROPIC_API_KEY"
+            )
+        base_url = base_url or os.environ.get("ANTHROPIC_BASE_URL") or None
         # 清掉 Claude Code 注入的旧 auth token
         os.environ.pop("ANTHROPIC_AUTH_TOKEN", None)
         self.client = anthropic.Anthropic(api_key=api_key, base_url=base_url)
         self.tracker = TokenTracker()
 
     def create(self, model, max_tokens, system, messages, tools=None, tool_choice=None, temperature=0.2, retry_policy="foreground"):
+        """Metrics 包装: 失败时记 llm.api_call status=failure, 成功时由内层 record success."""
+        import time as _t
+        _start = _t.time()
+        try:
+            return self._create_inner(model, max_tokens, system, messages,
+                                       tools=tools, tool_choice=tool_choice,
+                                       temperature=temperature, retry_policy=retry_policy)
+        except Exception as _e:
+            try:
+                _record_event(
+                    "llm.api_call",
+                    workspace=os.environ.get("WORKSPACE"),
+                    duration_ms=int((_t.time() - _start) * 1000),
+                    model=model,
+                    status="failure",
+                    details={
+                        "vendor": "anthropic_native",
+                        "error": str(_e)[:200],
+                        "retry_policy": retry_policy,
+                    },
+                )
+            except Exception:
+                pass
+            raise
+
+    def _create_inner(self, model, max_tokens, system, messages, tools=None, tool_choice=None, temperature=0.2, retry_policy="foreground"):
         kwargs = {
             "model": model,
             "max_tokens": max_tokens,
@@ -52,6 +94,10 @@ class AnthropicNativeClient:
         import anthropic as _anthropic
         from logger import get_logger
         log = get_logger("api")
+
+        # Metrics 埋点: 记起始时间, 在 return / raise 时统一 record llm.api_call
+        _llm_metric_start = time.time()
+        _llm_metric_workspace = os.environ.get("WORKSPACE")
         policy = RETRY_POLICIES.get(retry_policy, RETRY_POLICIES["foreground"])
         max_retries = policy["max_retries"]
         consecutive_overloads = 0
@@ -168,6 +214,27 @@ class AnthropicNativeClient:
         cache_creation = getattr(response.usage, 'cache_creation_input_tokens', 0) or 0
         cache_read = getattr(response.usage, 'cache_read_input_tokens', 0) or 0
         self.tracker.record(response.model, response.usage.input_tokens, response.usage.output_tokens, cache_creation, cache_read)
+
+        # Metrics 埋点: llm.api_call (anthropic_native success)
+        try:
+            _record_event(
+                "llm.api_call",
+                workspace=_llm_metric_workspace,
+                duration_ms=int((time.time() - _llm_metric_start) * 1000),
+                model=response.model,
+                status="success",
+                details={
+                    "vendor": "anthropic_native",
+                    "tokens_in": response.usage.input_tokens,
+                    "tokens_out": response.usage.output_tokens,
+                    "cache_read": cache_read,
+                    "retry_policy": retry_policy,
+                    "truncated": is_truncated,
+                },
+            )
+        except Exception:
+            pass
+
         return unified
 
     def create_stream(self, model, max_tokens, system, messages, tools=None, tool_choice=None, temperature=0.2, retry_policy="foreground", idle_timeout=60):

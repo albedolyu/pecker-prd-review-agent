@@ -1,0 +1,554 @@
+[
+  {
+    "id": "r_2815265f",
+    "source_id": "e_10ea8304",
+    "target_id": "e_aeefa4d2",
+    "relation_type": "合并为",
+    "description": "当前页面合并到目标页面",
+    "weight": 8
+  },
+  {
+    "id": "r_908c2469",
+    "source_id": "e_8b9ee5e2",
+    "target_id": "e_8caef33a",
+    "relation_type": "包含表",
+    "description": "约束文档包含表t_ds_aggre_tags",
+    "weight": 8
+  },
+  {
+    "id": "r_3ecccbe5",
+    "source_id": "e_8b9ee5e2",
+    "target_id": "e_fd4a275a",
+    "relation_type": "包含表",
+    "description": "约束文档包含表t_ds_aggre_tags_assigned",
+    "weight": 8
+  },
+  {
+    "id": "r_46f13f1d",
+    "source_id": "e_8caef33a",
+    "target_id": "e_590bb8e4",
+    "relation_type": "包含字段",
+    "description": "标签定义表包含tagid字段",
+    "weight": 8
+  },
+  {
+    "id": "r_68600d1b",
+    "source_id": "e_fd4a275a",
+    "target_id": "e_8caef33a",
+    "relation_type": "依赖",
+    "description": "分配表依赖标签定义表",
+    "weight": 5
+  },
+  {
+    "id": "r_8d8ea3b2",
+    "source_id": "e_8b9ee5e2",
+    "target_id": "e_3db90172",
+    "relation_type": "引用",
+    "description": "约束文档引用概念页面",
+    "weight": 5
+  },
+  {
+    "id": "r_59200871",
+    "source_id": "e_8b9ee5e2",
+    "target_id": "e_bd28f884",
+    "relation_type": "引用",
+    "description": "约束文档关联类似约束文档",
+    "weight": 5
+  },
+  {
+    "id": "r_f9e7f206",
+    "source_id": "e_ddadced6",
+    "target_id": "e_aeefa4d2",
+    "relation_type": "关联",
+    "description": "规范文档引用该业务场景",
+    "weight": 5
+  },
+  {
+    "id": "r_4bb8c57b",
+    "source_id": "e_ddadced6",
+    "target_id": "e_bd28f884",
+    "relation_type": "关联",
+    "description": "规范文档引用表结构约束规范",
+    "weight": 6
+  },
+  {
+    "id": "r_367b6e44",
+    "source_id": "e_e1b8bf47",
+    "target_id": "e_e9172dbf",
+    "relation_type": "包含字段",
+    "description": "表包含该字段",
+    "weight": 8
+  },
+  {
+    "id": "r_4e2f3506",
+    "source_id": "e_e1b8bf47",
+    "target_id": "e_87124b61",
+    "relation_type": "包含字段",
+    "description": "表包含该字段",
+    "weight": 8
+  },
+  {
+    "id": "r_cedec6c8",
+    "source_id": "e_e1b8bf47",
+    "target_id": "e_1d00f079",
+    "relation_type": "包含字段",
+    "description": "表包含该字段",
+    "weight": 8
+  },
+  {
+    "id": "r_628e93fe",
+    "source_id": "e_e1b8bf47",
+    "target_id": "e_bb3f66d2",
+    "relation_type": "包含字段",
+    "description": "表包含该字段",
+    "weight": 8
+  },
+  {
+    "id": "r_a6dc0337",
+    "source_id": "e_e1b8bf47",
+    "target_id": "e_d9ebfe27",
+    "relation_type": "包含字段",
+    "description": "表包含该字段",
+    "weight": 8
+  },
+  {
+    "id": "r_7ca7b85b",
+    "source_id": "e_ddadced6",
+    "target_id": "e_e9172dbf",
+    "relation_type": "导出字段",
+    "description": "导出功能包含该字段",
+    "weight": 5
+  },
+  {
+    "id": "r_e2ad79d9",
+    "source_id": "e_ddadced6",
+    "target_id": "e_87124b61",
+    "relation_type": "导出字段",
+    "description": "导出功能包含该字段",
+    "weight": 5
+  },
+  {
+    "id": "r_00168db1",
+    "source_id": "e_ddadced6",
+    "target_id": "e_1d00f079",
+    "relation_type": "导出字段",
+    "description": "导出功能包含该字段",
+    "weight": 5
+  },
+  {
+    "id": "r_5e5ebd43",
+    "source_id": "e_ddadced6",
+    "target_id": "e_bb3f66d2",
+    "relation_type": "导出字段",
+    "description": "导出功能包含该字段",
+    "weight": 5
+  },
+  {
+    "id": "r_5cf2de58",
+    "source_id": "e_ddadced6",
+    "target_id": "e_d9ebfe27",
+    "relation_type": "导出字段",
+    "description": "导出功能包含该字段",
+    "weight": 5
+  },
+  {
+    "id": "r_534c9821",
+    "source_id": "e_c4c75e5d",
+    "target_id": "e_feb24eab",
+    "relation_type": "定义枚举映射",
+    "description": "映射规范定义了stype字段的枚举值到前端文本",
+    "weight": 8
+  },
+  {
+    "id": "r_cf659713",
+    "source_id": "e_c4c75e5d",
+    "target_id": "e_bd28f884",
+    "relation_type": "关联",
+    "description": "映射规范引用了表结构约束页面",
+    "weight": 5
+  },
+  {
+    "id": "r_8ecf8b5a",
+    "source_id": "e_c4c75e5d",
+    "target_id": "e_3db90172",
+    "relation_type": "引用",
+    "description": "映射规范引用了纳税人资质概念页面",
+    "weight": 5
+  },
+  {
+    "id": "r_8c567401",
+    "source_id": "e_c4c75e5d",
+    "target_id": "e_e1b8bf47",
+    "relation_type": "涉及表",
+    "description": "映射规范涉及ds_company_tax_state表",
+    "weight": 5
+  },
+  {
+    "id": "r_0b05a402",
+    "source_id": "e_e1b8bf47",
+    "target_id": "e_feb24eab",
+    "relation_type": "包含字段",
+    "description": "表包含stype字段",
+    "weight": 8
+  },
+  {
+    "id": "r_be0644c1",
+    "source_id": "e_d64478a4",
+    "target_id": "e_8caef33a",
+    "relation_type": "包含表",
+    "description": "标签定义表属于该约束文档",
+    "weight": 8
+  },
+  {
+    "id": "r_3525c7c2",
+    "source_id": "e_d64478a4",
+    "target_id": "e_fd4a275a",
+    "relation_type": "包含表",
+    "description": "标签分配表属于该约束文档",
+    "weight": 8
+  },
+  {
+    "id": "r_50cf5f2f",
+    "source_id": "e_8caef33a",
+    "target_id": "e_f05ad62d",
+    "relation_type": "包含字段",
+    "description": "标签定义表包含tag_name字段",
+    "weight": 8
+  },
+  {
+    "id": "r_f0986281",
+    "source_id": "e_fd4a275a",
+    "target_id": "e_55a91074",
+    "relation_type": "包含字段",
+    "description": "标签分配表包含tagid字段",
+    "weight": 8
+  },
+  {
+    "id": "r_db8e3b64",
+    "source_id": "e_fd4a275a",
+    "target_id": "e_af574fe2",
+    "relation_type": "包含字段",
+    "description": "标签分配表包含entid字段",
+    "weight": 8
+  },
+  {
+    "id": "r_8f80b82a",
+    "source_id": "e_8caef33a",
+    "target_id": "e_fd4a275a",
+    "relation_type": "关联",
+    "description": "通过tagid字段JOIN关联",
+    "weight": 6
+  },
+  {
+    "id": "r_969fa552",
+    "source_id": "e_d64478a4",
+    "target_id": "e_3db90172",
+    "relation_type": "引用",
+    "description": "页面中通过wiki链接引用",
+    "weight": 5
+  },
+  {
+    "id": "r_63106911",
+    "source_id": "e_d64478a4",
+    "target_id": "e_bd28f884",
+    "relation_type": "引用",
+    "description": "页面中通过wiki链接引用",
+    "weight": 5
+  },
+  {
+    "id": "r_d91dd492",
+    "source_id": "e_d64478a4",
+    "target_id": "e_82b558b2",
+    "relation_type": "引用",
+    "description": "页面中通过wiki链接引用",
+    "weight": 5
+  },
+  {
+    "id": "r_b6de3bce",
+    "source_id": "e_d64478a4",
+    "target_id": "e_3db90172",
+    "relation_type": "依赖",
+    "description": "该约束文档引用概念页面",
+    "weight": 3
+  },
+  {
+    "id": "r_1d84b662",
+    "source_id": "e_d64478a4",
+    "target_id": "e_bd28f884",
+    "relation_type": "依赖",
+    "description": "关联约束文档",
+    "weight": 3
+  },
+  {
+    "id": "r_5a42bd77",
+    "source_id": "e_d64478a4",
+    "target_id": "e_82b558b2",
+    "relation_type": "依赖",
+    "description": "引用决策记录",
+    "weight": 3
+  },
+  {
+    "id": "r_4abbcb26",
+    "source_id": "e_bd28f884",
+    "target_id": "e_e1b8bf47",
+    "relation_type": "定义",
+    "description": "规范文档定义该表结构",
+    "weight": 9
+  },
+  {
+    "id": "r_2a6da41d",
+    "source_id": "e_e1b8bf47",
+    "target_id": "e_361e64ce",
+    "relation_type": "包含字段",
+    "description": "主表包含entid字段",
+    "weight": 8
+  },
+  {
+    "id": "r_021c7eca",
+    "source_id": "e_e1b8bf47",
+    "target_id": "e_ea852f36",
+    "relation_type": "包含字段",
+    "description": "主表包含tax_type字段",
+    "weight": 8
+  },
+  {
+    "id": "r_71fdc9eb",
+    "source_id": "e_e1b8bf47",
+    "target_id": "e_0deb3fd2",
+    "relation_type": "包含字段",
+    "description": "主表包含edate字段",
+    "weight": 8
+  },
+  {
+    "id": "r_c38100f3",
+    "source_id": "e_bd28f884",
+    "target_id": "e_3db90172",
+    "relation_type": "关联",
+    "description": "规范文档引用了该业务概念",
+    "weight": 6
+  },
+  {
+    "id": "r_e04f6e2a",
+    "source_id": "e_bd28f884",
+    "target_id": "e_d64478a4",
+    "relation_type": "关联",
+    "description": "同类型约束规范，可能相互引用",
+    "weight": 5
+  },
+  {
+    "id": "r_356e2516",
+    "source_id": "e_bd28f884",
+    "target_id": "e_10ea8304",
+    "relation_type": "关联",
+    "description": "规范文档描述的展示场景",
+    "weight": 6
+  },
+  {
+    "id": "r_de955f85",
+    "source_id": "e_9c3a89dc",
+    "target_id": "e_3db90172",
+    "relation_type": "引用",
+    "description": "评审决策引用纳税人资质概念",
+    "weight": 5
+  },
+  {
+    "id": "r_16e77306",
+    "source_id": "e_9c3a89dc",
+    "target_id": "e_bd28f884",
+    "relation_type": "引用",
+    "description": "评审决策引用表结构约束",
+    "weight": 5
+  },
+  {
+    "id": "r_4b462361",
+    "source_id": "e_9c3a89dc",
+    "target_id": "e_b4bc8ca4",
+    "relation_type": "引用",
+    "description": "评审决策引用企业标签展示规范",
+    "weight": 5
+  },
+  {
+    "id": "r_f2202437",
+    "source_id": "e_9c3a89dc",
+    "target_id": "e_ddadced6",
+    "relation_type": "引用",
+    "description": "评审决策引用数据导出规范",
+    "weight": 5
+  },
+  {
+    "id": "r_00609979",
+    "source_id": "e_9c3a89dc",
+    "target_id": "e_44893f9b",
+    "relation_type": "引用",
+    "description": "评审决策要求补充四态UI规范",
+    "weight": 7
+  },
+  {
+    "id": "r_052c7d2f",
+    "source_id": "e_9c3a89dc",
+    "target_id": "e_96e2b377",
+    "relation_type": "依赖",
+    "description": "决策点涉及tstatus字段过滤逻辑",
+    "weight": 4
+  },
+  {
+    "id": "r_6b33607c",
+    "source_id": "e_9c3a89dc",
+    "target_id": "e_0deb3fd2",
+    "relation_type": "依赖",
+    "description": "状态推算依赖edate字段",
+    "weight": 4
+  },
+  {
+    "id": "r_8f7cffc1",
+    "source_id": "e_bd28f884",
+    "target_id": "e_0deb3fd2",
+    "relation_type": "包含字段",
+    "description": "表结构包含edate字段",
+    "weight": 8
+  },
+  {
+    "id": "r_0341bb17",
+    "source_id": "e_bd28f884",
+    "target_id": "e_96e2b377",
+    "relation_type": "包含字段",
+    "description": "表结构包含tstatus字段",
+    "weight": 8
+  },
+  {
+    "id": "r_be4b392b",
+    "source_id": "e_b4bc8ca4",
+    "target_id": "e_8caef33a",
+    "relation_type": "依赖",
+    "description": "标签数据来源",
+    "weight": 6
+  },
+  {
+    "id": "r_b09cc8ce",
+    "source_id": "e_b4bc8ca4",
+    "target_id": "e_fd4a275a",
+    "relation_type": "依赖",
+    "description": "标签分配数据来源",
+    "weight": 6
+  },
+  {
+    "id": "r_de305985",
+    "source_id": "e_b4bc8ca4",
+    "target_id": "e_3db90172",
+    "relation_type": "引用",
+    "description": "业务概念关联",
+    "weight": 4
+  },
+  {
+    "id": "r_a205f0ee",
+    "source_id": "e_b4bc8ca4",
+    "target_id": "e_8b9ee5e2",
+    "relation_type": "引用依赖",
+    "description": "表结构规范依赖",
+    "weight": 5
+  },
+  {
+    "id": "r_fd6ed22e",
+    "source_id": "e_8b9ee5e2",
+    "target_id": "e_8caef33a",
+    "relation_type": "定义结构",
+    "description": "定义t_ds_aggre_tags的表结构",
+    "weight": 7
+  },
+  {
+    "id": "r_e0e049e1",
+    "source_id": "e_3db90172",
+    "target_id": "e_e1b8bf47",
+    "relation_type": "依赖",
+    "description": "纳税人资质数据来源于ds_company_tax_state表",
+    "weight": 8
+  },
+  {
+    "id": "r_71e4ed8c",
+    "source_id": "e_3db90172",
+    "target_id": "e_5abc0f89",
+    "relation_type": "引用",
+    "description": "纳税人资质页引用该决策文档",
+    "weight": 5
+  },
+  {
+    "id": "r_b35f7bd9",
+    "source_id": "e_3db90172",
+    "target_id": "e_bd28f884",
+    "relation_type": "引用",
+    "description": "纳税人资质页引用该约束文档",
+    "weight": 5
+  },
+  {
+    "id": "r_3aa755e4",
+    "source_id": "e_3db90172",
+    "target_id": "e_a310e916",
+    "relation_type": "关联",
+    "description": "纳税人资质属于企业标签体系的一部分",
+    "weight": 6
+  },
+  {
+    "id": "r_46070c43",
+    "source_id": "e_3db90172",
+    "target_id": "e_10ea8304",
+    "relation_type": "引用",
+    "description": "纳税人资质页引用该展示场景",
+    "weight": 5
+  },
+  {
+    "id": "r_3c81cb89",
+    "source_id": "e_3db90172",
+    "target_id": "e_ea852f36",
+    "relation_type": "包含字段",
+    "description": "页面描述该字段为纳税人性质",
+    "weight": 7
+  },
+  {
+    "id": "r_a41b146b",
+    "source_id": "e_aeefa4d2",
+    "target_id": "e_3db90172",
+    "relation_type": "引用概念",
+    "description": "页面引用业务概念",
+    "weight": 5
+  },
+  {
+    "id": "r_9da3acd3",
+    "source_id": "e_aeefa4d2",
+    "target_id": "e_c4c75e5d",
+    "relation_type": "引用概念",
+    "description": "页面引用枚举映射概念",
+    "weight": 5
+  },
+  {
+    "id": "r_366834e3",
+    "source_id": "e_aeefa4d2",
+    "target_id": "e_e1b8bf47",
+    "relation_type": "依赖数据表",
+    "description": "列表字段来源于此表",
+    "weight": 7
+  },
+  {
+    "id": "r_357d7939",
+    "source_id": "e_aeefa4d2",
+    "target_id": "e_8caef33a",
+    "relation_type": "依赖数据表",
+    "description": "企业标签数据来源",
+    "weight": 6
+  },
+  {
+    "id": "r_68038894",
+    "source_id": "e_aeefa4d2",
+    "target_id": "e_b4bc8ca4",
+    "relation_type": "引用规范",
+    "description": "页面引用标签展示规范",
+    "weight": 5
+  },
+  {
+    "id": "r_6c0c50e1",
+    "source_id": "e_aeefa4d2",
+    "target_id": "e_ddadced6",
+    "relation_type": "引用概念",
+    "description": "导出功能依赖此规范",
+    "weight": 4
+  }
+]

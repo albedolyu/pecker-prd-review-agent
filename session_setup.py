@@ -31,7 +31,9 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("prd_name", nargs="?", help="PRD 名称")
-    parser.add_argument("--model", choices=["auto", "opus", "sonnet", "haiku"], default="auto")
+    parser.add_argument("--model", choices=["opus", "sonnet"], default="opus",
+                        help="主啄木鸟 model tier (默认 opus, CC OAT 订阅 0 边际成本). "
+                             "router.intent auto 路由已废弃 (2026-04-28)")
     parser.add_argument("--reviewer", default=os.environ.get("REVIEWER", "default"))
     parser.add_argument("--workspace", default=DEFAULT_WORKSPACE, help="工作目录路径")
     parser.add_argument("--no-parallel", action="store_true",
@@ -52,6 +54,15 @@ def build_parser() -> argparse.ArgumentParser:
                         help="覆盖默认 model_routes.yaml (灰度/实验用, 设 PECKER_ROUTES_FILE)")
     parser.add_argument("--enable-shadow-advisor", action="store_true",
                         help="启用影子苍鹰对照 (advisor.goshawk.shadow), 设 PECKER_ENABLE_SHADOW_ADVISOR=1")
+    # 步骤 3 后半段: profile + tone_instructions (CodeRabbit 风格 chill/strict 二档)
+    parser.add_argument("--profile", choices=["chill", "strict"], default="chill",
+                        help=("报告渲染档位 (默认 chill): "
+                              "chill=只展示 must + 高置信 should, 隐藏 could; "
+                              "strict=全展示 (历史行为). 设 PECKER_PROFILE=<value>"))
+    parser.add_argument("--tone-instructions", default=None,
+                        help=("Worker prompt 注入的语气指令 (per-team max 250 字符), "
+                              "如 '用建议改为...而不是此处违反 X 原则'. "
+                              "未提供时读 .env PECKER_TONE_INSTRUCTIONS, 再退回内置默认值"))
     return parser
 
 
@@ -85,6 +96,18 @@ def apply_noninteractive_defaults(args: argparse.Namespace, stdin_is_tty: bool) 
         os.environ["PECKER_ROUTES_FILE"] = args.routes_file
     if getattr(args, "enable_shadow_advisor", False):
         os.environ["PECKER_ENABLE_SHADOW_ADVISOR"] = "1"
+
+    # 步骤 3 后半段: profile + tone_instructions 落到 env (post_review + prompting 消费)
+    profile = getattr(args, "profile", "chill") or "chill"
+    os.environ["PECKER_PROFILE"] = profile
+
+    tone = getattr(args, "tone_instructions", None)
+    if tone:
+        # 截到 250 字符 (per-team 上限, 超出截断 + warning)
+        if len(tone) > 250:
+            print(f"[warn] --tone-instructions 超过 250 字符上限, 已截断")
+            tone = tone[:250]
+        os.environ["PECKER_TONE_INSTRUCTIONS"] = tone
     return args
 
 

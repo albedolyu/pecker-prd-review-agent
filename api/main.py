@@ -40,14 +40,23 @@ async def lifespan(app: FastAPI):
     errors = []
 
     use_cc = os.environ.get("USE_CLAUDE_CODE", "").strip().lower() in ("1", "true", "yes", "on")
+    api_key_set = bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("API_KEY"))
     claude_path = None
-    if not use_cc:
-        errors.append("USE_CLAUDE_CODE 必须设为 1(本项目只支持本地 Claude Code CLI)")
-    else:
+    if use_cc:
+        # CLI 模式: 走 subprocess 复用本地 claude CLI 登录态(零 API key 成本)
         import shutil
         claude_path = shutil.which("claude")
         if not claude_path:
             errors.append("找不到 claude CLI,请先 `npm install -g @anthropic-ai/claude-code && claude login`")
+    elif api_key_set:
+        # Native API 模式: 直连 Anthropic SDK, 走 API_KEY 计费
+        # client 层 (clients.anthropic_native) 启动时按需读 env, 此处只校验配置存在
+        pass
+    else:
+        errors.append(
+            "鉴权未配置 — 二选一: "
+            "USE_CLAUDE_CODE=1 + claude CLI 已登录, 或 .env 设 API_KEY=sk-ant-... (Anthropic API 直连)"
+        )
 
     warnings = []
 
@@ -68,11 +77,12 @@ async def lifespan(app: FastAPI):
     _check_secret("PECKER_SIGNATURE_SECRET")
     _check_secret("PECKER_JWT_SECRET")
 
-    # claude CLI 登录态自检: 不阻塞启动,但写入 app.state 让 /api/health 暴露,
-    # 也在控制台 warning 级提醒。token 续期走 `claude setup-token` 长效模式。
-    # Windows 下 claude 是 .cmd shim, 必须用 shutil.which 解析后的完整路径。
+    # 鉴权状态自检: 写入 app.state 让 /api/health 暴露
+    # CLI 模式: subprocess 跑 `claude auth status` 检测登录态(过期会 warn 提示 setup-token)
+    # Native API 模式: 不做主动调用,只标记 native_api(实际可用性由首次 review 验证)
     app.state.claude_auth = "unknown"
-    if claude_path:
+    if use_cc and claude_path:
+        # Windows 下 claude 是 .cmd shim, 必须用 shutil.which 解析后的完整路径
         import subprocess
         try:
             r = subprocess.run([claude_path, "auth", "status"], capture_output=True, text=True, timeout=10)
@@ -83,6 +93,8 @@ async def lifespan(app: FastAPI):
                 warnings.append("Claude CLI 未登录或凭证过期 — 终端跑 `claude setup-token` 续期(长效 token)")
         except (subprocess.TimeoutExpired, FileNotFoundError):
             pass
+    elif api_key_set:
+        app.state.claude_auth = "native_api"
 
     if errors:
         print("\n[FastAPI 启动失败]", file=sys.stderr)
@@ -157,7 +169,7 @@ async def root():
 # 注册路由(每个子模块独立,便于分阶段实现)
 # ============================================================
 
-from api.routes import workspaces, drafts, audit, review, reports, feishu, auth, metrics
+from api.routes import workspaces, drafts, audit, review, reports, feishu, auth, metrics, feedback
 app.include_router(workspaces.router, prefix="/api")
 app.include_router(drafts.router, prefix="/api")
 app.include_router(audit.router, prefix="/api")
@@ -166,3 +178,4 @@ app.include_router(reports.router, prefix="/api")
 app.include_router(feishu.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(metrics.router, prefix="/api")
+app.include_router(feedback.router, prefix="/api")

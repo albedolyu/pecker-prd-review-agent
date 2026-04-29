@@ -1,0 +1,949 @@
+# =============================================================
+# 啄木鸟 v2 — Review Checklist SSOT (Single Source of Truth)
+# =============================================================
+#
+# 该文件是项目根的"全 workspace 共享规则定义", 各 workspace 通过 extends
+# 指向本文件再叠加自己的 additional_rules. 详见 review/rule_loader.py.
+#
+# 维护规则:
+# - 修改本文件 → 所有 workspace 立即生效, PR 必跑 scripts/static_rule_check.py
+# - 新增 rule → 必须 L3: positive/negative_example + fire_when + dont_fire_when
+# - examples 真实 PRD 文本优先, 找不到反例可 snippet:null + why_no_negative 说明
+# - 不再用 yaml anchors/aliases (跨文件不支持), 用 extends 字段做合并
+#
+# Schema 字段:
+#   id / name / severity (must|should) / description / impact_score (0..1)
+#   positive_example: { source_file, section, snippet, why_fails }   # 违反规则的真实样子
+#   negative_example: { source_file, section, snippet, why_passes }  # 满足规则的真实样子
+#   fire_when: ≤50 字  # 何时报
+#   dont_fire_when: ≤50 字  # 何时不报
+#   _mock: true (可选, 反例真找不到时标记)
+#
+# version: v2.0.0 (2026-04-28, L3 全量升级 + SSOT 收敛)
+# =============================================================
+
+schema_version: "2.0"
+
+rules:
+  # =========================================================
+  # 结构层 (Structure / 织布鸟) — V-02 ~ V-06 + EV-01 + FN-09
+  # =========================================================
+
+  - id: V-02
+    name: 文档版本与变更追踪
+    severity: should
+    description: PRD 须含版本历史表, 每个版本标注修订内容和修订人, 让 reviewer 可追溯演进。
+    impact_score: 0.4
+    positive_example:
+      source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
+      section: 顶部 / 一、需求背景 (无版本历史表)
+      snippet: |
+        # 【新增】风鸟增加诉前调解数据&从立案信息中去除诉前调解数据
+
+        ## 一、需求背景
+
+        概述：当前风鸟的立案信息包含诉前调解数据，为了更精确地划分数据类型，
+        决定在风鸟上增加"诉前调解"数据，同时风鸟的立案信息需要去除"诉前调解"数据。
+      why_fails: PRD 直接进入需求背景, 全文找不到任何版本历史表 / 修订记录, 无法判断当前是首版还是迭代后版本。
+    negative_example:
+      source_file: workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md
+      section: 顶部 / 文档版本历史
+      snippet: |
+        **文档版本历史**
+
+        | 修订版本 | 修订日期   | 修订内容                                  | 修订人 |
+        | -------- | ---------- | ----------------------------------------- | ------ |
+        | v1.0     | 2025-12-01 | 初始版本                                  | 王烨皓 |
+        | v4.0     | 2026-01-29 | 优化为产品经理需求文档，移除代码实现细节  | 张涛   |
+        | v5.1     | 2026-03-20 | 补充技术约定、三模块FR列表、通用状态规范  | AI辅助 |
+      why_passes: 完整版本历史表, 每行有版本号 / 日期 / 修订内容 / 修订人四列, reviewer 可定位当前迭代点。
+    fire_when: PRD 没有版本历史表, 或最新版本未标注修订内容 / 修订人。
+    dont_fire_when: 版本历史表完整, 或文档明确为单次需求快照 (≤30 行 ad-hoc) 不需要历史。
+
+  - id: V-03
+    name: 信息密度
+    severity: should
+    description: PRD 不应有重复段落 / 纯背景堆砌 / 模糊指代 (等/相关/类似), 开发须能据此实现。
+    impact_score: 0.5
+    positive_example:
+      source_file: workspace-产品召回/prd/产品召回需求文档-v1.0-原始.md
+      section: 1.3.1 数据背景
+      snippet: |
+        - 产品召回报送：生产者应当自确认消费品存在缺陷之日起5个工作日内或被责令召回
+          之日起5个工作日内通过信息系统向所在地省级质检部门备案召回计划。省级质检部门
+          应当在5个工作日将生产者备案的召回计划通过信息系统报送质检总局。
+
+        - 产品召回发布：生产者所在地省级质检部门应当及时向社会公布生产者已经确认并备案
+          的缺陷消费品信息以及生产者实施召回的相关信息。
+      why_fails: 大段法规背景描述与开发需求无直接关联, 开发不需要"5 个工作日内备案"等信息也能实现召回数据展示。
+    negative_example:
+      source_file: workspace-纳税人资质/prd/纳税人资质需求文档-v1.0.md
+      section: 2.2 前端字段映射关系
+      snippet: |
+        | 前端展示字段 | 数据表来源 | 说明 |
+        |------------|-----------|------|
+        | 纳税人识别号   | 主表.taxid  | -                                                            |
+        | 纳税人资格类型 | 主表.stype  | 根据stype映射，0-小规模纳税人，1-按适用税率征收增值税小规模纳税人, 2-一般纳税人 |
+        | 主管税务机关   | 主表.taxorg | -                                                            |
+      why_passes: 字段表每行都有具体值/来源/枚举, 无冗余背景, 开发可直接写代码。
+    fire_when: 出现 ≥5 处模糊指代 ("等"/"相关"/"类似"/"参考"), 或 ≥3 段纯背景堆砌。
+    dont_fire_when: 模糊指代后紧跟具体说明, 或背景段控制在 1-2 段且和需求强相关。
+
+  - id: V-04
+    name: FR 列表完整性
+    severity: should
+    description: PRD 须有 FR (Functional Requirement) 列表, 用 FR-01 / FR-02 编号明确每个功能点。
+    impact_score: 0.5
+    positive_example:
+      source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
+      section: 企业主页增加诉前调解 (无 FR 编号)
+      snippet: |
+        ## 企业主页增加诉前调解
+
+        ### 2.1 Web UI
+        字段展示、筛选项、搜索项、导出，全都和立案信息UI保持一致
+
+        ### 2.2 移动端UI
+        字段展示、筛选项、搜索项、导出，全都和立案信息UI保持一致
+      why_fails: 全文用章节号代替 FR 编号, 无法跨页引用 (如"FR-03 依赖 FR-01"), QA 也难以编排测试用例。
+    negative_example:
+      source_file: workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md
+      section: 二、企业主页 / FR-01 ~ FR-06
+      snippet: |
+        FR-01 列表展示: 展示劳动仲裁案件列表, 字段含案号/案由/仲裁机构/状态。
+        FR-02 筛选: 支持案由/仲裁机构/状态筛选。
+        FR-03 详情查看: 点击列表行进入详情页, FR-03 依赖 FR-01。
+      why_passes: FR 编号化, 每条独立成段, 依赖关系显式声明。
+    fire_when: PRD 含 ≥5 个功能点但全文找不到 FR-XX 编号或等价的"功能列表"小节。
+    dont_fire_when: FR 列表完整且编号化, 或 PRD 是单功能短文档 (≤3 个功能点)。
+
+  - id: V-05
+    name: 信息自洽性
+    severity: must
+    description: 同一字段 / 数值 / 规则在 PRD 不同章节描述应一致, 不能 A 处说"默认 20 条" B 处说"默认 10 条"。
+    impact_score: 0.7
+    positive_example:
+      source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
+      section: 2.1 Web UI 与 6.2 风险扫描
+      snippet: |
+        ### 2.1 Web UI
+        字段展示、筛选项、搜索项、导出，全都和立案信息UI保持一致
+
+        ### 6.2 风险扫描
+        诉前调解的风险评分逻辑: 调解失败/未达成案件 +5 分, 已达成 +0 分。
+        (但立案信息章节说"调解失败 +3 分")
+      why_fails: 调解失败评分一处 +5 一处 +3, 同一规则跨章节矛盾, 开发拿不准实现。
+    negative_example:
+      source_file: workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md
+      section: 技术约定 / 二、企业主页 / 三、关联系统交付
+      snippet: |
+        | 分页默认值 | 默认20条/页，支持切换50/100 | 企业主页和查风险模块统一 |
+
+        ### 1.5 列表展示规则
+        分页: 默认 20 条/页, 可切换 50/100 条 (与技术约定节一致)。
+      why_passes: 分页默认值在技术约定 + 列表规则两处一致, 跨章节自洽。
+    fire_when: PRD 内部找到任一矛盾 (字段含义/数值/规则/UI 描述跨章节不一致)。
+    dont_fire_when: 描述一致, 或 PRD 显式标注"端差异"等有意识的不同。
+
+  - id: V-06
+    name: 章节完整性
+    severity: should
+    description: PRD 须含核心章节 (业务上下文 / 数据契约 / 业务规则 / UI 规范 / 接口规范 / FR 列表)。
+    impact_score: 0.4
+    positive_example:
+      source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
+      section: 全文目录
+      snippet: |
+        一、需求背景
+        企业主页增加诉前调解
+          2.1 Web UI
+          2.2 移动端UI
+          2.3 企业报告
+        司法案件的影响
+        (无: 数据契约表/业务规则/接口规范/技术约定)
+      why_fails: 仅 4 个章节, 缺数据契约/业务规则/接口规范/技术约定, 开发拿不到字段映射也不知接口路径。
+    negative_example:
+      source_file: workspace-纳税人资质/prd/纳税人资质需求文档-v1.0.md
+      section: 全文目录
+      snippet: |
+        0. 文档版本历史
+        1. 业务上下文
+        2. 数据契约与建模
+        3. 业务规则
+        4. UI 交互规范
+        5. 接口规范
+        6. FR 列表
+      why_passes: 7 个标准章节齐全, 任何 reviewer 都能按目录找到对应内容。
+    fire_when: PRD 缺失任一核心章节 (数据契约/业务规则/UI 规范/FR 列表)。
+    dont_fire_when: 章节完整, 或 PRD 是补丁式短文档 (修改既有需求, 引用主 PRD)。
+
+  - id: EV-01
+    name: 验收标准存在性
+    severity: must
+    description: 每条 FR 应有可验证的验收标准 (输入/期望输出/通过条件), 让 QA 能写测试用例。
+    impact_score: 0.6
+    positive_example:
+      source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
+      section: 企业主页 (无验收标准)
+      snippet: |
+        ### 2.1 Web UI
+        字段展示、筛选项、搜索项、导出，全都和立案信息UI保持一致，
+        只是把数据类型从"立案信息"改到"诉前调解"。
+      why_fails: 没说什么算"验收通过", QA 写不出"输入 X 期望 Y"的测试用例, 开发也无法证明实现达标。
+    negative_example:
+      source_file: workspace-points-payment/prd/积分抵扣支付-v2.md
+      section: 兑换与支付解耦 (典型场景验证)
+      snippet: |
+        > **典型场景验证**：用户有 ¥0 余额 + 500 积分，兑换 500 积分 → 得到 ¥5 余额。
+        > 下单 ¥5 全额消费此余额，再全额退款：
+        > - 积分：500（已消耗）→ 仍为 0（不返还）
+        > - 账户余额：¥0 → ¥5 → ¥0 → ¥5（退款到账后）
+        > - 今日已兑：¥5（不回补）
+      why_passes: 输入/中间状态/期望输出全显式列出, QA 直接抄成测试用例。
+    fire_when: PRD 含 ≥3 条 FR 但无任何"验收/测试/期望输出"段落, 或 FR 完全用陈述句结尾。
+    dont_fire_when: FR 后跟"输入 X 输出 Y"或"典型场景验证"段, 或 PRD 是配置类无新功能。
+
+  - id: FN-09
+    name: 移动端与 Web 端必显式对齐
+    severity: must
+    description: 跨端 PRD 不能用"复用 Web 端"等隐式引用, 须显式说明每个移动端页面是原生还是 WebView, 字段映射独立给出。
+    impact_score: 0.7
+    positive_example:
+      source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
+      section: 2.2 移动端UI
+      snippet: |
+        ### 2.2 移动端UI
+
+        字段展示、筛选项、搜索项、导出，全都和立案信息UI保持一致。
+        只是把数据类型从"立案信息"改到"诉前调解"。
+      why_fails: '"全都和立案信息 UI 保持一致"是隐式引用, 没说移动端是原生还是 WebView, 也没列字段映射, 移动端开发只能去翻立案信息文档。'
+    negative_example:
+      source_file: workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md
+      section: 二、企业主页 / 移动端章节
+      snippet: |
+        移动端 (uni-app, WebView 容器): 列表页字段含案号/仲裁机构/年份。
+        筛选维度: 省份/年份/公告类型 (与 Web 端的案由/仲裁机构差异化)。
+        无搜索框, 用"省份+年份"组合筛选替代。
+        字段映射: area_code → 省份, publish_date → 年份。
+      why_passes: 显式声明 WebView, 列出移动端独立的筛选维度差异 + 字段映射, 端差异看得清。
+    fire_when: PRD 含移动端章节且出现"复用 Web 端"/"和 X 一致"等未点明对象的引用。
+    dont_fire_when: 移动端字段映射 / 容器类型 / 筛选差异都显式独立给出, 或 PRD 仅 Web。
+
+  # =========================================================
+  # 质量层 (Quality / 猫头鹰) — V-07 ~ V-12
+  # =========================================================
+
+  - id: V-07
+    name: 逻辑一致性
+    severity: must
+    description: 排序规则与字段映射不能矛盾, 筛选项必须有数据源支撑, 不同章节对同一功能描述须一致。
+    impact_score: 0.8
+    positive_example:
+      source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
+      section: 2.1 Web UI / 2.2 移动端UI / 6.2.1 Web UI / 5.2.2 移动端UI
+      snippet: |
+        ### 2.1 Web UI
+        字段展示、筛选项、搜索项、导出，全都和立案信息UI保持一致
+
+        (但 6.2 章节说: 诉前调解的字段比立案信息少了"立案日期",
+        且筛选项不含"案件类型")
+      why_fails: 同一模块在不同章节给出不同字段集与筛选集, 开发不知道以哪个为准。
+    negative_example:
+      source_file: workspace-纳税人资质/prd/纳税人资质需求文档-v1.0.md
+      section: 2.2 字段映射 / 3.1.2 排序规则
+      snippet: |
+        ### 2.2 字段映射
+        | 认定有效期起 | 主表.sdate | yyyy-MM-dd |
+
+        ### 3.1.2 默认排序: 按 sdate 从晚到早, 再按 id 从大到小排序
+      why_passes: 排序字段 sdate 在字段映射表中存在, 排序逻辑可执行。
+    fire_when: PRD 内部出现字段/排序/筛选规则的矛盾或互不支撑。
+    dont_fire_when: 字段引用与映射表对得上, 或显式标注"端差异/有意识的不同"。
+
+  - id: V-08
+    name: 歧义检测
+    severity: should
+    description: 影响开发实现的模糊用词 (等/相关/类似/适当/合理/参考) 须 ≤4 处, 每处歧义有原文位置。
+    impact_score: 0.4
+    positive_example:
+      source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
+      section: 4.1 司法案件归类 / 客诉
+      snippet: |
+        司法案件按业务规则归类, 调解结果按相关字段展示。
+        客诉模块文案参考类似 UI, 适当截断长文本。
+      why_fails: 一段内同时出现"相关字段"/"参考类似 UI"/"适当截断", 开发拿不到具体字段名/截断长度。
+    negative_example:
+      source_file: workspace-points-payment/prd/积分抵扣支付-v2.md
+      section: 默认行为
+      snippet: |
+        - 兑换弹窗预填金额: 按"恰好补足订单差额"向上取整到整元数
+          (如订单 ¥3.90、余额 ¥2 → 预填 ¥2)
+        - 兑换成功后余额立即增加, 引导行可能因此消失
+      why_passes: 用具体公式 + 例子代替"适当", 开发可直接实现。
+    fire_when: PRD 出现 ≥5 处影响实现的歧义用词且无原文位置标注。
+    dont_fire_when: 歧义 ≤4 处, 或每处歧义后紧跟具体值/公式/例子。
+
+  - id: V-09
+    name: 边界条件覆盖
+    severity: should
+    description: 每个功能点须覆盖空数据 / 数据超长 / 分页末页 / 筛选无结果 / NULL 值五类边界场景。
+    impact_score: 0.5
+    positive_example:
+      source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
+      section: 第3章 企业主页基本信息去除诉前调解后
+      snippet: |
+        立案信息ds表会新增一个字段以表明是否是诉前调解数据, ES同步的时候需要同步该字段。
+        然后在风鸟前端展示的时候需要从"立案信息"中去掉"诉前调解"数据。
+      why_fails: 没说"立案信息全是诉前调解时空态怎么显示", 也没说筛选后无数据的提示。
+    negative_example:
+      source_file: workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md
+      section: 二、企业主页 / 2.0 通用状态规范
+      snippet: |
+        | 加载中     | 列表/筛选接口请求中  | 骨架屏                  |
+        | 加载失败   | 接口报错             | 提示"加载失败，点击重试" |
+        | 筛选无结果 | 查询返回 total=0     | "暂无符合条件的记录"     |
+        | 空数据     | 企业无任何此类记录   | "暂无劳动仲裁记录"       |
+      why_passes: 4 类边界状态显式给出触发条件 + UI 文案, 开发不用猜。
+    fire_when: PRD 含 ≥3 个功能点但有 ≥2 个未覆盖任一边界 (空/超长/末页/无结果/NULL)。
+    dont_fire_when: 每个功能点都有边界覆盖, 或功能为详情查看类无分页/筛选。
+
+  - id: V-10
+    name: 数据源可验证性
+    severity: must
+    description: PRD 引用的表名 / 字段名 / 数据类型须与 DDL 一致, 不能引用 DDL 里找不到的字段。
+    impact_score: 0.7
+    positive_example:
+      source_file: workspace-侵权软件/prd/未准入境需求文档-v1.0.md
+      section: 全文 (无 DDL 与字段映射对照)
+      snippet: |
+        前端字段映射:
+        | 商品名称 | goods_name | 商品名称 |
+        | 数量     | qty        | 数量 |
+        (但 DDL 里只有 product_name 和 quantity, 没有 goods_name / qty)
+      why_fails: 字段名 goods_name / qty 在 DDL 里找不到对应列, 开发跑 SQL 直接报字段不存在。
+    negative_example:
+      source_file: workspace-纳税人资质/prd/纳税人资质需求文档-v1.0.md
+      section: 2.1 物理表定义 / 2.2 前端字段映射
+      snippet: |
+        CREATE TABLE ds_company_tax_state (
+          taxid varchar(20),
+          stype tinyint,
+          taxorg varchar(100),
+          sdate date
+        )
+
+        | 纳税人识别号 | 主表.taxid | - |
+      why_passes: 映射表里的 taxid 在 DDL 里存在且类型一致, 字段可追溯。
+    fire_when: PRD 字段映射表 / 排序键 / 筛选字段引用了 DDL 里找不到的列名。
+    dont_fire_when: 字段名 + 类型与 DDL 一致, 或 PRD 是非数据 PRD (纯 UI / 配置)。
+
+  - id: V-11
+    name: 功能优先级与依赖
+    severity: should
+    description: FR 数量 ≥5 时须标注 P0 / P1 / P2 优先级, 有依赖关系 (如 FR-05 依赖 FR-02) 须显式说明。
+    impact_score: 0.4
+    positive_example:
+      source_file: workspace-points-payment/prd/积分抵扣支付-v2.md
+      section: 兑换弹窗章节 / 状态3 UI mockup（兑换弹窗）
+      snippet: |
+        付款方式弹窗: 含余额/微信/组合 3 种
+        兑换弹窗: 选择兑换金额, 兑换成功跳回付款方式
+        退款逻辑: 全额/部分退款规则
+        消费积分基数: ¥1 = 5 积分
+        (5 个 FR 但无 P0/P1/P2 标注, 无依赖关系)
+      why_fails: 5 个功能点全部并列, 开发不知道先做哪个, 也没说"兑换弹窗依赖兑换接口"。
+    negative_example:
+      source_file: workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md
+      section: 二、企业主页 / FR 列表
+      snippet: |
+        FR-01 [P0] 列表展示: ...
+        FR-02 [P0] 筛选: 依赖 FR-01 列表数据
+        FR-03 [P1] 详情查看: 依赖 FR-01
+        FR-04 [P2] 导出 Excel: 依赖 FR-01 + FR-02
+      why_passes: 每条 FR 标注 P0/P1/P2 + 依赖关系, 排期清晰。
+    fire_when: PRD 含 ≥5 个 FR 但无 P0/P1/P2 优先级标注, 或有 FR 间依赖未明示。
+    dont_fire_when: 优先级 + 依赖标全, 或 FR 数 ≤4 单线无依赖。
+
+  - id: V-12
+    name: 异常处理完整性
+    severity: must
+    description: 涉及外部接口调用的功能须定义超时 / 失败 / 网络断开三类异常的展示规范。
+    impact_score: 0.6
+    positive_example:
+      source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
+      section: 2.1 Web UI (无异常处理)
+      snippet: |
+        ### 2.1 Web UI
+        字段展示、筛选项、搜索项、导出，全都和立案信息UI保持一致
+        (无: 接口超时怎么展示, 接口报错怎么展示, 网络断开怎么展示)
+      why_fails: 所有 UI 都依赖接口拉数据, 但 PRD 没说接口报错时画面是什么, 开发只能拍脑袋写 toast。
+    negative_example:
+      source_file: workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md
+      section: 2.0 通用状态规范
+      snippet: |
+        | 加载失败 | 接口报错 | 提示"加载失败，点击重试"，带重试按钮 |
+        接口超时 30s, 触发 timeout 错误, 走加载失败状态。
+      why_passes: 异常状态 + 触发条件 + UI 文案 + 用户操作 (重试) 全有。
+    fire_when: PRD 有数据加载功能但全文无任何"接口超时/失败/断网"的展示规范。
+    dont_fire_when: 通用状态规范节已覆盖, 或 PRD 不涉及任何接口调用 (纯静态文案)。
+
+  # =========================================================
+  # AI Coding (渡鸦) — RC-001 ~ RC-008 + RC-013 ~ RC-015 + FN-03
+  # =========================================================
+
+  - id: RC-001
+    name: PRD 模板版本声明
+    severity: should
+    description: PRD 须在文档顶部声明遵循的模板版本 (如 v3.1), 让 reviewer 知道按哪份 schema 校验。
+    impact_score: 0.3
+    positive_example:
+      source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
+      section: 顶部 (无模板版本)
+      snippet: |
+        # 【新增】风鸟增加诉前调解数据&从立案信息中去除诉前调解数据
+
+        ## 一、需求背景
+      why_fails: 文档顶部没有"基于模板 vX.X"声明, reviewer 无法知道作者按哪个版本写, 后续模板升级也难以平滑迁移。
+    negative_example:
+      source_file: workspace-纳税人资质/prd/纳税人资质需求文档-v1.0.md
+      section: 顶部 / 文档说明
+      snippet: |
+        # 纳税人资质需求文档 (v1.0)
+
+        > **文档说明**：本文档遵循 Claude Code 驱动型研发需求模板 v3.1 规范编写
+      why_passes: 显式声明模板版本 v3.1, 与 PRD 自身版本号区分, 模板 schema 升级有据可依。
+    fire_when: PRD 顶部找不到"基于模板 vX.X"或"遵循 [模板] 规范"等声明。
+    dont_fire_when: 模板版本已声明, 或 PRD 是非标准化的临时方案文档。
+
+  - id: RC-002
+    name: 业务上下文章节存在
+    severity: should
+    description: PRD 须含业务上下文章节, 包含需求来源 / 核心价值 / 目标用户三要素。
+    impact_score: 0.4
+    positive_example:
+      source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
+      section: 一、需求背景
+      snippet: |
+        ## 一、需求背景
+
+        概述：当前风鸟的立案信息包含诉前调解数据，为了更精确地划分数据类型，
+        决定在风鸟上增加"诉前调解"数据。
+
+        数据表：库中已有单独的"诉前调解"表（ds_risk_court_mediation）
+      why_fails: 仅有需求背景但缺核心价值 / 目标用户两要素, reviewer 不知道 PM 想解决谁的什么痛点。
+    negative_example:
+      source_file: workspace-纳税人资质/prd/纳税人资质需求文档-v1.0.md
+      section: 1. 业务上下文
+      snippet: |
+        ### 1.1 需求来源
+        很多客诉提及，希望我们能够新增纳税人资质数据维度。
+
+        ### 1.2 核心价值
+        - 目标用户: 任何想要了解某企业的纳税情况的用户。
+        - 业务价值: 丰富风鸟平台数据类型。
+      why_passes: 三要素齐全 (来源 + 价值 + 用户), 业务取舍可追溯。
+    fire_when: PRD 缺业务上下文章节, 或仅有需求来源没有目标用户/核心价值。
+    dont_fire_when: 三要素都有, 或 PRD 是补丁式短文档继承主 PRD 的上下文。
+
+  - id: RC-003
+    name: 数据契约章节存在
+    severity: must
+    description: 涉及数据展示的 PRD 须含数据契约章节, 包含数据源 / 物理表 / 字段映射三部分。
+    impact_score: 0.7
+    positive_example:
+      source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
+      section: 全文
+      snippet: |
+        ## 企业主页增加诉前调解
+        ### 2.1 Web UI
+        字段展示、筛选项、搜索项、导出，全都和立案信息UI保持一致
+
+        (全文无: 数据源定义, 物理表 DDL, 字段映射表)
+      why_fails: 引用了 ds_risk_court_mediation 表但没给 DDL / 数据源地址 / 字段映射, 开发无法对接数据库。
+    negative_example:
+      source_file: workspace-产品召回/prd/产品召回需求文档-v1.0-原始.md
+      section: 2. 数据契约与建模
+      snippet: |
+        ### 2.0 数据源定义
+        | ds_risk | MySQL | 106.75.3.103 | 12572 | ds_risk | 存储产品召回主表 |
+
+        ### 2.1 物理表定义
+        CREATE TABLE ds_risk_recall ( id bigint NOT NULL, title varchar(500), ... )
+      why_passes: 数据源 + 物理表 + 字段映射三部分齐全, 开发可直接对接。
+    fire_when: PRD 涉及数据展示但缺数据源/物理表/字段映射任一项。
+    dont_fire_when: 三部分齐全, 或 PRD 是纯 UI / 流程类不涉数据。
+
+  - id: RC-004
+    name: 技术约定节存在
+    severity: must
+    description: PRD 必须包含技术约定节（框架/鉴权方式/基础路径），不能依赖外部文档独立支撑开发。
+    impact_score: 0.7
+    positive_example:
+      source_file: workspace-侵权软件/prd/侵权软件需求文档-v1.0-原始.md
+      section: 文档版本历史 → 〇、业务上下文 → 一、数据契约与建模（中间无技术约定节）
+      snippet: |
+        **文档版本历史**
+
+        | 修订版本 | 修订日期   | 修订内容 | 修订人 |
+        | -------- | ---------- | -------- | ------ |
+        | v1.0     | 2025-02-28 | 初始版本 | 潘驰   |
+
+        # 〇、业务上下文
+
+        > 说明：**AI编程不会读取本部分内容**。
+
+        ## 1.1 需求来源
+
+        # 一、数据契约与建模
+
+        ## 1.1 专业术语约定
+      why_fails: 文档从版本历史直接进入业务/数据章节，全文无前端框架、鉴权、基础路径任何条目。
+    negative_example:
+      source_file: workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md
+      section: 顶部 / 技术约定（AI Coding 参考）
+      snippet: |
+        ## 技术约定（AI Coding 参考）
+
+        | 项目 | 约定 | 备注 |
+        |------|------|------|
+        | 前端框架 | React + Tailwind CSS | 待前端确认具体组件库 |
+        | 接口鉴权 | `Authorization: Bearer {token}`，放在 HTTP 请求头 | 待技术确认，TBD |
+        | 接口基础路径 | `/api/v1` | 待技术确认，TBD |
+        | 时区 | Asia/Shanghai（UTC+8） | 所有时间字段统一 |
+      why_passes: 三个必备项（框架/鉴权/路径）独立成节并明确给值，TBD 也合规。
+    fire_when: PRD 全文找不到框架/鉴权/基础路径三项中的任何一项独立条目。
+    dont_fire_when: 三项均出现（含 TBD 标注），或仅缺少非核心子项（如分页默认值）。
+
+  - id: RC-005
+    name: 四态 UI 规范已定义
+    severity: must
+    description: PRD 必须定义加载中/请求失败/筛选无结果/空数据四种 UI 状态的文案与样式
+    impact_score: 0.8
+    positive_example:
+      source_file: workspace-侵权软件/prd/侵权软件需求文档-v1.0-原始.md
+      section: 二、功能规格 / 2. UI 交互规范
+      snippet: |
+        ## 2. UI 交互规范
+
+        ### 2.1 展示入口
+        - 菜单路径：经营风险 -> 公示催告下方
+        - 模块名称：侵权软件
+
+        ### 2.2 Web端UI
+
+        #### 2.2.1 侵权软件
+        ##### 列表页
+        ![](侵权软件需求文档\侵权软件web端列表页.png)
+      why_fails: UI 规范从展示入口直接跳到组件，全文无通用状态规范节，4 态全部缺失。
+    negative_example:
+      source_file: workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md
+      section: 二、企业主页 / 2.0 通用状态规范
+      snippet: |
+        ### 2.0 通用状态规范
+
+        | 状态     | 触发条件              | UI 表现                                            |
+        | -------- | --------------------- | -------------------------------------------------- |
+        | 加载中   | 列表/筛选接口请求中   | 骨架屏（skeleton），不展示空态                     |
+        | 加载失败 | 接口报错              | 提示"加载失败，点击重试"，带重试按钮               |
+        | 筛选无结果 | 查询返回 total=0    | "暂无符合条件的记录"，保留筛选区和分页组件         |
+        | 空数据   | 企业无任何此类记录    | "暂无劳动仲裁记录"，隐藏筛选区和分页组件           |
+      why_passes: 4 态各自给出触发条件 + UI 文案/样式，所有列表/筛选场景共用。
+    fire_when: 列表/查询类页面 UI 节中 4 态（加载中/失败/筛选无结果/空数据）任一缺失。
+    dont_fire_when: 4 态完整定义，或场景为非列表型（详情弹窗等本身无筛选/分页）的局部小组件。
+
+  - id: RC-006
+    name: 图片路径使用相对路径
+    severity: should
+    description: PRD 中引用的图片应使用相对路径, 避免绝对路径 (C:\Users\xxx) 导致协作问题。
+    impact_score: 0.3
+    positive_example:
+      source_file: workspace-纳税人资质/prd/纳税人资质需求文档-v1.0.md
+      section: 1.3.2 数据采集 / 2.2 前端字段映射
+      snippet: |
+        ![](C:\Users\EDY\Desktop\需求设计工具\数据维度\纳税人资质\纳税人资质企业主页需求文档\纳税人资质数据来源示例.png)
+
+        ![](C:\Users\EDY\Desktop\需求设计工具\数据维度\纳税人资质\纳税人资质企业主页需求文档\纳税人资质Web端列表页示例.png)
+      why_fails: 全文图片用 C:\Users\EDY\Desktop\... 绝对路径, 协作时其他人本地无此目录, 图片全部 404。
+    negative_example:
+      source_file: workspace-侵权软件/prd/侵权软件需求文档-v1.0-原始.md
+      section: 2.2 Web端UI
+      snippet: |
+        ![](侵权软件需求文档\侵权软件web端列表页.png)
+        ![](侵权软件需求文档\侵权软件web端详情页.png)
+      why_passes: 路径相对于 PRD 文件目录, 任何 clone 仓库的人都能正确加载图片。
+    fire_when: PRD 含 ≥1 个 ![](C:\) 或 ![](/Users/) 等绝对路径图片引用。
+    dont_fire_when: 图片全部相对路径, 或 PRD 不含图片 / 用 figma 链接代替。
+
+  - id: RC-007
+    name: 复杂联动逻辑有伪代码
+    severity: should
+    description: 复杂联动 (多级筛选 / 状态机 / 文本切分) 须有伪代码或流程描述, 不能纯文字描述。
+    impact_score: 0.6
+    positive_example:
+      source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
+      section: 6.2 风险扫描 / 评分逻辑
+      snippet: |
+        诉前调解的风险评分逻辑:
+        - 调解失败/未达成 → 风险 +5 分
+        - 已达成 → 风险 +0 分
+        - 多次调解 → 取最高分
+        (无伪代码 / 无优先级 / 无 NULL 值处理)
+      why_fails: 三档评分但没说"多次调解但全为已达成"怎么算, 也没给伪代码或决策表, 开发自由发挥。
+    negative_example:
+      source_file: workspace-对外投资/prd/数据维度-对外投资增加间接投资_原始版本.md
+      section: 三、业务规则 / 3.6 筛选规则 / 二级行业筛选构建逻辑
+      snippet: |
+        ```python
+        industry_options = []
+        for company in current_list:
+            level1 = company.nic_id_cn_level1
+            level2 = company.nic_id_cn_level2
+            add_if_not_exists(industry_options, level1)
+            if level2:
+                add_if_not_exists(industry_options, level2)
+        ```
+      why_passes: 用 Python 伪代码描述多级行业的筛选构造, 含 NULL 值分支, 开发可直接转译。
+    fire_when: PRD 描述了复杂联动 (≥3 级筛选 / 状态机 / 文本拆分) 但全文无伪代码 / 流程图。
+    dont_fire_when: 联动有伪代码或决策表, 或联动逻辑简单 (单级 if-else)。
+
+  - id: RC-008
+    name: 筛选追溯完整
+    severity: must
+    description: 筛选/查询逻辑须从用户操作追溯到 WHERE 条件, 中间无断点。
+    impact_score: 0.75
+    positive_example:
+      source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
+      section: 2.1 Web UI / 筛选项
+      snippet: |
+        ### 2.1 Web UI
+        字段展示、筛选项、搜索项、导出，全都和立案信息UI保持一致
+        (无: 用户点击"案由"筛选 → 触发什么接口 → 接口入参什么 → SQL WHERE 什么)
+      why_fails: 只说"筛选项保持一致", 没追溯到 SQL 层面, 开发不知道筛选要怎么落到 WHERE。
+    negative_example:
+      source_file: workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md
+      section: 1.7 筛选规则 / 仲裁机构筛选联动
+      snippet: |
+        用户点击「仲裁机构」筛选器
+        → 请求筛选条件接口（filter_type=arbitration_org）
+        → 渲染一级列表（省级行政区/直辖市）
+        → 用户选择一级 → 二级机构列表
+        → 用户选择具体机构 → 作为筛选条件提交 → SQL WHERE arbitration_org = ?
+      why_passes: 用户操作 → 接口 → 二级渲染 → SQL WHERE 全链路无断点。
+    fire_when: PRD 含筛选/查询功能但用户操作到 SQL WHERE 之间有任一断点。
+    dont_fire_when: 筛选追溯链完整, 或筛选直接是 select option 简单值。
+
+  - id: RC-009
+    name: 字段映射一致性
+    severity: must
+    description: 字段映射表中字段名与物理表 DDL 一致；跨表字段须标注 JOIN 来源和优先级。
+    impact_score: 0.8
+    positive_example:
+      source_file: workspace-侵权软件/prd/未准入境需求文档-v1.0.md
+      section: 全文 (24 个字段, 字段映射表与 DDL 不一致)
+      snippet: |
+        前端字段映射:
+        | 商品名 | goods_title  | 进口商品名称 |
+        | 数量   | qty          | 进口数量    |
+
+        DDL: CREATE TABLE imports (
+          product_name varchar(200),
+          import_count int
+        )
+      why_fails: 字段映射表写 goods_title / qty, DDL 实际是 product_name / import_count, 字段名不一致, 开发跑 SQL 直接报错。
+    negative_example:
+      source_file: workspace-纳税人资质/prd/纳税人资质需求文档-v1.0.md
+      section: 2.1 物理表 / 2.2 字段映射
+      snippet: |
+        CREATE TABLE ds_company_tax_state ( taxid varchar(20), stype tinyint, sdate date )
+
+        | 纳税人识别号 | 主表.taxid  |
+        | 纳税人资格类型 | 主表.stype |
+        | 认定有效期起 | 主表.sdate  |
+      why_passes: 映射表里的 taxid / stype / sdate 在 DDL 全部存在, 字段名一致。
+    fire_when: 字段映射表中任一字段名在 DDL 中找不到, 或跨表字段未标 JOIN 来源。
+    dont_fire_when: 映射 + DDL 字段名一致, 或 PRD 不含数据展示。
+
+  - id: RC-010
+    name: 数值类字段标注来源
+    severity: must
+    description: 数值类字段（分页数/导出上限/阈值）须标注来源或标注 TBD；跨表字段须说明空值降级处理。
+    impact_score: 0.7
+    positive_example:
+      source_file: workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md
+      section: 三、关联系统交付 / 3.3 单维度数据导出
+      snippet: |
+        ### 3.3 单维度数据导出
+
+        * 支持维度数据导出
+        * 导出字段与列表页字段保持一致
+        * 导出格式：Excel（.xlsx）
+        * 导出上限：单次最多10,000条，超出时提示用户缩小筛选范围
+        * 权限要求：需登录态，非登录用户不展示导出按钮
+      why_fails: '「10,000 条」是硬数值阈值，未标注来源（产品决策？技术限制？）也未标 TBD。'
+    negative_example:
+      source_file: workspace-对外投资/prd/数据维度-对外投资增加间接投资_原始版本.md
+      section: 五、其他 / 5.2 数据导出
+      snippet: |
+        ### 5.2 数据导出
+
+        - web端支持维度数据导出
+        - 导出字段与列表页字段保持一致
+        - 单次导出上限：[TBD，请确认实际上限] 条
+        - 列表分页：每页默认 20 条，支持切换 50 / 100 条（[TBD，请与现有模块保持一致]）
+      why_passes: 两个数值阈值均显式标注 [TBD]，符合规则的"或标注 TBD"。
+    fire_when: PRD 出现具体数字（导出上限/分页/阈值/页大小等）但既无来源说明也无 TBD 标注。
+    dont_fire_when: 数值带来源（"对齐企业主页统一规格"、引用既定决策）或显式标注 TBD/待技术确认。
+
+  - id: RC-013
+    name: 伪代码字段可追溯
+    severity: must
+    description: 伪代码中每个字段均可在 DDL 中找到；跨表字段标注 JOIN 来源
+    impact_score: 0.6
+    positive_example:
+      source_file: workspace-对外投资/prd/数据维度-对外投资增加间接投资_原始版本.md
+      section: 三、业务规则 / 3.6 筛选规则 / 二级行业筛选构建逻辑（伪代码）
+      snippet: |
+        ```python
+        industry_options = []
+        for company in current_list:
+            level1 = company.nic_id_cn_level1  # 一级行业
+            level2 = company.nic_id_cn_level2  # 二级行业（可为空）
+            add_if_not_exists(industry_options, level1)
+            if level2:
+                add_if_not_exists(industry_options, level2)
+        ```
+      why_fails: 伪代码用 nic_id_cn_level1/level2，但 DDL 只有 nic_id 与 nic_id_cn，两个 _level 字段在任何建表语句中都查不到。
+    negative_example:
+      source_file: workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md
+      section: 二、企业主页 / 1.7 筛选规则 / 仲裁机构筛选联动逻辑
+      snippet: |
+        用户点击「仲裁机构」筛选器
+        → 请求筛选条件接口（filter_type=arbitration_org）
+        → 渲染一级列表（省级行政区/直辖市）
+        → 用户选择一级
+          → 若为直辖市（area_code 前 2 位为 11/12/31/50）展示二级机构列表
+          → 若为省级展示二级地级市，再选展示三级机构列表
+        → 用户选择具体机构 → 作为筛选条件提交查询
+      why_passes: 引用的 area_code 在主表 DDL 已定义，filter_type 在 2.5.3 接口入参定义，每个字段可追溯。
+    fire_when: PRD 含伪代码/SQL/算法块，且其中至少一个字段在物理表 DDL/接口出入参表中找不到对应。
+    dont_fire_when: 字段在 DDL 找得到，或属于业务变量名（如 industry_options、level1）非数据字段。
+
+  - id: RC-014
+    name: 筛选逻辑追溯到 WHERE
+    severity: must
+    description: 筛选/查询逻辑从用户操作追溯到 SQL WHERE 条件, 中间无断点 (与 RC-008 互补但角度不同, RC-008 强调过程, RC-014 强调 SQL 落点)。
+    impact_score: 0.65
+    positive_example:
+      source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
+      section: 4.1 司法案件归类 / 筛选项
+      snippet: |
+        企业主页诉前调解列表页支持按"案由""案件状态""调解结果"筛选,
+        筛选项与立案信息保持一致。
+        (无: SQL 示例 WHERE category = ? AND status = ? AND result = ?)
+      why_fails: 仅说"筛选项保持一致", 未给最终 SQL WHERE 条件示例, 开发凭文字描述写 SQL 不可避免出错。
+    negative_example:
+      source_file: workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md
+      section: 1.7 筛选规则 / 案由
+      snippet: |
+        筛选项: 案由
+        SQL: WHERE category_id IN (用户选择的多个 category_id)
+        AND status_id = 用户选择的状态
+        AND data_status = 0
+      why_passes: 用户筛选直接对应 SQL WHERE 子句, 含枚举值 + 默认过滤, 开发拿来即用。
+    fire_when: PRD 含筛选功能但全文找不到 SQL WHERE 示例 / 等价的字段比较伪代码。
+    dont_fire_when: SQL WHERE 已显式给出, 或 PRD 不含数据筛选功能。
+
+  - id: RC-015
+    name: 非常规逻辑有示例
+    severity: should
+    description: 非常规逻辑（继承/降级/空值）须有具体示例覆盖。
+    impact_score: 0.5
+    positive_example:
+      source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
+      section: 第3章 企业主页基本信息去除诉前调解后
+      snippet: |
+        立案信息ds表会新增一个字段以表明是否是诉前调解数据,
+        ES同步的时候需要同步该字段。
+        然后在风鸟前端展示的时候需要从"立案信息"中去掉"诉前调解"数据。
+        (无: 字段空值时的降级 / 字段同步失败的处理 / 历史数据迁移示例)
+      why_fails: 引入新字段但没给空值处理 (老数据该字段为 NULL 怎么算)、迁移失败处理示例。
+    negative_example:
+      source_file: workspace-points-payment/prd/积分抵扣支付-v2.md
+      section: 退款逻辑 / 典型场景验证
+      snippet: |
+        > **典型场景验证**：用户有 ¥0 余额 + 500 积分，兑换 500 积分 → 得到 ¥5 余额。
+        > 下单 ¥5 全额消费此余额，再全额退款：
+        > - 积分：500（已消耗）→ 仍为 0（不返还）
+        > - 账户余额：¥0 → ¥5 → ¥0 → ¥5（退款到账后）
+        > - 今日已兑：¥5（不回补）
+      why_passes: 退款这种非常规逻辑用具体数值场景给出, 边界情况 (额度池不回补) 显式说明。
+    fire_when: PRD 提到继承/降级/空值/迁移等非常规逻辑但无任何具体场景示例。
+    dont_fire_when: 至少 1 个非常规逻辑配数值示例, 或 PRD 仅含常规增删改查逻辑。
+
+  - id: FN-03
+    name: 风鸟鉴权与基础路径硬约定
+    severity: must
+    description: 风鸟接口鉴权须为 Bearer JWT, 基础路径须为 /api/v1/<module>/*, 不允许 TBD。
+    impact_score: 0.7
+    positive_example:
+      source_file: workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md
+      section: 技术约定 (含 TBD)
+      snippet: |
+        | 接口鉴权     | `Authorization: Bearer {token}`，放在 HTTP 请求头 | 待技术确认，TBD |
+        | 接口基础路径 | `/api/v1`                                          | 待技术确认，TBD |
+      why_fails: 鉴权与基础路径都标了 TBD, FN-03 在风鸟领域要求显式给值不能 TBD (与 RC-004 协同, RC-004 允许 TBD, FN-03 严)。
+    negative_example:
+      source_file: workspace-对外投资/prd/数据维度-对外投资增加间接投资_原始版本.md
+      section: 技术约定 (Technical Conventions)
+      snippet: |
+        ## 技术约定 (Technical Conventions)
+
+        | 约定项 | 说明 |
+        |--------|------|
+        | 前端框架 | React + Tailwind CSS |
+        | 接口鉴权方式 | JWT（Bearer Token） |
+        | 接口基础路径 | /api/v1 |
+        | 数据读取方式 | 所有数据走 ES，不直接查 MySQL/PostgreSQL |
+        | 分页方式 | page / pageSize 参数，默认 pageSize=20 |
+      why_passes: 接口鉴权方式显式写"JWT（Bearer Token）"且不带 TBD/待确认; 接口基础路径直给 "/api/v1" 而非占位符 — 完全符合 FN-03 dont_fire_when。
+    _mock: false
+    fire_when: PRD 鉴权/基础路径有"TBD"/"待确认", 或路径无模块前缀 (如 /xxx/* 占位符)。
+    dont_fire_when: 鉴权显式 Bearer JWT 不带 TBD, 路径以 /api/v1/<module>/ 开头。
+
+  - id: RC-011
+    name: 接口入参与出参定义
+    severity: must
+    description: 涉及接口的 PRD 须给出每个接口的入参 (含类型/必填/枚举值) 和出参结构。
+    impact_score: 0.65
+    positive_example:
+      source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
+      section: 全文 (无接口入参/出参定义)
+      snippet: |
+        诉前调解数据直接读取诉前调解表。
+        立案信息仍读取ds_risk_court_lian表但要去除诉前调解数据。
+        (无: GET /api/v1/court/mediation 入参, 出参字段, 错误码)
+      why_fails: 隐含至少 2 个接口 (列表 / 详情) 但 PRD 完全没给入参/出参契约, 前后端联调全靠口头对齐。
+    negative_example:
+      source_file: workspace-纳税人资质/prd/纳税人资质需求文档-v1.0.md
+      section: 5. 接口规范
+      snippet: |
+        GET /api/v1/tax-state/list
+        入参: entid (必填, string), pageNum (int, default 1), pageSize (int, default 20)
+        出参: { total: int, list: [{ taxid, stype, taxorg, sdate, edate }], code: 0 }
+      why_passes: 接口路径 + 入参类型/默认值 + 出参结构 + 错误码全有, 前后端可独立开发。
+    fire_when: PRD 提及 ≥1 个接口但全文找不到入参类型/必填/出参结构定义。
+    dont_fire_when: 入参出参定义齐全, 或 PRD 不涉及接口 (纯数据迁移/配置类)。
+
+  - id: RC-012
+    name: 排序规则可执行
+    severity: should
+    description: 默认排序须明示排序键 + 顺序 (DESC/ASC), 多键排序须显式给出优先级与 NULL 值处理。
+    impact_score: 0.4
+    positive_example:
+      source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
+      section: 全文 (无默认排序声明)
+      snippet: |
+        ### 2.1 Web UI
+        字段展示、筛选项、搜索项、导出，全都和立案信息UI保持一致
+        (无: 默认按什么字段排序, 升降序, NULL 值排在前还是后)
+      why_fails: 列表页未声明默认排序, 开发各写各的, 用户每次刷新顺序变化。
+    negative_example:
+      source_file: workspace-纳税人资质/prd/纳税人资质需求文档-v1.0.md
+      section: 3.1.2 个性化规则
+      snippet: |
+        | 数据类型   | 规则项   | 规则说明                                  |
+        | 纳税人资质 | 默认排序 | 按照sdate从晚到早排序，再按id从大到小排序 |
+      why_passes: 显式给出主键 (sdate DESC) + 副键 (id DESC), 多键优先级清晰。
+    fire_when: PRD 含列表/查询页面但全文找不到默认排序规则。
+    dont_fire_when: 排序规则显式声明含主副键 + 顺序, 或场景为详情页无列表。
+
+  # =========================================================
+  # 数据质量 (鸬鹚) — EV-04 + FN-01
+  # =========================================================
+
+  - id: EV-04
+    name: AI 特性 eval 集计划
+    severity: must
+    description: 涉及 AI/LLM/推荐/排序/智能匹配等特性时, PRD 须含评估集来源 / 主指标 / 回归触发三项。
+    impact_score: 0.8
+    positive_example:
+      source_file: workspace-points-payment/prd/积分抵扣支付-v2.md
+      section: 默认行为 / 兑换金额预填 (假设是 AI 推荐金额)
+      snippet: |
+        - 兑换弹窗预填金额: 按"恰好补足订单差额"向上取整到整元数
+          (如订单 ¥3.90、余额 ¥2 → 预填 ¥2)
+        (无: 评估集 / 主指标 / 回归触发)
+      why_fails: 若 PM 后续把"预填金额"改成 AI 智能推荐, 则需 eval 集 + 指标 + 回归; 当前是规则引擎, 一旦切 AI 必须补。
+    negative_example:
+      source_file: workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md
+      section: 1.6 默认排序规则
+      snippet: |
+        ### 1.6 默认排序规则
+
+        | 数据类型              | 规则项   | 规则说明                     |
+        | --------------------- | -------- | ---------------------------- |
+        | 【劳动仲裁-送达公告】 | 默认排序 | 按照publish_date从晚到早排序 |
+        | 【劳动仲裁-开庭公告】 | 默认排序 | 按照open_time从晚到早排序    |
+
+        ### 1.7 筛选规则
+
+        | 模块 | 筛选字段 | 层级 | 单选/多选 | 筛选项排序规则 | 规则说明 |
+        |------|---------|---------|------|------|------|
+        | 【开庭公告】 | 案由 | 单级筛选 | 单选 | 根据数量从大到小排序 | 按案由分组统计 |
+      why_passes: 排序与筛选完全是 ORDER BY publish_date / 数量倒序的规则驱动逻辑, 无 AI/LLM/推荐/相关性模型介入, 也不需要 eval 集和主指标 — 完全符合 EV-04 dont_fire_when "PRD 是规则驱动无 AI 特性"。
+    _mock: false
+    fire_when: PRD 提到 AI/LLM/推荐/排序/智能 ... 但 eval 集 / 主指标 / 回归触发缺任一项。
+    dont_fire_when: PRD 是规则驱动无 AI 特性, 或 AI 特性全部三项已写。
+
+  - id: FN-01
+    name: ds_risk_* 三段过滤约定
+    severity: must
+    description: 引用 ds_risk_* 表的 SQL/伪代码须含 entid > 0 / data_status = 0 / riskbird_status = 0 三段过滤。
+    impact_score: 0.75
+    positive_example:
+      source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
+      section: 全文 (引用 ds_risk_court_mediation 但无三段过滤)
+      snippet: |
+        ## 二、需求详情
+
+        ### 1. 诉前调解数据库设计
+
+        诉前调解数据直接读取诉前调解表 (ds_risk_court_mediation)。
+        立案信息仍读取ds_risk_court_lian表但要去除诉前调解数据。
+
+        ### 2. 数据展示
+
+        企业主页诉前调解列表页支持按"案由""案件状态""调解结果"筛选,
+        筛选项与立案信息保持一致。
+      why_fails: PRD 引用 ds_risk_court_mediation / ds_risk_court_lian 两张 ds_risk_* 表, 但全文未声明 entid > 0、data_status = 0、riskbird_status = 0 三段过滤的任一项, 开发漏过滤会混入企业关联数据 / 已删数据 / 风鸟不展示数据。
+    negative_example:
+      source_file: workspace-侵权软件/prd/未准入境需求文档-v1.0.md
+      section: 1.2.1 通用规则 (合规真实例 + synthetic 补充枚举值表)
+      snippet: |
+        ### 1.2.1 通用规则
+
+        | 规则项       | 规则说明                                        |
+        | ------------ | ----------------------------------------------- |
+        | 查询入口     | 从ds_risk_software_infringement_data表查询      |
+        | 企业过滤     | entid= 查询企业的entid                          |
+        | 主体过滤     | 只查询entid大于0的数据                          |
+        | 数据状态过滤 | data_status = 0（只查有效数据）主表要符合本规则 |
+        | 风鸟端过滤   | riskbird_status=0需要展示，为1不用展示          |
+
+        ### 1.2.2 字段枚举值表
+
+        | 字段 | 值 | 含义 |
+        |------|----|------|
+        | data_status | 0 | 有效 |
+        | data_status | 1 | 已删除 |
+        | riskbird_status | 0 | 风鸟展示 |
+        | riskbird_status | 1 | 风鸟不展示 |
+
+        ### 1.2.3 排序字段索引
+
+        默认排序字段 publish_date 在 DDL 中已建索引 (idx_publish_date), 见 wiki/约束-未准入境DDL.md。
+      why_passes: ds_risk_* 表三段过滤齐全 (entid>0 + data_status=0 + riskbird_status=0) + 完整枚举值表 + 排序字段索引声明, 满足 review-dimensions.yaml FN-01 全部 5 子项。前半部分 (1.2.1) 来自真实 PRD; 后半部分 (1.2.2/1.2.3 枚举与索引) 为合规拼接。
+      synthetic: true
+      synthetic_reason: 真实 PRD (8 个 workspace) 中 ds_risk_* 表三段过滤通常齐全, 但 review-dimensions.yaml 5 子项要求的 d) 完整枚举值表 + e) 排序字段索引声明在所有 PRD 中均缺失。为给 worker 完整合规样本以校准回归 baseline, 在真实 1.2.1 段后拼接 1.2.2/1.2.3 两段示意补充。
+    fire_when: PRD 引用了 ds_risk_* 表但 SQL/伪代码/规则表未声明 entid / data_status / riskbird_status 三段过滤的任一项。
+    dont_fire_when: PRD 不引用 ds_risk_* 表; 或者 entid/data_status/riskbird_status 三段过滤均已显式列出 (不要求枚举所有取值, 仅声明字段+条件即可)。

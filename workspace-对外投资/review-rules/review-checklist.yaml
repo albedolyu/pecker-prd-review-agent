@@ -1,63 +1,11 @@
-# 啄木鸟 Review Checklist -- 自建评审规则
-# 每条规则有 id, name, severity, description, impact_score
+# =============================================================
+# workspace-对外投资 review-checklist (SSOT extends 模式)
+# =============================================================
+# 由 scripts/migrate_to_ssot_yaml.py 自动生成 (一次性迁移).
+# 老规则定义已收敛到 review-rules-shared/review-checklist.yaml,
+# 本文件只列 workspace 独有 / 覆盖项.
+# =============================================================
 
-rules:
-  - id: RC-004
-    name: 技术约定节存在
-    severity: must
-    description: PRD 必须包含技术约定节（框架/鉴权方式/基础路径），不能依赖外部文档独立支撑开发
-    impact_score: 0.7
+extends: ../../review-rules-shared/review-checklist.yaml
 
-  - id: RC-005
-    name: 四态 UI 规范已定义
-    severity: must
-    description: PRD 必须定义加载中/请求失败/筛选无结果/空数据四种 UI 状态的文案与样式
-    impact_score: 0.8
-
-  - id: RC-006
-    name: 图片路径使用相对路径
-    severity: should
-    description: PRD 中引用的图片应使用相对路径，避免绝对路径导致协作问题
-    impact_score: 0.3
-
-  - id: RC-007
-    name: 复杂联动逻辑有伪代码
-    severity: should
-    description: 复杂联动逻辑、非结构化文本处理等必须有伪代码或流程描述
-    impact_score: 0.6
-
-  - id: RC-008
-    name: 筛选追溯完整
-    severity: must
-    description: 筛选/查询逻辑须从用户操作追溯到 WHERE 条件，中间无断点；非常规逻辑（继承/降级/空值）需有具体示例覆盖
-    impact_score: 0.75
-
-  - id: RC-009
-    name: 字段映射一致性
-    severity: must
-    description: 字段映射表中字段名与物理表 DDL 一致；跨表字段须标注 JOIN 来源和优先级
-    impact_score: 0.8
-
-  - id: RC-010
-    name: 数值类字段标注来源
-    severity: must
-    description: 数值类字段（分页数/导出上限/阈值）须标注来源或标注 TBD；跨表字段须说明空值降级处理
-    impact_score: 0.7
-
-  - id: RC-013
-    name: 伪代码字段可追溯
-    severity: must
-    description: 伪代码中每个字段均可在 DDL 中找到；跨表字段标注 JOIN 来源
-    impact_score: 0.6
-
-  - id: RC-014
-    name: 筛选逻辑追溯到 WHERE
-    severity: must
-    description: 筛选/查询逻辑从用户操作追溯到 WHERE 条件，中间无断点
-    impact_score: 0.65
-
-  - id: RC-015
-    name: 非常规逻辑有示例
-    severity: should
-    description: 非常规逻辑（继承/降级/空值）须有具体示例覆盖
-    impact_score: 0.5
+additional_rules: []

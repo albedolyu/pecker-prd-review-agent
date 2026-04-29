@@ -1,0 +1,110 @@
+version: subset
+rules:
+- id: V-02
+  name: 文档版本与变更追踪
+  severity: should
+  description: PRD 须含版本历史表, 每个版本标注修订内容和修订人, 让 reviewer 可追溯演进。
+  impact_score: 0.4
+  positive_example:
+    source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
+    section: 顶部 / 一、需求背景 (无版本历史表)
+    snippet: '# 【新增】风鸟增加诉前调解数据&从立案信息中去除诉前调解数据
+
+
+      ## 一、需求背景
+
+
+      概述：当前风鸟的立案信息包含诉前调解数据，为了更精确地划分数据类型，
+
+      决定在风鸟上增加"诉前调解"数据，同时风鸟的立案信息需要去除"诉前调解"数据。
+
+      '
+    why_fails: PRD 直接进入需求背景, 全文找不到任何版本历史表 / 修订记录, 无法判断当前是首版还是迭代后版本。
+  negative_example:
+    source_file: workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md
+    section: 顶部 / 文档版本历史
+    snippet: '**文档版本历史**
+
+
+      | 修订版本 | 修订日期   | 修订内容                                  | 修订人 |
+
+      | -------- | ---------- | ----------------------------------------- | ------
+      |
+
+      | v1.0     | 2025-12-01 | 初始版本                                  | 王烨皓 |
+
+      | v4.0     | 2026-01-29 | 优化为产品经理需求文档，移除代码实现细节  | 张涛   |
+
+      | v5.1     | 2026-03-20 | 补充技术约定、三模块FR列表、通用状态规范  | AI辅助 |
+
+      '
+    why_passes: 完整版本历史表, 每行有版本号 / 日期 / 修订内容 / 修订人四列, reviewer 可定位当前迭代点。
+  fire_when: PRD 没有版本历史表, 或最新版本未标注修订内容 / 修订人。
+  dont_fire_when: 版本历史表完整, 或文档明确为单次需求快照 (≤30 行 ad-hoc) 不需要历史。
+- id: V-05
+  name: 信息自洽性
+  severity: must
+  description: 同一字段 / 数值 / 规则在 PRD 不同章节描述应一致, 不能 A 处说"默认 20 条" B 处说"默认 10 条"。
+  impact_score: 0.7
+  positive_example:
+    source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
+    section: 2.1 Web UI 与 6.2 风险扫描
+    snippet: '### 2.1 Web UI
+
+      字段展示、筛选项、搜索项、导出，全都和立案信息UI保持一致
+
+
+      ### 6.2 风险扫描
+
+      诉前调解的风险评分逻辑: 调解失败/未达成案件 +5 分, 已达成 +0 分。
+
+      (但立案信息章节说"调解失败 +3 分")
+
+      '
+    why_fails: 调解失败评分一处 +5 一处 +3, 同一规则跨章节矛盾, 开发拿不准实现。
+  negative_example:
+    source_file: workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md
+    section: 技术约定 / 二、企业主页 / 三、关联系统交付
+    snippet: '| 分页默认值 | 默认20条/页，支持切换50/100 | 企业主页和查风险模块统一 |
+
+
+      ### 1.5 列表展示规则
+
+      分页: 默认 20 条/页, 可切换 50/100 条 (与技术约定节一致)。
+
+      '
+    why_passes: 分页默认值在技术约定 + 列表规则两处一致, 跨章节自洽。
+  fire_when: PRD 内部找到任一矛盾 (字段含义/数值/规则/UI 描述跨章节不一致)。
+  dont_fire_when: 描述一致, 或 PRD 显式标注"端差异"等有意识的不同。
+- id: FN-09
+  name: 移动端与 Web 端必显式对齐
+  severity: must
+  description: 跨端 PRD 不能用"复用 Web 端"等隐式引用, 须显式说明每个移动端页面是原生还是 WebView, 字段映射独立给出。
+  impact_score: 0.7
+  positive_example:
+    source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
+    section: 2.2 移动端UI
+    snippet: '### 2.2 移动端UI
+
+
+      字段展示、筛选项、搜索项、导出，全都和立案信息UI保持一致。
+
+      只是把数据类型从"立案信息"改到"诉前调解"。
+
+      '
+    why_fails: '"全都和立案信息 UI 保持一致"是隐式引用, 没说移动端是原生还是 WebView, 也没列字段映射, 移动端开发只能去翻立案信息文档。'
+  negative_example:
+    source_file: workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md
+    section: 二、企业主页 / 移动端章节
+    snippet: '移动端 (uni-app, WebView 容器): 列表页字段含案号/仲裁机构/年份。
+
+      筛选维度: 省份/年份/公告类型 (与 Web 端的案由/仲裁机构差异化)。
+
+      无搜索框, 用"省份+年份"组合筛选替代。
+
+      字段映射: area_code → 省份, publish_date → 年份。
+
+      '
+    why_passes: 显式声明 WebView, 列出移动端独立的筛选维度差异 + 字段映射, 端差异看得清。
+  fire_when: PRD 含移动端章节且出现"复用 Web 端"/"和 X 一致"等未点明对象的引用。
+  dont_fire_when: 移动端字段映射 / 容器类型 / 筛选差异都显式独立给出, 或 PRD 仅 Web。

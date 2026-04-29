@@ -170,7 +170,7 @@ def _init_config():
 # 意图路由(已抽至 router.py,此处保留旧名兼容)
 # ============================================================
 
-from router import route_intent
+# 2026-04-28: route_intent 已删 (Haiku PRD 复杂度分类废弃). 保留下面 build_system_blocks 一处 import.
 
 
 # ============================================================
@@ -256,7 +256,9 @@ def run_parallel_review(client, workspace, wiki_path, prd_content, prd_files, wi
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
     t_start = _time.time()
-    result = asyncio.run(parallel_review(client, prd_content, wiki_pages, MODEL_TIERS,
+    # 2026-04-28: worker 入参 client=None 强制走 model_router (worker.py:521 use_router=client is None),
+    # 让 routes.yaml 里 worker.* 切 DeepSeek 真生效; 主啄木鸟 agent (Phase 0/1/3/4) 仍用 client。
+    result = asyncio.run(parallel_review(None, prd_content, wiki_pages, MODEL_TIERS,
                                           wiki_path=wiki_path, diff_context=diff_context,
                                           on_worker_done=_on_worker_done))
     elapsed = _time.time() - t_start
@@ -485,13 +487,8 @@ def main():
     # 创建 API 客户端
     client = create_client(api_key=API_KEY, base_url=BASE_URL)
 
-    # 意图路由
-    if args.model == "auto":
-        model_tier = route_intent(client, prd_name)
-        print(f"[router] PRD「{prd_name}」-> {model_tier}")
-    else:
-        model_tier = args.model
-
+    # 2026-04-28: router.intent (Haiku PRD 复杂度分类) 已删, --model 直接生效
+    model_tier = args.model
     model = MODEL_TIERS[model_tier]
     print(f"Pecker:    v1.0.0")
     print(f"Model:     {model}")

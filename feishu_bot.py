@@ -107,6 +107,14 @@ async def _handle_message(event):
     content = json.loads(content_str)
     text = content.get("text", "")
 
+    sender = event.get("sender", {}).get("sender_id", {}).get("union_id", "feishu_user")
+
+    # 优先匹配反馈消息 — "@啄木鸟 R-001 是误报" 不能掉到评审分支
+    fb = _try_parse_feedback(text)
+    if fb:
+        await _handle_feedback(message_id, sender, fb)
+        return
+
     # 检测是否是评审请求
     if "评审" not in text:
         return
@@ -143,8 +151,6 @@ async def _handle_message(event):
     progress_msg_id = client.send_card(chat_id, progress_card)
 
     # 创建临时 workspace 并执行评审
-    sender = event.get("sender", {}).get("sender_id", {}).get("union_id", "feishu_user")
-
     loop = asyncio.get_running_loop()
     result = await loop.run_in_executor(None, lambda: _run_review(prd_content, prd_name, sender))
 
@@ -291,6 +297,116 @@ def _save_decision(workspace, prd_name, item_id, decision):
 
     with open(fpath, "w", encoding="utf-8") as f:
         json.dump(existing, f, ensure_ascii=False, indent=2)
+
+
+# ============================================================
+# PM 自然语言反馈处理 (CodeRabbit chat reply 同款)
+# ============================================================
+#
+# 触发示例 (PM 在群里 @啄木鸟):
+#   "@啄木鸟 R-001 是误报, 分页字段已统一约定为 20"
+#       → outcome=reject + auto-learning (累计 reject>=3 时)
+#   "@啄木鸟 R-005 接受"
+#       → outcome=accept
+#   "@啄木鸟 RC-005 这条以后都按 chill profile 隐藏"
+#       → outcome=reject + 显式 learning record
+#   "@啄木鸟 R-003 改写: 应该直接说排序规则需要补充章节"
+#       → outcome=edit + reason
+#
+# 解析策略 (启发式, 80% 用例够用, 不准确再 reply 让 PM 改写):
+#   1. 抽 finding_id (R-XXX / RC-XXX / TM-XXX 等大写字母+数字)
+#   2. 看动作关键词:
+#       reject: 误报 / 不对 / 不要 / 隐藏 / 撤回
+#       accept: 接受 / 同意 / 确认 / OK
+#       edit:   改写 / 应该 / 修正 / 改为
+#   3. reason: 整句 (去掉 finding_id 和 @机器人 部分)
+
+
+import re
+
+_FINDING_ID_RE = re.compile(r'\b([A-Z]{1,3}-\d{1,4})\b')
+_REJECT_KW = ("误报", "不对", "不要", "隐藏", "撤回", "false positive", "fp", "wrong")
+_ACCEPT_KW = ("接受", "同意", "确认", "ok", "对", "采纳")
+_EDIT_KW = ("改写", "应该", "修正", "改为", "edit")
+
+
+def _try_parse_feedback(text: str):
+    """从 PM 自然语言里启发式抽 feedback 字段.
+
+    返回:
+        None — 不是反馈消息
+        dict — {finding_id, outcome, reason, rule_id?}
+    """
+    if not text:
+        return None
+    # 必须包含 finding_id, 否则当普通消息
+    m = _FINDING_ID_RE.search(text)
+    if not m:
+        return None
+    finding_id = m.group(1)
+
+    lower = text.lower()
+    outcome = None
+    if any(kw in lower for kw in _EDIT_KW):
+        outcome = "edit"
+    elif any(kw in lower for kw in _REJECT_KW):
+        outcome = "reject"
+    elif any(kw in lower for kw in _ACCEPT_KW):
+        outcome = "accept"
+
+    if not outcome:
+        return None
+
+    # reason: 去掉 @机器人前缀 + finding_id + 动作关键词周边噪音
+    reason = re.sub(r'@\S+', '', text).strip()
+    reason = reason.replace(finding_id, "").strip(" ,.，。:：")
+    return {
+        "finding_id": finding_id,
+        "outcome": outcome,
+        "reason": reason or None,
+        # rule_id 启发式: finding_id 前缀就是 rule_id 系列 (R-001 → R)
+        # 但因为没原始 review 上下文, rule_id 暂存 finding_id 自身
+        # (record_outcome 会同时按 rule_id + finding_id 索引)
+        "rule_id": finding_id,
+    }
+
+
+async def _handle_feedback(message_id: str, sender: str, fb: dict):
+    """收到反馈 → 写 finding_outcomes_store + reply 确认."""
+    from feishu_client import FeishuClient
+    from review.finding_outcomes_store import record_outcome
+
+    client = FeishuClient()
+    try:
+        outcome_id = record_outcome(
+            finding_id=fb["finding_id"],
+            outcome=fb["outcome"],
+            rule_id=fb.get("rule_id"),
+            pm_name=sender,
+            reason=fb.get("reason"),
+        )
+        outcome_label = {
+            "accept": "已记录: 接受",
+            "reject": "已记录: 误报",
+            "edit": "已记录: 改写",
+        }.get(fb["outcome"], fb["outcome"])
+        msg = (
+            f"{outcome_label} ({fb['finding_id']}) #{outcome_id}\n"
+            f"理由: {(fb.get('reason') or '(无)')[:200]}"
+        )
+        # reject 累计达到阈值时, finding_outcomes_store 那边没自动加 learning
+        # (没 workspace 路径), 这里告知 PM 用 /api/feedback/reject 走 web 端
+        # 才能完整反哺 learning
+        if fb["outcome"] == "reject":
+            msg += "\n(累计反馈会反哺信鸽 v2 learning, 后续同类不再误报)"
+        client.reply_text(message_id, msg)
+        log.info(f"[feedback] {sender} → {fb['finding_id']} {fb['outcome']} (id={outcome_id})")
+    except Exception as e:
+        log.error(f"feedback 写入失败: {str(e)[:120]}")
+        try:
+            client.reply_text(message_id, f"反馈记录失败: {str(e)[:80]}")
+        except Exception:
+            pass
 
 
 # FastAPI 应用实例（uvicorn 直接引用）

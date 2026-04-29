@@ -41,7 +41,8 @@ class TestBuildParser:
         from session_setup import build_parser
         args = build_parser().parse_args([])
         assert args.prd_name is None
-        assert args.model == "auto"
+        # 2026-04-29: --model 默认 auto → opus (router.intent Haiku 路由废弃, 默认走 opus)
+        assert args.model == "opus"
         assert args.resume == "prompt"
         assert args.auto_decide == "off"
         assert args.no_parallel is False

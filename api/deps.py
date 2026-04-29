@@ -28,12 +28,19 @@ def get_max_concurrent() -> int:
 
 @lru_cache(maxsize=1)
 def get_client():
-    """返回 ClaudeCodeCLIClient 单例,整个 FastAPI 进程共享。
+    """根据 USE_CLAUDE_CODE 选 transport:
+    - =1 → ClaudeCodeCLIClient (subprocess 调本地 claude CLI)
+    - =0 → AnthropicNativeClient (直连 Anthropic SDK, 从 env 读 API_KEY)
 
-    api_adapter.create_client 内部已经忽略 api_key/base_url,只走本地 CC CLI。
+    单例缓存整个 FastAPI 进程共享, 给 precheck (client.create 直调) 和
+    parallel_review (透传给 worker, 让 use_router 判断走哪条路) 用。
     """
-    from api_adapter import create_client
-    return create_client()
+    use_cc = os.environ.get("USE_CLAUDE_CODE", "").strip().lower() in ("1", "true", "yes", "on")
+    if use_cc:
+        from api_adapter import create_client
+        return create_client()
+    from clients.anthropic_native import AnthropicNativeClient
+    return AnthropicNativeClient()
 
 
 # ============================================================

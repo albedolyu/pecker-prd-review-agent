@@ -1,0 +1,21 @@
+{
+  "wiki_dir": "C:\\Users\\20834\\Desktop\\agent\\prd review\\workspace-对外投资\\wiki",
+  "pages_scanned": 48,
+  "biz_pages_extracted": 46,
+  "pages_failed": [],
+  "entities_count": 146,
+  "relations_count": 291,
+  "by_type": {
+    "page_concept": 68,
+    "spec_doc": 28,
+    "data_table": 4,
+    "field": 41,
+    "ui_state": 4,
+    "api_endpoint": 1
+  },
+  "elapsed_seconds": 479.5,
+  "max_gleanings": 2,
+  "page_concurrency": 4,
+  "built_at": "2026-04-29 01:47:22",
+  "builder": "build_kg_all.py"
+}

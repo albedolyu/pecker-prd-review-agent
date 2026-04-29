@@ -1,0 +1,155 @@
+name: Rule Regression (real worker on self-hosted)
+
+# 真实 worker 调用版 P/R 回归 — 跟 rule_regression.yml (static) 互补.
+# 必须 self-hosted runner (label: pecker-runner), 因为:
+#   - claude CLI OAuth 不能搬到 GitHub-hosted runner
+#   - codex CLI ChatGPT Pro OAuth 同上
+#   - DEEPSEEK_API_KEY 走 self-hosted runner 的 .env, 不进 GitHub Secrets
+# 详见 scripts/CI_self_hosted_setup.md.
+#
+# 触发: 改 prompt / worker / dimensions / rules → 必跑.
+# Gate: P 或 R 跌 > tolerance (默认 0.05) 即 exit 1.
+# Artifacts: regression_results.json + 失败时 PR 评论详情.
+
+on:
+  pull_request:
+    paths:
+      - "review/prompting.py"
+      - "review/worker.py"
+      - "review/learnings_store.py"
+      - "review-rules/**"
+      - "workspace-sample/review-rules/**"
+      - "review-dimensions.yaml"
+      - "scripts/rule_regression.py"
+      - "scripts/fixtures/regression_baseline.json"
+      - "model_router.py"
+      - "model_routes.yaml"
+      - "agent_config.py"
+  workflow_dispatch:
+    inputs:
+      tolerance:
+        description: "P/R 下降容忍阈值 (绝对值, 默认 0.05)"
+        required: false
+        default: "0.05"
+      skip_nli:
+        description: "跳过二层 NLI 校验 (true/false)"
+        required: false
+        default: "false"
+
+# concurrency: 单 PR 同时只跑一份 (避免重复花 token)
+concurrency:
+  group: rule-regression-real-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-rule-regression:
+    name: Real worker P/R regression
+    # self-hosted + label, 让用户能给特定机器装 claude CLI + DEEPSEEK key
+    runs-on: [self-hosted, pecker-runner]
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify self-hosted runner has CLI auth
+        shell: bash
+        run: |
+          # 关键依赖自检 — 缺一项 fail fast, 比跑到一半才报错友好
+          set -e
+          echo "[verify] PATH=$PATH"
+          which python || { echo "ERROR: python not on PATH"; exit 1; }
+          which claude || echo "WARN: claude CLI 不在 PATH (USE_CLAUDE_CODE=1 时必须)"
+          if [ -z "${DEEPSEEK_API_KEY:-}" ] && [ -z "${ANTHROPIC_API_KEY:-}" ] && [ -z "${API_KEY:-}" ]; then
+            echo "WARN: 没有任何 API key, 将依赖 claude CLI 登录态"
+          fi
+          python --version
+
+      - name: Install deps (self-hosted, idempotent)
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          # self-hosted runner 上 site-packages 已存大头, 这里只 pip install 增量
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Run rule_regression with real worker
+        id: run
+        shell: bash
+        env:
+          # 让 .env 里的 DEEPSEEK_API_KEY / ANTHROPIC_API_KEY 进 worker
+          USE_CLAUDE_CODE: "1"
+          PECKER_NLI_DEBUG: "0"
+        run: |
+          set -e
+          TOLERANCE="${{ github.event.inputs.tolerance || '0.05' }}"
+          SKIP_NLI=""
+          if [ "${{ github.event.inputs.skip_nli }}" = "true" ]; then
+            SKIP_NLI="--skip-nli"
+          fi
+          python scripts/rule_regression.py \
+            --rules-yaml workspace-sample/review-rules/review-checklist.yaml \
+            --baseline scripts/fixtures/regression_baseline.json \
+            --tolerance "$TOLERANCE" \
+            --output scripts/fixtures/regression_results.json \
+            $SKIP_NLI
+
+      - name: Upload regression artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rule-regression-real-results
+          path: |
+            scripts/fixtures/regression_results.json
+            scripts/fixtures/regression_baseline.json
+          retention-days: 90
+
+      - name: Comment PR on failure (regression detected)
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let summary = '## Real Worker Rule Regression FAILED\n\n';
+            try {
+              const raw = fs.readFileSync('scripts/fixtures/regression_results.json', 'utf8');
+              const r = JSON.parse(raw);
+              summary += `**Macro-P**: ${r.summary.macro_precision} · **Macro-R**: ${r.summary.macro_recall} · 规则数: ${r.summary.rule_count}\n\n`;
+              summary += '| rule_id | dim | P | R | TP | FP | FN | TN |\n|---|---|---|---|---|---|---|---|\n';
+              for (const [rid, d] of Object.entries(r.rules || {})) {
+                summary += `| ${rid} | ${d.dimension} | ${d.precision} | ${d.recall} | ${d.TP} | ${d.FP} | ${d.FN} | ${d.TN} |\n`;
+              }
+            } catch (e) {
+              summary += `(无法解析 regression_results.json: ${e.message})\n`;
+            }
+            summary += '\n**修复建议**:\n';
+            summary += '1. 本地 `python scripts/rule_regression.py` 复现\n';
+            summary += '2. 排查 prompt/worker 改动是否合理\n';
+            summary += '3. 如果是预期降幅, 跑 `--update-baseline` 后 commit 新 baseline\n';
+            summary += '\n详细 results 见 Actions artifact `rule-regression-real-results`.\n';
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: summary,
+            });
+
+      - name: Comment PR on success (P/R baseline ok)
+        if: success() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            try {
+              const raw = fs.readFileSync('scripts/fixtures/regression_results.json', 'utf8');
+              const r = JSON.parse(raw);
+              const body = `## Real Worker Regression OK\n\n` +
+                `Macro-P: **${r.summary.macro_precision}** · Macro-R: **${r.summary.macro_recall}** · ${r.summary.rule_count} 条规则全部通过 (tolerance=0.05).\n`;
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body,
+              });
+            } catch (e) {
+              // 静默 — 成功路径下解析不了不阻塞
+            }
