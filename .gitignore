@@ -86,9 +86,13 @@ _ssot_analysis/
 .tmp-demo/
 workspace_hardening_demo/
 
-# 回归 baseline 重跑产物 (固定 baseline 在 scripts/fixtures/ 跟踪, 重跑输出忽略)
-regression_*.json
-regression_real*.json
+# 回归 baseline 重跑的临时产物 (项目根的 --output 文件忽略)
+# 但 scripts/fixtures/regression_baseline.json 是 SSOT baseline 必须跟踪
+/regression_*.json
+/regression_real*.json
+scripts/fixtures/regression_baseline_errors.json
+scripts/fixtures/regression_results*.json
+!scripts/fixtures/regression_baseline.json
 
 # workspace 运行时产物 (除已跟踪的 prd/ wiki/ raw/ rules)
 workspace-*/learnings/
