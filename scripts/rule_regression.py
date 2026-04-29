@@ -244,7 +244,7 @@ def check_evidence_alignment(
     rule: Dict[str, Any],
     finding: Dict[str, Any],
     n_samples: int = 4,
-    max_signal_threshold: float = 0.6,
+    max_signal_threshold: float = 0.5,
 ) -> bool:
     """对 worker TP 做二层校验: evidence 是否真对应 rule.fire_when 的语境。
 
