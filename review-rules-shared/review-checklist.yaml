@@ -63,7 +63,17 @@ rules:
   - id: V-03
     name: 信息密度
     severity: should
-    description: PRD 不应有重复段落 / 纯背景堆砌 / 模糊指代 (等/相关/类似), 开发须能据此实现。
+    description: |
+      PRD 不应有"开发用不到的纯背景描述"占据大段篇幅, 开发须能据此实现.
+
+      **典型违规信号 (worker 见到强烈触发)**:
+      (1) 单段 ≥80 字描述法规 / 政策背景 / 历史沿革, 段内**无任何字段名 / 接口名 / UI 元素**
+      (2) 段内出现"应当 / 不少于 / 自...之日起 / 通过信息系统 / 报送 / 备案"等
+          法规化表述, 与 PRD 要做的功能没直接关联
+      (3) 模糊指代 ("等" / "相关" / "类似" / "参考") ≥5 处但后面没具体说明
+      (4) 同一信息在多个章节重复 (如背景在 1.x 写一遍, 2.x 又写一遍)
+
+      开发拿到这种段落: 既不知道要做啥功能, 也不知道字段从哪取, 等于 PRD 这部分白写.
     impact_score: 0.5
     positive_example:
       source_file: workspace-产品召回/prd/产品召回需求文档-v1.0-原始.md
@@ -86,8 +96,16 @@ rules:
         | 纳税人资格类型 | 主表.stype  | 根据stype映射，0-小规模纳税人，1-按适用税率征收增值税小规模纳税人, 2-一般纳税人 |
         | 主管税务机关   | 主表.taxorg | -                                                            |
       why_passes: 字段表每行都有具体值/来源/枚举, 无冗余背景, 开发可直接写代码。
-    fire_when: 出现 ≥5 处模糊指代 ("等"/"相关"/"类似"/"参考"), 或 ≥3 段纯背景堆砌。
-    dont_fire_when: 模糊指代后紧跟具体说明, 或背景段控制在 1-2 段且和需求强相关。
+    fire_when: |
+      满足以下任一即报:
+      (a) PRD 出现 ≥1 段 "纯法规背景" (单段 ≥80 字 + 段内无字段名/接口名/UI 元素 +
+          含 "应当/不少于/自...之日起/通过信息系统/报送/备案" 等法规化表述);
+      (b) ≥5 处模糊指代 ("等"/"相关"/"类似"/"参考") 后无具体说明;
+      (c) ≥3 段纯背景堆砌 (没法规化措辞但确实是与功能无关的历史/语境描述);
+      (d) 同一信息在 ≥2 个章节重复出现 (背景在 1.x 写一遍, 2.x 又写一遍).
+    dont_fire_when: |
+      背景段控制在 1-2 段且和功能强相关 (如解释字段为什么要某种处理),
+      或模糊指代后紧跟具体说明, 或 PRD 是补丁式短文档无背景章节.
 
   - id: V-04
     name: FR 列表完整性
@@ -876,19 +894,36 @@ rules:
   # 数据质量 (鸬鹚) — EV-04 + FN-01
   # =========================================================
 
+  # 2026-04-30 EV-04 复活: 之前退役决策 (commit ed34fb3 后) 错误 — 拿 baseline 好看
+  # 换未来 AI PRD 漏报风险, 本末倒置. 风鸟未来必然有 AI 智能评分 / 推荐 / 排序特性,
+  # 规则必须常驻在岗. 改用 synthetic positive_example (_mock: true) 解决"当前 PRD
+  # 池无 AI 违规样本"问题 — worker 在 mock 段上能 catch, 真出现 AI PRD 时立刻生效.
+
   - id: EV-04
     name: AI 特性 eval 集计划
     severity: must
     description: 涉及 AI/LLM/推荐/排序/智能匹配等特性时, PRD 须含评估集来源 / 主指标 / 回归触发三项。
     impact_score: 0.8
+    status: experimental    # 当前 8 workspace PRD 无 AI 特性, baseline 用 mock 样本验证
     positive_example:
-      source_file: workspace-points-payment/prd/积分抵扣支付-v2.md
-      section: 默认行为 / 兑换金额预填 (假设是 AI 推荐金额)
+      source_file: synthetic
+      section: 构造样本 (风鸟未来 AI 特性 PRD 的违规模板)
       snippet: |
-        - 兑换弹窗预填金额: 按"恰好补足订单差额"向上取整到整元数
-          (如订单 ¥3.90、余额 ¥2 → 预填 ¥2)
-        (无: 评估集 / 主指标 / 回归触发)
-      why_fails: 若 PM 后续把"预填金额"改成 AI 智能推荐, 则需 eval 集 + 指标 + 回归; 当前是规则引擎, 一旦切 AI 必须补。
+        ## 三、智能风险评分 (AI 特性)
+
+        ### 3.1 评分模型
+        基于企业历史司法 / 行政处罚 / 失信记录, 用大模型 (LLM) 综合分析后输出
+        企业风险评分 (0-100). 评分越高代表风险越大.
+
+        ### 3.2 推荐逻辑
+        当用户搜索企业, 智能推荐 5 家"业务相似 + 风险等级相近" 的企业.
+        相似度由 embedding 模型 + 自研排序算法计算.
+
+        (全文找不到: 评估集来源 / 主指标 / 回归触发任一项)
+      why_fails: PRD 引入 LLM 评分 + embedding 推荐 + 自研排序算法三项 AI 特性, 但全文无任何评估集 (golden set 大小 / 标注方式 / 谁负责) / 主指标 (Precision/Recall/NDCG 任一可量化值) / 回归触发 (何时跑回归 / 失败如何处理) — 上线后 PM 不知模型对错, 模型升级也无法验证不掉点.
+      _mock: true
+      synthetic: true
+      synthetic_reason: 当前 8 workspace PRD 全是规则驱动企业信息查询, 无真实 AI 特性 PRD. 为让 EV-04 规则在 baseline 中可被验证, 构造一段最贴近风鸟未来产品形态 (智能风险评分 + 推荐) 的违规样本. 真出现 AI PRD 时, 把本段替换为真实样本即可.
     negative_example:
       source_file: workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md
       section: 1.6 默认排序规则
@@ -906,14 +941,19 @@ rules:
         |------|---------|---------|------|------|------|
         | 【开庭公告】 | 案由 | 单级筛选 | 单选 | 根据数量从大到小排序 | 按案由分组统计 |
       why_passes: 排序与筛选完全是 ORDER BY publish_date / 数量倒序的规则驱动逻辑, 无 AI/LLM/推荐/相关性模型介入, 也不需要 eval 集和主指标 — 完全符合 EV-04 dont_fire_when "PRD 是规则驱动无 AI 特性"。
-    _mock: false
     fire_when: PRD 提到 AI/LLM/推荐/排序/智能 ... 但 eval 集 / 主指标 / 回归触发缺任一项。
     dont_fire_when: PRD 是规则驱动无 AI 特性, 或 AI 特性全部三项已写。
 
   - id: FN-01
     name: ds_risk_* 三段过滤约定
     severity: must
-    description: 引用 ds_risk_* 表的 SQL/伪代码须含 entid > 0 / data_status = 0 / riskbird_status = 0 三段过滤。
+    description: |
+      **风鸟项目硬约定 — 凡 PRD 文本出现 "ds_risk_" 字符串就立即触发本规则强检.**
+      引用 ds_risk_* 表的查询必须含三段过滤 (任一缺失即 fail):
+      (1) entid > 0          (主体过滤, 滤掉关联企业污染数据)
+      (2) data_status = 0    (有效数据过滤, 滤掉已删除数据)
+      (3) riskbird_status = 0 (风鸟展示过滤, 滤掉风鸟不展示数据)
+      漏一项开发跑出来数据全是脏的, 用户看到不该看的内容.
     impact_score: 0.75
     positive_example:
       source_file: workspace-fengniao-mediation/prd/风鸟-诉前调解-v1.md
@@ -960,5 +1000,15 @@ rules:
       why_passes: ds_risk_* 表三段过滤齐全 (entid>0 + data_status=0 + riskbird_status=0) + 完整枚举值表 + 排序字段索引声明, 满足 review-dimensions.yaml FN-01 全部 5 子项。前半部分 (1.2.1) 来自真实 PRD; 后半部分 (1.2.2/1.2.3 枚举与索引) 为合规拼接。
       synthetic: true
       synthetic_reason: 真实 PRD (8 个 workspace) 中 ds_risk_* 表三段过滤通常齐全, 但 review-dimensions.yaml 5 子项要求的 d) 完整枚举值表 + e) 排序字段索引声明在所有 PRD 中均缺失。为给 worker 完整合规样本以校准回归 baseline, 在真实 1.2.1 段后拼接 1.2.2/1.2.3 两段示意补充。
-    fire_when: PRD 引用了 ds_risk_* 表但 SQL/伪代码/规则表未声明 entid / data_status / riskbird_status 三段过滤的任一项。
-    dont_fire_when: PRD 不引用 ds_risk_* 表; 或者 entid/data_status/riskbird_status 三段过滤均已显式列出 (不要求枚举所有取值, 仅声明字段+条件即可)。
+    fire_when: |
+      **检索关键字 "ds_risk_" — 命中即必查三段过滤**.
+      PRD 文本任一处出现 "ds_risk_" 字符串 (如 ds_risk_court_mediation /
+      ds_risk_court_lian / ds_risk_software_infringement_data 等) 即触发,
+      触发后任一缺失即报:
+      (a) 全文找不到 entid 相关过滤声明 (entid > 0 或 entid 非空);
+      (b) 全文找不到 data_status 过滤声明 (data_status = 0 或 data_status IN (0,...));
+      (c) 全文找不到 riskbird_status 过滤声明 (riskbird_status = 0 或等价).
+    dont_fire_when: |
+      PRD 全文不包含 "ds_risk_" 字符串 (即 PRD 不涉及 ds_risk_* 表); 或者
+      entid / data_status / riskbird_status 三段过滤在 PRD 任意位置 (SQL / 伪代码 /
+      规则表 / 通用规则节) 均已显式列出 (不要求枚举所有取值, 仅声明字段 + 条件即可).

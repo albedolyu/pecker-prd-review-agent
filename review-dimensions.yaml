@@ -21,12 +21,31 @@ dimensions:
         fail 条件：无版本历史表，或最新版本未标注修订内容。
         severity: should
 
-      V-03 信息密度：
-        检查项：逐段扫描 PRD，标记以下反模式：
-        - 重复说明同一个功能（如"支持筛选"在多处重复描述但无新增信息）
-        - 堆砌背景/法规引用但与开发需求无关的段落
-        - "等"、"相关"、"类似"等模糊指代（开发无法据此实现）
-        fail 条件：≥5 处模糊指代或≥3 段纯背景堆砌。severity: should
+      V-03 信息密度（**逐段扫描, 见到长背景段必报**）：
+        # 2026-04-30 强化: 原 prompt 太抽象, worker 在批量 29 条规则里注意力分散漏报.
+        # 加典型违规信号 + 触发关键词清单, 让 worker 一眼识别.
+        逐段扫描 PRD, 任一段满足以下条件即必报本规则 (不要因为 PRD 整体 OK 就放过):
+
+        反模式 1 — 单段法规/政策背景堆砌 (最常见, 必报):
+          - 单段 ≥80 字 + 段内**无字段名 / 接口名 / UI 元素 / SQL**;
+          - 段内含 "应当 / 不少于 / 自...之日起 / 通过信息系统 / 报送 / 备案 /
+            根据...规定 / 第X条" 等法规化表述;
+          - 例: "生产者应当自确认消费品存在缺陷之日起5个工作日内或被责令召回之日起
+            5个工作日内通过信息系统向所在地省级质检部门备案召回计划" → 必报.
+
+        反模式 2 — 模糊指代 (worker 常见漏报, 主动找):
+          - "等" / "相关" / "类似" / "参考" 后无具体说明, 出现 ≥5 处必报.
+
+        反模式 3 — 同一信息跨章节重复:
+          - 同一概念在 ≥2 个章节出现, 没有新增信息.
+
+        反模式 4 — 无功能/字段绑定的纯描述段:
+          - 段内全是描述性文字, 没有任何"做什么 / 取哪个字段 / 哪个 UI" 的具体信息.
+
+        fail 条件: 命中任一反模式即报.
+        反例 (worker 不要报): 背景段 ≤2 段且与功能强相关 (如解释字段为何要某种处理),
+        或模糊指代后紧跟具体说明.
+        severity: should
 
       V-04 功能清单完整性：
         # 2026-04-26 sprint Day3 REWRITE: 原 "FR 列表完整性" 假设 FR-XX 命名过强,
@@ -296,12 +315,14 @@ dimensions:
       RC-009~RC-010，逐条检查：
 
       EV-04 AI 特性 eval 集计划（must, experimental, 仅 AI/ML PRD 触发）：
-        # 2026-04-26 sprint Day3 ADD: AI Coding 失败模式高发, AI 特性 PRD 没 eval 计划等于
-        # 跑出来没人能验对错. 触发条件确保非 AI PRD 不被误报.
+        # 2026-04-30 复活: 之前退役错了, 拿 baseline 好看换未来 AI PRD 漏报风险.
+        # 风鸟未来必然有 AI 智能评分 / 推荐 / 排序特性, 规则必须常驻在岗.
+        # SSOT 已用 synthetic mock 样本作为 positive_example, 真 AI PRD 出现时替换即可.
         触发条件: PRD 提到以下任一关键词时强检:
         - AI / LLM / 大模型 / 机器学习 / ML / 深度学习
         - 推荐 / 排序 / 分类 / 评分 / 预测 / 生成 (业务上是 AI 算法生成的)
-        - 智能 (限定: 智能匹配/智能搜索/智能推荐, 不含"智能手机/智能合约"等无关用法)
+        - 智能 (限定: 智能匹配/智能搜索/智能推荐/智能评分, 不含"智能手机/智能合约"等无关用法)
+        - embedding / 向量 / similarity / 相似度模型
 
         触发后必须包含 3 项 (缺任一即 fail):
         (a) **评估集来源**: golden set 大小 (如 "100 条人工标注样例") + 标注方式 + 谁负责标注
@@ -314,8 +335,7 @@ dimensions:
         反例 (PM 写得对, 不要报):
         - 描述了 AI 推荐, 同章节注明 "评估集详见 [eval/recall_v2_goldenset.md] (200 条人工标注), 主指标 NDCG@5 >=0.7, 上线前回归"
         - 描述了 AI 分类, 注明 "复用现有 sklearn baseline (eval/classifier_v3.ipynb), 月度回归"
-
-        # status: experimental, 1 周后看 reject_by_reason 决定升 active 或降级
+        - PRD 是规则驱动 (ORDER BY / WHERE 无 AI 介入), 不报本规则.
 
       RC-009 物理表定义一致性（must, 仅数据 PRD 触发）：
         # 2026-04-26 sprint Day3 REWRITE: 加触发条件, 配置类/迁移类/UI-only PRD 不应被强制
@@ -335,18 +355,32 @@ dimensions:
         非数据 PRD (纯 UI / 流程 / 业务规则 / 配置变更等) 此规则跳过, 不应触发 fail。
       RC-010 数值类字段标注来源（must）：数值类字段（分页数/导出上限/阈值）须标注来源或标注 TBD；跨表字段须说明空值降级处理。
 
-      FN-01 ds_risk_* 三段过滤约定（must, experimental）：
-        # 2026-04-27 风鸟领域规则第一波: 风鸟 80% PRD 涉及 ds_risk_*, 三段过滤是平台级硬约定.
-        # 与 RC-009 (物理表定义一致性) 协同 — RC-009 查 DDL 完整, FN-01 查 WHERE 条件硬约定.
-        触发条件: PRD 引用任一 ds_risk_* 物理表 (即关键字 ds_risk_ 出现且后接表名).
-        触发后逐条检查 (5 子项, 缺任一即 fail):
-        a) PRD 中查询 SQL / 伪代码包含 entid > 0 (或等价的 entid 非空过滤)
-        b) PRD 中查询 SQL / 伪代码包含 data_status = 0 (或显式声明本场景不需要 data_status 过滤并给出原因)
-        c) PRD 中查询 SQL / 伪代码包含 riskbird_status = 0 (或显式声明本场景不需要 riskbird_status 过滤并给出原因)
-        d) data_status 和 riskbird_status 都给出完整枚举值表 (如 0/1/2/3 各代表什么)
-        e) 默认排序字段在 DDL 里有索引 (PRD 文本提到该字段索引存在或 wiki 引用确认)
-        fail 条件: 命中触发条件后任一子项缺失。severity: must
-        注意: 请先看 RC-009 是否已经覆盖具体子项. 仅当 RC-009 已通过但 WHERE 条件未写或不符合三段约定时报 FN-01. 防止双倍 fail.
+      FN-01 ds_risk_* 三段过滤约定（**风鸟硬约定, 命中 "ds_risk_" 必报**）：
+        # 2026-04-30 强化: 原 prompt 让 worker"先看 RC-009 是否已覆盖", 导致 worker 把
+        # FN-01 当成补漏项, 实际从不主动报. 改为强约束: ds_risk_ 出现即触发, 三段过滤
+        # 任一缺即报, 不依赖 RC-009 状态. 双倍 fail 由报告去重处理.
+
+        **强约束触发**: 在 PRD 任意位置发现字符串 "ds_risk_" (常见: ds_risk_court_mediation /
+        ds_risk_court_lian / ds_risk_software_infringement_data 等) 立即激活本规则强检.
+
+        触发后必查 3 段过滤 (缺任一即必报, 不要因为"PRD 看起来很完整"就放过):
+        (1) entid > 0          — 主体过滤, 滤掉关联企业污染数据
+        (2) data_status = 0    — 有效数据过滤, 滤掉已删除数据
+        (3) riskbird_status = 0 — 风鸟展示过滤, 滤掉风鸟不展示数据
+
+        检查方法: 全文搜索 "entid" / "data_status" / "riskbird_status" 关键字,
+        在 SQL / 伪代码 / 业务规则表 / 通用规则节任一位置找到对应过滤条件即合格.
+        全文都找不到任一字段的过滤声明 → 必报.
+
+        fail 条件:
+        - PRD 含 "ds_risk_" 字符串 + 任一过滤段缺失 → 必报 FN-01;
+        - 例: 风鸟诉前调解 PRD 引用 ds_risk_court_mediation / ds_risk_court_lian
+          但全文未声明 entid > 0 / data_status = 0 / riskbird_status = 0 任一项 →
+          开发漏过滤会混入企业关联数据 / 已删数据 / 风鸟不展示数据, 必报.
+
+        反例 (worker 不要报): PRD 全文不含 "ds_risk_" 字符串 (即不涉及 ds_risk_* 表),
+        或 entid / data_status / riskbird_status 三段过滤均已显式列出.
+        severity: must
     checklist:
       - rule_id: "RC-009"
         name: "物理表定义一致性"
@@ -360,7 +394,7 @@ dimensions:
         name: "AI 特性 eval 集计划"
         enabled: true
         owner: data_quality
-        status: experimental    # 2026-04-26 sprint Day3 加, AI Coding PRD 必检
+        status: experimental    # 2026-04-30 复活: synthetic positive_example 作 baseline 验证用, 真 AI PRD 出现时替换
       - rule_id: "FN-01"
         name: "ds_risk_* 三段过滤约定"
         enabled: true
