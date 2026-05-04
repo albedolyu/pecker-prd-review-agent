@@ -345,12 +345,20 @@ def _find_wiki_page_with_signal(evidence_content, wiki_dir, wiki_index=None):
     signal["ref_count"] = len(page_refs)
 
     if page_refs:
+        from review.wiki_selection import normalize_wiki_title, wiki_title_aliases
+
         # 有明确 [[ref]] 引用
         for ref in page_refs:
             for basename in (wiki_index or {}):
                 if ref == basename or ref == basename.replace(".md", ""):
                     signal["matched_pages"].append(basename)
                     signal["method"] = "ref_exact"
+                    return True, signal
+            ref_norm = normalize_wiki_title(ref)
+            for basename in (wiki_index or {}):
+                if ref_norm in wiki_title_aliases(basename):
+                    signal["matched_pages"].append(basename)
+                    signal["method"] = "ref_normalized"
                     return True, signal
             for basename in (wiki_index or {}):
                 if ref in basename:
@@ -375,9 +383,13 @@ def _find_wiki_page_with_signal(evidence_content, wiki_dir, wiki_index=None):
     keywords = cn_keywords + en_keywords
     signal["keyword_count"] = len(keywords)
 
+    from review.wiki_selection import wiki_title_aliases
+
     for basename in all_basenames:
+        aliases = wiki_title_aliases(basename)
         for kw in keywords[:5]:
-            if kw in basename:
+            kw_norm = kw.lower()
+            if kw in basename or any(kw_norm in alias for alias in aliases):
                 signal["matched_pages"].append(basename)
                 signal["method"] = "keyword"
                 return True, signal
@@ -447,9 +459,17 @@ def _llm_nli_score(client, item, wiki_pages, n_samples=4, model=None):
     # 提取 [[ref]] 找对应 wiki 内容 (限前 3 页 / 每页 1500 字防超 token)
     page_refs = re.findall(r"\[\[(.+?)\]\]", evidence)
     relevant_pages = []
+    from review.wiki_selection import normalize_wiki_title, wiki_title_aliases
+
     for ref in page_refs:
+        ref_norm = normalize_wiki_title(ref)
         for title, content in wiki_pages.items():
-            if ref in title or title in ref or ref == title.replace(".md", ""):
+            if (
+                ref in title
+                or title in ref
+                or ref == title.replace(".md", "")
+                or ref_norm in wiki_title_aliases(title)
+            ):
                 relevant_pages.append((title, (content or "")[:1500]))
                 break
         if len(relevant_pages) >= 3:

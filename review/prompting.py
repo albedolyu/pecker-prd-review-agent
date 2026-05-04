@@ -225,6 +225,23 @@ _EXAMPLE_SNIPPET_MAX_CHARS = 80
 # Token 预算阈值 — 超过即触发 compact 降级 (should 走老格式)
 _PROMPT_TOKEN_BUDGET = 10_000
 
+def _wiki_budget_for_dim(
+    dim_key: str | None,
+    base_chars: int,
+    prd_content: str | None = None,
+    wiki_pages: dict | None = None,
+    recovery_mode: bool = False,
+) -> int:
+    from review.adaptive import wiki_budget_for_dim
+
+    return wiki_budget_for_dim(
+        dim_key,
+        base_chars,
+        prd_content=prd_content,
+        wiki_pages=wiki_pages,
+        recovery_mode=recovery_mode,
+    )
+
 
 def _truncate_snippet(text: str, max_chars: int = _EXAMPLE_SNIPPET_MAX_CHARS) -> str:
     """把示例 snippet 截到 max_chars 字, 保留首部, 末尾加 ... 标识.
@@ -901,16 +918,43 @@ def _maybe_compact_wiki(wiki_pages, budget):
     """二次截断钩子 (CC compact 模式预留接口).
 
     当 prompt token 估算超过 COMPACT_THRESHOLD 时调用。
-    目前只 log + 返回原 wiki_pages,留接口给未来真正的压缩实现。
+    目前按内容顺序做保守字符预算截断,避免 compact warning 只是空响。
     """
     log.info(f"[compact] _maybe_compact_wiki 被调用, pages={len(wiki_pages)}, budget={budget}")
-    # TODO: 未来实现: 按相关性评分截断低分 wiki 页面,或对长页面做摘要
-    return wiki_pages
+    compacted = {}
+    used = 0
+    for title, content in wiki_pages.items():
+        remaining = budget - used
+        if remaining <= 0:
+            break
+        if len(content) <= remaining:
+            compacted[title] = content
+            used += len(content)
+            continue
+        suffix = f"\n\n(... 余 {len(content) - remaining} 字已省略 — compact 预算截断)"
+        if len(suffix) < remaining:
+            compacted[title] = content[: remaining - len(suffix)].rstrip() + suffix
+        else:
+            compacted[title] = content[:remaining]
+        used += len(compacted[title])
+        break
+    return compacted
 
 
-def _build_worker_messages(prd_content, wiki_pages, dim_key=None, wiki_path=None, wiki_keywords=None, diff_context=None):
+def _build_worker_messages(
+    prd_content,
+    wiki_pages,
+    dim_key=None,
+    wiki_path=None,
+    wiki_keywords=None,
+    diff_context=None,
+    on_wiki_selection=None,
+    wiki_budget_chars=None,
+    recovery_mode=False,
+):
     """构建 worker 的 user messages，包含 PRD 和知识库内容"""
     from agent_config import MAX_WIKI_CHARS, COMPACT_THRESHOLD
+    from review.wiki_selection import select_wiki_pages
 
     wk = wiki_keywords or get_wiki_keywords()
     parts = [f"## 待评审 PRD\n\n{prd_content}"]
@@ -918,19 +962,36 @@ def _build_worker_messages(prd_content, wiki_pages, dim_key=None, wiki_path=None
         parts.insert(0, diff_context)  # diff context before PRD content
     wiki_char_total = 0
     if wiki_pages:
-        # 按维度筛选相关 wiki 页面，减少无关上下文
-        if dim_key and dim_key in wk:
-            keywords = wk[dim_key]
-            relevant = {t: c for t, c in wiki_pages.items()
-                        if any(kw in t for kw in keywords)}
-            filtered = relevant if relevant else wiki_pages
-        else:
-            filtered = wiki_pages
-        # strong 页(≥3 关键词命中)= filtered 里和 relevant 交集的;
-        # weak 页 = filtered 里不在 relevant 里的(fallback 到全量时全部算 weak)
-        strong_titles = set(relevant.keys()) if dim_key and dim_key in wk else set()
-
-        WEAK_SUMMARY_CHARS = 500  # weak 页只传前 500 字摘要
+        wiki_budget = wiki_budget_chars or _wiki_budget_for_dim(
+            dim_key,
+            MAX_WIKI_CHARS,
+            prd_content=prd_content,
+            wiki_pages=wiki_pages,
+            recovery_mode=recovery_mode,
+        )
+        filtered, selection_telemetry = select_wiki_pages(
+            wiki_pages,
+            prd_content,
+            dim_key=dim_key,
+            wiki_keywords=wk,
+            max_chars=wiki_budget,
+            summary_chars=500,
+        )
+        selection_telemetry["budget_chars"] = wiki_budget
+        selection_telemetry["strategy"] = "adaptive_recovery" if recovery_mode else "adaptive"
+        if on_wiki_selection is not None:
+            try:
+                on_wiki_selection(selection_telemetry)
+            except Exception:
+                pass
+        if selection_telemetry["omitted_count"]:
+            log.info(
+                f"[{_cn_label(dim_key) if dim_key else 'global'}] wiki_selection "
+                f"{selection_telemetry['selected_count']} selected / "
+                f"{selection_telemetry['omitted_count']} omitted, "
+                f"chars={selection_telemetry['total_chars_after']:,}/"
+                f"{selection_telemetry['total_chars_before']:,}"
+            )
 
         parts.append("## 相关知识库页面\n")
         for title, content in filtered.items():
@@ -938,16 +999,12 @@ def _build_worker_messages(prd_content, wiki_pages, dim_key=None, wiki_path=None
             if wiki_path:
                 fpath = os.path.join(wiki_path, f"{title}.md")
                 content = _add_freshness_note(fpath, content)
-            # strong 页全文, weak 页截断到 500 字摘要
-            is_strong = title in strong_titles or not strong_titles
-            if not is_strong and len(content) > WEAK_SUMMARY_CHARS:
-                content = content[:WEAK_SUMMARY_CHARS] + f"\n\n(... 余 {len(content) - WEAK_SUMMARY_CHARS} 字已省略 — weak 相关页摘要)"
             wiki_char_total += len(content)
             parts.append(f"### {title}\n{content}\n")
 
         # 1b: rapid_refill_breaker 钩子 — wiki 注入接近预算上限时 warning
-        if wiki_char_total > MAX_WIKI_CHARS * 0.95:
-            log.warning(f"[{_cn_label(dim_key) if dim_key else 'global'}] approaching wiki budget limit: {wiki_char_total:,} / {MAX_WIKI_CHARS:,} chars (95%+)")
+        if wiki_char_total > wiki_budget * 0.95:
+            log.warning(f"[{_cn_label(dim_key) if dim_key else 'global'}] approaching wiki budget limit: {wiki_char_total:,} / {wiki_budget:,} chars (95%+)")
 
     parts.append("请评审以上 PRD，逐条对照你的检查清单，然后调用 submit_review_items 工具提交发现的所有改进项。每条改进项必须标注 rule_id。")
 
@@ -959,8 +1016,12 @@ def _build_worker_messages(prd_content, wiki_pages, dim_key=None, wiki_path=None
     if estimated_tokens > 100_000:
         log.warning(f"[{_cn_label(dim_key) if dim_key else 'global'}] prompt token 估算 > 100K,可能触发 context overflow")
 
-    # 4b: compact 钩子 — 超阈值时尝试二次截断 wiki
+    # 4b: compact 钩子 — wiki 已在 select_wiki_pages 阶段按 MAX_WIKI_CHARS 收敛;
+    # 若这里仍超阈值,通常是 PRD 本身过长,只能先告警给上层做 diff/section review。
     if estimated_tokens > COMPACT_THRESHOLD and wiki_pages:
-        wiki_pages = _maybe_compact_wiki(wiki_pages, COMPACT_THRESHOLD)
+        log.warning(
+            f"[{_cn_label(dim_key) if dim_key else 'global'}] prompt 仍超过 compact 阈值: "
+            f"{estimated_tokens:,} / {COMPACT_THRESHOLD:,} tokens"
+        )
 
     return messages

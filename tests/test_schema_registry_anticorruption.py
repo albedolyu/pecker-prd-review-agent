@@ -71,6 +71,18 @@ LEGACY_WORKSPACES = [
 ]
 
 
+def _make_legacy_workspace(tmp_path, yaml_text: str) -> str:
+    """构造一个老 schema workspace，用于测试已迁移掉的历史规则。"""
+    fake_ws = tmp_path / "legacy-workspace"
+    rules_dir = fake_ws / "review-rules"
+    rules_dir.mkdir(parents=True)
+    (rules_dir / "review-checklist.yaml").write_text(
+        textwrap.dedent(yaml_text),
+        encoding="utf-8",
+    )
+    return str(fake_ws)
+
+
 @pytest.mark.parametrize("workspace", LEGACY_WORKSPACES)
 def test_legacy_yaml_translation_loadable(workspace):
     """每个 workspace 老 review-checklist.yaml 能转译, 不 raise."""
@@ -165,18 +177,27 @@ def test_infer_dimension_unknown_prefix_fallback():
 # ============================================================
 
 
-def test_rc_014_present_in_legacy_yaml_but_dropped_after_merge():
-    """⚠️ 关键: 6 workspace 老 yaml 都有 RC-014 (zombie), 但全局新 yaml 已删.
-
-    转译时单独看 legacy: RC-014 仍在 (老 yaml 真有).
-    与全局 merge 后: RC-014 被 drop, 因为新 yaml 已删 → 优先级 global > legacy.
-    """
-    repo_root = os.path.join(os.path.dirname(__file__), "..")
-    ws_path = os.path.join(repo_root, "workspace-劳动仲裁")
+def test_rc_014_present_in_synthetic_legacy_yaml_but_dropped_after_merge(tmp_path):
+    """关键: 即使历史老 yaml 带 RC-014，merge 后也不能让它复活。"""
+    ws_path = _make_legacy_workspace(
+        tmp_path,
+        """
+        rules:
+          - id: RC-004
+            name: 技术约定章节存在
+            severity: must
+            description: legacy active rule
+            impact_score: 0.7
+          - id: RC-014
+            name: RC-014 zombie
+            severity: must
+            description: retired legacy rule
+            impact_score: 0.7
+        """,
+    )
     legacy_rules = _load_legacy_workspace_yaml(ws_path)
     legacy_ids = {r.rule_id for r in legacy_rules}
-    # 老 yaml 真有 RC-014
-    assert "RC-014" in legacy_ids, "老 yaml 应有 RC-014 (zombie 物证)"
+    assert "RC-014" in legacy_ids, "合成老 yaml 应有 RC-014 (zombie 物证)"
 
     # 全局 yaml 已删 RC-014
     reg_global = SchemaRegistry.get()
@@ -191,12 +212,21 @@ def test_rc_014_present_in_legacy_yaml_but_dropped_after_merge():
     )
 
 
-def test_legacy_yaml_with_rc014_logs_warning(caplog):
+def test_legacy_yaml_with_rc014_logs_warning(tmp_path, caplog):
     """legacy yaml 有 RC-014 但新 yaml 已删时, merge 应 log warning 提示 PM."""
     import logging
 
-    repo_root = os.path.join(os.path.dirname(__file__), "..")
-    ws_path = os.path.join(repo_root, "workspace-对外投资")
+    ws_path = _make_legacy_workspace(
+        tmp_path,
+        """
+        rules:
+          - id: RC-014
+            name: RC-014 zombie
+            severity: must
+            description: retired legacy rule
+            impact_score: 0.7
+        """,
+    )
     legacy_rules = _load_legacy_workspace_yaml(ws_path)
 
     reg_global = SchemaRegistry.get()

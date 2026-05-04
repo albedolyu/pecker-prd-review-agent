@@ -48,6 +48,19 @@ class TestFindWikiPageSignal:
         assert found is True
         assert signal["method"] == "ref_substring"
 
+    def test_ref_normalized_alias_match(self, tmp_path):
+        from review.evidence_verify import _find_wiki_page_with_signal
+        wiki = tmp_path / "wiki"
+        wiki.mkdir()
+        page = wiki / "API总览.md"
+        page.write_text("---\n---\n", encoding="utf-8")
+        index = {"api/API总览.md": str(page)}
+
+        found, signal = _find_wiki_page_with_signal("[[API 总览]]", str(wiki), index)
+
+        assert found is True
+        assert signal["method"] == "ref_normalized"
+
     def test_keyword_fallback(self, tmp_path):
         from review.evidence_verify import _find_wiki_page_with_signal
         wiki = tmp_path / "wiki"
@@ -87,13 +100,22 @@ def _mock_response(text):
 
 
 class TestLlmNliScore:
-    def test_client_none_returns_default(self):
+    def test_client_none_uses_verify_route(self, monkeypatch):
         from review.evidence_verify import _llm_nli_score
+        import model_router
+
+        calls = []
+
+        def fake_route_call(route_id, **kwargs):
+            calls.append((route_id, kwargs))
+            return _mock_response('{"verdict": "entail", "reason": "wiki 明确支持该问题判断"}')
+
+        monkeypatch.setattr(model_router, "route_call", fake_route_call)
         out = _llm_nli_score(client=None, item={"issue": "x", "evidence_content": "[[页]]"},
-                             wiki_pages={"页": "内容"})
-        assert out["entail_score"] == 0.0
-        assert out["n_samples_succeeded"] == 0
-        assert out["neutral_score"] == 1.0   # default
+                             wiki_pages={"页": "内容"}, n_samples=2)
+        assert out["entail_score"] == 1.0
+        assert out["n_samples_succeeded"] == 2
+        assert [c[0] for c in calls] == ["verify.nli", "verify.nli"]
 
     def test_empty_wiki_pages_returns_default(self):
         from review.evidence_verify import _llm_nli_score

@@ -39,6 +39,55 @@ router = APIRouter(tags=["review"])
 
 
 # ============================================================
+# Phase 2 辅助: worker_done event payload 构造
+# ============================================================
+
+def _summarize_wiki_selection(telemetry: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Extract compact wiki selection telemetry for event_store.
+
+    The full telemetry can include a per-page list. worker_done events only need
+    aggregate counts for latency/cost correlation, so keep the payload small.
+    """
+    if not isinstance(telemetry, dict):
+        return None
+    wiki_selection = telemetry.get("wiki_selection")
+    if not isinstance(wiki_selection, dict):
+        return None
+    return {
+        "selected_count": wiki_selection.get("selected_count", 0),
+        "omitted_count": wiki_selection.get("omitted_count", 0),
+        "total_chars_before": wiki_selection.get("total_chars_before", 0),
+        "total_chars_after": wiki_selection.get("total_chars_after", 0),
+    }
+
+
+def _build_worker_done_event_payload(dim: str, result: Dict[str, Any]) -> Dict[str, Any]:
+    """Build the worker_done event_store payload used by /review/run."""
+    telemetry = result.get("telemetry") if isinstance(result, dict) else None
+    payload = {
+        "dim": dim,
+        "items_count": len(result.get("items", [])) if isinstance(result, dict) else 0,
+        "error": str(result.get("error", ""))[:200] if isinstance(result, dict) and "error" in result else None,
+        # P1-3: 持久化 cost/时长/token 用量，支持事后成本分析和性能回归
+        "duration_ms": telemetry.get("duration_ms") if telemetry else None,
+        "input_tokens": telemetry.get("input_tokens", telemetry.get("tokens_in")) if telemetry else None,
+        "output_tokens": telemetry.get("output_tokens", telemetry.get("tokens_out")) if telemetry else None,
+        "cost_usd": telemetry.get("cost_usd") if telemetry else result.get("cost_usd") if isinstance(result, dict) else None,
+        "model": telemetry.get("model") if telemetry else result.get("model_used") if isinstance(result, dict) else None,
+        "degraded": telemetry.get("degraded") if telemetry else None,
+        # Round 2: 空提交重试分支 telemetry,后续由 generate_status 聚合
+        "empty_retry_used": telemetry.get("empty_retry_used") if telemetry else None,
+        "turns_used": telemetry.get("turns_used") if telemetry else None,
+        "empty_submission_confirmed": telemetry.get("empty_submission_confirmed") if telemetry else None,
+        "empty_submission_reason": telemetry.get("empty_submission_reason") if telemetry else None,
+    }
+    wiki_selection = _summarize_wiki_selection(telemetry)
+    if wiki_selection is not None:
+        payload["wiki_selection"] = wiki_selection
+    return payload
+
+
+# ============================================================
 # Phase 2 辅助: 全员失败分类(P0-1,抽出来便于单测)
 # ============================================================
 
@@ -348,24 +397,7 @@ async def run_review(
                 def _on_worker_done(dim, r):
                     emitter.emit_worker_done(dim, r)
                     # Pattern 21: 记录每个 worker 完成事件 (P1-3 补 telemetry)
-                    telemetry = r.get("telemetry") if isinstance(r, dict) else None
-                    evt.append("worker_done", {
-                        "dim": dim,
-                        "items_count": len(r.get("items", [])) if isinstance(r, dict) else 0,
-                        "error": str(r.get("error", ""))[:200] if isinstance(r, dict) and "error" in r else None,
-                        # P1-3: 持久化 cost/时长/token 用量，支持事后成本分析和性能回归
-                        "duration_ms": telemetry.get("duration_ms") if telemetry else None,
-                        "input_tokens": telemetry.get("input_tokens") if telemetry else None,
-                        "output_tokens": telemetry.get("output_tokens") if telemetry else None,
-                        "cost_usd": telemetry.get("cost_usd") if telemetry else r.get("cost_usd") if isinstance(r, dict) else None,
-                        "model": telemetry.get("model") if telemetry else r.get("model_used") if isinstance(r, dict) else None,
-                        "degraded": telemetry.get("degraded") if telemetry else None,
-                        # Round 2: 空提交重试分支 telemetry,后续由 generate_status 聚合
-                        "empty_retry_used": telemetry.get("empty_retry_used") if telemetry else None,
-                        "turns_used": telemetry.get("turns_used") if telemetry else None,
-                        "empty_submission_confirmed": telemetry.get("empty_submission_confirmed") if telemetry else None,
-                        "empty_submission_reason": telemetry.get("empty_submission_reason") if telemetry else None,
-                    })
+                    evt.append("worker_done", _build_worker_done_event_payload(dim, r))
 
                 result = await parallel_review(
                     client, enhanced_prd, req.wiki_pages, MODEL_TIERS,
