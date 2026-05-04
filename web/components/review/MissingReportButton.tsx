@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { BirdAvatar, type BirdId } from "@/components/birds/BirdAvatar";
+import { type BirdId } from "@/components/birds/BirdAvatar";
 import { BIRD_META } from "@/components/birds/BirdBadge";
 
 export interface MissingReportPayload {
@@ -88,7 +88,7 @@ export function MissingReportButton({
     };
     try {
       await onSubmit?.(payload);
-      toast.success("已提交漏报线索 · 会反查并入归因库");
+      toast.success("已记录,将用于后续规则优化");
       try {
         localStorage.removeItem(LOCAL_KEY);
       } catch {
@@ -150,7 +150,7 @@ export function MissingReportButton({
         }}
       >
         <span style={{ fontSize: 14, lineHeight: 1 }}>+</span>
-        我发现一个他们漏掉的问题
+        我还发现一个问题
       </button>
 
       {open && (
@@ -166,16 +166,13 @@ export function MissingReportButton({
             <header>
               <div
                 style={{
-                  fontSize: 10,
-                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
                   fontWeight: 600,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.1em",
                   color: "var(--accent-600)",
                   marginBottom: 4,
                 }}
               >
-                Harness · 漏报反馈
+                补充评审线索
               </div>
               <h2
                 style={{
@@ -185,7 +182,7 @@ export function MissingReportButton({
                   margin: 0,
                 }}
               >
-                报一个&ldquo;他们没提&rdquo;的问题
+                我还发现一个问题
               </h2>
               <p
                 style={{
@@ -195,37 +192,37 @@ export function MissingReportButton({
                   lineHeight: 1.55,
                 }}
               >
-                PM 发现的真问题 + 应该归谁 → 系统反查这只鸟为什么没报 → 进归因库反哺 rule 权重
+                把评审鸟漏掉的问题补充上来,系统会用于优化下次的检查规则
               </p>
             </header>
 
             {/* 问题内容 */}
-            <Field label="问题是什么" required>
+            <Field label="问题描述" required>
               <textarea
                 autoFocus
                 value={problem}
                 onChange={(e) => setProblem(e.target.value)}
                 rows={3}
-                placeholder="例如:PRD 漏了下游 risk_service 的降级策略"
+                placeholder="例如:PRD 漏了下游服务降级策略,会影响测试验收"
                 style={textareaStyle}
               />
             </Field>
 
             {/* 对应位置 */}
-            <Field label="PRD 对应段落(可选)" hint="如 §2.3 或直接贴关键字">
+            <Field label="PRD 位置" hint="可选 · 如 §2.3 或贴一句关键字">
               <input
                 type="text"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
-                placeholder="§2.3 · risk_service 依赖"
+                placeholder="§2.3 · 风险服务依赖"
                 style={inputStyle}
               />
             </Field>
 
             {/* 应该归哪只鸟 */}
             <Field
-              label="应该归哪只鸟管"
-              hint="选了的话系统会反查它当时的输出 + rule 状态"
+              label="属于哪类问题"
+              hint="选一只对应职责的评审鸟,帮助系统下次更准"
             >
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {availableBirdIds.map((id) => (
@@ -255,11 +252,10 @@ export function MissingReportButton({
               <span
                 style={{
                   fontSize: 11,
-                  fontFamily: "var(--font-mono)",
                   color: "var(--text-faint)",
                 }}
               >
-                草稿自动保存到本地 · esc 关闭
+                草稿自动保存,Esc 可关闭
               </span>
               <div style={{ display: "flex", gap: 8 }}>
                 <button
@@ -280,7 +276,7 @@ export function MissingReportButton({
                       : btnPrimary
                   }
                 >
-                  {submitting ? "提交中…" : "提交线索"}
+                  {submitting ? "提交中…" : "提交"}
                 </button>
               </div>
             </div>
@@ -405,7 +401,16 @@ function BirdChoice({
         transition: "all var(--dur-fast) var(--ease-out)",
       }}
     >
-      <BirdAvatar id={id} size="sm" />
+      <span
+        aria-hidden
+        style={{
+          width: 6,
+          height: 6,
+          borderRadius: "50%",
+          background: `var(--bird-${id})`,
+          flexShrink: 0,
+        }}
+      />
       <span>{meta.label}鸟</span>
     </button>
   );

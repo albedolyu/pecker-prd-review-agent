@@ -84,7 +84,7 @@ export function ForestLanding() {
             lineHeight: 1.6,
           }}
         >
-          4 位 worker 并行审稿 + 苍鹰交叉校验 + harness 可观测性 — 把误报 / 漏报 / 静默失败都显式化,10 分钟出一份可追溯的评审报告。
+          四位评审鸟并行审稿,苍鹰复核漏报与误判 — 10 分钟出一份可追溯的 PRD 评审报告,每条意见都有来源、有依据、可签收。
         </p>
 
         {/* 10 只鸟展示 */}
@@ -168,19 +168,19 @@ export function ForestLanding() {
           }}
         >
           <Feature
-            tag="phase 2"
-            title="Agent 调度中心"
-            desc="4 worker 并行 + 苍鹰分层可视化 · 依赖边 dash-flow · 实时 console 流式日志"
+            tag="评审运行"
+            title="评审运行状态可视化"
+            desc="实时看到每个评审员审到哪了,谁返回了多少条意见,哪只鸟出了状况一目了然"
           />
           <Feature
-            tag="phase 1.5"
-            title="运行质量检查"
-            desc="session 分类 · 5 色失败矩阵 · partial_silent 自动告警 · 不让 PM 在静默失败上决策"
+            tag="质量检查"
+            title="不让你在残缺结果上决策"
+            desc="评审跑完先看运行健康度,有评审员未完整返回时强制提示重跑,避免遗漏问题"
           />
           <Feature
-            tag="phase 3"
-            title="键盘优先评审"
-            desc="j/k/y/n/e 全键盘 · 苍鹰验证徽章 · 依据验证 3 态 · 低置信自动折叠"
+            tag="逐条确认"
+            title="左对照原文,右逐条决策"
+            desc="按维度和严重度筛选,接受 / 驳回 / 改写一键完成,低置信意见自动弱化"
           />
         </div>
       </section>
@@ -200,25 +200,28 @@ export function ForestLanding() {
           flexWrap: "wrap",
         }}
       >
-        <span>pecker · harness v8 · 2026</span>
+        <span>Pecker · PRD 评审工作台 · 2026</span>
         <span style={{ display: "flex", gap: 12 }}>
           <Link
             href="/runs/diff"
+            title="运行对比 · 内部"
             style={{ color: "inherit", textDecoration: "none" }}
           >
-            runs/diff
+            运行对比
           </Link>
           <Link
             href="/v8-preview"
+            title="组件预览 · 内部"
             style={{ color: "inherit", textDecoration: "none" }}
           >
-            v8-preview
+            组件预览
           </Link>
           <Link
             href="/review?v=7"
+            title="老版回退入口"
             style={{ color: "inherit", textDecoration: "none" }}
           >
-            legacy v7
+            老版回退
           </Link>
         </span>
       </footer>

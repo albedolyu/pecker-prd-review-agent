@@ -32,7 +32,7 @@ import {
   type RejectReason,
   type ReviewItem,
 } from "@/lib/api";
-import { BirdAvatar, type BirdId } from "@/components/birds/BirdAvatar";
+import { BirdLabel, type BirdId } from "@/components/birds/BirdAvatar";
 import { BIRD_META } from "@/components/birds/BirdBadge";
 import { EagleMark } from "@/components/review/CommentThread";
 import { EvidenceBlock } from "@/components/review/EvidenceBlock";
@@ -66,19 +66,21 @@ const REJECT_CATEGORIES: ReadonlyArray<{
   label: string;
   hint: string;
 }> = [
-  { value: "good_issue", label: "实际是好问题(手滑点错)", hint: "PM 改主意了, 不算规则锅 → EMA 正向微调" },
-  { value: "false_positive", label: "误报", hint: "PRD 确实没这问题 → 规则精度差, 重惩罚" },
-  { value: "known_tradeoff", label: "已知取舍, 不改", hint: "业务允许, 不改 → 弱惩罚 + 周报建议加 ignore" },
-  { value: "wiki_missing", label: "知识库缺失", hint: "规则没错, 是 wiki 缺背景 → 弱惩罚 + 周报提示补 wiki" },
-  { value: "rule_too_strict", label: "规则太严", hint: "规则 scope 问题 → 重惩罚 + 周报提示改写规则" },
-  { value: "impl_detail", label: "实现细节, 不该 PRD 管", hint: "规则 scope 错 → 中等惩罚 + 收窄 rule" },
-  { value: "model_noise", label: "模型噪音", hint: "无业务意义 → 中等惩罚, 进 prompt 迭代队列" },
+  { value: "good_issue", label: "实际是好问题(手滑点错)", hint: "PM 改主意了,不算评审员的锅" },
+  { value: "false_positive", label: "误报", hint: "PRD 确实没这个问题,评审员判断错了" },
+  { value: "known_tradeoff", label: "已知取舍,不改", hint: "业务上允许保留,不需要改动" },
+  { value: "wiki_missing", label: "知识库缺背景", hint: "规则没错,是知识库里缺背景信息" },
+  { value: "rule_too_strict", label: "规则太严", hint: "规则适用范围太宽,误伤了正常情况" },
+  { value: "impl_detail", label: "实现细节,不该 PRD 管", hint: "这是研发实现层面的事,PRD 不需要写" },
+  { value: "model_noise", label: "AI 误判", hint: "意见没业务意义,属于 AI 的随机噪音" },
 ];
 
 const DEFAULT_REJECT_CATEGORY: RejectReason = "model_noise";
 
 export function Phase3ConfirmV8() {
   const reviewResult = useReviewStore((s) => s.reviewResult);
+  const prdContent = useReviewStore((s) => s.prdContent);
+  const prdName = useReviewStore((s) => s.prdName);
   const decisions = useReviewStore((s) => s.decisions);
   const setDecision = useReviewStore((s) => s.setDecision);
   const setConfirmedReportMarkdown = useReviewStore(
@@ -106,32 +108,72 @@ export function Phase3ConfirmV8() {
 
   type Tab = "all" | RoleKey;
   const [currentTab, setCurrentTab] = useState<Tab>("all");
+  // 严重度过滤(must / should / 其他 / 全部)
+  type SevFilter = "all" | "must" | "should" | "other";
+  const [sevFilter, setSevFilter] = useState<SevFilter>("all");
+  // 状态过滤(待处理 / 已接受 / 已拒绝 / 低置信 / 全部)
+  type StatusFilter = "all" | "pending" | "accepted" | "rejected" | "low_conf";
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
   // 当前聚焦 item(给键盘导航用)
   const [focusedIdx, setFocusedIdx] = useState(0);
   // 进入 edit 态的 item id(每次只能编一条)
   const [editingId, setEditingId] = useState<string | null>(null);
+  // 手机端评论抽屉是否展开
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // 当前 tab 下的 items(排序:pinned 优先 + 原顺序)
+  // 当前 tab 下的 items(过滤后,pinned 优先 + 原顺序)
   const visibleItems = useMemo<ReviewItem[]>(() => {
     if (!reviewResult) return [];
-    const items =
+    const base =
       currentTab === "all"
         ? Array.from(reviewResult.items)
         : Array.from(itemsByDim.get(currentTab) ?? []);
-    return items.sort((a, b) => {
-      const ap = a.pinned ? 0 : 1;
-      const bp = b.pinned ? 0 : 1;
-      return ap - bp;
-    });
-  }, [reviewResult, itemsByDim, currentTab]);
 
-  // tab 切换时 focusedIdx 归零
+    const sevPass = (item: ReviewItem) => {
+      if (sevFilter === "all") return true;
+      const s = item.severity;
+      if (sevFilter === "must") return s === "must";
+      if (sevFilter === "should") return s === "should";
+      return s !== "must" && s !== "should";
+    };
+    const statusPass = (item: ReviewItem) => {
+      if (statusFilter === "all") return true;
+      const action = decisions[item.id]?.action;
+      if (statusFilter === "pending") return !action;
+      if (statusFilter === "accepted") return action === "accept" || action === "edit";
+      if (statusFilter === "rejected") return action === "reject";
+      if (statusFilter === "low_conf") {
+        const lc = typeof item.confidence === "number" && item.confidence < 0.7;
+        const evFailed = (item.gate_log ?? []).some(
+          (g) => (g.type === "evidence_verify" || g.type === "evidence_validator") && !g.pass,
+        );
+        return lc || evFailed;
+      }
+      return true;
+    };
+
+    return base
+      .filter((item) => sevPass(item) && statusPass(item))
+      .sort((a, b) => {
+        const ap = a.pinned ? 0 : 1;
+        const bp = b.pinned ? 0 : 1;
+        return ap - bp;
+      });
+  }, [reviewResult, itemsByDim, currentTab, sevFilter, statusFilter, decisions]);
+
+  // tab / 过滤切换时 focusedIdx 归零
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- tab 切换后重置键盘焦点,属纯派生 UI 状态
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 过滤切换后重置键盘焦点,属纯派生 UI 状态
     setFocusedIdx(0);
-  }, [currentTab]);
+  }, [currentTab, sevFilter, statusFilter]);
+
+  // 选中的意见(右栏锚点联动用)
+  const focusedAnchor = useMemo(() => {
+    const item = visibleItems[focusedIdx];
+    return item?.location ?? undefined;
+  }, [visibleItems, focusedIdx]);
 
   // ── stats ──
   const stats = useMemo(() => {
@@ -155,7 +197,7 @@ export function Phase3ConfirmV8() {
     },
     onSuccess: (resp: ConfirmResponse) => {
       toast.success(
-        `已确认 ${resp.accepted} 接受 · ${resp.edited} 改写 · ${resp.rejected} 拒绝`,
+        `本次评审已确认 · 接受 ${resp.accepted} · 改写 ${resp.edited} · 拒绝 ${resp.rejected}`,
       );
       void auditApi
         .log({
@@ -175,7 +217,7 @@ export function Phase3ConfirmV8() {
     },
     onError: (e: ApiError) => {
       if (e.status === 403) {
-        toast.error("签名验证失败 — 数据可能被篡改,请重新评审");
+        toast.error("数据校验失败,请重新评审一遍");
       } else {
         toast.error(`确认失败: ${e.detail ?? e.message}`);
       }
@@ -293,67 +335,108 @@ export function Phase3ConfirmV8() {
     );
   }
 
-  return (
+  // 严重度计数
+  const sevCounts = useMemo(() => {
+    if (!reviewResult) return { must: 0, should: 0, other: 0 };
+    let must = 0;
+    let should = 0;
+    let other = 0;
+    for (const it of reviewResult.items) {
+      if (it.severity === "must") must += 1;
+      else if (it.severity === "should") should += 1;
+      else other += 1;
+    }
+    return { must, should, other };
+  }, [reviewResult]);
+
+  // 状态计数(待处理 / 已接受+已改写 / 已拒绝 / 低置信)
+  const statusCounts = useMemo(() => {
+    if (!reviewResult)
+      return { pending: 0, accepted: 0, rejected: 0, low_conf: 0 };
+    let pending = 0;
+    let accepted = 0;
+    let rejected = 0;
+    let lowConf = 0;
+    for (const it of reviewResult.items) {
+      const action = decisions[it.id]?.action;
+      if (!action) pending += 1;
+      else if (action === "accept" || action === "edit") accepted += 1;
+      else if (action === "reject") rejected += 1;
+      const lc =
+        typeof it.confidence === "number" && it.confidence < 0.7;
+      const evFailed = (it.gate_log ?? []).some(
+        (g) =>
+          (g.type === "evidence_verify" || g.type === "evidence_validator") &&
+          !g.pass,
+      );
+      if (lc || evFailed) lowConf += 1;
+    }
+    return { pending, accepted, rejected, low_conf: lowConf };
+  }, [reviewResult, decisions]);
+
+  // 渲染单条意见卡(避免嵌套大量 props 的重复书写)
+  const renderItem = (item: ReviewItem, i: number) => (
+    <ItemCardV8
+      key={item.id}
+      item={item}
+      focused={i === focusedIdx}
+      decision={decisions[item.id]}
+      editing={editingId === item.id}
+      onFocus={() => setFocusedIdx(i)}
+      onAccept={() => handleAccept(item.id)}
+      onReject={() => handleReject(item.id)}
+      onEdit={() => handleEdit(item)}
+      onEditChange={(v) =>
+        setDecision(item.id, {
+          action: "edit",
+          edited_problem: v,
+        })
+      }
+      onRejectReasonChange={(v) => {
+        const existing = decisions[item.id];
+        setDecision(item.id, {
+          action: "reject",
+          reason_category:
+            existing?.action === "reject" && existing.reason_category
+              ? existing.reason_category
+              : DEFAULT_REJECT_CATEGORY,
+          reason: v,
+        });
+      }}
+      onRejectCategoryChange={(cat) => {
+        const existing = decisions[item.id];
+        setDecision(item.id, {
+          action: "reject",
+          reason_category: cat,
+          reason: existing?.action === "reject" ? existing.reason : undefined,
+        });
+      }}
+      onEditDone={() => setEditingId(null)}
+    />
+  );
+
+  // 右栏:意见列表 + 过滤工具条
+  const commentColumn = (
     <div
-      ref={containerRef}
+      className="pecker-phase3-comments"
       style={{
-        maxWidth: 920,
-        margin: "0 auto",
-        padding: "28px 24px 120px", // 底部留空给 KeymapBar
-        fontFamily: "var(--font-sans)",
+        display: "flex",
+        flexDirection: "column",
+        minWidth: 0,
       }}
     >
-      {/* ── header ── */}
-      <header style={{ marginBottom: 16 }}>
-        <h1
+      {/* 工具条:维度 tabs */}
+      {stats.total > 0 && (
+        <div
           style={{
-            fontSize: 22,
-            fontWeight: 600,
-            color: "var(--text-strong)",
-            margin: 0,
-            letterSpacing: "-0.015em",
+            display: "flex",
+            gap: 6,
+            flexWrap: "wrap",
+            paddingBottom: 8,
+            borderBottom: "1px solid var(--border-subtle)",
+            overflowX: "auto",
           }}
         >
-          逐条确认
-        </h1>
-        <p
-          style={{
-            fontSize: 13,
-            color: "var(--text-muted)",
-            marginTop: 4,
-          }}
-        >
-          {stats.total === 0
-            ? "本次评审没有发现问题"
-            : `${stats.total} 条 · 待决 ${stats.pending} · 键盘 j/k 切换 · y/n 决策 · e 编辑`}
-        </p>
-      </header>
-
-      {/* ── stat bar ── */}
-      {stats.total > 0 && (
-        <div style={statBarStyle}>
-          <StatPill label="总计" value={stats.total} />
-          <StatPill label="待决" value={stats.pending} tone="muted" />
-          <StatPill label="接受" value={stats.accept} tone="done" />
-          <StatPill label="驳回" value={stats.reject} tone="muted" />
-          <StatPill label="改写" value={stats.edit} tone="warn" />
-          <span style={{ flex: 1 }} />
-          <span
-            style={{
-              fontSize: 11,
-              fontFamily: "var(--font-mono)",
-              color: "var(--text-muted)",
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
-            已决 {stats.decided} / {stats.total}
-          </span>
-        </div>
-      )}
-
-      {/* ── dim tabs ── */}
-      {stats.total > 0 && (
-        <div style={tabsStyle}>
           <TabBtn
             active={currentTab === "all"}
             onClick={() => setCurrentTab("all")}
@@ -379,61 +462,125 @@ export function Phase3ConfirmV8() {
         </div>
       )}
 
-      {/* ── items list ── */}
+      {/* 状态过滤(处理进度) */}
       {stats.total > 0 && (
         <div
           style={{
             display: "flex",
-            flexDirection: "column",
-            gap: 10,
-            marginTop: 16,
+            gap: 6,
+            flexWrap: "wrap",
+            padding: "10px 0 4px",
+            fontSize: 12,
           }}
         >
-          {visibleItems.map((item, i) => (
-            <ItemCardV8
-              key={item.id}
-              item={item}
-              focused={i === focusedIdx}
-              decision={decisions[item.id]}
-              editing={editingId === item.id}
-              onFocus={() => setFocusedIdx(i)}
-              onAccept={() => handleAccept(item.id)}
-              onReject={() => handleReject(item.id)}
-              onEdit={() => handleEdit(item)}
-              onEditChange={(v) =>
-                setDecision(item.id, {
-                  action: "edit",
-                  edited_problem: v,
-                })
-              }
-              onRejectReasonChange={(v) => {
-                // 写自由文本备注时保留已选的 reason_category (默认 model_noise)
-                const existing = decisions[item.id];
-                setDecision(item.id, {
-                  action: "reject",
-                  reason_category:
-                    existing?.action === "reject" && existing.reason_category
-                      ? existing.reason_category
-                      : DEFAULT_REJECT_CATEGORY,
-                  reason: v,
-                });
-              }}
-              onRejectCategoryChange={(cat) => {
-                const existing = decisions[item.id];
-                setDecision(item.id, {
-                  action: "reject",
-                  reason_category: cat,
-                  reason:
-                    existing?.action === "reject" ? existing.reason : undefined,
-                });
-              }}
-              onEditDone={() => setEditingId(null)}
+          <SevFilterBtn
+            active={statusFilter === "all"}
+            onClick={() => setStatusFilter("all")}
+            label="全部"
+            count={stats.total}
+          />
+          <SevFilterBtn
+            active={statusFilter === "pending"}
+            onClick={() => setStatusFilter("pending")}
+            label="待处理"
+            count={statusCounts.pending}
+            tone="warn"
+          />
+          <SevFilterBtn
+            active={statusFilter === "accepted"}
+            onClick={() => setStatusFilter("accepted")}
+            label="已接受"
+            count={statusCounts.accepted}
+          />
+          <SevFilterBtn
+            active={statusFilter === "rejected"}
+            onClick={() => setStatusFilter("rejected")}
+            label="已拒绝"
+            count={statusCounts.rejected}
+          />
+          {statusCounts.low_conf > 0 && (
+            <SevFilterBtn
+              active={statusFilter === "low_conf"}
+              onClick={() => setStatusFilter("low_conf")}
+              label="低置信度"
+              count={statusCounts.low_conf}
             />
-          ))}
+          )}
         </div>
       )}
 
-      {/* ── 漏报反馈入口(harness 增量 P1⑦) ── */}
+      {/* 严重度过滤 */}
+      {stats.total > 0 && (
+        <div
+          style={{
+            display: "flex",
+            gap: 6,
+            flexWrap: "wrap",
+            padding: "4px 0 6px",
+            fontSize: 12,
+          }}
+        >
+          <SevFilterBtn
+            active={sevFilter === "all"}
+            onClick={() => setSevFilter("all")}
+            label="所有严重度"
+            count={stats.total}
+          />
+          <SevFilterBtn
+            active={sevFilter === "must"}
+            onClick={() => setSevFilter("must")}
+            label="必须修"
+            count={sevCounts.must}
+            tone="fail"
+          />
+          <SevFilterBtn
+            active={sevFilter === "should"}
+            onClick={() => setSevFilter("should")}
+            label="建议修"
+            count={sevCounts.should}
+            tone="warn"
+          />
+          {sevCounts.other > 0 && (
+            <SevFilterBtn
+              active={sevFilter === "other"}
+              onClick={() => setSevFilter("other")}
+              label="参考"
+              count={sevCounts.other}
+            />
+          )}
+        </div>
+      )}
+
+      {/* items list */}
+      {stats.total > 0 ? (
+        visibleItems.length === 0 ? (
+          <div
+            style={{
+              padding: "32px 12px",
+              textAlign: "center",
+              color: "var(--text-muted)",
+              fontSize: 13,
+            }}
+          >
+            当前过滤条件下没有意见
+          </div>
+        ) : (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+              marginTop: 12,
+            }}
+          >
+            {visibleItems.map(renderItem)}
+          </div>
+        )
+      ) : (
+        <EmptyClearState />
+      )}
+
+      {/* 漏报反馈入口 */}
       {stats.total > 0 && (
         <div
           style={{
@@ -444,72 +591,368 @@ export function Phase3ConfirmV8() {
         >
           <MissingReportButton
             onSubmit={(payload) => {
-              // Sprint 5 接归因库接口;暂时 console log
               console.log("[harness · missing-report]", payload);
             }}
           />
         </div>
       )}
+    </div>
+  );
 
-      {/* ── 底部 footer ── */}
-      <footer
-        style={{
-          marginTop: 20,
-          paddingTop: 18,
-          borderTop: "1px solid var(--border-subtle)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => setPhase(2)}
-          disabled={confirmMutation.isPending}
-          style={
-            confirmMutation.isPending ? btnGhostDisabledStyle : btnGhostStyle
-          }
-        >
-          ← 返回 Phase 2
-        </button>
-        <button
-          type="button"
-          onClick={() => confirmMutation.mutate()}
-          disabled={confirmMutation.isPending}
-          style={
-            confirmMutation.isPending
-              ? btnPrimaryDisabledStyle
-              : btnPrimaryStyle
-          }
-        >
-          {confirmMutation.isPending ? "生成中…" : "生成报告 →"}
-        </button>
-      </footer>
-
-      {/* ── 底部常驻 KeymapBar ── */}
+  // 左栏:PRD 原文(简单 markdown-ish 渲染 + 锚点高亮)
+  const docColumn = (
+    <div
+      className="pecker-phase3-doc"
+      style={{
+        background: "var(--surface-raised)",
+        border: "1px solid var(--border-default)",
+        borderRadius: "var(--r-4)",
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 0,
+        overflow: "hidden",
+      }}
+    >
       <div
         style={{
-          position: "fixed",
-          bottom: 16,
-          left: "50%",
-          transform: "translateX(-50%)",
-          zIndex: "var(--z-toast)" as unknown as number,
-          pointerEvents: "none",
+          padding: "12px 16px",
+          borderBottom: "1px solid var(--border-default)",
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          gap: 10,
+          flexWrap: "wrap",
         }}
       >
-        <div style={{ pointerEvents: "auto" }}>
-          <KeymapBar
-            items={[
-              { keys: ["j"], label: "下一条" },
-              { keys: ["k"], label: "上一条" },
-              { keys: ["y"], label: "接受" },
-              { keys: ["n"], label: "驳回" },
-              { keys: ["e"], label: "编辑" },
-            ]}
-          />
+        <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: "var(--text-strong)",
+            }}
+          >
+            PRD 原文
+          </div>
+          {prdName && (
+            <div
+              style={{
+                fontSize: 11,
+                color: "var(--text-faint)",
+                marginTop: 2,
+              }}
+            >
+              {prdName}
+            </div>
+          )}
         </div>
+        {focusedAnchor && (
+          <span
+            title="当前选中意见所引用的位置"
+            style={{
+              fontSize: 11,
+              padding: "2px 8px",
+              borderRadius: "var(--r-pill)",
+              background: "var(--accent-50)",
+              color: "var(--accent-700)",
+              fontWeight: 600,
+            }}
+          >
+            ↳ {focusedAnchor}
+          </span>
+        )}
       </div>
+      <div
+        style={{
+          flex: 1,
+          overflow: "auto",
+          padding: "14px 18px",
+          fontSize: 13,
+          lineHeight: 1.7,
+          color: "var(--text-default)",
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+        }}
+      >
+        {prdContent ? (
+          highlightPrdAnchor(prdContent, focusedAnchor)
+        ) : (
+          <span
+            style={{
+              color: "var(--text-faint)",
+              fontStyle: "italic",
+            }}
+          >
+            (PRD 原文未加载)
+          </span>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div
+      ref={containerRef}
+      className="pecker-phase3"
+      style={{
+        maxWidth: 1480,
+        margin: "0 auto",
+        padding: "20px 24px 140px", // 底部留空给 sticky 批量栏
+        fontFamily: "var(--font-sans)",
+      }}
+    >
+      {/* ── header ── */}
+      <header
+        style={{
+          marginBottom: 14,
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          gap: 16,
+          flexWrap: "wrap",
+        }}
+      >
+        <div>
+          <h1
+            style={{
+              fontSize: 22,
+              fontWeight: 600,
+              color: "var(--text-strong)",
+              margin: 0,
+              letterSpacing: "-0.015em",
+            }}
+          >
+            待确认意见
+          </h1>
+          <p
+            style={{
+              fontSize: 13,
+              color: "var(--text-muted)",
+              marginTop: 4,
+            }}
+          >
+            {stats.total === 0
+              ? "本次评审没有发现问题"
+              : "左侧对照 PRD 原文,右侧逐条决策每个评审员提出的问题"}
+          </p>
+        </div>
+        {stats.total > 0 && (
+          <div
+            style={{
+              display: "flex",
+              gap: 6,
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
+          >
+            <KeymapBar
+              items={[
+                { keys: ["j"], label: "下一条" },
+                { keys: ["k"], label: "上一条" },
+                { keys: ["y"], label: "接受" },
+                { keys: ["n"], label: "驳回" },
+                { keys: ["e"], label: "编辑" },
+              ]}
+            />
+          </div>
+        )}
+      </header>
+
+      {/* ── 双栏工作台:左 PRD 原文 / 右 意见列表 ── */}
+      <div
+        className="pecker-phase3-grid"
+        style={{
+          display: "grid",
+          gridTemplateColumns:
+            stats.total === 0 ? "1fr" : "minmax(0, 1fr) minmax(0, 1.1fr)",
+          gap: 16,
+          minHeight: "calc(100vh - 280px)",
+          alignItems: "start",
+        }}
+      >
+        {stats.total > 0 && (
+          <div
+            className="pecker-phase3-doc-wrap"
+            style={{
+              position: "sticky",
+              top: 16,
+              maxHeight: "calc(100vh - 200px)",
+              display: "flex",
+              flexDirection: "column",
+              minHeight: 0,
+            }}
+          >
+            {docColumn}
+          </div>
+        )}
+        {commentColumn}
+      </div>
+
+      {/* ── sticky 批量操作栏(底部) ── */}
+      {stats.total > 0 && (
+        <div
+          className="pecker-phase3-batchbar"
+          style={{
+            position: "fixed",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 30,
+            background: "var(--surface-raised)",
+            borderTop: "1px solid var(--border-default)",
+            boxShadow: "var(--shadow-sm)",
+            padding: "10px 24px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 16,
+              flexWrap: "wrap",
+              fontSize: 13,
+              color: "var(--text-muted)",
+            }}
+          >
+            <BatchStat
+              label="已接受"
+              value={stats.accept}
+              tone="done"
+            />
+            <BatchStat
+              label="已驳回"
+              value={stats.reject}
+            />
+            <BatchStat
+              label="待处理"
+              value={stats.pending}
+              tone="warn"
+            />
+            <span
+              style={{
+                fontSize: 12,
+                color: "var(--text-faint)",
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              共 {stats.decided} / {stats.total} 条已决
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={() => setPhase(2)}
+              disabled={confirmMutation.isPending}
+              style={
+                confirmMutation.isPending ? btnGhostDisabledStyle : btnGhostStyle
+              }
+            >
+              ← 返回上一步
+            </button>
+            <button
+              type="button"
+              onClick={() => confirmMutation.mutate()}
+              disabled={confirmMutation.isPending}
+              style={
+                confirmMutation.isPending
+                  ? btnPrimaryDisabledStyle
+                  : btnPrimaryStyle
+              }
+            >
+              {confirmMutation.isPending
+                ? "生成中…"
+                : `导出报告（${stats.decided}/${stats.total}）`}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── 移动端浮动按钮:展开评论抽屉 ── */}
+      {stats.total > 0 && (
+        <button
+          type="button"
+          className="pecker-phase3-drawer-fab"
+          onClick={() => setDrawerOpen(true)}
+          aria-label="展开评论列表"
+          style={{
+            position: "fixed",
+            bottom: 76,
+            right: 16,
+            zIndex: 35,
+            display: "none",
+            alignItems: "center",
+            gap: 6,
+            padding: "10px 14px",
+            borderRadius: "var(--r-pill)",
+            border: 0,
+            background: "var(--accent-500)",
+            color: "var(--accent-fg)",
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: "pointer",
+            boxShadow: "var(--shadow-md)",
+          }}
+        >
+          {stats.pending > 0
+            ? `还有 ${stats.pending} 条待处理`
+            : "查看意见列表"}
+        </button>
+      )}
+
+      {/* ── 移动端评论抽屉(底部 sheet) ── */}
+      {stats.total > 0 && drawerOpen && (
+        <div
+          className="pecker-phase3-drawer"
+          role="dialog"
+          aria-label="意见列表"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 40,
+            display: "none",
+            flexDirection: "column",
+            background: "var(--surface-canvas)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "10px 16px",
+              borderBottom: "1px solid var(--border-default)",
+              background: "var(--surface-raised)",
+            }}
+          >
+            <span style={{ fontSize: 14, fontWeight: 600 }}>
+              意见列表({stats.pending} 待处理)
+            </span>
+            <button
+              type="button"
+              onClick={() => setDrawerOpen(false)}
+              style={{
+                background: "transparent",
+                border: 0,
+                fontSize: 16,
+                cursor: "pointer",
+                color: "var(--text-muted)",
+                padding: "4px 8px",
+              }}
+              aria-label="关闭"
+            >
+              ✕
+            </button>
+          </div>
+          <div style={{ flex: 1, overflow: "auto", padding: "12px 16px 100px" }}>
+            {commentColumn}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -569,6 +1012,10 @@ function ItemCardV8({
 
   const lowConf =
     typeof item.confidence === "number" && item.confidence < 0.7;
+  const evidenceFailed = evidenceVerification === "failed";
+  // 验证失败或低置信度且未决策时,默认弱化(让 PM 不会被噪音干扰)
+  const fadedByQuality =
+    !action && (lowConf || evidenceFailed);
   const accepted =
     action === "accept" ? true : action === "reject" ? false : undefined;
 
@@ -593,14 +1040,15 @@ function ItemCardV8({
         display: "flex",
         flexDirection: "column",
         gap: 10,
-        opacity: action === "reject" ? 0.55 : 1,
+        opacity:
+          action === "reject" ? 0.55 : fadedByQuality && !focused ? 0.7 : 1,
         cursor: "default",
         transition: "border-color var(--dur-fast) var(--ease-out)",
       }}
     >
-      {/* top row */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <BirdAvatar id={birdId} size="md" />
+      {/* top row · BirdLabel(色点 + 文字)代替原 sm/md 头像 */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <BirdLabel id={birdId} size="md" />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
@@ -610,15 +1058,6 @@ function ItemCardV8({
               flexWrap: "wrap",
             }}
           >
-            <span
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: "var(--text-strong)",
-              }}
-            >
-              {BIRD_META[birdId].label}鸟
-            </span>
             {item.severity && <SeverityChip severity={item.severity} />}
             {eagleMark && <EagleMark kind={eagleMark} />}
             {action === "accept" && <DecisionChip kind="accept" />}
@@ -628,14 +1067,16 @@ function ItemCardV8({
           </div>
         </div>
         <span
+          title={`意见 ID · ${item.id}`}
           style={{
             fontSize: 10,
             fontFamily: "var(--font-mono)",
             color: "var(--text-faint)",
             fontVariantNumeric: "tabular-nums",
+            opacity: 0.55,
           }}
         >
-          {item.id.slice(0, 10)}
+          {item.id.slice(0, 6)}
         </span>
       </div>
 
@@ -683,36 +1124,66 @@ function ItemCardV8({
         />
       )}
 
-      {/* meta */}
+      {/* 主指标:置信度 + 多评审员引用(PM 第一眼判断这条意见是否可信) */}
       <div
         style={{
           display: "flex",
           flexWrap: "wrap",
-          gap: "3px 12px",
-          fontFamily: "var(--font-mono)",
-          fontSize: 11,
+          alignItems: "center",
+          gap: 10,
+          fontSize: 12,
           color: "var(--text-muted)",
-          fontVariantNumeric: "tabular-nums",
         }}
       >
         {typeof item.confidence === "number" && (
-          <MetaTag
-            k="conf"
-            v={item.confidence.toFixed(2)}
-            emph={lowConf}
-          />
+          <ConfidenceBadge value={item.confidence} />
         )}
         {item.cited_by_workers && item.cited_by_workers.length > 1 && (
-          <MetaTag
-            k="cited_by"
-            v={`${item.cited_by_workers.length} workers`}
-          />
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              fontSize: 11,
+              color: "var(--text-muted)",
+            }}
+            title="多个评审员都提到这条意见"
+          >
+            {item.cited_by_workers.length} 位评审员同时提出
+          </span>
         )}
         {Array.isArray(item.gate_log) && item.gate_log.length > 0 && (
-          <MetaTag
-            k="gate"
-            v={`${item.gate_log.filter((g) => g.pass).length}/${item.gate_log.length}`}
-          />
+          <details style={{ marginLeft: "auto" }}>
+            <summary
+              style={{
+                fontSize: 11,
+                color: "var(--text-faint)",
+                cursor: "pointer",
+                userSelect: "none",
+                listStyle: "none",
+              }}
+            >
+              技术详情
+            </summary>
+            <div
+              style={{
+                marginTop: 6,
+                fontSize: 10,
+                color: "var(--text-faint)",
+                fontVariantNumeric: "tabular-nums",
+                display: "flex",
+                gap: 10,
+                flexWrap: "wrap",
+              }}
+            >
+              <span title="该意见经过的质量校验门数 / 总门数">
+                校验通过 {item.gate_log.filter((g) => g.pass).length}/{item.gate_log.length}
+              </span>
+              {typeof item.confidence === "number" && (
+                <span>置信度 {item.confidence.toFixed(2)}</span>
+              )}
+            </div>
+          </details>
         )}
       </div>
 
@@ -724,9 +1195,10 @@ function ItemCardV8({
           justifyContent: "space-between",
           gap: 8,
           marginTop: 2,
+          flexWrap: "wrap",
         }}
       >
-        <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           <button
             type="button"
             style={btnAcceptStyle(accepted === true)}
@@ -746,8 +1218,12 @@ function ItemCardV8({
           <button type="button" style={btnEditStyle(editing)} onClick={onEdit}>
             编辑
           </button>
+          <CopySuggestionBtn item={item} />
         </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <div
+          className="pecker-shortcut-hints"
+          style={{ display: "flex", gap: 10, alignItems: "center" }}
+        >
           <ShortcutHint keys={["y"]} label="接受" />
           <ShortcutHint keys={["n"]} label="拒绝" />
           <ShortcutHint keys={["e"]} label="编辑" />
@@ -875,11 +1351,21 @@ function TabBtn({ active, onClick, label, sublabel, birdId, count }: TabBtnProps
       }}
       title={sublabel}
     >
-      {birdId && <BirdAvatar id={birdId} size="sm" />}
+      {birdId && (
+        <span
+          aria-hidden
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: `var(--bird-${birdId})`,
+            flexShrink: 0,
+          }}
+        />
+      )}
       <span>{label}</span>
       <span
         style={{
-          fontFamily: "var(--font-mono)",
           fontSize: 11,
           color: active ? "var(--accent-600)" : "var(--text-muted)",
           fontVariantNumeric: "tabular-nums",
@@ -980,12 +1466,25 @@ function DecisionChip({ kind }: { kind: "accept" | "reject" | "edit" }) {
 function SeverityChip({ severity }: { severity: string }) {
   const tone =
     severity === "must"
-      ? { bg: "var(--status-failed-bg)", fg: "var(--status-failed-fg)", label: "must" }
+      ? {
+          bg: "var(--status-failed-bg)",
+          fg: "var(--status-failed-fg)",
+          label: "必须修",
+        }
       : severity === "should"
-        ? { bg: "var(--status-warn-bg)", fg: "var(--status-warn-fg)", label: "should" }
-        : { bg: "var(--neutral-100)", fg: "var(--text-muted)", label: severity };
+        ? {
+            bg: "var(--status-warn-bg)",
+            fg: "var(--status-warn-fg)",
+            label: "建议修",
+          }
+        : {
+            bg: "var(--neutral-100)",
+            fg: "var(--text-muted)",
+            label: severity,
+          };
   return (
     <span
+      title={`严重度 · ${severity}`}
       style={{
         fontSize: 10,
         padding: "1px 6px",
@@ -993,9 +1492,6 @@ function SeverityChip({ severity }: { severity: string }) {
         background: tone.bg,
         color: tone.fg,
         fontWeight: 600,
-        fontFamily: "var(--font-mono)",
-        textTransform: "uppercase",
-        letterSpacing: "0.04em",
       }}
     >
       {tone.label}
@@ -1006,6 +1502,7 @@ function SeverityChip({ severity }: { severity: string }) {
 function PinChip() {
   return (
     <span
+      title="苍鹰标记的重点意见"
       style={{
         fontSize: 10,
         padding: "1px 6px",
@@ -1015,36 +1512,91 @@ function PinChip() {
         fontWeight: 600,
       }}
     >
-      pinned
+      重点
     </span>
   );
 }
 
-function MetaTag({
-  k,
-  v,
-  emph,
-}: {
-  k: string;
-  v: string;
-  emph?: boolean;
-}) {
+function CopySuggestionBtn({ item }: { item: ReviewItem }) {
+  const [copied, setCopied] = useState(false);
+  const text = (() => {
+    const parts: string[] = [];
+    if (item.problem) parts.push(`【问题】${item.problem}`);
+    if (item.suggestion) parts.push(`【建议】${item.suggestion}`);
+    if (item.evidence) parts.push(`【依据】${item.evidence}`);
+    if (item.location) parts.push(`【位置】${item.location}`);
+    return parts.join("\n");
+  })();
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      toast.success("已复制建议到剪贴板");
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error("复制失败,请手动选中文本");
+    }
+  };
   return (
-    <span
+    <button
+      type="button"
+      onClick={handleCopy}
+      title="复制问题 + 建议 + 依据,可直接粘回 PRD"
       style={{
-        display: "inline-flex",
-        gap: 3,
-        color: emph ? "var(--status-warn-fg)" : "var(--text-muted)",
+        padding: "5px 12px",
+        border: "1px solid var(--border-default)",
+        borderRadius: "var(--r-3)",
+        background: copied ? "var(--status-done-bg)" : "var(--surface-raised)",
+        color: copied ? "var(--status-done-fg)" : "var(--text-muted)",
+        fontSize: 12,
+        fontWeight: 500,
+        cursor: "pointer",
+        fontFamily: "var(--font-sans)",
       }}
     >
-      <span style={{ opacity: 0.6 }}>{k}=</span>
-      <span
-        style={{
-          color: emph ? "var(--status-warn-fg)" : "var(--text-default)",
-        }}
-      >
-        {v}
-      </span>
+      {copied ? "已复制" : "复制建议"}
+    </button>
+  );
+}
+
+function ConfidenceBadge({ value }: { value: number }) {
+  // 高 ≥ 0.85 / 中 0.7-0.85 / 低 < 0.7
+  const tier =
+    value >= 0.85 ? "high" : value >= 0.7 ? "mid" : "low";
+  const map = {
+    high: {
+      bg: "var(--status-done-bg)",
+      fg: "var(--status-done-fg)",
+      label: "高置信",
+    },
+    mid: {
+      bg: "var(--neutral-100)",
+      fg: "var(--text-default)",
+      label: "中置信",
+    },
+    low: {
+      bg: "var(--status-warn-bg)",
+      fg: "var(--status-warn-fg)",
+      label: "低置信",
+    },
+  } as const;
+  const tok = map[tier];
+  return (
+    <span
+      title={`置信度 ${value.toFixed(2)} · 数值越高越可信`}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        padding: "2px 8px",
+        borderRadius: "var(--r-pill)",
+        background: tok.bg,
+        color: tok.fg,
+        fontSize: 11,
+        fontWeight: 600,
+      }}
+    >
+      {tok.label}
     </span>
   );
 }
@@ -1210,3 +1762,199 @@ const emptyDescStyle: React.CSSProperties = {
   color: "var(--text-muted)",
   marginBottom: 18,
 };
+
+// ============================================================
+// 辅助:在 PRD 原文里高亮当前选中意见引用的位置
+// 简单实现:把 anchor 字串作为 substring 找到第一处匹配,加 <mark> 包裹。
+// 找不到就原文返回(很多 location 是 §2.3 / line 42 这种,找不到很正常)。
+
+function highlightPrdAnchor(
+  prd: string,
+  anchor: string | undefined,
+): React.ReactNode {
+  if (!anchor || anchor === "(未标注位置)") return prd;
+  // 抽取 anchor 中的关键 token(通常是 §X / line N / 章节名)
+  const trimmed = anchor.trim().replace(/^[↳→\-·]+\s*/, "");
+  if (!trimmed) return prd;
+  const idx = prd.indexOf(trimmed);
+  if (idx < 0) return prd;
+  return (
+    <>
+      {prd.slice(0, idx)}
+      <mark
+        style={{
+          background:
+            "color-mix(in oklch, var(--accent-500) 22%, transparent)",
+          borderBottom: "2px solid var(--accent-500)",
+          padding: "0 2px",
+          color: "inherit",
+        }}
+      >
+        {prd.slice(idx, idx + trimmed.length)}
+      </mark>
+      {prd.slice(idx + trimmed.length)}
+    </>
+  );
+}
+
+// ============================================================
+// 严重度过滤按钮 + 批量统计 pill
+
+function SevFilterBtn({
+  active,
+  onClick,
+  label,
+  count,
+  tone,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count: number;
+  tone?: "fail" | "warn";
+}) {
+  const accentBg =
+    tone === "fail"
+      ? "var(--status-failed-bg)"
+      : tone === "warn"
+        ? "var(--status-warn-bg)"
+        : "var(--accent-50)";
+  const accentFg =
+    tone === "fail"
+      ? "var(--status-failed-fg)"
+      : tone === "warn"
+        ? "var(--status-warn-fg)"
+        : "var(--accent-700)";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "4px 10px",
+        borderRadius: "var(--r-pill)",
+        border: `1px solid ${active ? accentFg : "var(--border-default)"}`,
+        background: active ? accentBg : "var(--surface-raised)",
+        color: active ? accentFg : "var(--text-default)",
+        fontSize: 12,
+        fontWeight: active ? 600 : 500,
+        cursor: "pointer",
+        fontFamily: "var(--font-sans)",
+      }}
+    >
+      <span>{label}</span>
+      <span
+        style={{
+          fontSize: 11,
+          color: active ? accentFg : "var(--text-muted)",
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {count}
+      </span>
+    </button>
+  );
+}
+
+function BatchStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone?: "done" | "warn";
+}) {
+  const fg =
+    tone === "done"
+      ? "var(--status-done-fg)"
+      : tone === "warn"
+        ? "var(--status-warn-fg)"
+        : "var(--text-default)";
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "baseline",
+        gap: 6,
+      }}
+    >
+      <span
+        style={{
+          fontSize: 18,
+          fontWeight: 600,
+          color: fg,
+          fontVariantNumeric: "tabular-nums",
+          lineHeight: 1,
+        }}
+      >
+        {value}
+      </span>
+      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{label}</span>
+    </span>
+  );
+}
+
+// ============================================================
+// EmptyClearState · "本次评审没有发现需要处理的问题" 庆祝时刻
+//
+// 用手绘 clear-state.png(啄木鸟趴在文档上 + 3 个 jade 对勾),情绪曲线
+// 系列里"全部通过"那张。PNG 缺失时降级到纯文本(不影响功能)。
+
+function EmptyClearState() {
+  return (
+    <div
+      style={{
+        padding: "40px 24px",
+        textAlign: "center",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 8,
+      }}
+    >
+      <img
+        src="/illustrations/clear-state.png"
+        alt=""
+        aria-hidden
+        width={280}
+        height={188}
+        style={{
+          width: 280,
+          height: "auto",
+          maxWidth: "100%",
+          marginBottom: 8,
+          opacity: 0.95,
+          userSelect: "none",
+        }}
+        onError={(e) => {
+          (e.currentTarget as HTMLImageElement).style.display = "none";
+        }}
+      />
+      <div
+        style={{
+          fontSize: 16,
+          fontWeight: 600,
+          color: "var(--text-strong)",
+        }}
+      >
+        本次评审没有发现需要处理的问题
+      </div>
+      <div
+        style={{
+          fontSize: 13,
+          color: "var(--text-muted)",
+          lineHeight: 1.6,
+          maxWidth: 340,
+          margin: "0 auto",
+        }}
+      >
+        四位评审员都未提出意见,苍鹰也没有补充。
+        <br />
+        PRD 可以直接进入研发评审。
+      </div>
+    </div>
+  );
+}

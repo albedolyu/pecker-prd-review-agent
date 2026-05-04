@@ -58,37 +58,67 @@ export function RunHealthCheck({
   className,
   style,
 }: RunHealthCheckProps) {
+  // 不完整返回的评审员数量(给 PM 看的具体风险)
+  const incompleteCount = birds.filter((b) => b.fails > 0).length;
+
   const classInfo: Record<
     SessionClass,
-    { fg: string; bg: string; label: string; desc: string }
+    {
+      tone: "ok" | "warn" | "fail";
+      fg: string;
+      bg: string;
+      label: string;
+      headline: string;
+      desc: string;
+      // 技术 code,留作小字
+      code: string;
+    }
   > = {
     productive: {
+      tone: "ok",
       fg: "var(--status-done-fg)",
       bg: "var(--status-done-bg)",
-      label: "productive",
-      desc: "run 质量健康,可进入 Phase 3",
+      label: "本次运行健康",
+      headline: "本次运行健康,可进入逐条确认。",
+      desc: "所有评审员都正常返回,意见可以放心处理。",
+      code: "productive",
     },
     partial_silent: {
+      tone: "warn",
       fg: "var(--status-warn-fg)",
       bg: "var(--status-warn-bg)",
-      label: "partial_silent",
-      desc: "存在静默失败 · 在不完整结果上决策风险很高 · 建议重跑",
+      label: incompleteCount > 0
+        ? `本次评审有 ${incompleteCount} 个评审员未完整返回`
+        : "本次评审有评审员未完整返回",
+      headline:
+        incompleteCount > 0
+          ? `本次评审有 ${incompleteCount} 个评审员未完整返回,继续确认可能遗漏问题。`
+          : "本次评审有评审员未完整返回,继续确认可能遗漏问题。",
+      desc: "建议先重跑异常评审员,再进入逐条确认。",
+      code: "partial_silent",
     },
     quota_exhausted: {
+      tone: "fail",
       fg: "var(--status-failed-fg)",
       bg: "var(--status-failed-bg)",
-      label: "quota_exhausted",
-      desc: "配额打满导致提前终止",
+      label: "API 配额已用尽,评审被中断",
+      headline: "API 配额已用尽,评审中途终止。",
+      desc: "重跑前请确认 API 额度,否则会再次中断。",
+      code: "quota_exhausted",
     },
     degraded: {
+      tone: "warn",
       fg: "var(--status-warn-fg)",
       bg: "var(--status-warn-bg)",
-      label: "degraded",
-      desc: "部分失败但结果仍可用",
+      label: "部分评审员降级,结果仍可参考",
+      headline: "部分评审员未完全返回,但结果仍可参考。",
+      desc: "继续确认前可以快速看一眼是哪几只鸟出了状况。",
+      code: "degraded",
     },
   };
   const info = classInfo[sessionClass];
   const isWarn = sessionClass !== "productive";
+  const isPartialSilent = sessionClass === "partial_silent";
 
   return (
     <div
@@ -105,73 +135,93 @@ export function RunHealthCheck({
         ...style,
       }}
     >
-      {/* top banner */}
+      {/* top banner · 头条直接告诉 PM 本次评审是否可信 */}
       <div
         style={{
           display: "flex",
-          alignItems: "center",
+          alignItems: "flex-start",
           gap: 14,
-          padding: "14px 18px",
+          padding: "16px 20px",
           background: info.bg,
           borderBottom: `1px solid ${info.fg}22`,
         }}
       >
-        {isWarn && (
+        {info.tone === "ok" ? (
           <svg
-            width="22"
-            height="22"
-            viewBox="0 0 22 22"
-            style={{ color: info.fg, flexShrink: 0 }}
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            style={{ color: info.fg, flexShrink: 0, marginTop: 1 }}
+            aria-hidden
+          >
+            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="1.8" />
+            <path
+              d="M7 12.5 L10.5 16 L17 9"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        ) : (
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            style={{ color: info.fg, flexShrink: 0, marginTop: 1 }}
             aria-hidden
           >
             <path
-              d="M11 3 L20 18 L2 18 Z"
+              d="M12 3 L22 20 L2 20 Z"
               fill="none"
               stroke="currentColor"
               strokeWidth="1.8"
               strokeLinejoin="round"
             />
-            <rect x="10.2" y="8" width="1.6" height="5" fill="currentColor" />
-            <circle cx="11" cy="15" r="1" fill="currentColor" />
+            <rect x="11.2" y="9" width="1.6" height="6" fill="currentColor" />
+            <circle cx="12" cy="17" r="1.1" fill="currentColor" />
           </svg>
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <span
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 13,
-                fontWeight: 600,
-                padding: "2px 8px",
-                borderRadius: "var(--r-2)",
-                background: info.fg,
-                color: "var(--neutral-0)",
-              }}
-            >
-              {info.label}
-            </span>
-            <span
-              style={{
-                fontSize: 13,
-                color: info.fg,
-                fontWeight: 500,
-              }}
-            >
-              {info.desc}
-            </span>
+          <div
+            style={{
+              fontSize: 15,
+              fontWeight: 600,
+              color: info.fg,
+              lineHeight: 1.45,
+            }}
+          >
+            {info.headline}
+          </div>
+          <div
+            style={{
+              fontSize: 12,
+              color: info.fg,
+              opacity: 0.85,
+              marginTop: 4,
+              lineHeight: 1.55,
+            }}
+          >
+            {info.desc}
+          </div>
+          <div
+            style={{
+              marginTop: 6,
+              fontSize: 10,
+              color: info.fg,
+              opacity: 0.55,
+              fontFamily: "var(--font-mono)",
+            }}
+            title={`运行分类 code · ${info.code}`}
+          >
+            {info.code}
           </div>
         </div>
       </div>
 
       {/* body */}
-      <div
-        style={{
-          padding: "18px 20px",
-          display: "grid",
-          gridTemplateColumns: "200px 1fr",
-          gap: 28,
-        }}
-      >
+      <div className="pecker-health-body" style={healthBodyStyle}>
         {/* consistency ring */}
         <div
           style={{
@@ -184,67 +234,41 @@ export function RunHealthCheck({
           <ConsistencyRing value={consistency} />
           <div
             style={{
-              fontSize: 11,
+              fontSize: 12,
               color: "var(--text-muted)",
               textAlign: "center",
               lineHeight: 1.4,
             }}
           >
-            effective
-            <br />
-            consistency
+            评审员一致率
+            <div
+              style={{
+                fontSize: 10,
+                color: "var(--text-faint)",
+                marginTop: 2,
+              }}
+              title="effective consistency · 同维度多评审员产出的相似度"
+            >
+              数值越高越可信
+            </div>
           </div>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {/* 5 色失败矩阵 */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          {/* 评审员状态(原 5 鸟健康度) */}
           <div>
             <div
               style={{
-                fontSize: 11,
-                textTransform: "uppercase",
-                letterSpacing: 0.8,
-                color: "var(--text-muted)",
+                fontSize: 13,
                 fontWeight: 600,
+                color: "var(--text-strong)",
                 marginBottom: 8,
               }}
             >
-              失败分类 · 5 色
+              评审员状态
             </div>
             <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(5, 1fr)",
-                gap: 10,
-              }}
-            >
-              {FAILURE_CATEGORIES.map((f) => (
-                <FailureCell
-                  key={f.code}
-                  code={f.code}
-                  token={f.token}
-                  label={f.label}
-                  n={failures[f.code] ?? 0}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* 5 鸟健康度 */}
-          <div>
-            <div
-              style={{
-                fontSize: 11,
-                textTransform: "uppercase",
-                letterSpacing: 0.8,
-                color: "var(--text-muted)",
-                fontWeight: 600,
-                marginBottom: 8,
-              }}
-            >
-              5 鸟健康度
-            </div>
-            <div
+              className="pecker-health-grid"
               style={{
                 display: "grid",
                 gridTemplateColumns: "repeat(5, 1fr)",
@@ -256,43 +280,133 @@ export function RunHealthCheck({
               ))}
             </div>
           </div>
+
+          {/* 异常分类 — 展开式,PM 默认看到一句话总结 */}
+          {Object.values(failures).some((n) => (n ?? 0) > 0) ? (
+            <details
+              style={{
+                background: "var(--surface-sunken)",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: "var(--r-3)",
+                padding: "10px 12px",
+              }}
+            >
+              <summary
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "var(--text-strong)",
+                  cursor: "pointer",
+                  userSelect: "none",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  flexWrap: "wrap",
+                }}
+              >
+                <span>异常分类</span>
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 500,
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  {summarizeFailures(failures)}
+                </span>
+              </summary>
+              <div
+                className="pecker-health-grid"
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(5, 1fr)",
+                  gap: 10,
+                  marginTop: 10,
+                }}
+              >
+                {FAILURE_CATEGORIES.map((f) => (
+                  <FailureCell
+                    key={f.code}
+                    code={f.code}
+                    token={f.token}
+                    label={f.label}
+                    n={failures[f.code] ?? 0}
+                  />
+                ))}
+              </div>
+            </details>
+          ) : null}
         </div>
       </div>
 
-      {/* CTA */}
+      {/* CTA · 强二选一(partial_silent / quota_exhausted)/ 轻提示(productive) */}
       <div
+        className="pecker-health-cta"
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           gap: 12,
-          padding: "12px 18px",
+          padding: "14px 20px",
           borderTop: "1px solid var(--border-default)",
           background: "var(--surface-sunken)",
           flexWrap: "wrap",
         }}
       >
-        <div style={{ fontSize: 12, color: "var(--text-muted)", flex: 1, minWidth: 0 }}>
-          {sessionClass === "partial_silent"
-            ? "⚠ 必须二选一:继续会在不完整结果上决策,建议重跑失败 worker"
+        <div
+          style={{
+            fontSize: 12,
+            color: "var(--text-muted)",
+            flex: 1,
+            minWidth: 220,
+            lineHeight: 1.5,
+          }}
+        >
+          {isPartialSilent
+            ? "继续确认会在不完整结果上决策,有遗漏问题的风险。"
             : sessionClass === "quota_exhausted"
-              ? "⚠ 配额已打满,重跑前请确认 API key 额度"
-              : "两项操作可选,继续不会再次触发预检"}
+              ? "重跑前请确认 API 额度,否则会再次中断。"
+              : sessionClass === "degraded"
+                ? "可以直接进入逐条确认;如果想看到完整结果,也可以重跑。"
+                : "本次运行健康,可放心进入逐条确认。"}
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" onClick={onRetry} style={btnSecondary}>
-            重跑失败 worker
-          </button>
-          <button
-            type="button"
-            onClick={onContinue}
-            style={{
-              ...btnPrimary,
-              opacity: sessionClass === "partial_silent" ? 0.85 : 1,
-            }}
-          >
-            继续 Phase 3 →
-          </button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {isPartialSilent ? (
+            <>
+              <button type="button" onClick={onRetry} style={btnPrimary}>
+                重跑异常评审员
+              </button>
+              <button
+                type="button"
+                onClick={onContinue}
+                style={{ ...btnSecondary, color: "var(--text-muted)" }}
+              >
+                仍继续确认
+              </button>
+            </>
+          ) : sessionClass === "quota_exhausted" ? (
+            <>
+              <button type="button" onClick={onRetry} style={btnPrimary}>
+                重新评审
+              </button>
+              <button
+                type="button"
+                onClick={onContinue}
+                style={{ ...btnSecondary, color: "var(--text-muted)" }}
+              >
+                查看现有意见
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" onClick={onRetry} style={btnSecondary}>
+                重新评审
+              </button>
+              <button type="button" onClick={onContinue} style={btnPrimary}>
+                进入逐条确认 →
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -307,12 +421,35 @@ const FAILURE_CATEGORIES: {
   token: string;
   label: string;
 }[] = [
-  { code: "quota_exhausted", token: "--fail-quota", label: "配额" },
-  { code: "tool_call_failed", token: "--fail-tool", label: "工具" },
-  { code: "json_parse_error", token: "--fail-json", label: "JSON" },
-  { code: "empty_submission", token: "--fail-empty", label: "空提交" },
-  { code: "timeout", token: "--fail-timeout", label: "超时" },
+  { code: "quota_exhausted", token: "--fail-quota", label: "配额用尽" },
+  { code: "tool_call_failed", token: "--fail-tool", label: "工具异常" },
+  { code: "json_parse_error", token: "--fail-json", label: "格式异常" },
+  { code: "empty_submission", token: "--fail-empty", label: "未返回意见" },
+  { code: "timeout", token: "--fail-timeout", label: "运行超时" },
 ];
+
+const FAILURE_LABEL_MAP: Record<FailureCategory, string> = Object.fromEntries(
+  FAILURE_CATEGORIES.map((f) => [f.code, f.label]),
+) as Record<FailureCategory, string>;
+
+function summarizeFailures(
+  failures: Partial<Record<FailureCategory, number>>,
+): string {
+  const parts: string[] = [];
+  for (const f of FAILURE_CATEGORIES) {
+    const n = failures[f.code] ?? 0;
+    if (n > 0) parts.push(`${FAILURE_LABEL_MAP[f.code]} ${n}`);
+  }
+  if (parts.length === 0) return "未发现异常";
+  return parts.join(" · ");
+}
+
+const healthBodyStyle: React.CSSProperties = {
+  padding: "18px 20px",
+  display: "grid",
+  gridTemplateColumns: "200px 1fr",
+  gap: 28,
+};
 
 function FailureCell({
   code,
@@ -325,45 +462,43 @@ function FailureCell({
   label: string;
   n: number;
 }) {
+  const dim = n === 0;
   return (
     <div
+      title={`分类 code · ${code}`}
       style={{
         padding: "10px 12px",
-        background: `color-mix(in oklch, var(${token}) 10%, var(--surface-sunken))`,
-        border: `1px solid color-mix(in oklch, var(${token}) 24%, var(--border-subtle))`,
+        background: dim
+          ? "var(--surface-canvas)"
+          : `color-mix(in oklch, var(${token}) 10%, var(--surface-sunken))`,
+        border: `1px solid ${
+          dim
+            ? "var(--border-subtle)"
+            : `color-mix(in oklch, var(${token}) 24%, var(--border-subtle))`
+        }`,
         borderRadius: "var(--r-3)",
+        opacity: dim ? 0.55 : 1,
       }}
     >
       <div
         style={{
           fontSize: 22,
           fontWeight: 600,
-          color: `var(${token})`,
+          color: dim ? "var(--text-faint)" : `var(${token})`,
           fontVariantNumeric: "tabular-nums",
           lineHeight: 1,
-          fontFamily: "var(--font-mono)",
         }}
       >
         {n}
       </div>
       <div
         style={{
-          fontSize: 11,
+          fontSize: 12,
           color: "var(--text-default)",
           marginTop: 4,
         }}
       >
         {label}
-      </div>
-      <div
-        style={{
-          fontSize: 10,
-          fontFamily: "var(--font-mono)",
-          color: "var(--text-faint)",
-          marginTop: 2,
-        }}
-      >
-        {code}
       </div>
     </div>
   );
@@ -430,6 +565,7 @@ function BirdHealth({
   const healthy = fails === 0;
   return (
     <div
+      title={`运行 ${runs} · 异常 ${fails} · 提交 ${submissions} 条意见`}
       style={{
         display: "flex",
         flexDirection: "column",
@@ -462,27 +598,16 @@ function BirdHealth({
       </div>
       <div
         style={{
-          display: "flex",
-          gap: 10,
-          fontFamily: "var(--font-mono)",
-          fontSize: 10,
-          color: "var(--text-muted)",
-          fontVariantNumeric: "tabular-nums",
+          fontSize: 11,
+          color: healthy ? "var(--text-muted)" : "var(--status-failed-fg)",
+          fontWeight: healthy ? 400 : 600,
         }}
       >
-        <span>
-          <span style={{ opacity: 0.6 }}>runs</span> {runs}
-        </span>
-        <span
-          style={{
-            color: fails ? "var(--status-failed-fg)" : "inherit",
-          }}
-        >
-          <span style={{ opacity: 0.6 }}>fails</span> {fails}
-        </span>
-        <span>
-          <span style={{ opacity: 0.6 }}>subs</span> {submissions}
-        </span>
+        {healthy
+          ? runs === 0
+            ? "未运行"
+            : `已提交 ${submissions} 条`
+          : "未完整返回"}
       </div>
     </div>
   );

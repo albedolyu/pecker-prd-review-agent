@@ -89,17 +89,13 @@ export function TopBanner() {
         </span>
         <span
           style={{
-            fontSize: 10,
-            fontFamily: "var(--font-mono)",
+            fontSize: 11,
             color: "var(--text-faint)",
-            padding: "1px 5px",
-            borderRadius: "var(--r-2)",
-            background: "var(--surface-sunken)",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
+            fontWeight: 500,
+            letterSpacing: "-0.005em",
           }}
         >
-          v8
+          评审工作台
         </span>
       </Link>
 
@@ -124,14 +120,11 @@ export function TopBanner() {
             >
               <span
                 style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 10,
+                  fontSize: 11,
                   color: "var(--text-faint)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
                 }}
               >
-                reviewer
+                评审人
               </span>
               <span
                 style={{
@@ -152,7 +145,7 @@ export function TopBanner() {
                     fontWeight: 600,
                   }}
                 >
-                  readonly
+                  只读
                 </span>
               )}
             </span>
@@ -169,18 +162,14 @@ export function TopBanner() {
                 >
                   <span
                     style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 10,
+                      fontSize: 11,
                       color: "var(--text-faint)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.08em",
                     }}
                   >
-                    today
+                    今日已评
                   </span>
                   <span
                     style={{
-                      fontFamily: "var(--font-mono)",
                       fontWeight: 600,
                       color: "var(--text-default)",
                       fontVariantNumeric: "tabular-nums",

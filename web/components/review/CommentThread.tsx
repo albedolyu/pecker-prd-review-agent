@@ -15,8 +15,7 @@
 "use client";
 
 import { useState } from "react";
-import { BirdAvatar, type BirdId } from "@/components/birds/BirdAvatar";
-import { BIRD_META } from "@/components/birds/BirdBadge";
+import { BirdLabel, type BirdId } from "@/components/birds/BirdAvatar";
 import {
   EvidenceBlock,
   type EvidenceData,
@@ -109,9 +108,9 @@ export function CommentThread({
         ...style,
       }}
     >
-      {/* ── top row ── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <BirdAvatar id={birdId} size="md" />
+      {/* ── top row · BirdLabel(色点 + 文字)代替 sm/md 头像 ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <BirdLabel id={birdId} size="md" />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
@@ -121,15 +120,6 @@ export function CommentThread({
               flexWrap: "wrap",
             }}
           >
-            <span
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: "var(--text-strong)",
-              }}
-            >
-              {BIRD_META[birdId].label}鸟
-            </span>
             {dimension && (
               <span
                 style={{

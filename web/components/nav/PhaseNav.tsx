@@ -25,12 +25,12 @@ interface PhaseDef {
 }
 
 export const PHASES: readonly PhaseDef[] = Object.freeze([
-  { id: 0, label: "上传", desc: "PRD 接入" },
-  { id: 1, label: "盲区预检", desc: "知识盲区" },
-  { id: 1.5, label: "运行检查", desc: "session 健康度", critical: true },
-  { id: 2, label: "运行中", desc: "Agent 调度" },
-  { id: 3, label: "逐条确认", desc: "评审" },
-  { id: 4, label: "报告", desc: "导出" },
+  { id: 0, label: "上传 PRD", desc: "接入文档" },
+  { id: 1, label: "盲区预检", desc: "覆盖与遗漏" },
+  { id: 1.5, label: "运行质量检查", desc: "评审是否可信", critical: true },
+  { id: 2, label: "评审运行中", desc: "鸟群审稿" },
+  { id: 3, label: "逐条确认", desc: "处理评审意见" },
+  { id: 4, label: "评审报告", desc: "导出与归档" },
 ]);
 
 type PhaseState = "current" | "done" | "future" | "failed";
@@ -62,6 +62,10 @@ export function PhaseNav({
         borderBottom: "1px solid var(--border-default)",
         padding: "0 16px",
         fontFamily: "var(--font-sans)",
+        // 窄屏允许横向滚动,不挤压文字
+        overflowX: "auto",
+        whiteSpace: "nowrap",
+        scrollbarWidth: "thin",
         ...style,
       }}
       aria-label="评审阶段进度"
@@ -213,7 +217,14 @@ function PhaseNode({ phase, state, onClick }: PhaseNodeProps) {
             ) : state === "failed" ? (
               "×"
             ) : state === "current" ? (
-              <span style={{ color: colors.dot }}>{formatId(phase.id)}</span>
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background: colors.dot,
+                }}
+              />
             ) : (
               ""
             )}
@@ -237,16 +248,6 @@ function PhaseNode({ phase, state, onClick }: PhaseNodeProps) {
             color: colors.label,
           }}
         >
-          <span
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontWeight: 500,
-              marginRight: 6,
-              opacity: 0.7,
-            }}
-          >
-            {formatId(phase.id)}
-          </span>
           {phase.label}
           {phase.critical && (
             <span
@@ -276,10 +277,6 @@ function PhaseNode({ phase, state, onClick }: PhaseNodeProps) {
       </span>
     </button>
   );
-}
-
-function formatId(id: PhaseId): string {
-  return String(id).replace(".", "·");
 }
 
 interface PhaseConnectorProps {
