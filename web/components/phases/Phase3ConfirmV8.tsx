@@ -316,25 +316,6 @@ export function Phase3ConfirmV8() {
     el?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [focusedItem]);
 
-  // ── 空态 guard ──
-  if (!reviewResult) {
-    return (
-      <div style={emptyWrapStyle}>
-        <h2 style={emptyTitleStyle}>没找到评审结果</h2>
-        <p style={emptyDescStyle}>
-          没有 Phase 2 的产出,请返回重新评审。
-        </p>
-        <button
-          type="button"
-          onClick={() => setPhase(2)}
-          style={btnPrimaryStyle}
-        >
-          返回 Phase 2
-        </button>
-      </div>
-    );
-  }
-
   // 严重度计数
   const sevCounts = useMemo(() => {
     if (!reviewResult) return { must: 0, should: 0, other: 0 };
@@ -373,6 +354,25 @@ export function Phase3ConfirmV8() {
     }
     return { pending, accepted, rejected, low_conf: lowConf };
   }, [reviewResult, decisions]);
+
+  // ── 空态 guard ──
+  if (!reviewResult) {
+    return (
+      <div style={emptyWrapStyle}>
+        <h2 style={emptyTitleStyle}>没找到评审结果</h2>
+        <p style={emptyDescStyle}>
+          没有 Phase 2 的产出,请返回重新评审。
+        </p>
+        <button
+          type="button"
+          onClick={() => setPhase(2)}
+          style={btnPrimaryStyle}
+        >
+          返回 Phase 2
+        </button>
+      </div>
+    );
+  }
 
   // 渲染单条意见卡(避免嵌套大量 props 的重复书写)
   const renderItem = (item: ReviewItem, i: number) => (
