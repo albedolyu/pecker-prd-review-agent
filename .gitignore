@@ -53,6 +53,13 @@ workspace-points-payment/
 *.docx
 ~$*
 
+# Codex local run artifacts
+_baseline_run*.log
+web/_codex_*.log
+web/_codex_*.png
+workspace-*-standalone-*/
+py-manual-tmp/
+
 # 嵌入的 git 子仓库（wiki 独立管理）
 workspace/wiki/
 
