@@ -384,16 +384,13 @@ export function Phase2RunningV8() {
         <header style={{ marginBottom: 20 }}>
           <div
             style={{
-              fontSize: 10,
-              fontFamily: "var(--font-mono)",
+              fontSize: 11,
               fontWeight: 600,
-              textTransform: "uppercase",
-              letterSpacing: "0.1em",
               color: "var(--accent-600)",
               marginBottom: 4,
             }}
           >
-            Phase 1.5 · 必经节点
+            必经节点 · 进入逐条确认前
           </div>
           <h1
             style={{
@@ -413,7 +410,7 @@ export function Phase2RunningV8() {
               marginTop: 4,
             }}
           >
-            看一眼本次 run 的健康度,再决定是继续还是重跑
+            先确认本次评审是否可信,再决定继续还是重跑
           </p>
         </header>
 
@@ -465,7 +462,7 @@ export function Phase2RunningV8() {
               letterSpacing: "-0.015em",
             }}
           >
-            评审进行中
+            评审运行状态
           </h1>
           <p
             style={{
@@ -474,37 +471,23 @@ export function Phase2RunningV8() {
               marginTop: 4,
             }}
           >
-            4 worker 并行审稿 · 苍鹰交叉校验漏报
+            四个评审员并行审稿,苍鹰复核漏报与误判
           </p>
         </div>
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 12,
-            fontFamily: "var(--font-mono)",
+            gap: 14,
             fontSize: 12,
             color: "var(--text-muted)",
             fontVariantNumeric: "tabular-nums",
           }}
         >
           <span>
-            <span style={{ opacity: 0.6 }}>elapsed</span>{" "}
-            <span style={{ color: "var(--text-default)" }}>
+            已运行{" "}
+            <span style={{ color: "var(--text-default)", fontWeight: 500 }}>
               {formatElapsed(elapsed)}
-            </span>
-          </span>
-          <span
-            style={{
-              width: 1,
-              height: 14,
-              background: "var(--border-default)",
-            }}
-          />
-          <span>
-            <span style={{ opacity: 0.6 }}>mode</span>{" "}
-            <span style={{ color: "var(--text-default)" }}>
-              {mode === "quick" ? "quick" : "standard"}
             </span>
           </span>
           {(stream.state === "running" || stream.state === "connecting") && (
@@ -512,30 +495,36 @@ export function Phase2RunningV8() {
               <span
                 style={{
                   width: 1,
-                  height: 14,
+                  height: 12,
                   background: "var(--border-default)",
                 }}
               />
-              <span>
-                <span style={{ opacity: 0.6 }}>eta</span>{" "}
-                <span
-                  style={{
-                    color: elapsed > 480
+              <span
+                style={{
+                  color:
+                    elapsed > 480
                       ? "var(--status-failed-dot)"
-                      : elapsed > 180
-                        ? "var(--text-default)"
-                        : "var(--text-muted)",
-                  }}
-                >
-                  {elapsed > 480
-                    ? "超预期, 仍在进行"
-                    : elapsed > 300
-                      ? "正常, 预计 3-8 分钟"
-                      : "预计 3-8 分钟"}
-                </span>
+                      : "var(--text-muted)",
+                }}
+              >
+                {elapsed > 480
+                  ? "已超预期,仍在评审"
+                  : "预计 3–8 分钟完成"}
               </span>
             </>
           )}
+          <span
+            style={{
+              fontSize: 11,
+              padding: "2px 7px",
+              borderRadius: "var(--r-2)",
+              background: "var(--surface-sunken)",
+              color: "var(--text-faint)",
+            }}
+            title={`评审模式 · ${mode === "quick" ? "快速" : "标准"}`}
+          >
+            {mode === "quick" ? "快速模式" : "标准模式"}
+          </span>
         </div>
       </header>
 
@@ -563,11 +552,11 @@ export function Phase2RunningV8() {
         >
           <strong style={{ fontWeight: 600 }}>
             {failedReviewEvent?.reason === "quota_exhausted"
-              ? "配额已打满"
-              : "评审失败"}
+              ? "API 配额已用尽,本次评审中断"
+              : "评审运行失败"}
           </strong>
           {" · "}
-          {failedReviewEvent?.message ?? stream.error ?? "未知错误"}
+          {failedReviewEvent?.message ?? stream.error ?? "未知错误,请重试"}
         </div>
       )}
       {!hasError && degradedEvent && (
@@ -582,7 +571,7 @@ export function Phase2RunningV8() {
             fontSize: 13,
           }}
         >
-          <strong style={{ fontWeight: 600 }}>部分 worker 降级</strong>
+          <strong style={{ fontWeight: 600 }}>部分评审员未完整返回</strong>
           {" · "}
           {degradedEvent.message}
         </div>
@@ -590,8 +579,9 @@ export function Phase2RunningV8() {
 
       {/* ── 分层可视化:上层 worker + 下层 meta + 依赖边 ── */}
       <section style={{ position: "relative", marginBottom: 20 }}>
-        {/* worker 层 4 卡 · 横向并行 */}
+        {/* worker 层 · 桌面 4 列 / 平板 2 列 / 手机 1 列 */}
         <div
+          className="pecker-worker-grid"
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(4, 1fr)",
@@ -659,7 +649,7 @@ export function Phase2RunningV8() {
         }}
       >
         <button type="button" onClick={handleBack} style={btnGhost}>
-          ← 返回预检
+          ← 返回上一步
         </button>
         <div style={{ display: "flex", gap: 8 }}>
           {(stream.state === "running" || stream.state === "connecting") && (
@@ -669,7 +659,7 @@ export function Phase2RunningV8() {
           )}
           {(stream.state === "error" || failedReviewEvent) && (
             <button type="button" onClick={handleRetry} style={btnPrimary}>
-              重试
+              重新评审
             </button>
           )}
         </div>
@@ -702,25 +692,25 @@ function buildConsoleLines(
       case "uploaded":
         lines.push({
           t,
-          src: { name: "system" },
+          src: { name: "系统" },
           level: "info",
-          text: "PRD 上传完成 · 开始扫 wiki",
+          text: "PRD 已接入,正在加载知识库",
         });
         break;
       case "wiki_scanned":
         lines.push({
           t,
-          src: { name: "system" },
+          src: { name: "系统" },
           level: "info",
-          text: `wiki 扫描完成 · ${"page_count" in e ? e.page_count : "?"} 页`,
+          text: `知识库已加载 · ${"page_count" in e ? e.page_count : "?"} 页`,
         });
         break;
       case "workers_started":
         lines.push({
           t,
-          src: { name: "orchestrator" },
+          src: { name: "调度" },
           level: "accent",
-          text: `4 worker 并行启动 · mode=${"mode" in e ? e.mode : "?"}`,
+          text: `四只评审鸟开始并行审稿(${"mode" in e && e.mode === "quick" ? "快速模式" : "标准模式"})`,
         });
         break;
       case "worker_done": {
@@ -732,23 +722,19 @@ function buildConsoleLines(
             ? "warn"
             : "ok";
         const reason = !ev.success
-          ? ev.error ?? "failed"
+          ? ev.error ?? "未完成"
           : ev.timeout
-            ? "超时降级"
+            ? "运行超时,部分结果可用"
             : ev.degraded
-              ? "JSON 解析失败"
-              : "done";
+              ? "返回格式异常,已降级处理"
+              : "已完成";
         lines.push({
           t,
           src: { name: ev.dim_name, bird },
           level,
-          text: `${reason} · items=${ev.items_count}${
+          text: `${reason} · 提交 ${ev.items_count} 条意见${
             ev.telemetry?.duration_ms
-              ? ` · ${(ev.telemetry.duration_ms / 1000).toFixed(1)}s`
-              : ""
-          }${
-            ev.telemetry?.cost_usd
-              ? ` · $${ev.telemetry.cost_usd.toFixed(4)}`
+              ? ` · 耗时 ${(ev.telemetry.duration_ms / 1000).toFixed(1)} 秒`
               : ""
           }`,
         });
@@ -759,7 +745,7 @@ function buildConsoleLines(
           t,
           src: { name: "苍鹰", bird: 5 },
           level: "accent",
-          text: "开始交叉校验 4 worker 产出",
+          text: "开始交叉校验,核对依据与遗漏",
         });
         break;
       case "final_reviewer_done":
@@ -773,26 +759,26 @@ function buildConsoleLines(
       case "result":
         lines.push({
           t,
-          src: { name: "system" },
+          src: { name: "系统" },
           level: "ok",
-          text: `评审完成 · 共 ${e.payload.items.length} 条 · 等待 PM 决策`,
+          text: `评审完成,共 ${e.payload.items.length} 条意见待确认`,
         });
         break;
       case "error":
         lines.push({
           t,
-          src: { name: "system" },
+          src: { name: "系统" },
           level: "error",
-          text: `错误:${e.message}`,
+          text: `运行异常:${e.message}`,
         });
         break;
       case "review_failed": {
         const ev = e as ReviewFailedEvent;
         lines.push({
           t,
-          src: { name: "system" },
+          src: { name: "系统" },
           level: "error",
-          text: `评审失败 · ${ev.reason} · ${ev.message}`,
+          text: `评审中断 · ${ev.message}`,
         });
         break;
       }
@@ -800,9 +786,9 @@ function buildConsoleLines(
         const ev = e as ReviewDegradedEvent;
         lines.push({
           t,
-          src: { name: "system" },
+          src: { name: "系统" },
           level: "warn",
-          text: `部分降级 · ${ev.message}`,
+          text: `部分评审员未完整返回 · ${ev.message}`,
         });
         break;
       }
@@ -967,47 +953,34 @@ function FunnelPanel({ funnel }: { funnel: FunnelState }) {
           flexWrap: "wrap",
         }}
       >
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-          <span
-            style={{
-              fontSize: 10,
-              fontFamily: "var(--font-mono)",
-              fontWeight: 600,
-              textTransform: "uppercase",
-              letterSpacing: "0.1em",
-              color: "var(--accent-600)",
-            }}
-          >
-            Review Funnel
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)" }}>
+            意见筛选漏斗
           </span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-strong)" }}>
-            评审漏斗
-          </span>
-          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-            5 stage 实时进度
+          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+            从初稿到最终确认,每一步保留多少条意见
           </span>
         </div>
         {funnel.retention && (
           <div
             style={{
               display: "flex",
-              gap: 12,
-              fontFamily: "var(--font-mono)",
+              gap: 14,
               fontSize: 11,
               color: "var(--text-muted)",
               fontVariantNumeric: "tabular-nums",
             }}
           >
             <RetentionPill
-              label="dedup"
+              label="去重"
               value={funnel.retention.dedup_retention}
             />
             <RetentionPill
-              label="ev"
+              label="依据校验"
               value={funnel.retention.evidence_verify_retention}
             />
             <RetentionPill
-              label="goshawk"
+              label="苍鹰复核"
               value={funnel.retention.goshawk_retention}
             />
           </div>
@@ -1085,61 +1058,75 @@ function FunnelPanel({ funnel }: { funnel: FunnelState }) {
         })}
       </div>
 
-      {/* audit #4: wiki authority 分布 (可选, 收到 evidence_verify 才显示) */}
+      {/* 知识库依据来源分布(收到 evidence_verify 才显示,降为辅助信息) */}
       {funnel.authorityDistribution && Object.keys(funnel.authorityDistribution).length > 0 && (
-        <div
+        <details
           style={{
             marginTop: 10,
-            padding: "8px 10px",
-            borderRadius: "var(--r-2)",
-            background: "var(--surface-canvas)",
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            flexWrap: "wrap",
-            fontSize: 11,
-            color: "var(--text-muted)",
-            fontFamily: "var(--font-mono)",
-            fontVariantNumeric: "tabular-nums",
           }}
           data-testid="wiki-authority-bar"
         >
-          <span style={{ fontWeight: 600, color: "var(--text-default)" }}>
-            wiki 权威性
-          </span>
-          {funnel.wikiMode && (
-            <span
-              style={{
-                padding: "1px 6px",
-                borderRadius: "var(--r-2)",
-                background:
-                  funnel.wikiMode === "rich"
-                    ? "var(--status-done-bg)"
-                    : funnel.wikiMode === "sparse"
-                      ? "var(--status-warn-bg)"
-                      : "var(--neutral-100)",
-                color:
-                  funnel.wikiMode === "rich"
-                    ? "var(--status-done-fg)"
-                    : funnel.wikiMode === "sparse"
-                      ? "var(--status-warn-fg)"
-                      : "var(--text-muted)",
-                fontSize: 10,
-              }}
-            >
-              {funnel.wikiMode === "rich"
-                ? "rich"
-                : funnel.wikiMode === "sparse"
-                  ? "sparse"
-                  : "unknown"}
-            </span>
-          )}
-          {Object.entries(funnel.authorityDistribution).map(([tier, n]) => (
-            <span key={tier}>
-              {tier}: <span style={{ color: "var(--text-default)" }}>{n}</span>
-            </span>
-          ))}
-        </div>
+          <summary
+            style={{
+              fontSize: 11,
+              color: "var(--text-muted)",
+              cursor: "pointer",
+              userSelect: "none",
+            }}
+          >
+            知识库依据来源
+            {funnel.wikiMode && (
+              <span
+                style={{
+                  marginLeft: 8,
+                  padding: "1px 6px",
+                  borderRadius: "var(--r-2)",
+                  background:
+                    funnel.wikiMode === "rich"
+                      ? "var(--status-done-bg)"
+                      : funnel.wikiMode === "sparse"
+                        ? "var(--status-warn-bg)"
+                        : "var(--neutral-100)",
+                  color:
+                    funnel.wikiMode === "rich"
+                      ? "var(--status-done-fg)"
+                      : funnel.wikiMode === "sparse"
+                        ? "var(--status-warn-fg)"
+                        : "var(--text-muted)",
+                  fontSize: 10,
+                  fontWeight: 600,
+                }}
+              >
+                {funnel.wikiMode === "rich"
+                  ? "知识库充足"
+                  : funnel.wikiMode === "sparse"
+                    ? "知识库稀疏"
+                    : "未知"}
+              </span>
+            )}
+          </summary>
+          <div
+            style={{
+              marginTop: 6,
+              padding: "8px 10px",
+              borderRadius: "var(--r-2)",
+              background: "var(--surface-canvas)",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              flexWrap: "wrap",
+              fontSize: 11,
+              color: "var(--text-muted)",
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            {Object.entries(funnel.authorityDistribution).map(([tier, n]) => (
+              <span key={tier}>
+                {tier}: <span style={{ color: "var(--text-default)" }}>{n}</span>
+              </span>
+            ))}
+          </div>
+        </details>
       )}
     </section>
   );

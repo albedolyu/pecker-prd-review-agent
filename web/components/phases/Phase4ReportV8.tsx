@@ -16,6 +16,7 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { Download } from "lucide-react";
 
 import {
   authApi,
@@ -28,9 +29,13 @@ import {
 } from "@/lib/api";
 import { useReviewStore } from "@/lib/store";
 import { generateReportMarkdown, computeStats } from "@/lib/generateReport";
+import {
+  buildPmFriendlySnapshot,
+  formatReviewModeLabel,
+  type PmFriendlySnapshot,
+} from "@/lib/pm-friendly";
 import { ROLES, normalizeDimensionKey, type RoleKey } from "@/lib/roles";
-import { BirdAvatar, type BirdId } from "@/components/birds/BirdAvatar";
-import { BirdBadge } from "@/components/birds/BirdBadge";
+import { BirdLabel, type BirdId } from "@/components/birds/BirdAvatar";
 import { MissingReportButton } from "@/components/review/MissingReportButton";
 
 // 把 RoleKey 映射到 BirdAvatar 的 birdId(v8 设计稿里 1-5 对应业务/数据/体验/风险/苍鹰)
@@ -78,6 +83,11 @@ export function Phase4ReportV8() {
       stats: computeStats(reviewResult, decisions),
     };
   }, [reviewResult, decisions, confirmedReportMarkdown]);
+
+  const pmSnapshot = useMemo(() => {
+    if (!reviewResult) return null;
+    return buildPmFriendlySnapshot(reviewResult);
+  }, [reviewResult]);
 
   const itemsByDim = useMemo(() => {
     const map = new Map<RoleKey, ReviewItem[]>();
@@ -145,6 +155,34 @@ export function Phase4ReportV8() {
       .catch(() => {});
   };
 
+  const handleDownloadZhiquHandoff = () => {
+    if (!pmSnapshot) return;
+    const safeName = (prdName || "PRD").replace(/\.[^.]+$/, "");
+    const dateTag = new Date().toISOString().slice(0, 10);
+    const filename = `织雀交接包-${safeName}-${dateTag}.json`;
+    const blob = new Blob(
+      [JSON.stringify(pmSnapshot.zhiquHandoff, null, 2) + "\n"],
+      { type: "application/json;charset=utf-8" },
+    );
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success(`已下载 ${filename}`);
+    void auditApi
+      .log({
+        event: "downloaded_zhiqu_handoff",
+        workspace,
+        prd_name: prdName || "未命名",
+        extra: { filename, review_id: reviewResult?.review_id ?? "" },
+      })
+      .catch(() => {});
+  };
+
   const saveWikiMutation = useMutation({
     mutationFn: () => {
       if (!reviewResult || !stats) throw new Error("缺少评审结果");
@@ -161,7 +199,7 @@ export function Phase4ReportV8() {
     },
     onSuccess: (resp) => {
       toast.success(
-        `已保存到 wiki${resp.filename ? `: ${resp.filename}` : ""}`,
+        `已存入知识库${resp.filename ? `: ${resp.filename}` : ""}`,
       );
       void auditApi
         .log({
@@ -173,7 +211,7 @@ export function Phase4ReportV8() {
         .catch(() => {});
     },
     onError: (e: ApiError) => {
-      if (e.status === 403) toast.error("只读用户不能保存 wiki");
+      if (e.status === 403) toast.error("只读权限不能存入知识库");
       else toast.error(`保存失败: ${e.detail ?? e.message}`);
     },
   });
@@ -186,7 +224,7 @@ export function Phase4ReportV8() {
       }),
     onSuccess: (resp) => {
       toast.success(
-        `已推送到飞书${resp.msg_id ? ` (msg_id=${resp.msg_id.slice(0, 12)}…)` : ""}`,
+        `已推送到飞书${resp.msg_id ? ` · 消息号 ${resp.msg_id.slice(0, 8)}` : ""}`,
       );
       void auditApi
         .log({
@@ -199,8 +237,8 @@ export function Phase4ReportV8() {
     },
     onError: (e: ApiError) => {
       if (e.status === 503)
-        toast.error("飞书未配置(需要 FEISHU_APP_ID/APP_SECRET/CHAT_ID)");
-      else if (e.status === 403) toast.error("只读用户不能推送飞书");
+        toast.error("飞书还未配置,请联系系统管理员");
+      else if (e.status === 403) toast.error("只读权限不能推送到飞书");
       else toast.error(`推送失败: ${e.detail ?? e.message}`);
     },
   });
@@ -242,7 +280,7 @@ export function Phase4ReportV8() {
       }}
     >
       {/* ── 顶部标题 ── */}
-      <header style={{ marginBottom: 24 }}>
+      <header style={{ marginBottom: 16 }}>
         <h1
           style={{
             fontSize: 22,
@@ -265,6 +303,96 @@ export function Phase4ReportV8() {
         </p>
       </header>
 
+      {/* ── 一句话给研发的结论 ── */}
+      <section
+        style={{
+          marginBottom: 16,
+          padding: "14px 18px",
+          background:
+            stats.peckScore >= 80
+              ? "var(--status-failed-bg)"
+              : stats.peckScore >= 50
+                ? "var(--status-warn-bg)"
+                : "var(--status-done-bg)",
+          border: `1px solid ${
+            stats.peckScore >= 80
+              ? "var(--status-failed-dot)"
+              : stats.peckScore >= 50
+                ? "var(--status-warn-dot)"
+                : "var(--status-done-dot)"
+          }33`,
+          borderRadius: "var(--r-4)",
+          display: "flex",
+          alignItems: "center",
+          gap: 16,
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color:
+                stats.peckScore >= 80
+                  ? "var(--status-failed-fg)"
+                  : stats.peckScore >= 50
+                    ? "var(--status-warn-fg)"
+                    : "var(--status-done-fg)",
+              marginBottom: 4,
+            }}
+          >
+            是否建议进入研发评审 · 苍鹰建议
+          </div>
+          <div
+            style={{
+              fontSize: 15,
+              fontWeight: 600,
+              color:
+                stats.peckScore >= 80
+                  ? "var(--status-failed-fg)"
+                  : stats.peckScore >= 50
+                    ? "var(--status-warn-fg)"
+                    : "var(--status-done-fg)",
+              lineHeight: 1.5,
+            }}
+          >
+            {stats.peckScore >= 80
+              ? "暂不建议直接发研发评审 — 必改项较多,建议先回炉调整。"
+              : stats.peckScore >= 50
+                ? "可以发研发评审,但请先确认必改项和建议项是否要补。"
+                : "可以发研发评审 — 评审鸟未发现关键阻塞问题。"}
+          </div>
+          <div
+            style={{
+              fontSize: 12,
+              color: "var(--text-muted)",
+              marginTop: 6,
+              lineHeight: 1.55,
+            }}
+          >
+            共发现 {stats.total} 条意见 · 接受 {stats.accepted} 条 · 改写{" "}
+            {stats.edited} 条 · 拒绝 {stats.rejected} 条
+          </div>
+        </div>
+        {/* 右侧苍鹰头像 · 强化"苍鹰终审建议"的视觉权重 */}
+        <img
+          src="/birds/goshawk-lg.png"
+          alt="苍鹰"
+          width={64}
+          height={64}
+          style={{
+            width: 64,
+            height: 64,
+            borderRadius: "50%",
+            flexShrink: 0,
+            display: "block",
+          }}
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).style.display = "none";
+          }}
+        />
+      </section>
+
       {/* ── 元信息卡 ── */}
       <section style={cardStyle}>
         <div
@@ -276,10 +404,13 @@ export function Phase4ReportV8() {
             borderBottom: "1px solid var(--border-subtle)",
           }}
         >
-          <MetaItem label="workspace" value={workspace.replace(/^workspace-/, "")} />
-          <MetaItem label="reviewer" value={reviewer || "—"} />
-          <MetaItem label="模式" value={mode === "quick" ? "简审" : "精审"} />
-          <MetaItem label="run no." value={revNo} />
+          <MetaItem
+            label="资料库"
+            value={workspace.replace(/^workspace-/, "")}
+          />
+          <MetaItem label="评审人" value={reviewer || "—"} />
+          <MetaItem label="评审模式" value={formatReviewModeLabel(mode)} />
+          <MetaItem label="本次运行" value={revNo} />
         </div>
         <div
           style={{
@@ -288,7 +419,7 @@ export function Phase4ReportV8() {
             gap: 0,
           }}
         >
-          <StatBlock label="总条目" value={stats.total} />
+          <StatBlock label="意见总数" value={stats.total} />
           <StatBlock
             label="已接受"
             value={stats.accepted}
@@ -300,12 +431,12 @@ export function Phase4ReportV8() {
             tone="muted"
           />
           <StatBlock
-            label="已编辑"
+            label="已改写"
             value={stats.edited}
             tone="warn"
           />
           <StatBlock
-            label={`啄伤度 · ${stats.peckLabel}`}
+            label={`PRD 健康度 · ${stats.peckLabel}`}
             value={`${stats.peckScore} / 100`}
             tone={
               stats.peckScore >= 80
@@ -320,6 +451,11 @@ export function Phase4ReportV8() {
           />
         </div>
       </section>
+
+      <PmFriendlySummary
+        snapshot={pmSnapshot}
+        onDownloadHandoff={handleDownloadZhiquHandoff}
+      />
 
       {/* ── 反馈回声(harness 增量 P1④ · 本版占位) ── */}
       <section
@@ -349,7 +485,6 @@ export function Phase4ReportV8() {
         >
           <span
             style={{
-              fontFamily: "var(--font-mono)",
               fontWeight: 600,
               color: "var(--accent-600)",
             }}
@@ -357,7 +492,7 @@ export function Phase4ReportV8() {
             反馈回声
           </span>
           <span>
-            你本周的 accept / reject 将通过 EMA 反哺规则权重,详细统计接入 dashboard 后可见。
+            你这周的接受 / 拒绝会反过来调整评审鸟的判断权重,完整统计在系统监控里可看。
           </span>
         </span>
         <MissingReportButton
@@ -369,7 +504,7 @@ export function Phase4ReportV8() {
 
       {/* ── 按维度分组的评审摘要 ── */}
       <section style={{ marginTop: 24 }}>
-        <SectionHead title="评审摘要" hint="按维度分组,点条目看详情" />
+        <SectionHead title="评审摘要" hint="按评审维度分组" />
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {Array.from(itemsByDim.entries()).map(([roleKey, items]) => (
             <DimGroup
@@ -434,37 +569,34 @@ export function Phase4ReportV8() {
         >
           <span
             style={{
-              fontSize: 10,
-              fontFamily: "var(--font-mono)",
+              fontSize: 12,
               fontWeight: 600,
-              textTransform: "uppercase",
-              letterSpacing: "0.1em",
               color: "var(--accent-600)",
             }}
           >
-            治理简报
+            评审治理摘要
           </span>
           {darSummary && (
             <span
               data-testid="dar-summary"
-              title="DAR (Diversified Aggregated Resampling): 苍鹰多轮采样,unanimous = N 轮全保留,minority = 仅少数轮保留 (DAR 少数派保留机制让其不被丢弃)"
-              style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}
+              title={`苍鹰多轮交叉校验:${darSummary.nSamplesSucceeded}/${darSummary.nSamples} 轮成功 · 一致 ${darSummary.unanimous} / 多数 ${darSummary.majority} / 少数 ${darSummary.minority}`}
+              style={{ fontVariantNumeric: "tabular-nums" }}
             >
-              苍鹰多轮: {darSummary.nSamplesSucceeded}/{darSummary.nSamples} 轮 ·
+              苍鹰多轮校验: {darSummary.nSamplesSucceeded}/{darSummary.nSamples} 轮 ·
               <span style={{ color: "var(--status-done-fg)", marginLeft: 4 }}>
-                unanimous {darSummary.unanimous}
+                一致 {darSummary.unanimous}
               </span>{" "}
               ·{" "}
               <span style={{ color: "var(--text-default)" }}>
-                majority {darSummary.majority}
+                多数 {darSummary.majority}
               </span>{" "}
               ·{" "}
               <span style={{ color: "var(--status-warn-fg)" }}>
-                minority {darSummary.minority}
+                少数 {darSummary.minority}
               </span>
               {darSummary.minorityKept > 0 && (
                 <span style={{ marginLeft: 4, color: "var(--accent-600)" }}>
-                  (DAR 少数派保留 {darSummary.minorityKept})
+                  (保留少数派 {darSummary.minorityKept})
                 </span>
               )}
             </span>
@@ -472,8 +604,8 @@ export function Phase4ReportV8() {
           {crossBoundaryCount > 0 && (
             <span
               data-testid="cross-boundary-count"
-              title="跨维度规则: worker 引用了 schema_registry 内但不属于本维度的 rule_id, 自动降权 0.3 confidence 后保留"
-              style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}
+              title="评审员引用了非本维度的规则,系统已自动降低权重后保留"
+              style={{ fontVariantNumeric: "tabular-nums" }}
             >
               跨维度规则:{" "}
               <span style={{ color: "var(--text-default)" }}>{crossBoundaryCount}</span> 条
@@ -504,7 +636,7 @@ export function Phase4ReportV8() {
             onClick={handleDownload}
             style={btnSecondaryStyle}
           >
-            下载 md
+            导出 Markdown
           </button>
           <button
             type="button"
@@ -515,8 +647,9 @@ export function Phase4ReportV8() {
                 ? btnSecondaryDisabledStyle
                 : btnSecondaryStyle
             }
+            title="保存到团队知识库"
           >
-            {saveWikiMutation.isPending ? "保存中…" : "保存到 wiki"}
+            {saveWikiMutation.isPending ? "保存中…" : "存入知识库"}
           </button>
           <button
             type="button"
@@ -528,7 +661,7 @@ export function Phase4ReportV8() {
                 : btnPrimaryStyle
             }
           >
-            {feishuMutation.isPending ? "推送中…" : "推送飞书"}
+            {feishuMutation.isPending ? "推送中…" : "推送到飞书"}
           </button>
         </div>
       </footer>
@@ -539,16 +672,181 @@ export function Phase4ReportV8() {
 // ============================================================
 // subcomponents
 
+function PmFriendlySummary({
+  snapshot,
+  onDownloadHandoff,
+}: {
+  snapshot: PmFriendlySnapshot | null;
+  onDownloadHandoff: () => void;
+}) {
+  if (!snapshot) return null;
+  const { pmSummary, pmView, testabilitySummary, zhiquHandoff } = snapshot;
+  const riskTone =
+    pmSummary.rework_risk === "高"
+      ? "failed"
+      : pmSummary.rework_risk === "中"
+        ? "warn"
+        : "done";
+
+  return (
+    <section style={{ ...cardStyle, marginTop: 16 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
+        }}
+      >
+        <div style={{ padding: "14px 18px" }}>
+          <div style={summaryEyebrowStyle}>PM 结论卡</div>
+          <div
+            style={{
+              marginTop: 6,
+              fontSize: 18,
+              fontWeight: 600,
+              color: "var(--text-strong)",
+            }}
+          >
+            {pmSummary.verdict}
+          </div>
+          <div style={summaryMetricsStyle}>
+            <SummaryMetric
+              label="返工风险"
+              value={pmSummary.rework_risk}
+              tone={riskTone}
+            />
+            <SummaryMetric label="阻塞项" value={pmSummary.blocking_count} />
+            <SummaryMetric label="PM 默认" value={`${pmView.pm_count} 条`} />
+            <SummaryMetric
+              label="工程展开"
+              value={`${pmView.engineering_count} 条`}
+            />
+          </div>
+          <div style={dimensionPillWrapStyle}>
+            {pmSummary.top_risk_dimensions.length > 0 ? (
+              pmSummary.top_risk_dimensions.map((dim) => (
+                <span key={dim.dimension} style={dimensionPillStyle}>
+                  {dim.dimension} {dim.count}
+                </span>
+              ))
+            ) : (
+              <span style={{ color: "var(--text-muted)", fontSize: 12 }}>
+                暂无重点风险维度
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div style={{ padding: "14px 18px" }}>
+          <div style={summaryEyebrowStyle}>织雀测试用例交接</div>
+          <div style={summaryMetricsStyle}>
+            <SummaryMetric
+              label="可测性"
+              value={testabilitySummary.testability_verdict}
+              tone={
+                testabilitySummary.testability_verdict === "blocked"
+                  ? "failed"
+                  : testabilitySummary.testability_verdict === "partial"
+                    ? "warn"
+                    : "done"
+              }
+            />
+            <SummaryMetric
+              label="覆盖度"
+              value={testabilitySummary.estimated_case_coverage}
+            />
+            <SummaryMetric
+              label="阻塞缺口"
+              value={testabilitySummary.blocking_gap_count}
+            />
+            <SummaryMetric
+              label="场景"
+              value={zhiquHandoff.scenario_matrix.length}
+            />
+          </div>
+          <p
+            style={{
+              margin: "10px 0 12px",
+              fontSize: 12,
+              lineHeight: 1.6,
+              color: "var(--text-muted)",
+            }}
+          >
+            交接包保留来源追踪和 PM 控制项；阻塞项需要补齐后再让织雀生成对应测试用例。
+          </p>
+          <button
+            type="button"
+            onClick={onDownloadHandoff}
+            style={{
+              ...btnSecondaryStyle,
+              display: "inline-flex",
+              alignItems: "center",
+            }}
+            title="下载 pecker_to_zhiqu.v1 JSON"
+          >
+            <Download size={14} strokeWidth={2} style={{ marginRight: 6 }} />
+            下载交接包
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SummaryMetric({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number | string;
+  tone?: StatTone;
+}) {
+  const fg =
+    tone === "done"
+      ? "var(--status-done-fg)"
+      : tone === "warn"
+        ? "var(--status-warn-fg)"
+        : tone === "failed"
+          ? "var(--status-failed-fg)"
+          : "var(--text-strong)";
+
+  return (
+    <span style={{ minWidth: 70 }}>
+      <span
+        style={{
+          display: "block",
+          fontSize: 10,
+          color: "var(--text-faint)",
+          fontFamily: "var(--font-mono)",
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
+        }}
+      >
+        {label}
+      </span>
+      <span
+        style={{
+          display: "block",
+          marginTop: 2,
+          fontSize: 14,
+          fontWeight: 600,
+          color: fg,
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {value}
+      </span>
+    </span>
+  );
+}
+
 function MetaItem({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <div
         style={{
-          fontSize: 10,
-          fontFamily: "var(--font-mono)",
+          fontSize: 11,
           color: "var(--text-faint)",
-          textTransform: "uppercase",
-          letterSpacing: "0.08em",
         }}
       >
         {label}
@@ -598,11 +896,8 @@ function StatBlock({ label, value, tone, mono }: StatBlockProps) {
     >
       <div
         style={{
-          fontSize: 10,
-          fontFamily: "var(--font-mono)",
+          fontSize: 11,
           color: "var(--text-faint)",
-          textTransform: "uppercase",
-          letterSpacing: "0.08em",
         }}
       >
         {label}
@@ -677,28 +972,26 @@ function DimGroup({ roleKey, items, decisions }: DimGroupProps) {
           borderBottom: "1px solid var(--border-subtle)",
         }}
       >
-        <BirdAvatar id={birdId} size="md" />
-        <BirdBadge id={birdId} />
+        <BirdLabel id={birdId} size="md" />
         <span
           style={{
             fontSize: 13,
-            color: "var(--text-default)",
-            fontWeight: 500,
+            color: "var(--text-muted)",
+            fontWeight: 400,
           }}
         >
-          {role.responsibility}
+          · {role.responsibility}
         </span>
         <span style={{ flex: 1 }} />
         <span
           style={{
             fontSize: 11,
-            fontFamily: "var(--font-mono)",
             color: "var(--text-muted)",
             fontVariantNumeric: "tabular-nums",
           }}
         >
-          {items.length} 条 · ✓{accepted} · ✗{rejected}
-          {edited > 0 ? ` · ✎${edited}` : ""}
+          {items.length} 条 · 接受 {accepted} · 拒绝 {rejected}
+          {edited > 0 ? ` · 改写 ${edited}` : ""}
         </span>
       </header>
       <ul
@@ -747,9 +1040,9 @@ function DimGroup({ roleKey, items, decisions }: DimGroupProps) {
               </span>
               {typeof it.confidence === "number" && (
                 <span
+                  title={`置信度 ${it.confidence.toFixed(2)}`}
                   style={{
                     fontSize: 11,
-                    fontFamily: "var(--font-mono)",
                     color:
                       it.confidence < 0.7
                         ? "var(--status-warn-fg)"
@@ -757,7 +1050,11 @@ function DimGroup({ roleKey, items, decisions }: DimGroupProps) {
                     fontVariantNumeric: "tabular-nums",
                   }}
                 >
-                  conf {it.confidence.toFixed(2)}
+                  {it.confidence < 0.7
+                    ? "低置信"
+                    : it.confidence >= 0.85
+                      ? "高置信"
+                      : "中置信"}
                 </span>
               )}
             </li>
@@ -808,7 +1105,7 @@ function CrossBoundaryChip() {
   return (
     <span
       data-testid="cross-boundary-chip"
-      title="此 rule_id 在本维度规则表外,但属于其他维度合法规则 (跨维度引用)。已自动降权 0.3 confidence。"
+      title="此规则不属于本维度核心范围,系统已自动降低权重"
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -818,7 +1115,6 @@ function CrossBoundaryChip() {
         background: "var(--neutral-100)",
         color: "var(--text-muted)",
         fontSize: 10,
-        fontFamily: "var(--font-mono)",
         fontWeight: 500,
         lineHeight: 1.4,
         verticalAlign: "middle",
@@ -889,6 +1185,40 @@ const linkStyle: React.CSSProperties = {
   padding: 0,
   fontFamily: "var(--font-sans)",
   fontWeight: 500,
+};
+
+const summaryEyebrowStyle: React.CSSProperties = {
+  fontSize: 10,
+  fontFamily: "var(--font-mono)",
+  fontWeight: 600,
+  color: "var(--accent-600)",
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+};
+
+const summaryMetricsStyle: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 14,
+  marginTop: 12,
+};
+
+const dimensionPillWrapStyle: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 6,
+  marginTop: 12,
+};
+
+const dimensionPillStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  minHeight: 22,
+  padding: "0 8px",
+  borderRadius: "var(--r-2)",
+  background: "var(--surface-sunken)",
+  color: "var(--text-default)",
+  fontSize: 12,
 };
 
 const emptyWrapStyle: React.CSSProperties = {

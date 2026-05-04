@@ -37,6 +37,11 @@ MODEL_PRICING = {
     # ChatGPT Pro 订阅自带, 实际 0 边际成本; 仅占位避免 cost dashboard warning
     "gpt-5.5":                    {"input": 0.0, "output": 0.0, "cache_read": 0.0, "cache_write": 0.0},
     "gpt-5.4":                    {"input": 0.0, "output": 0.0, "cache_read": 0.0, "cache_write": 0.0},
+    "gpt-5.4-mini":               {"input": 0.0, "output": 0.0, "cache_read": 0.0, "cache_write": 0.0},
+    # Route eval receives tier aliases from CLI args before model_router resolves them.
+    "gpt55":                      {"input": 0.0, "output": 0.0, "cache_read": 0.0, "cache_write": 0.0},
+    "gpt54":                      {"input": 0.0, "output": 0.0, "cache_read": 0.0, "cache_write": 0.0},
+    "gpt54mini":                  {"input": 0.0, "output": 0.0, "cache_read": 0.0, "cache_write": 0.0},
 }
 FLOOR_MAX_TOKENS = 3000  # 动态调整 max_tokens 的下限
 

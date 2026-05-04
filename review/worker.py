@@ -63,6 +63,9 @@ def _prepare_worker_context(
     wiki_pages: Dict[str, str],
     prd_content: str,
     diff_context: Optional[str] = None,
+    wiki_budget_chars: Optional[int] = None,
+    route_model_override: Optional[str] = None,
+    recovery_mode: bool = False,
 ) -> Dict[str, Any]:
     """构建单 worker 所需的上下文: dim 配置 / model 选择 / system+messages /
     维度约束后的 tool schema / cache monitor / 各种 hash 指纹.
@@ -76,14 +79,14 @@ def _prepare_worker_context(
     dimensions = get_review_dimensions()
     wiki_keywords = get_wiki_keywords()
     dim = dimensions[dim_key]
-    # Wave 2: model 选择交给 model_router (按 worker.<dim_key> route 解析,
-    # dim["model"] 作为 tier 别名 override 传入). 这里只解析"显示用 model 名",
+    # GPT-only 路由由 model_routes.yaml 按 worker.<dim_key> 统一分档.
+    # 这里只解析"显示用 model 名",
     # 真正的 client.create 已迁到 route_call. model_tiers 入参变 deprecated 兼容
     # orchestration 老调用方, 内部不再使用.
     from model_router import get_model_for_route
     dim_tier_alias = dim.get("model")  # "sonnet" / "opus" / "haiku" or None
     try:
-        model = get_model_for_route(f"worker.{dim_key}", model_override=dim_tier_alias)
+        model = get_model_for_route(f"worker.{dim_key}", model_override=route_model_override)
     except Exception:
         # routes.yaml 未配 worker.<dim_key> 也 fallback 失败时, 兜底用 model_tiers 老路径,
         # 仅用于 telemetry / log 显示, 真正调用走 route_call 自身的 fallback.
@@ -97,7 +100,23 @@ def _prepare_worker_context(
     cache_monitor = PromptCacheMonitor()
     workspace_dir = os.path.dirname(wiki_path) if wiki_path else None
     dynamic_system = _build_worker_system(dim_key, rule_perf_history, dimensions, workspace=workspace_dir)
-    messages = _build_worker_messages(prd_content, wiki_pages, dim_key, wiki_path, wiki_keywords, diff_context)
+    wiki_selection_telemetry: Dict[str, Any] = {}
+
+    def _capture_wiki_selection(telemetry: Dict[str, Any]) -> None:
+        wiki_selection_telemetry.clear()
+        wiki_selection_telemetry.update(telemetry)
+
+    messages = _build_worker_messages(
+        prd_content,
+        wiki_pages,
+        dim_key,
+        wiki_path,
+        wiki_keywords,
+        diff_context,
+        on_wiki_selection=_capture_wiki_selection,
+        wiki_budget_chars=wiki_budget_chars,
+        recovery_mode=recovery_mode,
+    )
 
     # system prompt 分静态/动态两段(CC DYNAMIC_BOUNDARY 模式), 静态段打 cache_control
     system_blocks = [
@@ -139,13 +158,16 @@ def _prepare_worker_context(
     return {
         "dim": dim,
         "dim_key": dim_key,                  # Wave 2: 给 _worker_core 转 route_id
-        "dim_tier_alias": dim_tier_alias,    # Wave 2: dim["model"] tier 别名 → route_call model_override
+        "dim_tier_alias": dim_tier_alias,    # legacy dimensions.yaml tier, 保留给兼容 telemetry
+        "route_model_override": route_model_override,
+        "recovery_mode": recovery_mode,
         "model": model,                       # 解析后的实名 (telemetry / cost / log)
         "max_tokens": max_tokens,
         "system_blocks": system_blocks,
         "messages": messages,
         "dim_constrained_tool": dim_constrained_tool,
         "cache_monitor": cache_monitor,
+        "wiki_selection_telemetry": wiki_selection_telemetry,
     }
 
 
@@ -492,7 +514,20 @@ def _parse_items_from_text(text):
 # ============================================================
 
 
-def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_perf_history=None, wiki_path=None, diff_context=None, on_tool_call=None) -> WorkerResult:
+def _worker_core(
+    client,
+    dim_key,
+    prd_content,
+    wiki_pages,
+    model_tiers,
+    rule_perf_history=None,
+    wiki_path=None,
+    diff_context=None,
+    on_tool_call=None,
+    wiki_budget_chars=None,
+    route_model_override=None,
+    recovery_mode=False,
+) -> WorkerResult:
     """Worker 核心逻辑（sync），返回首次 API 响应和处理后的 items 列表。
     async 版本通过 run_in_executor 包装此函数。
 
@@ -523,6 +558,9 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
         ctx = _prepare_worker_context(
             dim_key, model_tiers, rule_perf_history, wiki_path, wiki_pages,
             prd_content, diff_context,
+            wiki_budget_chars=wiki_budget_chars,
+            route_model_override=route_model_override,
+            recovery_mode=recovery_mode,
         )
     except Exception as _ctx_err:
         try:
@@ -539,11 +577,13 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
     dim = ctx["dim"]
     model = ctx["model"]
     dim_tier_alias = ctx["dim_tier_alias"]
+    route_model_override = ctx.get("route_model_override")
     max_tokens = ctx["max_tokens"]
     system_blocks = ctx["system_blocks"]
     messages = ctx["messages"]
     dim_constrained_tool = ctx["dim_constrained_tool"]
     cache_monitor = ctx["cache_monitor"]
+    wiki_selection_telemetry = ctx.get("wiki_selection_telemetry", {})
 
     # Wave 2: 默认走 model_router 路由 (worker.<dim_key>). client 入参变 deprecated 但保留,
     # 显式传 client (e.g. e2e MagicMock 测试 / orchestration 注入) 时仍走 client.create
@@ -575,7 +615,7 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
                 tools=[tool_to_use],
                 tool_choice={"type": "any"},
                 max_tokens=max_tokens,            # Pattern 20: effort-aware
-                model_override=dim_tier_alias,    # 兼容 dim["model"] 老语义
+                model_override=route_model_override,
             )
         else:
             # 老 caller (传 client) 路径: 兼容 e2e mock 测试和 orchestration 注入
@@ -741,6 +781,7 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
         "empty_retry_used": empty_retry_used,
         "empty_submission_confirmed": empty_submission_confirmed,
         "empty_submission_reason": empty_submission_reason[:300],
+        "wiki_selection": wiki_selection_telemetry,
         # 2026-04-28 P1 anti-corruption drop: LLM 出未知 rule_id 数 (任务 2 R3 暴露)
         "dropped_unknown_rule_count": drop_telemetry["dropped_unknown_rule_count"],
         "dropped_unknown_rule_ids": drop_telemetry["dropped_unknown_rule_ids"],
@@ -784,18 +825,99 @@ def _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_per
     }
 
 
-async def _run_worker_async(client, dim_key, prd_content, wiki_pages, model_tiers, rule_perf_history=None, wiki_path=None, diff_context=None, on_tool_call=None) -> WorkerResult:
+async def _run_worker_async(
+    client,
+    dim_key,
+    prd_content,
+    wiki_pages,
+    model_tiers,
+    rule_perf_history=None,
+    wiki_path=None,
+    diff_context=None,
+    on_tool_call=None,
+    *,
+    retry_on_timeout: bool = True,
+    recovery_mode: bool = False,
+) -> WorkerResult:
     """异步包装：在线程池中执行 _worker_core，带超时保护"""
     from agent_config import WORKER_TIMEOUT
+    from agent_config import MAX_WIKI_CHARS
+    from review.adaptive import choose_worker_model_override, wiki_budget_for_dim
+
     loop = asyncio.get_running_loop()
+    wiki_budget_chars = wiki_budget_for_dim(
+        dim_key,
+        MAX_WIKI_CHARS,
+        prd_content=prd_content,
+        wiki_pages=wiki_pages,
+        recovery_mode=recovery_mode,
+    )
+    route_model_override = choose_worker_model_override(
+        dim_key,
+        prd_content=prd_content,
+        wiki_pages=wiki_pages,
+        recovery_mode=recovery_mode,
+    )
+    timeout_s = WORKER_TIMEOUT
+    if recovery_mode:
+        timeout_s = max(WORKER_TIMEOUT, float(os.environ.get("PECKER_WORKER_RECOVERY_TIMEOUT", "120")))
     try:
         return await asyncio.wait_for(
             loop.run_in_executor(
-                None, lambda: _worker_core(client, dim_key, prd_content, wiki_pages, model_tiers, rule_perf_history, wiki_path, diff_context, on_tool_call)
+                None,
+                lambda: _worker_core(
+                    client,
+                    dim_key,
+                    prd_content,
+                    wiki_pages,
+                    model_tiers,
+                    rule_perf_history,
+                    wiki_path,
+                    diff_context,
+                    on_tool_call,
+                    wiki_budget_chars=wiki_budget_chars,
+                    route_model_override=route_model_override,
+                    recovery_mode=recovery_mode,
+                ),
             ),
-            timeout=WORKER_TIMEOUT,
+            timeout=timeout_s,
         )
     except asyncio.TimeoutError:
+        if retry_on_timeout and not recovery_mode:
+            first_error = f"Worker 超时({WORKER_TIMEOUT}s)"
+            log.warning(f"[{_cn_label(dim_key)}] {first_error}, recovery retry")
+            recovered = await _run_worker_async(
+                client,
+                dim_key,
+                prd_content,
+                wiki_pages,
+                model_tiers,
+                rule_perf_history=rule_perf_history,
+                wiki_path=wiki_path,
+                diff_context=diff_context,
+                on_tool_call=on_tool_call,
+                retry_on_timeout=False,
+                recovery_mode=True,
+            )
+            if not recovered.get("error"):
+                recovery = dict(recovered.get("recovery") or {})
+                recovery.update({
+                    "attempts": 2,
+                    "first_error": first_error,
+                    "model_override": "gpt55",
+                    "wiki_budget_chars": wiki_budget_chars,
+                })
+                recovered["recovery"] = recovery
+                recovered["status"] = "recovered"
+                telemetry = recovered.setdefault("telemetry", {})
+                telemetry["recovery"] = recovery
+                return recovered
+            recovered["recovery"] = {
+                "attempts": 2,
+                "first_error": first_error,
+                "recovery_error": recovered.get("error"),
+            }
+            return recovered
         # 超时 Worker 不抛出,返回错误结构,让 gather 正常汇总其他 Worker 结果
         dim_name = get_review_dimensions().get(dim_key, {}).get("name", dim_key)
         log.warning(f"[{_cn_label(dim_key)}] Worker 超时({WORKER_TIMEOUT}s),跳过")
@@ -816,6 +938,7 @@ async def _run_worker_async(client, dim_key, prd_content, wiki_pages, model_tier
             "items": [],
             "usage": {"input_tokens": 0, "output_tokens": 0},
             "status": "timeout",
+            "recovery": {"attempts": 1},
         }
 
 

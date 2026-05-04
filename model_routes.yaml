@@ -5,7 +5,7 @@
 # 调用方改 model_router.route_call(route_id, ...) 进入此路由表。
 #
 # route_id 命名空间:
-#   worker.<dim_key>          各维度 worker (兼容 dimensions.yaml 的 dim["model"] tier 别名 override)
+#   worker.<dim_key>          各维度 worker (GPT-only 默认由 route 表控制分档)
 #   advisor.goshawk[.recheck|.shadow]  苍鹰主审 / 二次校验 / 影子实验槽位
 #   verify.nli                evidence_verify NLI 校验
 #   router.intent             意图路由 (Haiku 三分类)
@@ -13,7 +13,7 @@
 #
 # 全局开关 (env):
 #   PECKER_ROUTES_FILE                覆盖默认 model_routes.yaml 路径 (实验/灰度用)
-#   PECKER_MODEL_OVERRIDE             等价 --model auto/opus/sonnet/haiku, 仅覆盖 worker.* 的 tier
+#   PECKER_MODEL_OVERRIDE             等价 --model auto/opus/sonnet/haiku/gpt55/gpt54/gpt54mini, 仅覆盖 worker.* 的 tier
 #   PECKER_ENABLE_SHADOW_ADVISOR=1    一键开 advisor.goshawk.shadow
 
 vendors:
@@ -33,7 +33,8 @@ vendors:
     model_tiers:
       gpt55:    gpt-5.5                # ChatGPT Pro 通过 codex 默认 model
       gpt54:    gpt-5.4                # codex 兼容降级 (notice.model_migrations 默认 fallback)
-    fallback_chain: [gpt55, gpt54]
+      gpt54mini: gpt-5.4-mini          # GPT-only smooth tier: 小任务 / NLI / 低风险复核
+    fallback_chain: [gpt55, gpt54, gpt54mini]
 
   # DeepSeek 接入 (2026-04-28): worker 维度走 DeepSeek 绕开 Anthropic OAuth burst
   # 需要 .env 配 DEEPSEEK_API_KEY; OpenAI SDK 兼容,无新依赖
@@ -48,52 +49,51 @@ vendors:
 routes:
   # ============================================================
   # Worker 维度 (4-6 个并行 worker)
-  # dimensions.yaml 里的 dim["model"] = "sonnet"|"opus"|"haiku" 仍然生效,
-  # model_router 把 dim["model"] 当 model_override 传入, 覆盖此处 model 字段。
+  # GPT-only pilot: worker 默认模型由本 route 表统一控制;
+  # dimensions.yaml 的 legacy dim["model"] 仅保留为历史配置, 不再覆盖路由分档。
   # ============================================================
-  # 2026-04-28: 全 worker 维度切 DeepSeek (绕 Anthropic OAuth burst, 见 STATUS.md 401 警告)
-  worker.default:      {vendor: openai, transport: cli, model: gpt55, retry_policy: worker}
+  # 2026-05-04: GPT-only smooth routes. 轻维度走 gpt54, 高风险维度保留 gpt55.
+  worker.default:      {vendor: openai, transport: cli, model: gpt54, retry_policy: worker}
   worker.structure:    {vendor: openai, transport: cli, model: gpt55, retry_policy: worker}
-  worker.compliance:   {vendor: openai, transport: cli, model: gpt55, retry_policy: worker}
+  worker.compliance:   {vendor: openai, transport: cli, model: gpt54, retry_policy: worker}
   worker.data_quality: {vendor: openai, transport: cli, model: gpt55, retry_policy: worker}
   worker.quality:      {vendor: openai, transport: cli, model: gpt55, retry_policy: worker}
   worker.consistency:  {vendor: openai, transport: cli, model: gpt55, retry_policy: worker}
+  worker.ai_coding:    {vendor: openai, transport: cli, model: gpt55, retry_policy: worker}
   worker.ai_friendly:  {vendor: openai, transport: cli, model: gpt55, retry_policy: worker}
 
   # ============================================================
   # 苍鹰 meta-reviewer
   # ============================================================
   advisor.goshawk:
-    vendor: anthropic
-    transport: cli           # 2026-04-28: OAT 走 CLI 复用登录态; native 路径会把 OAT 当 sk-key 直传 → 401
-    model: opus              # 反转实验失败 (worker 切 Opus 撞 OAuth race, GPT-5.5 当苍鹰也未带来增益), 回 Opus
+    vendor: openai
+    transport: cli
+    model: gpt55             # GPT-only pilot: 终审仍保留最高档, 控制漏报/误判风险
     retry_policy: advisor
 
   advisor.goshawk.recheck:
-    vendor: anthropic
+    vendor: openai
     transport: cli
-    model: sonnet            # 2026-04-28: 升级 haiku→sonnet, recheck 是因果判断不是分类, 中文 PRD 场景 Haiku 误判 ~25% 污染主审 fp 标记; CC OAT 订阅 0 成本
+    model: gpt54             # 因果复核比 NLI 重, 但不必常驻最高档
     retry_policy: router
 
   # P2 影子苍鹰 (默认 disabled)
   # 启用后 model_router.route_call_with_shadow 会异步并发跑, 仅落 logs/shadow_*.jsonl 不影响主路径
   # scripts/eval_dual_advisor.py 启用此 route 跑跨 vendor 互补率实验
   advisor.goshawk.shadow:
-    vendor: anthropic        # P1 codex 接入后改为 openai
+    vendor: openai
     transport: cli
-    model: opus              # 暂用同 vendor 高 tier dry-run, P1 后切跨 vendor
+    model: gpt54
     retry_policy: advisor
     enabled: false
 
   # ============================================================
   # Evidence verify NLI (高频小任务, evidence_verify._llm_nli_score)
-  # 2026-04-28: 切 DeepSeek-flash 直连 — 原 Haiku CLI 子进程跟 codex worker 子进程
-  # 争 anthropic OAT 频繁 401; DeepSeek 独立 API key 无 OAuth race; 中文 NLI 比
-  # Haiku 强且 function calling JSON 输出更稳定 (不再需要单词扫描 fallback)
+  # GPT-only pilot: 用 GPT mini 档减少校验链路体感延迟, 保持统一 provider.
   verify.nli:
-    vendor: deepseek
-    transport: native
-    model: flash
+    vendor: openai
+    transport: cli
+    model: gpt54mini
     retry_policy: router
 
   # 注: router.intent (PRD 复杂度自动路由) 已删 (2026-04-28).
@@ -103,7 +103,7 @@ routes:
   # Eval LLM-as-judge (cuckoo_eval scorer 调用)
   # ============================================================
   eval.cuckoo:
-    vendor: anthropic
+    vendor: openai
     transport: cli
-    model: sonnet
+    model: gpt54
     retry_policy: foreground

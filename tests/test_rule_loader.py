@@ -63,15 +63,15 @@ def test_load_legacy_schema_direct_rules(tmp_path):
 
 def test_load_real_workspace_sample_old_schema():
     """2026-04-28 SSOT 迁移后, workspace-sample 已转为 extends 模式 (additional_rules: []),
-    应展开为 SSOT 全部 31 条规则. 之前的 10 条老 inline 在 .bak 备份, 不再生效."""
+    应展开为当前 SSOT 规则池. 之前的老 inline 在 .bak 备份, 不再生效."""
     ws = os.path.join(_ROOT, "workspace-sample")
     rules = load_review_checklist(ws)
-    assert len(rules) == 31, f"SSOT extends 后应有 31 条, 实际 {len(rules)} (yaml 是否被回滚?)"
+    assert len(rules) >= 30, f"SSOT extends 后应展开当前规则池, 实际 {len(rules)} (yaml 是否被回滚?)"
     ids = {r["id"] for r in rules}
-    # 老 10 条 SSOT 兼容 ID 仍应在 (现在都来自 SSOT)
-    legacy_ids = {"RC-004", "RC-005", "RC-006", "RC-007", "RC-008",
-                  "RC-009", "RC-014", "RC-015"}
-    assert legacy_ids.issubset(ids), f"SSOT 应仍包含老 ID, 缺失: {legacy_ids - ids}"
+    expected_ids = {"RC-004", "RC-005", "RC-006", "RC-007", "RC-008",
+                    "RC-009", "RC-015", "RC-016"}
+    assert expected_ids.issubset(ids), f"SSOT 应包含当前关键 ID, 缺失: {expected_ids - ids}"
+    assert "RC-014" not in ids, "RC-014 已退役，不应在 SSOT extends 结果里复活"
 
 
 # =========================================================

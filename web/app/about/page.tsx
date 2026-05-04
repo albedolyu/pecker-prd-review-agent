@@ -39,25 +39,25 @@ const SECTIONS: RoleSection[] = [
   {
     tag: "orchestrator",
     title: "主控层",
-    subtitle: "整个产品的元角色 · 不亲自写稿,只负责分稿催稿",
+    subtitle: "编辑部主编,只负责分稿、催稿、收稿,自己不审",
     keys: ["editor-in-chief"],
   },
   {
     tag: "worker",
     title: "Worker 层 · 并行审稿",
-    subtitle: "4 位 worker 同时工作 · 每位只管自己那一维度",
+    subtitle: "4 位评审员同时工作,每位只管自己那一维度,互不干扰",
     keys: ["structure", "quality", "ai_coding", "data_quality"],
   },
   {
     tag: "meta-reviewer",
     title: "Meta 层 · 交叉校验",
-    subtitle: "4 worker 跑完才登场 · 不重审,只做交叉校验 + 漏报补充",
+    subtitle: "4 位评审员跑完才登场,不重审,只做交叉校验和漏报补充",
     keys: ["final-reviewer"],
   },
   {
     tag: "background",
     title: "后台 · 看不见但一直在工作",
-    subtitle: "反馈采集 / 评审质量 eval / 知识库维护 / push 门禁",
+    subtitle: "反馈采集、评审质量回归、知识库维护、推送前安全检查",
     keys: ["reader-feedback", "sample-reader", "archivist", "qa-gatekeeper"],
   },
 ];
@@ -115,7 +115,7 @@ export default function AboutPage() {
               lineHeight: 1.6,
             }}
           >
-            一份 PRD,4 只 worker 并行审稿,1 只苍鹰交叉校验,4 只后台鸟常年维护反馈闭环和 wiki。这里是 10 只鸟的职能分工和工程拓扑。
+            一份 PRD,4 位评审员并行审稿,1 只苍鹰交叉校验,4 位后台鸟常年维护反馈闭环和知识库。这里是 10 只鸟的职能分工和协作拓扑。
           </p>
         </header>
 
@@ -164,7 +164,7 @@ export default function AboutPage() {
                 margin: "12px 0 0",
               }}
             >
-              PRD 评审也一样:4 位 worker 各管一维度并行审,苍鹰最后交叉校验撤掉证据不足的、补上漏掉的。10 只鸟里有 5 只在台前(4 worker + 1 苍鹰),5 只在后台(反馈 / eval / wiki / 门禁 / 主控),构成一个完整的反馈闭环——每一次评审的下游信号都会回流到下一次评审的规则权重里。
+              PRD 评审也一样:4 位评审员各管一维度并行审,苍鹰最后交叉校验,撤掉证据不足的、补上漏掉的。10 只鸟里有 5 只在台前(4 位评审员 + 1 只苍鹰),5 只在后台(反馈采集、质量回归、知识库维护、推送门禁、主控调度),构成一个完整的反馈闭环——每一次评审的下游信号都会回流到下一次评审的规则权重里。
             </p>
           </div>
         </section>
@@ -201,7 +201,7 @@ export default function AboutPage() {
           <SectionHead
             tag="topology"
             title="Agent 协作拓扑"
-            subtitle="orchestrator → workers → meta-reviewer · 禁止 worker 相互调用"
+            subtitle="主编 → 4 评审员 → 苍鹰终审 · 评审员之间互不干扰"
           />
           <div
             style={{
@@ -218,21 +218,21 @@ export default function AboutPage() {
             }}
           >
 {`  ┌──────────────────────────────────────┐
-  │      主编(orchestrator)                │
-  │      啄木鸟 · 分稿 / 催稿 / 收拢结论    │
+  │      主编(调度层)                       │
+  │      啄木鸟 · 分稿 / 催稿 / 收稿        │
   └──────────────────────────────────────┘
                   │
                   ↓
   ┌──────┬──────┬──────┬──────┐
-  │ 业务 │ 数据 │ 体验 │ 风险 │  ← worker 层(并行)
-  │ 织布 │ 鸬鹚 │ 猫头 │ 渡鸦 │    严禁互调
+  │ 业务 │ 数据 │ 体验 │ 风险 │  ← 4 位评审员(并行)
+  │ 织布 │ 鸬鹚 │ 猫头 │ 渡鸦 │    互不干扰
   └──────┴──────┴──────┴──────┘
       │     │     │     │
       └──┬──┴──┬──┴──┬──┘
             ↓
   ┌──────────────────────────────────────┐
-  │      苍鹰(meta-reviewer)               │
-  │      交叉校验 · 漏报补充(最多 N 条)     │
+  │      苍鹰(终审)                         │
+  │      交叉校验 · 漏报补充(最多 2-3 条)   │
   └──────────────────────────────────────┘
                   │
                   ↓
@@ -240,11 +240,11 @@ export default function AboutPage() {
                   │
                   ↓
   ┌──────────────────────────────────────┐
-  │      4 后台(常年运行)                   │
-  │ 信鸽(下游信号 → EMA 反哺 rule 权重)    │
-  │ 杜鹃(评审质量 eval · CI 门禁)          │
-  │ 鸮鹦(wiki 运维 · 孤岛 / 断链 / 过时)   │
-  │ 伯劳(push 前安全门禁 · 密钥 / 内网 IP) │
+  │      4 位后台鸟(常年运行)                │
+  │ 信鸽(用户反馈 → 规则权重微调)          │
+  │ 杜鹃(评审质量回归 · 上线前自检)        │
+  │ 鸮鹦(知识库维护 · 找断链与过时)        │
+  │ 伯劳(推送前安全检查 · 密钥与隐私)      │
   └──────────────────────────────────────┘`}
           </div>
         </section>
@@ -254,8 +254,7 @@ export default function AboutPage() {
           style={{
             paddingTop: 20,
             borderTop: "1px solid var(--border-subtle)",
-            fontSize: 11,
-            fontFamily: "var(--font-mono)",
+            fontSize: 12,
             color: "var(--text-faint)",
             display: "flex",
             justifyContent: "space-between",
@@ -263,25 +262,25 @@ export default function AboutPage() {
             gap: 12,
           }}
         >
-          <span>pecker · harness v8 · 2026</span>
+          <span>Pecker · 评审工作台 · 2026</span>
           <span style={{ display: "flex", gap: 14 }}>
             <Link
               href="/"
               style={{ color: "inherit", textDecoration: "none" }}
             >
-              ← home
+              ← 首页
             </Link>
             <Link
               href="/review"
               style={{ color: "inherit", textDecoration: "none" }}
             >
-              review
+              进入评审
             </Link>
             <Link
               href="/runs/diff"
               style={{ color: "inherit", textDecoration: "none" }}
             >
-              runs/diff
+              运行对比
             </Link>
           </span>
         </footer>
@@ -313,15 +312,13 @@ function SectionHead({
       >
         <span
           style={{
-            fontSize: 10,
-            fontFamily: "var(--font-mono)",
+            fontSize: 11,
             fontWeight: 600,
             color: "var(--accent-600)",
             padding: "2px 8px",
             borderRadius: "var(--r-pill)",
             background: "var(--accent-50)",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
+            letterSpacing: "0.04em",
           }}
         >
           {tag}
@@ -367,7 +364,9 @@ function RoleCardV8({ role }: { role: Role }) {
       }}
     >
       <header style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <BirdAvatar id={birdId} size="lg" />
+        {/* id > 5 是未上线后台鸟,走 placeholder 灰圆;
+           1-5 是上线鸟,走 hand-drawn lg PNG 头像 */}
+        <BirdAvatar id={birdId} size="lg" placeholder={birdId > 5} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{

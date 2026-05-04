@@ -48,7 +48,7 @@ export function Phase1PrecheckV8() {
       setPrecheckResult(data);
       setWikiPages({ ...data.wiki_pages });
       toast.success(
-        `预检完成:强 ${data.strong.length} · 弱 ${data.weak.length} · 盲区 ${data.gaps.length}`,
+        `预检完成 · 已覆盖 ${data.strong.length} 项,${data.gaps.length} 项可能是知识盲区`,
       );
       setTimeout(() => setPhase(2), 800);
     },
@@ -72,11 +72,11 @@ export function Phase1PrecheckV8() {
 
   const handleNext = async () => {
     if (!precheckResult) {
-      toast.warning("预检还没完成");
+      toast.warning("预检还没完成,请稍候");
       return;
     }
     if (Object.keys(wikiPages).length === 0) {
-      toast.warning("wiki 内容缺失,Phase 2 会收不到上下文");
+      toast.warning("知识库为空,接下来的评审拿不到上下文");
     }
     try {
       if (reviewer) {
@@ -120,7 +120,7 @@ export function Phase1PrecheckV8() {
             marginTop: 4,
           }}
         >
-          扫 workspace 里的 wiki · 找相关资料 · 识别 PRD 里的知识盲区
+          先翻一遍资料库,看 PRD 哪些点已有依据、哪些点是知识盲区
         </p>
       </header>
 
@@ -142,13 +142,10 @@ export function Phase1PrecheckV8() {
         >
           <div
             style={{
-              fontSize: 12,
-              fontFamily: "var(--font-mono)",
+              fontSize: 13,
               fontWeight: 600,
               color: "var(--status-failed-fg)",
               marginBottom: 6,
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
             }}
           >
             预检失败
@@ -186,24 +183,24 @@ export function Phase1PrecheckV8() {
         >
           <ResultColumn
             kind="strong"
-            title="强相关"
-            hint="命中 ≥ 3 关键词"
+            title="已覆盖"
+            hint="资料库里有充分依据"
             items={precheckResult.strong}
-            empty="没有强相关的 wiki 页"
+            empty="没有强相关的资料"
           />
           <ResultColumn
             kind="weak"
-            title="弱相关"
-            hint="命中 ≥ 1 关键词"
+            title="部分覆盖"
+            hint="资料库里只提了一两句"
             items={precheckResult.weak}
-            empty="没有弱相关的 wiki 页"
+            empty="没有弱相关的资料"
           />
           <ResultColumn
             kind="gap"
             title="知识盲区"
-            hint="Claude 识别的缺失主题"
+            hint="资料库缺这个主题,评审可能信息不足"
             items={precheckResult.gaps}
-            empty="无明显盲区"
+            empty="未发现明显盲区"
           />
         </div>
       )}
@@ -231,14 +228,11 @@ export function Phase1PrecheckV8() {
             </label>
             <span
               style={{
-                fontSize: 10,
-                fontFamily: "var(--font-mono)",
+                fontSize: 11,
                 color: "var(--text-faint)",
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
               }}
             >
-              optional
+              可选
             </span>
             <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
               看过预检后可以再提醒一句评审重点
@@ -360,7 +354,7 @@ function LoadingCard() {
             marginBottom: 2,
           }}
         >
-          正在翻 wiki…
+          正在查阅资料库…
         </div>
         <div
           style={{
@@ -369,7 +363,7 @@ function LoadingCard() {
             lineHeight: 1.55,
           }}
         >
-          本地扫一遍索引,再让 Claude 看一下有哪些盲点。约 10-15 秒,不要关页面。
+          扫一遍知识库索引,再让 AI 检查 PRD 可能的盲点。约 10-15 秒,请不要关闭页面。
         </div>
       </div>
     </div>
@@ -509,15 +503,14 @@ function ResultColumn({ kind, title, hint, items, empty }: ResultColumnProps) {
               >
                 <span
                   style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 10,
+                    fontSize: 11,
                     color: "var(--text-faint)",
                     minWidth: 18,
                     paddingTop: 2,
                     fontVariantNumeric: "tabular-nums",
                   }}
                 >
-                  {String(idx + 1).padStart(2, "0")}
+                  {idx + 1}
                 </span>
                 <span style={{ flex: 1, wordBreak: "break-word" }}>{item}</span>
               </li>
