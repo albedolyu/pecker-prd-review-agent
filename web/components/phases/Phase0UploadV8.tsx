@@ -250,20 +250,20 @@ export function Phase0UploadV8() {
         </Field>
 
         {/* 评审模式 */}
-        <Field label="评审模式" hint="决定几只鸟一起看">
+        <Field label="评审模式" hint="轻评审更快预检，深评审适合正式提交前">
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <ModeCardV8
               active={mode === "quick"}
-              name="简审"
+              name="轻评审"
               eta="≈ 5 分钟"
-              desc="全 sonnet 走一遍 · 跳过苍鹰终审 · 适合初稿粗检"
+              desc="日常预检 · 更快给 PM 结论 · 跳过终审"
               onClick={() => setUserInput({ mode: "quick" as ReviewMode })}
             />
             <ModeCardV8
               active={mode === "standard"}
-              name="精审"
+              name="深评审"
               eta="≈ 10 分钟"
-              desc="4 位 worker 并行 + 苍鹰交叉校验 · 把误报漏报都扫一遍"
+              desc="正式评审 · worker 并行 + 交叉校验 · 适合发给同事"
               onClick={() => setUserInput({ mode: "standard" as ReviewMode })}
             />
           </div>

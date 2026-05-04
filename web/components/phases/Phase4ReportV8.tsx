@@ -16,6 +16,7 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { Download } from "lucide-react";
 
 import {
   authApi,
@@ -28,6 +29,11 @@ import {
 } from "@/lib/api";
 import { useReviewStore } from "@/lib/store";
 import { generateReportMarkdown, computeStats } from "@/lib/generateReport";
+import {
+  buildPmFriendlySnapshot,
+  formatReviewModeLabel,
+  type PmFriendlySnapshot,
+} from "@/lib/pm-friendly";
 import { ROLES, normalizeDimensionKey, type RoleKey } from "@/lib/roles";
 import { BirdAvatar, type BirdId } from "@/components/birds/BirdAvatar";
 import { BirdBadge } from "@/components/birds/BirdBadge";
@@ -78,6 +84,11 @@ export function Phase4ReportV8() {
       stats: computeStats(reviewResult, decisions),
     };
   }, [reviewResult, decisions, confirmedReportMarkdown]);
+
+  const pmSnapshot = useMemo(() => {
+    if (!reviewResult) return null;
+    return buildPmFriendlySnapshot(reviewResult);
+  }, [reviewResult]);
 
   const itemsByDim = useMemo(() => {
     const map = new Map<RoleKey, ReviewItem[]>();
@@ -141,6 +152,34 @@ export function Phase4ReportV8() {
         workspace,
         prd_name: prdName || "未命名",
         extra: { filename },
+      })
+      .catch(() => {});
+  };
+
+  const handleDownloadZhiquHandoff = () => {
+    if (!pmSnapshot) return;
+    const safeName = (prdName || "PRD").replace(/\.[^.]+$/, "");
+    const dateTag = new Date().toISOString().slice(0, 10);
+    const filename = `织雀交接包-${safeName}-${dateTag}.json`;
+    const blob = new Blob(
+      [JSON.stringify(pmSnapshot.zhiquHandoff, null, 2) + "\n"],
+      { type: "application/json;charset=utf-8" },
+    );
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success(`已下载 ${filename}`);
+    void auditApi
+      .log({
+        event: "downloaded_zhiqu_handoff",
+        workspace,
+        prd_name: prdName || "未命名",
+        extra: { filename, review_id: reviewResult?.review_id ?? "" },
       })
       .catch(() => {});
   };
@@ -278,7 +317,7 @@ export function Phase4ReportV8() {
         >
           <MetaItem label="workspace" value={workspace.replace(/^workspace-/, "")} />
           <MetaItem label="reviewer" value={reviewer || "—"} />
-          <MetaItem label="模式" value={mode === "quick" ? "简审" : "精审"} />
+          <MetaItem label="模式" value={formatReviewModeLabel(mode)} />
           <MetaItem label="run no." value={revNo} />
         </div>
         <div
@@ -320,6 +359,11 @@ export function Phase4ReportV8() {
           />
         </div>
       </section>
+
+      <PmFriendlySummary
+        snapshot={pmSnapshot}
+        onDownloadHandoff={handleDownloadZhiquHandoff}
+      />
 
       {/* ── 反馈回声(harness 增量 P1④ · 本版占位) ── */}
       <section
@@ -538,6 +582,174 @@ export function Phase4ReportV8() {
 
 // ============================================================
 // subcomponents
+
+function PmFriendlySummary({
+  snapshot,
+  onDownloadHandoff,
+}: {
+  snapshot: PmFriendlySnapshot | null;
+  onDownloadHandoff: () => void;
+}) {
+  if (!snapshot) return null;
+  const { pmSummary, pmView, testabilitySummary, zhiquHandoff } = snapshot;
+  const riskTone =
+    pmSummary.rework_risk === "高"
+      ? "failed"
+      : pmSummary.rework_risk === "中"
+        ? "warn"
+        : "done";
+
+  return (
+    <section style={{ ...cardStyle, marginTop: 16 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
+        }}
+      >
+        <div style={{ padding: "14px 18px" }}>
+          <div style={summaryEyebrowStyle}>PM 结论卡</div>
+          <div
+            style={{
+              marginTop: 6,
+              fontSize: 18,
+              fontWeight: 600,
+              color: "var(--text-strong)",
+            }}
+          >
+            {pmSummary.verdict}
+          </div>
+          <div style={summaryMetricsStyle}>
+            <SummaryMetric
+              label="返工风险"
+              value={pmSummary.rework_risk}
+              tone={riskTone}
+            />
+            <SummaryMetric label="阻塞项" value={pmSummary.blocking_count} />
+            <SummaryMetric label="PM 默认" value={`${pmView.pm_count} 条`} />
+            <SummaryMetric
+              label="工程展开"
+              value={`${pmView.engineering_count} 条`}
+            />
+          </div>
+          <div style={dimensionPillWrapStyle}>
+            {pmSummary.top_risk_dimensions.length > 0 ? (
+              pmSummary.top_risk_dimensions.map((dim) => (
+                <span key={dim.dimension} style={dimensionPillStyle}>
+                  {dim.dimension} {dim.count}
+                </span>
+              ))
+            ) : (
+              <span style={{ color: "var(--text-muted)", fontSize: 12 }}>
+                暂无重点风险维度
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div style={{ padding: "14px 18px" }}>
+          <div style={summaryEyebrowStyle}>织雀测试用例交接</div>
+          <div style={summaryMetricsStyle}>
+            <SummaryMetric
+              label="可测性"
+              value={testabilitySummary.testability_verdict}
+              tone={
+                testabilitySummary.testability_verdict === "blocked"
+                  ? "failed"
+                  : testabilitySummary.testability_verdict === "partial"
+                    ? "warn"
+                    : "done"
+              }
+            />
+            <SummaryMetric
+              label="覆盖度"
+              value={testabilitySummary.estimated_case_coverage}
+            />
+            <SummaryMetric
+              label="阻塞缺口"
+              value={testabilitySummary.blocking_gap_count}
+            />
+            <SummaryMetric
+              label="场景"
+              value={zhiquHandoff.scenario_matrix.length}
+            />
+          </div>
+          <p
+            style={{
+              margin: "10px 0 12px",
+              fontSize: 12,
+              lineHeight: 1.6,
+              color: "var(--text-muted)",
+            }}
+          >
+            交接包保留来源追踪和 PM 控制项；阻塞项需要补齐后再让织雀生成对应测试用例。
+          </p>
+          <button
+            type="button"
+            onClick={onDownloadHandoff}
+            style={{
+              ...btnSecondaryStyle,
+              display: "inline-flex",
+              alignItems: "center",
+            }}
+            title="下载 pecker_to_zhiqu.v1 JSON"
+          >
+            <Download size={14} strokeWidth={2} style={{ marginRight: 6 }} />
+            下载交接包
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SummaryMetric({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number | string;
+  tone?: StatTone;
+}) {
+  const fg =
+    tone === "done"
+      ? "var(--status-done-fg)"
+      : tone === "warn"
+        ? "var(--status-warn-fg)"
+        : tone === "failed"
+          ? "var(--status-failed-fg)"
+          : "var(--text-strong)";
+
+  return (
+    <span style={{ minWidth: 70 }}>
+      <span
+        style={{
+          display: "block",
+          fontSize: 10,
+          color: "var(--text-faint)",
+          fontFamily: "var(--font-mono)",
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
+        }}
+      >
+        {label}
+      </span>
+      <span
+        style={{
+          display: "block",
+          marginTop: 2,
+          fontSize: 14,
+          fontWeight: 600,
+          color: fg,
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {value}
+      </span>
+    </span>
+  );
+}
 
 function MetaItem({ label, value }: { label: string; value: string }) {
   return (
@@ -889,6 +1101,40 @@ const linkStyle: React.CSSProperties = {
   padding: 0,
   fontFamily: "var(--font-sans)",
   fontWeight: 500,
+};
+
+const summaryEyebrowStyle: React.CSSProperties = {
+  fontSize: 10,
+  fontFamily: "var(--font-mono)",
+  fontWeight: 600,
+  color: "var(--accent-600)",
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+};
+
+const summaryMetricsStyle: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 14,
+  marginTop: 12,
+};
+
+const dimensionPillWrapStyle: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 6,
+  marginTop: 12,
+};
+
+const dimensionPillStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  minHeight: 22,
+  padding: "0 8px",
+  borderRadius: "var(--r-2)",
+  background: "var(--surface-sunken)",
+  color: "var(--text-default)",
+  fontSize: 12,
 };
 
 const emptyWrapStyle: React.CSSProperties = {
