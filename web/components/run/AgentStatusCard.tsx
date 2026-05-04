@@ -174,26 +174,80 @@ export function AgentStatusCard({
         </div>
       )}
 
-      {/* meta chips */}
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "4px 12px",
-          fontFamily: "var(--font-mono)",
-          fontSize: 11,
-          color: "var(--text-muted)",
-          fontVariantNumeric: "tabular-nums",
-        }}
-      >
-        <MetaChip k="model" v={model} />
-        {tokens && <MetaChip k="tokens" v={tokens} />}
-        {elapsed && <MetaChip k="t" v={elapsed} />}
-        {submissions != null && <MetaChip k="subs" v={String(submissions)} />}
-        {isFailed && failReason && (
-          <MetaChip k="err" v={failReason} emph />
-        )}
-      </div>
+      {/* 主指标:已提交意见数 + 失败原因(优先级最高,PM 第一眼看到的) */}
+      {(submissions != null || (isFailed && failReason)) && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexWrap: "wrap",
+            fontSize: 12,
+            color: "var(--text-default)",
+          }}
+        >
+          {submissions != null && (
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "baseline",
+                gap: 4,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 18,
+                  fontWeight: 600,
+                  color: "var(--text-strong)",
+                  fontVariantNumeric: "tabular-nums",
+                  lineHeight: 1,
+                }}
+              >
+                {submissions}
+              </span>
+              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                条意见
+              </span>
+            </span>
+          )}
+          {isFailed && failReason && (
+            <span
+              style={{
+                fontSize: 11,
+                padding: "2px 8px",
+                borderRadius: "var(--r-2)",
+                background: "var(--status-failed-bg)",
+                color: "var(--status-failed-fg)",
+                fontWeight: 600,
+              }}
+              title={failReason}
+            >
+              {failMessage(failReason)}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* 技术细节:hover 提示,默认仅以小字模糊呈现,不抢视觉 */}
+      {(tokens || elapsed) && (
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "2px 10px",
+            fontSize: 10,
+            color: "var(--text-faint)",
+            fontVariantNumeric: "tabular-nums",
+          }}
+          title={`模型 ${model}${tokens ? ` · token ${tokens}` : ""}${
+            elapsed ? ` · 耗时 ${elapsed}` : ""
+          }`}
+        >
+          {elapsed && <span>耗时 {elapsed}</span>}
+          {tokens && <span>token {tokens}</span>}
+          <span style={{ opacity: 0.7 }}>· {model}</span>
+        </div>
+      )}
 
       {/* failure recovery */}
       {isFailed && (
@@ -287,13 +341,13 @@ function dotStatus(s: AgentStatus) {
 }
 
 function failMessage(r?: FailReason): string {
-  if (!r) return "失败";
+  if (!r) return "未完成";
   return {
-    quota_exhausted: "配额已打满",
-    tool_call_failed: "工具调用失败",
-    json_parse_error: "输出 JSON 解析错误",
-    empty_submission: "空提交(静默失败)",
-    timeout: "调用超时",
+    quota_exhausted: "配额用尽",
+    tool_call_failed: "工具调用异常",
+    json_parse_error: "返回格式异常",
+    empty_submission: "未返回任何意见",
+    timeout: "运行超时",
   }[r];
 }
 
@@ -301,41 +355,15 @@ function MetaTag() {
   return (
     <span
       style={{
-        fontFamily: "var(--font-mono)",
         fontSize: 10,
-        fontWeight: 500,
-        padding: "1px 5px",
+        fontWeight: 600,
+        padding: "1px 6px",
         borderRadius: "var(--r-2)",
         background: "color-mix(in oklch, var(--bird-5) 15%, transparent)",
         color: "var(--bird-5)",
-        letterSpacing: 0.3,
       }}
     >
-      META
-    </span>
-  );
-}
-
-function MetaChip({
-  k,
-  v,
-  emph,
-}: {
-  k: string;
-  v: string;
-  emph?: boolean;
-}) {
-  return (
-    <span style={{ display: "inline-flex", gap: 4 }}>
-      <span style={{ opacity: 0.55 }}>{k}</span>
-      <span
-        style={{
-          color: emph ? "var(--status-failed-fg)" : "var(--text-default)",
-          fontWeight: emph ? 600 : 500,
-        }}
-      >
-        {v}
-      </span>
+      交叉校验
     </span>
   );
 }
@@ -350,22 +378,22 @@ function StatusPill({ status, note }: StatusPillProps) {
     queued: {
       bg: "var(--status-queued-bg)",
       fg: "var(--status-queued-fg)",
-      label: note || "排队中",
+      label: note || "等待运行",
     },
     running: {
       bg: "var(--status-running-bg)",
       fg: "var(--status-running-fg)",
-      label: note || "运行中",
+      label: note || "审稿中",
     },
     done: {
       bg: "var(--status-done-bg)",
       fg: "var(--status-done-fg)",
-      label: note || "完成",
+      label: note || "已完成",
     },
     failed: {
       bg: "var(--status-failed-bg)",
       fg: "var(--status-failed-fg)",
-      label: note || "失败",
+      label: note || "未完成",
     },
   };
   const tok = map[status];

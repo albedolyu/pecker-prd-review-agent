@@ -5,6 +5,8 @@
  *
  * - 3 尺寸:lg(32) / md(24) / sm(16)
  * - 10 只全集(id 1-10),内部复用 BirdArt-v2 现成线稿 SVG
+ * - lg 尺寸 + 已上线 1-5 鸟 → hand-drawn PNG 大头像(放在 /public/birds/)
+ *   PNG 加载失败时 onError 自动回退到原 SVG 线稿,无缝降级
  * - 四态状态灯(+warn):queued / running / done / failed / warn
  *   running 态用 dot-breathe 呼吸动画(1.4s infinite)
  * - 外层 pill 背景色用 --bird-{id} 的 color-mix,和徽章同源
@@ -13,6 +15,9 @@
  * 规范源:design-system/啄木鸟-pecker-v8/components/bird-avatar.jsx
  */
 
+"use client";
+
+import { useState } from "react";
 import {
   WoodpeckerArtV2,
   WeaverArtV2,
@@ -33,6 +38,8 @@ export type BirdStatus = "queued" | "running" | "done" | "failed" | "warn";
 const BIRD_SIZES: Record<BirdSize, number> = { lg: 32, md: 24, sm: 16 };
 
 // v8 birdId → BirdArt-v2 SVG · 1-5 已上线(业务/数据/体验/风险/苍鹰),6-10 占位
+// 注:lg 尺寸的 1-5 已切到 hand-drawn PNG 大头像(见 LG_PORTRAIT),BIRD_SVG 仅
+// 用于 sm/md 尺寸 + lg 6-10 placeholder。
 const BIRD_SVG: Record<
   BirdId,
   React.FC<{ size?: number; className?: string }>
@@ -47,6 +54,24 @@ const BIRD_SVG: Record<
   8: CuckooArtV2,
   9: KakapoArtV2,
   10: ShrikeArtV2,
+};
+
+// lg 尺寸 hand-drawn PNG 路径 · 仅 1-5 已上线
+// 文件需存在于 /public/birds/ 下,详见 public/birds/README.md
+const LG_PORTRAIT: Record<1 | 2 | 3 | 4 | 5, string> = {
+  1: "/birds/biz-lg.png",
+  2: "/birds/data-lg.png",
+  3: "/birds/ux-lg.png",
+  4: "/birds/risk-lg.png",
+  5: "/birds/goshawk-lg.png",
+};
+
+const BIRD_ALT_TEXT: Record<1 | 2 | 3 | 4 | 5, string> = {
+  1: "业务鸟",
+  2: "数据鸟",
+  3: "体验鸟",
+  4: "风险鸟",
+  5: "苍鹰",
 };
 
 interface BirdAvatarProps {
@@ -71,6 +96,13 @@ export function BirdAvatar({
   const dotSize = size === "sm" ? 6 : size === "md" ? 8 : 10;
   const Art = BIRD_SVG[id];
 
+  // lg 尺寸 + 已上线 5 鸟 + 非 placeholder 模式 → 用 hand-drawn PNG 大头像
+  // img onError 时 setPortraitFailed → 自动回退到原 SVG 线稿(无缝降级)
+  const eligibleForPortrait =
+    size === "lg" && !placeholder && id >= 1 && id <= 5;
+  const [portraitFailed, setPortraitFailed] = useState(false);
+  const useHandDrawnPortrait = eligibleForPortrait && !portraitFailed;
+
   return (
     <span
       className={className}
@@ -83,39 +115,128 @@ export function BirdAvatar({
         ...style,
       }}
     >
+      {useHandDrawnPortrait ? (
+        <img
+          src={LG_PORTRAIT[id as 1 | 2 | 3 | 4 | 5]}
+          alt={BIRD_ALT_TEXT[id as 1 | 2 | 3 | 4 | 5]}
+          width={px}
+          height={px}
+          onError={() => setPortraitFailed(true)}
+          style={{
+            width: "100%",
+            height: "100%",
+            borderRadius: "50%",
+            objectFit: "cover",
+            display: "block",
+          }}
+        />
+      ) : (
+        <span
+          style={{
+            width: "100%",
+            height: "100%",
+            borderRadius: "var(--r-pill)",
+            background: `color-mix(in oklch, ${color} 10%, var(--surface-raised))`,
+            border: `1px solid color-mix(in oklch, ${color} 28%, var(--border-default))`,
+            color,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            overflow: "hidden",
+            opacity: placeholder ? 0.5 : 1,
+            transition: "border-color var(--dur-base) var(--ease-out)",
+          }}
+        >
+          {placeholder ? (
+            <svg viewBox="0 0 36 36" style={{ width: "100%", height: "100%" }}>
+              <circle
+                cx="18"
+                cy="18"
+                r="10"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                strokeDasharray="2 2"
+              />
+            </svg>
+          ) : (
+            <Art size={px - 4} />
+          )}
+        </span>
+      )}
+      {status && <StatusDot status={status} size={dotSize} />}
+    </span>
+  );
+}
+
+// ============================================================
+// BirdLabel · sm/md 场景的"色点 + 文字"标签
+//
+// 用在 tab nav / 评论卡顶行 / 列表项等位置 — PM 工作台审美里这些地方
+// 不需要肖像感,文字 + 一个 6-8px 色点已经够识别。
+// 大头像(/about 角色卡 / Phase 2 worker 卡 / hover tooltip)继续用 BirdAvatar size="lg"。
+
+const BIRD_LABEL_TEXT: Record<BirdId, string> = {
+  1: "业务鸟",
+  2: "数据鸟",
+  3: "体验鸟",
+  4: "风险鸟",
+  5: "苍鹰",
+  6: "—",
+  7: "—",
+  8: "—",
+  9: "—",
+  10: "—",
+};
+
+interface BirdLabelProps {
+  id: BirdId;
+  /** sm = 12px / md = 13px。lg 别用,lg 走 BirdAvatar 大头像。 */
+  size?: "sm" | "md";
+  className?: string;
+  style?: React.CSSProperties;
+}
+
+export function BirdLabel({
+  id,
+  size = "sm",
+  className,
+  style,
+}: BirdLabelProps) {
+  const fontSize = size === "sm" ? 12 : 13;
+  const dotSize = size === "sm" ? 6 : 8;
+  const fontWeight = size === "sm" ? 500 : 600;
+
+  return (
+    <span
+      className={className}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        fontFamily: "var(--font-sans)",
+        ...style,
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          width: dotSize,
+          height: dotSize,
+          borderRadius: "50%",
+          background: `var(--bird-${id})`,
+          flexShrink: 0,
+        }}
+      />
       <span
         style={{
-          width: "100%",
-          height: "100%",
-          borderRadius: "var(--r-pill)",
-          background: `color-mix(in oklch, ${color} 10%, var(--surface-raised))`,
-          border: `1px solid color-mix(in oklch, ${color} 28%, var(--border-default))`,
-          color,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          overflow: "hidden",
-          opacity: placeholder ? 0.5 : 1,
-          transition: "border-color var(--dur-base) var(--ease-out)",
+          fontSize,
+          fontWeight,
+          color: "var(--text-strong)",
         }}
       >
-        {placeholder ? (
-          <svg viewBox="0 0 36 36" style={{ width: "100%", height: "100%" }}>
-            <circle
-              cx="18"
-              cy="18"
-              r="10"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.2"
-              strokeDasharray="2 2"
-            />
-          </svg>
-        ) : (
-          <Art size={px - 4} />
-        )}
+        {BIRD_LABEL_TEXT[id]}
       </span>
-      {status && <StatusDot status={status} size={dotSize} />}
     </span>
   );
 }

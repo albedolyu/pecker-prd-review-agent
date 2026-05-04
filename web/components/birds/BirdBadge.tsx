@@ -90,12 +90,12 @@ export function BirdBadge({
         <span
           style={{
             fontSize: 10,
-            fontFamily: "var(--font-mono)",
-            opacity: 0.7,
+            opacity: 0.75,
             marginLeft: 2,
           }}
+          title="终审鸟,在 4 位评审员之后做交叉校验"
         >
-          meta
+          终审
         </span>
       )}
     </span>

@@ -122,7 +122,7 @@ export function Phase0UploadV8() {
   const handleResume = () => {
     if (!draft) return;
     hydrateFromDraft(draft);
-    toast.success(`已恢复草稿 — Phase ${draft.phase}`);
+    toast.success(`已恢复上次评审 — 进度: ${phaseLabel(draft.phase)}`);
   };
 
   const handleDiscardDraft = async () => {
@@ -159,29 +159,53 @@ export function Phase0UploadV8() {
         fontFamily: "var(--font-sans)",
       }}
     >
-      {/* ── 页面标题区(克制的一行,不是刊头) ── */}
-      <header style={{ marginBottom: 28 }}>
-        <h1
+      {/* ── 页面标题区 ── */}
+      <header
+        style={{
+          marginBottom: 28,
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        <div>
+          <h1
+            style={{
+              fontSize: 22,
+              fontWeight: 600,
+              color: "var(--text-strong)",
+              margin: 0,
+              letterSpacing: "-0.015em",
+            }}
+          >
+            新建一次 PRD 评审
+          </h1>
+          <p
+            style={{
+              fontSize: 13,
+              color: "var(--text-muted)",
+              marginTop: 4,
+            }}
+          >
+            上传 PRD,选资料库与评审模式,预计{" "}
+            {mode === "quick" ? "5 分钟" : "10 分钟"}完成
+          </p>
+        </div>
+        <a
+          href="/runs/diff"
           style={{
-            fontSize: 22,
-            fontWeight: 600,
-            color: "var(--text-strong)",
-            margin: 0,
-            letterSpacing: "-0.015em",
-          }}
-        >
-          新建一次 PRD 评审
-        </h1>
-        <p
-          style={{
-            fontSize: 13,
+            fontSize: 12,
             color: "var(--text-muted)",
-            marginTop: 4,
+            textDecoration: "none",
+            padding: "4px 10px",
+            border: "1px solid var(--border-default)",
+            borderRadius: "var(--r-pill)",
           }}
         >
-          上传 PRD 正文 · 选 workspace · 选模式 · 预计{" "}
-          {mode === "quick" ? "5 分钟" : "10 分钟"}
-        </p>
+          查看历史评审
+        </a>
       </header>
 
       {/* ── 草稿恢复 banner ── */}
@@ -189,10 +213,10 @@ export function Phase0UploadV8() {
 
       {/* ── 表单单列 ── */}
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-        {/* Workspace */}
+        {/* 资料库 */}
         <Field
-          label="Workspace"
-          hint="选一个资料库 · 评审会基于它的 wiki / 规则做上下文"
+          label="资料库"
+          hint="选一个资料库,评审会基于它的知识库与规则做上下文"
         >
           <Select
             value={workspace}
@@ -212,14 +236,14 @@ export function Phase0UploadV8() {
                 fontFamily: "var(--font-sans)",
               }}
             >
-              <SelectValue placeholder={wsLoading ? "加载中…" : "选一个 workspace"} />
+              <SelectValue placeholder={wsLoading ? "加载中…" : "选一个资料库"} />
             </SelectTrigger>
             <SelectContent>
               {(workspaces ?? []).map((w) => (
                 <SelectItem key={w.name} value={w.name}>
                   <span style={{ marginRight: 8, fontWeight: 500 }}>{w.display_name}</span>
-                  <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
-                    wiki {w.wiki_page_count} · PRD {w.prd_count}
+                  <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                    知识 {w.wiki_page_count} 页 · PRD {w.prd_count} 份
                   </span>
                 </SelectItem>
               ))}
@@ -227,7 +251,7 @@ export function Phase0UploadV8() {
           </Select>
           {!workspace && (
             <input
-              placeholder="或手动输入 workspace 名(如 workspace-对外投资)"
+              placeholder="或手动输入资料库名(如 对外投资 / 风险评估 等)"
               style={{
                 marginTop: 8,
                 width: "100%",
@@ -263,7 +287,7 @@ export function Phase0UploadV8() {
               active={mode === "standard"}
               name="深评审"
               eta="≈ 10 分钟"
-              desc="正式评审 · worker 并行 + 交叉校验 · 适合发给同事"
+              desc="正式评审 · 四位评审员并行 + 苍鹰交叉校验 · 适合发给同事"
               onClick={() => setUserInput({ mode: "standard" as ReviewMode })}
             />
           </div>
@@ -272,17 +296,30 @@ export function Phase0UploadV8() {
         {/* PRD 上传 */}
         <Field label="PRD 正文" hint="拖进来 / 点击选 / 粘贴都行 · 上限 2 MB">
           <div
-            onDragOver={(e) => {
+            onDragEnter={(e) => {
+              // 用 dragenter 比 dragover 触发更早(光标一进入就响应,
+              // 不用等到第一帧 dragover 触发),鸟切换到"接住"姿态更敏锐
               e.preventDefault();
               setDragOver(true);
             }}
-            onDragLeave={() => setDragOver(false)}
+            onDragOver={(e) => {
+              e.preventDefault();
+              if (!dragOver) setDragOver(true);
+            }}
+            onDragLeave={(e) => {
+              // 必须判 relatedTarget 是否还在区域内,否则 children 跨边界会闪烁
+              const related = e.relatedTarget as Node | null;
+              if (!related || !e.currentTarget.contains(related)) {
+                setDragOver(false);
+              }
+            }}
             onDrop={onDrop}
             onClick={() => {
               const el = document.getElementById("prd-file-input-v8") as HTMLInputElement | null;
               el?.click();
             }}
             style={{
+              position: "relative",
               cursor: "pointer",
               borderRadius: "var(--r-4)",
               border: `1px dashed ${dragOver ? "var(--accent-500)" : "var(--border-default)"}`,
@@ -290,8 +327,36 @@ export function Phase0UploadV8() {
               padding: "28px 20px",
               textAlign: "center",
               transition: "all var(--dur-base) var(--ease-out)",
+              overflow: "hidden",
             }}
           >
+            {/* 小啄木鸟蹲在右下角等 PRD · 拖入悬停时切换为"接住"姿势 */}
+            {!prdName && (
+              <img
+                src={dragOver ? "/birds/biz-happy.png" : "/birds/biz-waiting.png"}
+                alt=""
+                aria-hidden
+                width={88}
+                height={88}
+                style={{
+                  position: "absolute",
+                  right: 12,
+                  bottom: 8,
+                  width: 88,
+                  height: 88,
+                  opacity: 0.85,
+                  pointerEvents: "none",
+                  // 镜像让鸟朝向区域中心(文字方向)
+                  transform: "scaleX(-1)",
+                  transition: "opacity var(--dur-fast) var(--ease-out)",
+                  userSelect: "none",
+                }}
+                onError={(e) => {
+                  // PNG 缺失时静默隐藏,不影响拖拽功能
+                  (e.currentTarget as HTMLImageElement).style.display = "none";
+                }}
+              />
+            )}
             <div
               style={{
                 fontSize: 14,
@@ -347,8 +412,8 @@ export function Phase0UploadV8() {
 
         {/* 备注 */}
         <Field
-          label="备注"
-          hint="可选 · 写一句关注重点,鸟会多看两眼"
+          label="评审备注"
+          hint="可选 · 写一句关注重点,评审鸟会多看两眼"
           optional
         >
           <textarea
@@ -387,12 +452,11 @@ export function Phase0UploadV8() {
       >
         <span
           style={{
-            fontSize: 11,
-            fontFamily: "var(--font-mono)",
+            fontSize: 12,
             color: "var(--text-faint)",
           }}
         >
-          {canProceed ? "准备好了" : "填完 workspace + PRD 后可进入下一步"}
+          {canProceed ? "准备好了,可以开始预检" : "填完资料库与 PRD 后可进入下一步"}
         </span>
         <button
           type="button"
@@ -454,14 +518,11 @@ function Field({ label, hint, optional, children }: FieldProps) {
         {optional && (
           <span
             style={{
-              fontSize: 10,
+              fontSize: 11,
               color: "var(--text-faint)",
-              fontFamily: "var(--font-mono)",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
             }}
           >
-            optional
+            可选
           </span>
         )}
         {hint && (
@@ -571,18 +632,15 @@ function DraftBanner({ draft, onResume, onDiscard }: DraftBannerProps) {
     >
       <span
         style={{
-          fontSize: 10,
-          fontFamily: "var(--font-mono)",
+          fontSize: 11,
           fontWeight: 600,
-          textTransform: "uppercase",
-          letterSpacing: "0.08em",
           color: "var(--accent-700)",
-          padding: "2px 6px",
+          padding: "2px 8px",
           borderRadius: "var(--r-2)",
           background: "var(--surface-raised)",
         }}
       >
-        旧稿
+        上次评审
       </span>
       <span style={{ fontSize: 13, color: "var(--text-default)", flex: 1 }}>
         <strong style={{ fontWeight: 600 }}>{draft.prd_name || "未命名"}</strong>
@@ -595,11 +653,10 @@ function DraftBanner({ draft, onResume, onDiscard }: DraftBannerProps) {
           style={{
             marginLeft: 6,
             color: "var(--text-muted)",
-            fontFamily: "var(--font-mono)",
             fontSize: 11,
           }}
         >
-          · phase {draft.phase} · {formatTs(draft.ts)}
+          · 进度 {phaseLabel(draft.phase)} · {formatTs(draft.ts)}
         </span>
       </span>
       <div style={{ display: "flex", gap: 6 }}>
@@ -619,7 +676,7 @@ function DraftBanner({ draft, onResume, onDiscard }: DraftBannerProps) {
             fontFamily: "var(--font-sans)",
           }}
         >
-          恢复
+          继续上次评审
         </button>
         <button
           type="button"
@@ -636,7 +693,7 @@ function DraftBanner({ draft, onResume, onDiscard }: DraftBannerProps) {
             fontFamily: "var(--font-sans)",
           }}
         >
-          丢弃
+          丢弃草稿
         </button>
       </div>
     </div>
@@ -646,4 +703,21 @@ function DraftBanner({ draft, onResume, onDiscard }: DraftBannerProps) {
 function formatTs(ts: string): string {
   const match = ts.match(/^\d{4}-(\d{2}-\d{2})T(\d{2}:\d{2})/);
   return match ? `${match[1]} ${match[2]}` : ts;
+}
+
+function phaseLabel(phase: number): string {
+  switch (phase) {
+    case 0:
+      return "上传 PRD";
+    case 1:
+      return "盲区预检";
+    case 2:
+      return "评审运行中";
+    case 3:
+      return "逐条确认";
+    case 4:
+      return "评审报告";
+    default:
+      return `第 ${phase} 步`;
+  }
 }

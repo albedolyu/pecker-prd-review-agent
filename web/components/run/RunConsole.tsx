@@ -96,7 +96,7 @@ export function RunConsole({
             />
           </span>
           <span style={{ opacity: 0.6, letterSpacing: 0.3 }}>
-            run-console · harness-v8
+            实时日志
           </span>
         </div>
         <div
@@ -118,7 +118,7 @@ export function RunConsole({
                   animation: "dot-breathe 1.4s ease-out infinite",
                 }}
               />
-              <span>LIVE</span>
+              <span>实时</span>
             </>
           )}
         </div>
@@ -134,7 +134,7 @@ export function RunConsole({
               padding: "4px 0",
             }}
           >
-            (no output)
+            (暂无日志)
           </div>
         )}
         {lines.map((l, i) => (

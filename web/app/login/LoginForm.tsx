@@ -64,7 +64,7 @@ export function LoginForm() {
         /* ignore */
       }
       toast.success(
-        `欢迎,${resp.reviewer}${resp.readonly ? "(只读)" : ""}`,
+        `欢迎,${resp.reviewer}${resp.readonly ? "(只读权限)" : ""}`,
       );
       queryClient.invalidateQueries({ queryKey: ["me"] });
       const next = searchParams.get("next") ?? "/review";
@@ -73,7 +73,7 @@ export function LoginForm() {
     onError: (e: ApiError) => {
       if (e.status === 401) toast.error("密码错误");
       else if (e.status === 503)
-        toast.error("服务端未配置密码(PECKER_WEB_PASSWORD)");
+        toast.error("还未配置登录密码,请联系系统管理员");
       else toast.error(`登录失败: ${e.detail ?? e.message}`);
     },
   });
@@ -140,20 +140,6 @@ export function LoginForm() {
           >
             Pecker
           </span>
-          <span
-            style={{
-              fontSize: 10,
-              fontFamily: "var(--font-mono)",
-              color: "var(--text-faint)",
-              padding: "1px 5px",
-              borderRadius: "var(--r-2)",
-              background: "var(--surface-sunken)",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-            }}
-          >
-            v8
-          </span>
         </div>
 
         {/* card */}
@@ -197,7 +183,7 @@ export function LoginForm() {
               gap: 14,
             }}
           >
-            <Field label="账号" hint="会记在报告末页">
+            <Field label="评审人" hint="会出现在评审报告署名">
               <input
                 type="text"
                 value={reviewer}
@@ -285,7 +271,7 @@ export function LoginForm() {
               lineHeight: 1.65,
             }}
           >
-            第一次来?找管理员要密码 · 进来后 10 只鸟的状况都能看
+            第一次来?找系统管理员要密码,登录后即可使用评审工作台
           </div>
         </form>
 

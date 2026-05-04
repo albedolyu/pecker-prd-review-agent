@@ -850,3 +850,68 @@
     }
   }
 }
+
+/* ============================================================
+ * v8 工作台响应式 · Phase 2 / Phase 3
+ * - Phase 2: 评审员卡片网格在窄屏降级
+ * - Phase 3: 双栏 → 单栏 → 移动抽屉
+ * ============================================================ */
+
+/* 评审员卡片(Phase 2):桌面 4 列 / 平板 2 列 / 手机 1 列 */
+@media (max-width: 1080px) {
+  .pecker-worker-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+@media (max-width: 640px) {
+  .pecker-worker-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* 运行质量检查(Phase 1.5):窄屏一致率环和评审员状态堆叠 */
+@media (max-width: 720px) {
+  .pecker-health-body {
+    grid-template-columns: 1fr !important;
+    gap: 18px !important;
+  }
+  .pecker-health-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* Phase 3 双栏工作台:< 1280 单栏(PRD 原文置顶,意见列表在下),< 720 抽屉 */
+@media (max-width: 1280px) {
+  .pecker-phase3-grid {
+    grid-template-columns: 1fr !important;
+    min-height: auto !important;
+  }
+  .pecker-phase3-doc-wrap {
+    position: static !important;
+    max-height: 360px !important;
+  }
+}
+
+/* 手机端:PRD 原文短卡 + 评论抽屉 fab */
+@media (max-width: 720px) {
+  .pecker-phase3-doc-wrap {
+    max-height: 240px !important;
+  }
+  .pecker-phase3-comments {
+    /* 移动端隐藏内联评论列表,改用底部抽屉访问 */
+    display: none !important;
+  }
+  .pecker-phase3-drawer-fab {
+    display: inline-flex !important;
+  }
+  .pecker-phase3-drawer {
+    display: flex !important;
+  }
+  .pecker-phase3-batchbar {
+    padding: 8px 12px !important;
+  }
+  .pecker-phase3-batchbar > div:first-child {
+    gap: 10px !important;
+    font-size: 12px !important;
+  }
+}
