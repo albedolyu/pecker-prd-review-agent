@@ -27,8 +27,8 @@ interface PhaseDef {
 export const PHASES: readonly PhaseDef[] = Object.freeze([
   { id: 0, label: "上传 PRD", desc: "接入文档" },
   { id: 1, label: "盲区预检", desc: "覆盖与遗漏" },
-  { id: 1.5, label: "运行质量检查", desc: "评审是否可信", critical: true },
   { id: 2, label: "评审运行中", desc: "鸟群审稿" },
+  { id: 1.5, label: "运行质量检查", desc: "评审是否可信", critical: true },
   { id: 3, label: "逐条确认", desc: "处理评审意见" },
   { id: 4, label: "评审报告", desc: "导出与归档" },
 ]);

@@ -31,7 +31,8 @@ import { Phase3ConfirmV8 } from "@/components/phases/Phase3ConfirmV8";
 import { Phase4Report } from "@/components/phases/Phase4Report";
 import { Phase4ReportV8 } from "@/components/phases/Phase4ReportV8";
 import { PhaseStepper } from "@/components/PhaseStepper";
-import { PhaseNav, type PhaseId } from "@/components/nav/PhaseNav";
+import { PHASES, PhaseNav, type PhaseId } from "@/components/nav/PhaseNav";
+import { ReviewDemoFlow } from "@/components/demo/ReviewDemoFlow";
 
 export default function ReviewPage() {
   return (
@@ -46,6 +47,7 @@ function ReviewPageInner() {
   const searchParams = useSearchParams();
   // v7=7 显式回退,其他一律 v8 主线
   const useLegacy = searchParams.get("v") === "7";
+  const useDemo = searchParams.get("demo") === "1";
 
   const phase = useReviewStore((s) => s.phase);
   const reviewer = useReviewStore((s) => s.reviewer);
@@ -60,6 +62,7 @@ function ReviewPageInner() {
     queryKey: ["me"],
     queryFn: () => authApi.me(),
     retry: false,
+    enabled: !useDemo,
     staleTime: 60 * 1000,
   });
 
@@ -70,10 +73,14 @@ function ReviewPageInner() {
   }, [me, reviewer, setUserInput]);
 
   useEffect(() => {
-    if (error) {
+    if (!useDemo && error) {
       router.replace("/login");
     }
-  }, [error, router]);
+  }, [error, router, useDemo]);
+
+  if (useDemo) {
+    return <ReviewDemoFlow />;
+  }
 
   if (isLoading) {
     return (
@@ -102,6 +109,12 @@ function ReviewPageInner() {
             className="rounded-[6px] border border-foreground/70 bg-foreground px-4 py-2 text-sm text-background"
           >
             去登录
+          </Link>
+          <Link
+            href="/review?demo=1"
+            className="rounded-[6px] border border-foreground/30 px-4 py-2 text-sm text-foreground/75 hover:border-foreground/60"
+          >
+            先看演示流程
           </Link>
           <Link
             href="/"
@@ -162,8 +175,11 @@ function ReviewPageInner() {
 
   // ═══════════ v8 主线(默认) ═══════════
   const currentPhaseId: PhaseId = phase as PhaseId;
-  const completed: PhaseId[] = ([0, 1, 1.5, 2, 3] as PhaseId[]).filter(
-    (p) => p < currentPhaseId,
+  const phaseOrder = PHASES.map((p) => p.id);
+  const currentPhaseIndex = phaseOrder.indexOf(currentPhaseId);
+  const completed: PhaseId[] = phaseOrder.slice(
+    0,
+    Math.max(0, currentPhaseIndex),
   );
 
   return (
