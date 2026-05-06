@@ -101,9 +101,9 @@ export function RunHealthCheck({
       tone: "fail",
       fg: "var(--status-failed-fg)",
       bg: "var(--status-failed-bg)",
-      label: "API 配额已用尽,评审被中断",
-      headline: "API 配额已用尽,评审中途终止。",
-      desc: "重跑前请确认 API 额度,否则会再次中断。",
+      label: "评审额度不足,评审被中断",
+      headline: "评审额度不足,评审中途终止。",
+      desc: "重跑前请确认额度,否则会再次中断。",
       code: "quota_exhausted",
     },
     degraded: {
@@ -204,18 +204,6 @@ export function RunHealthCheck({
             }}
           >
             {info.desc}
-          </div>
-          <div
-            style={{
-              marginTop: 6,
-              fontSize: 10,
-              color: info.fg,
-              opacity: 0.55,
-              fontFamily: "var(--font-mono)",
-            }}
-            title={`运行分类 code · ${info.code}`}
-          >
-            {info.code}
           </div>
         </div>
       </div>
@@ -327,7 +315,6 @@ export function RunHealthCheck({
                 {FAILURE_CATEGORIES.map((f) => (
                   <FailureCell
                     key={f.code}
-                    code={f.code}
                     token={f.token}
                     label={f.label}
                     n={failures[f.code] ?? 0}
@@ -365,7 +352,7 @@ export function RunHealthCheck({
           {isPartialSilent
             ? "继续确认会在不完整结果上决策,有遗漏问题的风险。"
             : sessionClass === "quota_exhausted"
-              ? "重跑前请确认 API 额度,否则会再次中断。"
+              ? "重跑前请确认评审额度,否则会再次中断。"
               : sessionClass === "degraded"
                 ? "可以直接进入逐条确认;如果想看到完整结果,也可以重跑。"
                 : "本次运行健康,可放心进入逐条确认。"}
@@ -421,11 +408,11 @@ const FAILURE_CATEGORIES: {
   token: string;
   label: string;
 }[] = [
-  { code: "quota_exhausted", token: "--fail-quota", label: "配额用尽" },
-  { code: "tool_call_failed", token: "--fail-tool", label: "工具异常" },
-  { code: "json_parse_error", token: "--fail-json", label: "格式异常" },
-  { code: "empty_submission", token: "--fail-empty", label: "未返回意见" },
-  { code: "timeout", token: "--fail-timeout", label: "运行超时" },
+  { code: "quota_exhausted", token: "--fail-quota", label: "额度不足" },
+  { code: "tool_call_failed", token: "--fail-tool", label: "服务异常" },
+  { code: "json_parse_error", token: "--fail-json", label: "结果不完整" },
+  { code: "empty_submission", token: "--fail-empty", label: "暂未产出意见" },
+  { code: "timeout", token: "--fail-timeout", label: "耗时过长" },
 ];
 
 const FAILURE_LABEL_MAP: Record<FailureCategory, string> = Object.fromEntries(
@@ -452,12 +439,10 @@ const healthBodyStyle: React.CSSProperties = {
 };
 
 function FailureCell({
-  code,
   token,
   label,
   n,
 }: {
-  code: FailureCategory;
   token: string;
   label: string;
   n: number;
@@ -465,7 +450,7 @@ function FailureCell({
   const dim = n === 0;
   return (
     <div
-      title={`分类 code · ${code}`}
+      title={`异常类型 · ${label}`}
       style={{
         padding: "10px 12px",
         background: dim

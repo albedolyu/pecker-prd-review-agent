@@ -781,7 +781,7 @@ function PmFriendlySummary({
               display: "inline-flex",
               alignItems: "center",
             }}
-            title="下载 pecker_to_zhiqu.v1 JSON"
+            title="下载织雀交接包"
           >
             <Download size={14} strokeWidth={2} style={{ marginRight: 6 }} />
             下载交接包

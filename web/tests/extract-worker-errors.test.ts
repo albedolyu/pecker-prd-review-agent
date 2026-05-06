@@ -10,7 +10,10 @@
 
 import { describe, it, expect } from "vitest";
 import type { ReviewStreamEvent } from "@/lib/useReviewStream";
-import { extractWorkerErrors } from "@/lib/v8-run-helpers";
+import {
+  deriveFunnelState,
+  extractWorkerErrors,
+} from "@/lib/v8-run-helpers";
 
 // 真实样本(workspace-sample/output/sessions/rev_1777352680_bc901d.jsonl 里抓的)
 // 后端 stream.py:115 把 result["error"] 截断到 200 字,这里取截断后的样子
@@ -46,8 +49,8 @@ describe("extractWorkerErrors", () => {
     expect(banners).toHaveLength(1);
     const b = banners[0]!;
     expect(b.category).toBe("not_logged_in");
-    expect(b.title).toContain("Claude CLI 未登录");
-    expect(b.hint).toContain("claude login");
+    expect(b.title).toContain("评审服务未连接");
+    expect(b.hint).toContain("维护人");
     expect(b.affectedDims).toHaveLength(3);
     expect(b.affectedDims.map((d) => d.dim).sort()).toEqual([
       "ai_coding",
@@ -110,5 +113,49 @@ describe("extractWorkerErrors", () => {
     expect(banners).toHaveLength(2);
     const cats = banners.map((b) => b.category).sort();
     expect(cats).toEqual(["not_logged_in", "quota"]);
+  });
+
+  it("other banner 使用 PM 友好文案,不露出 worker/debug 词", () => {
+    const ev = workerDoneEvent(
+      "ai_coding",
+      "风险",
+      "Connection timed out after 120s talking to upstream",
+    );
+    const banners = extractWorkerErrors([ev]);
+    const b = banners[0]!;
+
+    expect(b.title).toBe("风险评审未完整返回");
+    expect(`${b.title} ${b.hint}`).not.toMatch(/\b(worker|debug|log)\b/i);
+  });
+});
+
+describe("deriveFunnelState PM labels", () => {
+  it("funnel stage labels 不露出 N0/N1/worker 原始产出等实现层级", () => {
+    const funnel = deriveFunnelState([
+      { event: "funnel_stage_worker_raw", count: 6 },
+      { event: "funnel_stage_after_dedup", count: 4, dropped_count: 2 },
+      {
+        event: "funnel_stage_after_evidence_verify",
+        count: 3,
+        retracted_count: 1,
+        downgraded_count: 0,
+        wiki_mode: "rich",
+        authority_distribution: {},
+      },
+      {
+        event: "funnel_stage_after_goshawk",
+        count: 3,
+        delta_breakdown: { removed: 0, merged_to_facet: 0, added: 0 },
+      },
+    ] as ReviewStreamEvent[]);
+
+    const labels = Object.values(funnel.stages)
+      .map((s) => s.label)
+      .join(" ");
+
+    expect(labels).toContain("初步意见");
+    expect(labels).toContain("PM 确认");
+    expect(labels).not.toMatch(/\b(worker|N0|N1|N2|N3|N4)\b/i);
+    expect(labels).not.toContain("原始产出");
   });
 });

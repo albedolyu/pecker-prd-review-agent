@@ -172,8 +172,8 @@ export function extractWorkerErrors(
   if (loggedInList && loggedInList.length > 0) {
     banners.push({
       category: "not_logged_in",
-      title: "Claude CLI 未登录",
-      hint: "在终端跑 `claude login` 后重试",
+      title: "评审服务未连接",
+      hint: "请让维护人重新登录评审服务后重试",
       affectedDims: loggedInList.map((x) => ({ dim: x.dim, dimName: x.dimName })),
     });
   }
@@ -181,8 +181,8 @@ export function extractWorkerErrors(
   if (quotaList && quotaList.length > 0) {
     banners.push({
       category: "quota",
-      title: "Claude 账户额度耗尽",
-      hint: "请稍后重试或联系管理员升级账户",
+      title: "评审额度不足",
+      hint: "请稍后重试,或联系维护人补充额度",
       affectedDims: quotaList.map((x) => ({ dim: x.dim, dimName: x.dimName })),
     });
   }
@@ -191,8 +191,8 @@ export function extractWorkerErrors(
   for (const o of otherList) {
     banners.push({
       category: "other",
-      title: `Worker ${o.dim} 失败`,
-      hint: "查看下方运行日志或重试",
+      title: `${o.dimName || "该项"}评审未完整返回`,
+      hint: "可以先重试;仍失败时请把本次评审发给维护人排查",
       affectedDims: [{ dim: o.dim, dimName: o.dimName }],
       errorPreview: o.error.slice(0, 120),
     });
@@ -296,11 +296,11 @@ export interface FunnelState {
 }
 
 const STAGE_LABELS: Record<FunnelStageKey, string> = {
-  N0_worker_raw: "N0 · worker 原始产出",
-  N1_after_dedup: "N1 · 去重后",
-  N2_after_evidence_verify: "N2 · 证据校验后",
-  N3_after_goshawk: "N3 · 苍鹰终审后",
-  N4_after_pm_decision: "N4 · PM 决策后",
+  N0_worker_raw: "初步意见",
+  N1_after_dedup: "合并相似问题后",
+  N2_after_evidence_verify: "核对依据后",
+  N3_after_goshawk: "苍鹰复核后",
+  N4_after_pm_decision: "PM 确认后",
 };
 
 /**

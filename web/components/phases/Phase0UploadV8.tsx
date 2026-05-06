@@ -417,7 +417,7 @@ export function Phase0UploadV8() {
           optional
         >
           <textarea
-            placeholder="比如:这版改了 2 个字段名,担心后端接不上 — 重点看结构"
+            placeholder="比如:这版改了 2 个字段名,担心字段口径和现有流程对不上 — 重点看结构"
             rows={3}
             value={userNotes}
             onChange={(e) => setUserInput({ userNotes: e.target.value })}

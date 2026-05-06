@@ -361,14 +361,14 @@ export function Phase3ConfirmV8() {
       <div style={emptyWrapStyle}>
         <h2 style={emptyTitleStyle}>没找到评审结果</h2>
         <p style={emptyDescStyle}>
-          没有 Phase 2 的产出,请返回重新评审。
+          没有评审运行的产出,请返回重新评审。
         </p>
         <button
           type="button"
           onClick={() => setPhase(2)}
           style={btnPrimaryStyle}
         >
-          返回 Phase 2
+          返回评审运行
         </button>
       </div>
     );
@@ -1067,7 +1067,7 @@ function ItemCardV8({
           </div>
         </div>
         <span
-          title={`意见 ID · ${item.id}`}
+          title={`意见编号 · ${item.id}`}
           style={{
             fontSize: 10,
             fontFamily: "var(--font-mono)",
@@ -1163,7 +1163,7 @@ function ItemCardV8({
                 listStyle: "none",
               }}
             >
-              技术详情
+              校验详情
             </summary>
             <div
               style={{
@@ -1306,7 +1306,7 @@ function ItemCardV8({
             rows={2}
             value={decision?.reason ?? ""}
             onChange={(e) => onRejectReasonChange(e.target.value)}
-            placeholder="备注(可选)— 例如规则太严的具体场景, 帮助后续 rule_lifecycle 决策"
+            placeholder="备注(可选)— 例如规则太严的具体场景, 帮助后续校准评审规则"
             style={rejectTextareaStyle}
           />
         </div>

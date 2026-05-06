@@ -236,7 +236,7 @@ export function Phase2RunningV8() {
   }, [stream.events, stream.state]);
 
   const metaNote = useMemo(() => {
-    if (metaState === "queued") return "等待 worker 完成";
+    if (metaState === "queued") return "等待各项初审完成";
     if (metaState === "running") return "交叉校验中";
     if (metaState === "done") return "完成";
     return undefined;
@@ -523,7 +523,7 @@ export function Phase2RunningV8() {
             }}
             title={`评审模式 · ${mode === "quick" ? "快速" : "标准"}`}
           >
-            {mode === "quick" ? "快速模式" : "标准模式"}
+            {mode === "quick" ? "轻评审" : "深评审"}
           </span>
         </div>
       </header>
@@ -552,7 +552,7 @@ export function Phase2RunningV8() {
         >
           <strong style={{ fontWeight: 600 }}>
             {failedReviewEvent?.reason === "quota_exhausted"
-              ? "API 配额已用尽,本次评审中断"
+              ? "评审额度不足,本次评审中断"
               : "评审运行失败"}
           </strong>
           {" · "}
@@ -710,7 +710,7 @@ function buildConsoleLines(
           t,
           src: { name: "调度" },
           level: "accent",
-          text: `四只评审鸟开始并行审稿(${"mode" in e && e.mode === "quick" ? "快速模式" : "标准模式"})`,
+          text: `四个评审方向开始并行检查(${"mode" in e && e.mode === "quick" ? "轻评审" : "深评审"})`,
         });
         break;
       case "worker_done": {
@@ -724,9 +724,9 @@ function buildConsoleLines(
         const reason = !ev.success
           ? ev.error ?? "未完成"
           : ev.timeout
-            ? "运行超时,部分结果可用"
+            ? "耗时过长,部分结果可用"
             : ev.degraded
-              ? "返回格式异常,已降级处理"
+              ? "结果不完整,已保留可用部分"
               : "已完成";
         lines.push({
           t,
@@ -769,7 +769,7 @@ function buildConsoleLines(
           t,
           src: { name: "系统" },
           level: "error",
-          text: `运行异常:${e.message}`,
+          text: `评审遇到异常:${e.message}`,
         });
         break;
       case "review_failed": {
@@ -831,24 +831,33 @@ function WorkerErrorBannerView({ banner }: { banner: WorkerErrorBanner }) {
           fontFamily: "var(--font-mono)",
         }}
       >
-        影响 {banner.affectedDims.length} 个 worker:{dimsLabel}
+        影响 {banner.affectedDims.length} 个评审方向:{dimsLabel}
       </div>
       {banner.errorPreview && (
-        <div
+        <details
           style={{
             marginTop: 6,
             padding: "6px 8px",
             borderRadius: "var(--r-2)",
             background: "color-mix(in oklch, var(--status-failed-bg) 60%, var(--surface-canvas))",
             fontSize: 11,
-            fontFamily: "var(--font-mono)",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
             opacity: 0.9,
           }}
         >
-          {banner.errorPreview}
-        </div>
+          <summary style={{ cursor: "pointer", userSelect: "none" }}>
+            给维护人看的错误原文
+          </summary>
+          <div
+            style={{
+              marginTop: 6,
+              fontFamily: "var(--font-mono)",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+            }}
+          >
+            {banner.errorPreview}
+          </div>
+        </details>
       )}
     </div>
   );

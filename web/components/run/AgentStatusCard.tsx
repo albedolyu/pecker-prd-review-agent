@@ -228,8 +228,8 @@ export function AgentStatusCard({
         </div>
       )}
 
-      {/* 技术细节:hover 提示,默认仅以小字模糊呈现,不抢视觉 */}
-      {(tokens || elapsed) && (
+      {/* 处理详情默认只露出耗时,避免把模型与 token 信息放到 PM 主视图里 */}
+      {elapsed && (
         <div
           style={{
             display: "flex",
@@ -239,13 +239,11 @@ export function AgentStatusCard({
             color: "var(--text-faint)",
             fontVariantNumeric: "tabular-nums",
           }}
-          title={`模型 ${model}${tokens ? ` · token ${tokens}` : ""}${
-            elapsed ? ` · 耗时 ${elapsed}` : ""
-          }`}
+          title={`处理详情 · 耗时 ${elapsed}${
+            tokens ? ` · 处理量 ${tokens}` : ""
+          }${model ? " · 模型由系统自动选择" : ""}`}
         >
-          {elapsed && <span>耗时 {elapsed}</span>}
-          {tokens && <span>token {tokens}</span>}
-          <span style={{ opacity: 0.7 }}>· {model}</span>
+          <span>耗时 {elapsed}</span>
         </div>
       )}
 
@@ -343,11 +341,11 @@ function dotStatus(s: AgentStatus) {
 function failMessage(r?: FailReason): string {
   if (!r) return "未完成";
   return {
-    quota_exhausted: "配额用尽",
-    tool_call_failed: "工具调用异常",
-    json_parse_error: "返回格式异常",
-    empty_submission: "未返回任何意见",
-    timeout: "运行超时",
+    quota_exhausted: "评审额度不足",
+    tool_call_failed: "评审服务异常",
+    json_parse_error: "结果格式不完整",
+    empty_submission: "暂未产出意见",
+    timeout: "耗时过长",
   }[r];
 }
 
