@@ -23,15 +23,15 @@ const LAST_30_DAYS_CONSISTENCY = [
 ];
 
 const SESSION_DISTRIBUTION = [
-  { label: "productive", count: 142, color: "var(--status-done-dot)" },
-  { label: "degraded", count: 18, color: "var(--status-warn-dot)" },
+  { label: "正常完成", count: 142, color: "var(--status-done-dot)" },
+  { label: "部分降级", count: 18, color: "var(--status-warn-dot)" },
   {
-    label: "partial_silent",
+    label: "结果不完整",
     count: 11,
     color: "var(--status-warn-fg)",
   },
   {
-    label: "quota_exhausted",
+    label: "额度中断",
     count: 3,
     color: "var(--status-failed-dot)",
   },
@@ -54,10 +54,10 @@ const TOP_RULES: {
 ];
 
 const EVAL_BASELINE = [
-  { name: "worker-ground-truth(20 cases)", score: 0.88, delta: 0.03 },
-  { name: "goshawk-cross-check(15 cases)", score: 0.91, delta: 0.01 },
-  { name: "evidence-verify(12 cases)", score: 0.84, delta: -0.02 },
-  { name: "rule-hit-recall(30 cases)", score: 0.79, delta: 0.05 },
+  { name: "评审员命中样例(20 例)", score: 0.88, delta: 0.03 },
+  { name: "苍鹰交叉校验(15 例)", score: 0.91, delta: 0.01 },
+  { name: "依据可验证性(12 例)", score: 0.84, delta: -0.02 },
+  { name: "规则召回(30 例)", score: 0.79, delta: 0.05 },
 ];
 
 const RECENT_RUNS = [
@@ -102,7 +102,7 @@ export default function SystemHealthPage() {
             marginBottom: 4,
           }}
         >
-          Harness · System Health
+          质量看板
         </div>
         <h1
           style={{
@@ -113,7 +113,7 @@ export default function SystemHealthPage() {
             letterSpacing: "-0.015em",
           }}
         >
-          系统健康
+          评审质量看板
         </h1>
         <p
           style={{
@@ -123,7 +123,7 @@ export default function SystemHealthPage() {
             lineHeight: 1.55,
           }}
         >
-          近 30 天 consistency 趋势 · session 分类 · rule 权重演化 · eval 回归基线
+          看近 30 天一致率、异常类型、规则命中和回归样例表现
         </p>
       </header>
 
@@ -139,10 +139,7 @@ export default function SystemHealthPage() {
           fontFamily: "var(--font-sans)",
         }}
       >
-        <strong style={{ fontWeight: 600 }}>Sprint 5 · v2 预留</strong> · sample 数据。真实接入{" "}
-        <code style={{ fontFamily: "var(--font-mono)" }}>/api/stability/daily</code> +{" "}
-        <code style={{ fontFamily: "var(--font-mono)" }}>/api/feedback/rules/performance</code>{" "}
-        在 v2 做。
+        <strong style={{ fontWeight: 600 }}>演示数据</strong> · 当前展示样例指标,后续接入真实稳定性和规则表现数据。
       </div>
 
       {/* top metrics */}
@@ -155,25 +152,25 @@ export default function SystemHealthPage() {
         }}
       >
         <MetricCard
-          label="本周 consistency"
+          label="本周一致率"
           value="90%"
           delta="+4%"
           tone="done"
         />
         <MetricCard
-          label="近 30 日 run"
+          label="近 30 天评审"
           value="174"
           delta="+18"
           tone="info"
         />
         <MetricCard
-          label="partial_silent 率"
+          label="不完整返回率"
           value="6.3%"
           delta="-2.1%"
           tone="done"
         />
         <MetricCard
-          label="平均 $/run"
+          label="单次平均成本"
           value="$0.18"
           delta="-$0.02"
           tone="done"
@@ -191,8 +188,8 @@ export default function SystemHealthPage() {
         {/* consistency 趋势 */}
         <section style={cardStyle}>
           <SectionHead
-            title="Consistency 趋势"
-            hint="近 30 日 effective_consistency · 阈值 0.8"
+            title="一致率趋势"
+            hint="近 30 天评审员判断一致率 · 阈值 80%"
           />
           <div style={{ padding: "16px 20px 20px" }}>
             <TrendLine values={LAST_30_DAYS_CONSISTENCY} threshold={0.8} />
@@ -201,7 +198,7 @@ export default function SystemHealthPage() {
 
         {/* session 分类 */}
         <section style={cardStyle}>
-          <SectionHead title="Session 分类" hint="近 174 次 run" />
+          <SectionHead title="评审状态分布" hint="近 174 次评审" />
           <div style={{ padding: "16px 20px 20px" }}>
             <SessionBars data={SESSION_DISTRIBUTION} />
           </div>
@@ -210,8 +207,8 @@ export default function SystemHealthPage() {
         {/* rule 权重演化 */}
         <section style={{ ...cardStyle, gridColumn: "1 / -1" }}>
           <SectionHead
-            title="Rule 权重 Top 6"
-            hint="hover 低命中率规则考虑下线"
+            title="高影响规则 Top 6"
+            hint="命中少、驳回多的规则需要复核"
           />
           <div style={{ padding: "12px 20px 16px" }}>
             <RuleTable rules={TOP_RULES} />
@@ -221,17 +218,17 @@ export default function SystemHealthPage() {
         {/* eval 回归 */}
         <section style={{ ...cardStyle, gridColumn: "1 / -1" }}>
           <SectionHead
-            title="Eval 回归基线"
-            hint="预埋测试用例 · 每日 CI 跑一次"
+            title="回归样例表现"
+            hint="固定样例每日检查,防止评审质量回退"
           />
           <div style={{ padding: "12px 20px 16px" }}>
             <EvalTable rows={EVAL_BASELINE} />
           </div>
         </section>
 
-        {/* 最近 runs */}
+        {/* 最近评审 */}
         <section style={{ ...cardStyle, gridColumn: "1 / -1" }}>
-          <SectionHead title="最近 runs" hint="点 id 进 audit trail replay" />
+          <SectionHead title="最近评审" hint="点评审编号查看回放" />
           <ul
             style={{
               margin: 0,
@@ -302,10 +299,10 @@ export default function SystemHealthPage() {
             href="/system/prompts"
             style={{ color: "inherit", textDecoration: "none" }}
           >
-            prompts & rules →
+            规则配置 →
           </Link>
         </span>
-        <span>pecker · harness v8 · system/health · sample</span>
+        <span>Pecker · 质量看板 · 演示数据</span>
       </footer>
     </div>
   );
@@ -571,7 +568,7 @@ function RuleTable({
     >
       <thead>
         <tr>
-          {["rule", "dim", "weight", "hits", "rejects", "trend"].map((h) => (
+          {["规则", "方向", "权重", "命中", "驳回", "趋势"].map((h) => (
             <th
               key={h}
               style={{
@@ -768,9 +765,18 @@ function SessionChip({ sessionClass }: { sessionClass: string }) {
         justifySelf: "start",
       }}
     >
-      {sessionClass}
+      {sessionClassLabel(sessionClass)}
     </span>
   );
+}
+
+function sessionClassLabel(sessionClass: string): string {
+  return {
+    productive: "正常完成",
+    degraded: "部分降级",
+    partial_silent: "结果不完整",
+    quota_exhausted: "额度中断",
+  }[sessionClass] ?? sessionClass;
 }
 
 const cardStyle: React.CSSProperties = {

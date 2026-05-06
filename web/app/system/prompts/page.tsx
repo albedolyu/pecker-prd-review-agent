@@ -3,7 +3,7 @@
 /**
  * /system/prompts · v8 Sprint 5(v2 预留)
  *
- * Prompt / Rule 透明度 · 让 PM 看见每只鸟当前用的 prompt 摘要 + 激活的 rule 集。
+ * 评审规则配置 · 让 PM 看见每只鸟当前用的判断口径摘要 + 启用规则。
  * 数据来源:
  *   - GET /api/prompts/:bird_id(prompt 版本 + 摘要)
  *   - GET /api/feedback/rules?dim=structure(该维度当前激活 rule)
@@ -163,7 +163,7 @@ export default function SystemPromptsPage() {
             marginBottom: 4,
           }}
         >
-          Harness · Prompts & Rules
+          规则配置
         </div>
         <h1
           style={{
@@ -174,7 +174,7 @@ export default function SystemPromptsPage() {
             letterSpacing: "-0.015em",
           }}
         >
-          Prompt / Rule 透明度
+          评审规则配置
         </h1>
         <p
           style={{
@@ -184,7 +184,7 @@ export default function SystemPromptsPage() {
             lineHeight: 1.55,
           }}
         >
-          看每只鸟当前的 prompt 摘要 + 激活的 rule 集 + 本周 hit/reject · 未来支持&ldquo;临时覆盖权重&rdquo;做实验
+          查看每位评审员的判断口径、启用规则和本周命中/驳回情况
         </p>
       </header>
 
@@ -199,9 +199,7 @@ export default function SystemPromptsPage() {
           fontSize: 12,
         }}
       >
-        <strong style={{ fontWeight: 600 }}>Sprint 5 · v2 预留</strong> · sample 数据。真实接入{" "}
-        <code style={{ fontFamily: "var(--font-mono)" }}>/api/prompts/:bird_id</code> +{" "}
-        <code style={{ fontFamily: "var(--font-mono)" }}>/api/feedback/rules</code> 在 v2 做。
+        <strong style={{ fontWeight: 600 }}>演示数据</strong> · 当前展示样例规则,后续接入真实规则库后可用于校准评审口径。
       </div>
 
       {/* 鸟 tabs */}
@@ -290,7 +288,7 @@ export default function SystemPromptsPage() {
                     color: "var(--text-strong)",
                   }}
                 >
-                  {BIRD_META[selected].label}鸟 · Prompt
+                  {BIRD_META[selected].label}鸟 · 判断口径
                 </div>
                 <div
                   style={{
@@ -315,19 +313,19 @@ export default function SystemPromptsPage() {
                 borderBottom: "1px solid var(--border-subtle)",
               }}
             >
-              <MetaField label="model" value={prompt.model} />
+              <MetaField label="模型" value={prompt.model} />
               <MetaField
-                label="temperature"
+                label="稳定性"
                 value={prompt.temperature.toFixed(2)}
                 mono
               />
               <MetaField
-                label="max tokens"
+                label="上下文上限"
                 value={String(prompt.maxTokens)}
                 mono
               />
               <MetaField
-                label="injected rules"
+                label="本次规则"
                 value={String(prompt.injectedRules.length)}
                 mono
               />
@@ -344,7 +342,7 @@ export default function SystemPromptsPage() {
                   marginBottom: 8,
                 }}
               >
-                prompt summary
+                判断口径摘要
               </div>
               <p
                 style={{
@@ -400,7 +398,7 @@ export default function SystemPromptsPage() {
                 marginBottom: 6,
               }}
             >
-              临时覆盖(v2)
+              本次临时调整
             </div>
             <p
               style={{
@@ -410,7 +408,7 @@ export default function SystemPromptsPage() {
                 margin: "0 0 12px",
               }}
             >
-              下次 run 可以临时调整某条 rule 的权重 · 只影响本次 session,reload 后失效 · 方便做 AB 实验
+              下一次评审可以临时调整某条规则的权重,只影响本次任务,刷新后失效,方便做 AB 实验。
             </p>
             <button
               type="button"
@@ -428,7 +426,7 @@ export default function SystemPromptsPage() {
                 fontFamily: "var(--font-sans)",
               }}
             >
-              发起一次临时覆盖 · v2 启用
+              临时调整规则权重 · v2 启用
             </button>
           </aside>
 
@@ -450,10 +448,10 @@ export default function SystemPromptsPage() {
                   color: "var(--text-strong)",
                 }}
               >
-                激活 rule 集
+                启用规则
               </div>
               <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                {rules.length} 条 · 本周 hit/reject · 按权重降序
+                {rules.length} 条 · 本周命中/驳回 · 按权重降序
               </div>
             </header>
             <table
@@ -466,14 +464,14 @@ export default function SystemPromptsPage() {
               <thead>
                 <tr>
                   {[
-                    "rule",
-                    "name",
-                    "severity",
-                    "status",
-                    "weight",
-                    "hits 7d",
-                    "rejects 7d",
-                    "reject %",
+                    "规则",
+                    "名称",
+                    "严重级",
+                    "状态",
+                    "权重",
+                    "近7天命中",
+                    "近7天驳回",
+                    "驳回率",
                   ].map((h) => (
                     <th
                       key={h}
@@ -582,7 +580,7 @@ export default function SystemPromptsPage() {
             color: "var(--text-muted)",
           }}
         >
-          该鸟尚未上线 · 无 prompt / rule 数据
+          该评审员尚未上线 · 暂无判断口径和规则数据
         </div>
       )}
 
@@ -603,9 +601,9 @@ export default function SystemPromptsPage() {
           href="/system/health"
           style={{ color: "var(--text-muted)", textDecoration: "none" }}
         >
-          ← /system/health
+          ← 质量看板
         </Link>
-        <span>pecker · harness v8 · system/prompts · sample</span>
+        <span>Pecker · 规则配置 · 演示数据</span>
       </footer>
     </div>
   );
@@ -660,12 +658,14 @@ function SeverityChip({
     must: {
       bg: "var(--status-failed-bg)",
       fg: "var(--status-failed-fg)",
+      label: "必须改",
     },
     should: {
       bg: "var(--status-warn-bg)",
       fg: "var(--status-warn-fg)",
+      label: "建议改",
     },
-    suggest: { bg: "var(--neutral-100)", fg: "var(--text-muted)" },
+    suggest: { bg: "var(--neutral-100)", fg: "var(--text-muted)", label: "参考" },
   }[severity];
   return (
     <span
@@ -677,11 +677,9 @@ function SeverityChip({
         color: cfg.fg,
         fontWeight: 600,
         fontFamily: "var(--font-mono)",
-        textTransform: "uppercase",
-        letterSpacing: "0.04em",
       }}
     >
-      {severity}
+      {cfg.label}
     </span>
   );
 }
@@ -692,12 +690,13 @@ function StatusChip({
   status: "active" | "shadow" | "disabled";
 }) {
   const cfg = {
-    active: { bg: "var(--status-done-bg)", fg: "var(--status-done-fg)" },
+    active: { bg: "var(--status-done-bg)", fg: "var(--status-done-fg)", label: "启用中" },
     shadow: {
       bg: "var(--status-info-bg)",
       fg: "var(--status-info-fg)",
+      label: "观察中",
     },
-    disabled: { bg: "var(--neutral-100)", fg: "var(--text-muted)" },
+    disabled: { bg: "var(--neutral-100)", fg: "var(--text-muted)", label: "已停用" },
   }[status];
   return (
     <span
@@ -711,7 +710,7 @@ function StatusChip({
         fontFamily: "var(--font-mono)",
       }}
     >
-      {status}
+      {cfg.label}
     </span>
   );
 }

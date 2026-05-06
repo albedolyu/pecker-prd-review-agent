@@ -47,7 +47,7 @@ const SAMPLE_RUN: RunMeta = {
   id: "r_20260418_1042",
   reviewer: "晨舒",
   workspace: "workspace-对外投资",
-  mode: "standard",
+  mode: "深评审",
   prdName: "用户等级体系改造 v0.3.md",
   sessionClass: "productive",
   consistency: 0.92,
@@ -62,7 +62,7 @@ const SAMPLE_EVENTS: ReplayEvent[] = [
     seq: 1,
     t: "0.0s",
     iso: "2026-04-18T10:42:00.123Z",
-    source: { name: "system" },
+    source: { name: "调度" },
     level: "info",
     summary: "PRD 上传完成 · 3487 字 · 42 blocks",
     payload: {
@@ -76,7 +76,7 @@ const SAMPLE_EVENTS: ReplayEvent[] = [
     seq: 2,
     t: "1.2s",
     iso: "2026-04-18T10:42:01.321Z",
-    source: { name: "system" },
+    source: { name: "调度" },
     level: "info",
     summary: "wiki 扫描完成 · 42 页 · 加载到 context",
     payload: {
@@ -204,7 +204,7 @@ const SAMPLE_EVENTS: ReplayEvent[] = [
     seq: 10,
     t: "52.6s",
     iso: "2026-04-18T10:42:52.721Z",
-    source: { name: "system" },
+    source: { name: "调度" },
     level: "ok",
     summary: "评审完成 · 24 条 · 等待 PM 决策",
     payload: {
@@ -288,7 +288,7 @@ export default function RunReplayPage({
             marginBottom: 4,
           }}
         >
-          Harness · Audit Trail Replay
+          评审记录 · 过程回放
         </div>
         <h1
           style={{
@@ -299,7 +299,7 @@ export default function RunReplayPage({
             letterSpacing: "-0.015em",
           }}
         >
-          Run · {id}
+          评审回放 · {id}
         </h1>
         <p
           style={{
@@ -309,7 +309,7 @@ export default function RunReplayPage({
             lineHeight: 1.55,
           }}
         >
-          回放这次 run 的完整 event 流 · 点任一事件看 JSON payload · j/k 切换 · enter 展开
+          回看这次评审的关键步骤和原始明细,用于排查意见来源和过程异常
         </p>
       </header>
 
@@ -326,9 +326,9 @@ export default function RunReplayPage({
           fontFamily: "var(--font-sans)",
         }}
       >
-        <strong style={{ fontWeight: 600 }}>Sprint 5 · v2 预留</strong> ·{" "}
+        <strong style={{ fontWeight: 600 }}>演示数据</strong> ·{" "}
         <span style={{ color: "var(--text-default)" }}>
-          sample data 演示。接 <code style={{ fontFamily: "var(--font-mono)" }}>GET /api/audit/runs/:id/events</code> 在 v2 做。
+          当前展示样例过程,后续接入真实评审记录后可用于复盘和排障。
         </span>
       </div>
 
@@ -343,13 +343,13 @@ export default function RunReplayPage({
             gap: 16,
           }}
         >
-          <MetaItem label="reviewer" value={SAMPLE_RUN.reviewer} />
+          <MetaItem label="评审人" value={SAMPLE_RUN.reviewer} />
           <MetaItem
-            label="workspace"
+            label="资料库"
             value={SAMPLE_RUN.workspace.replace(/^workspace-/, "")}
           />
-          <MetaItem label="mode" value={SAMPLE_RUN.mode} mono />
-          <MetaItem label="prd" value={SAMPLE_RUN.prdName} />
+          <MetaItem label="模式" value={SAMPLE_RUN.mode} mono />
+          <MetaItem label="PRD" value={SAMPLE_RUN.prdName} />
         </div>
         <div
           style={{
@@ -359,31 +359,31 @@ export default function RunReplayPage({
           }}
         >
           <StatBlock
-            label="session"
-            value={SAMPLE_RUN.sessionClass}
+            label="状态"
+            value={sessionClassLabel(SAMPLE_RUN.sessionClass)}
             mono
             tone={
               SAMPLE_RUN.sessionClass === "productive" ? "done" : "warn"
             }
           />
           <StatBlock
-            label="consistency"
+            label="一致率"
             value={`${Math.round(SAMPLE_RUN.consistency * 100)}%`}
             mono
             tone="done"
           />
           <StatBlock
-            label="items"
+            label="意见数"
             value={String(SAMPLE_RUN.itemsCount)}
             mono
           />
           <StatBlock
-            label="duration"
+            label="耗时"
             value={`${SAMPLE_RUN.durationSec.toFixed(1)}s`}
             mono
           />
           <StatBlock
-            label="cost"
+            label="成本"
             value={`$${SAMPLE_RUN.costUsd.toFixed(4)}`}
             mono
           />
@@ -420,7 +420,7 @@ export default function RunReplayPage({
               justifyContent: "space-between",
             }}
           >
-            <span>event timeline · {SAMPLE_EVENTS.length} events</span>
+            <span>评审过程 · {SAMPLE_EVENTS.length} 个节点</span>
             <span>
               <span style={{ opacity: 0.5 }}>seq </span>
               <span style={{ fontWeight: 600, color: "var(--accent-500)" }}>
@@ -469,7 +469,7 @@ export default function RunReplayPage({
                     letterSpacing: "0.08em",
                   }}
                 >
-                  payload · seq {focusedEvent.seq}
+                  明细 · 节点 {focusedEvent.seq}
                 </div>
                 <div
                   style={{
@@ -540,15 +540,24 @@ export default function RunReplayPage({
           href="/runs/diff"
           style={{ color: "var(--text-muted)", textDecoration: "none" }}
         >
-          ← /runs/diff
+          ← 评审记录
         </Link>
-        <span>pecker · harness v8 · replay · sample</span>
+        <span>Pecker · 过程回放 · 演示数据</span>
       </footer>
     </div>
   );
 }
 
 // ============================================================
+
+function sessionClassLabel(sessionClass: string): string {
+  return {
+    productive: "正常完成",
+    degraded: "部分降级",
+    partial_silent: "结果不完整",
+    quota_exhausted: "额度中断",
+  }[sessionClass] ?? sessionClass;
+}
 
 function EventRow({
   event,

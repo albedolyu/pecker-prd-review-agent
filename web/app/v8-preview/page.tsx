@@ -120,9 +120,9 @@ export default function V8PreviewPage() {
           </div>
         </Section>
 
-        <Section title="RunDiff 入口 · /runs/diff">
+        <Section title="评审记录对比入口">
           <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 0 }}>
-            独立管理页 · baseline 和 shadow 对比(当前用 sample 数据演示)
+            独立管理页 · 对比规则调整前后的评审结果(当前用演示数据)
           </p>
           <Link
             href="/runs/diff"
@@ -141,7 +141,7 @@ export default function V8PreviewPage() {
               fontFamily: "var(--font-sans)",
             }}
           >
-            打开 /runs/diff →
+            打开评审记录对比 →
           </Link>
         </Section>
 
@@ -222,8 +222,8 @@ export default function V8PreviewPage() {
             live={true}
             height={240}
             lines={[
-              { t: "0.0s", src: { name: "system" }, level: "info", text: "PRD 上传完成 · 开始扫 wiki" },
-              { t: "1.2s", src: { name: "system" }, level: "info", text: "wiki 扫描完成 · 42 页" },
+              { t: "0.0s", src: { name: "调度" }, level: "info", text: "PRD 上传完成 · 开始扫 wiki" },
+              { t: "1.2s", src: { name: "调度" }, level: "info", text: "wiki 扫描完成 · 42 页" },
               { t: "1.4s", src: { name: "orchestrator" }, level: "accent", text: "4 worker 并行启动 · mode=standard" },
               { t: "8.3s", src: { name: "业务鸟", bird: 1 }, level: "ok", text: "done · items=18 · 7.1s · $0.0042" },
               { t: "9.7s", src: { name: "数据鸟", bird: 2 }, level: "ok", text: "done · items=12 · 8.5s · $0.0038" },

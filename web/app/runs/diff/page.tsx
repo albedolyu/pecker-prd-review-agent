@@ -15,8 +15,8 @@ import {
 } from "@/components/run/RunDiff";
 
 const BASELINE_RUN: RunSummary = {
-  label: "baseline · 用户等级 PRD v0.3",
-  subtitle: "run_id=r_20260417_1425 · mode=standard",
+  label: "原始评审 · 用户等级 PRD v0.3",
+  subtitle: "评审编号 r_20260417_1425 · 常规模式",
   sessionClass: "productive",
   consistency: 0.88,
   totalTokens: 42300,
@@ -62,8 +62,8 @@ const BASELINE_RUN: RunSummary = {
 };
 
 const SHADOW_RUN: RunSummary = {
-  label: "shadow · 换 rule 集 v2.1",
-  subtitle: "run_id=r_20260418_1042 · mode=standard",
+  label: "规则调整后 · 规则集 v2.1",
+  subtitle: "评审编号 r_20260418_1042 · 常规模式",
   sessionClass: "productive",
   consistency: 0.92,
   totalTokens: 48900,
@@ -148,7 +148,7 @@ export default function RunsDiffPage() {
               marginBottom: 4,
             }}
           >
-            Harness · Run 对比
+            评审记录 · 结果对比
           </div>
           <h1
             style={{
@@ -159,7 +159,7 @@ export default function RunsDiffPage() {
               letterSpacing: "-0.015em",
             }}
           >
-            Run A ↔ Run B
+            两次评审对比
           </h1>
           <p
             style={{
@@ -169,7 +169,7 @@ export default function RunsDiffPage() {
               lineHeight: 1.55,
             }}
           >
-            baseline vs shadow 同一 PRD 重跑 / 不同 rule 集 · 看 conf 变化 / 新增 / 缺失
+            对比同一 PRD 在不同规则配置下的意见变化:新增、缺失和置信度变化
           </p>
         </div>
         <Link
@@ -198,9 +198,9 @@ export default function RunsDiffPage() {
           fontFamily: "var(--font-sans)",
         }}
       >
-        <strong style={{ fontWeight: 600 }}>Sprint 4 WIP</strong> ·{" "}
+        <strong style={{ fontWeight: 600 }}>演示数据</strong> ·{" "}
         <span style={{ color: "var(--text-default)" }}>
-          当前用 sample 数据演示 · 接 scripts/shadow_run.py 的真实产出接口在 Sprint 5 接入。
+          当前展示样例评审结果,后续接入真实评审记录后可用于规则调整前后对比。
         </span>
       </div>
 

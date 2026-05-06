@@ -200,7 +200,7 @@ export function TopBanner() {
               "var(--text-muted)")
           }
         >
-          Runs
+          评审记录
         </Link>
         <Link
           href="/system/health"
@@ -218,7 +218,7 @@ export function TopBanner() {
               "var(--text-muted)")
           }
         >
-          System
+          质量看板
         </Link>
         <Link
           href="/about"

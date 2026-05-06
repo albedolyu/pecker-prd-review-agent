@@ -208,7 +208,7 @@ function ConsoleLineRow({ line }: { line: ConsoleLine }) {
         {t}
       </span>
       <span style={{ color: srcColor, fontWeight: 500 }}>
-        {src?.name ? `[${src.name}]` : "[system]"}
+        {src?.name ? `[${src.name}]` : "[调度]"}
       </span>
       <span
         style={{

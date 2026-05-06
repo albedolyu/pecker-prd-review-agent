@@ -109,27 +109,27 @@ export function RunDiff({ left, right, className, style }: RunDiffProps) {
           }}
         >
           <MetricCompare
-            label="consistency"
+            label="一致率"
             leftValue={left.consistency}
             rightValue={right.consistency}
             format={(v) => `${(v * 100).toFixed(0)}%`}
             higherBetter
           />
           <MetricCompare
-            label="items"
+            label="意见数"
             leftValue={left.items.length}
             rightValue={right.items.length}
             format={(v) => String(v)}
           />
           <MetricCompare
-            label="tokens"
+            label="消耗"
             leftValue={left.totalTokens}
             rightValue={right.totalTokens}
             format={formatTokens}
             higherBetter={false}
           />
           <MetricCompare
-            label="elapsed"
+            label="耗时"
             leftValue={left.durationSec}
             rightValue={right.durationSec}
             format={(v) => `${v.toFixed(1)}s`}
@@ -150,11 +150,11 @@ export function RunDiff({ left, right, className, style }: RunDiffProps) {
             marginBottom: 10,
           }}
         >
-          评审条目 diff
+          评审意见变化
         </div>
 
         <DiffBucket
-          title="只在 baseline 出现"
+          title="原评审才有"
           count={buckets.onlyLeft.length}
           tone="left-only"
         >
@@ -164,7 +164,7 @@ export function RunDiff({ left, right, className, style }: RunDiffProps) {
         </DiffBucket>
 
         <DiffBucket
-          title="只在 shadow 出现"
+          title="调整后新增"
           count={buckets.onlyRight.length}
           tone="right-only"
         >
@@ -174,7 +174,7 @@ export function RunDiff({ left, right, className, style }: RunDiffProps) {
         </DiffBucket>
 
         <DiffBucket
-          title="conf 变化"
+          title="判断强度变化"
           count={buckets.bothChanged.length}
           tone="changed"
         >
@@ -221,7 +221,7 @@ function RunHeaderCard({
   run: RunSummary;
 }) {
   const sideColor = side === "left" ? "var(--bird-2)" : "var(--accent-500)";
-  const sideLabel = side === "left" ? "A · baseline" : "B · shadow";
+  const sideLabel = side === "left" ? "A · 原评审" : "B · 调整后";
 
   return (
     <div
@@ -307,9 +307,18 @@ function SessionClassChip({ sessionClass }: { sessionClass: SessionClass }) {
         fontFamily: "var(--font-mono)",
       }}
     >
-      {sessionClass}
+      {sessionClassLabel(sessionClass)}
     </span>
   );
+}
+
+function sessionClassLabel(sessionClass: SessionClass): string {
+  return {
+    productive: "正常完成",
+    partial_silent: "结果不完整",
+    quota_exhausted: "额度中断",
+    degraded: "部分降级",
+  }[sessionClass];
 }
 
 function MetricCompare({
@@ -539,7 +548,7 @@ function ItemRow({
           flexShrink: 0,
         }}
       >
-        conf {item.confidence.toFixed(2)}
+        置信度 {item.confidence.toFixed(2)}
       </span>
     </div>
   );
@@ -610,7 +619,7 @@ function ItemRowChanged({
           flexShrink: 0,
         }}
       >
-        {left.confidence.toFixed(2)} →{" "}
+        置信度 {left.confidence.toFixed(2)} →{" "}
         <span
           style={{
             color: deltaColor,
