@@ -568,7 +568,7 @@ function BirdHealth({
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <BirdAvatar
           id={id}
-          size="md"
+          size="lg"
           status={healthy ? "done" : "failed"}
         />
         <span
