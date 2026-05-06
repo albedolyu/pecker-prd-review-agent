@@ -34,6 +34,7 @@ pecker-eval = "cuckoo_eval:main"
 pecker-dream = "kakapo_dream:main"
 pecker-advisor = "goshawk_advisor:main"
 pecker-gate = "shrike_review:main"
+pecker-prd-tdd-pipeline = "scripts.prd_tdd_pipeline:main"
 
 [tool.setuptools]
 # 顶层单文件模块 — 全加是防回归策略: 任何顶层 .py 都可能被子包 import,

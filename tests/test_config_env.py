@@ -157,7 +157,16 @@ def test_actually_imported_symbols_across_envs_via_ast(env):
 
     proj_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     # 扫根目录 + api/ + eval/ 下的 .py,跳过 tests/ / worktrees/ / pecker-release/
-    skip_parts = {"tests", "worktrees", ".claude", "pecker-release", "__pycache__"}
+    skip_parts = {
+        "tests",
+        "worktrees",
+        ".claude",
+        "pecker-release",
+        "__pycache__",
+        "build",
+        "dist",
+        ".tmp-pytest",
+    }
     symbols = set()
     for root, dirs, files in os.walk(proj_root):
         dirs[:] = [d for d in dirs if d not in skip_parts and not d.startswith(".")]

@@ -53,6 +53,7 @@ workspace*/output_archive_*/
 # 真实业务 PRD 工作区（不入公共 repo · workspace-sample 是脱敏 demo,仍可入库）
 workspace-fengniao-mediation/
 workspace-points-payment/
+workspace-fengniao-privacy-20260508/
 
 # 桌面误拖入的业务 docx / Office 锁文件
 *.docx
