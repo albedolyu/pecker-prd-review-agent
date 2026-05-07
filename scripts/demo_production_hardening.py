@@ -9,7 +9,7 @@
     <workspace>/learnings.db        — sqlite (50 条 mock learning, 10 thread 并发写)
     <workspace>/metrics.db          — sqlite (5 个 mock review session events)
     <workspace>/dashboard.html      — 静态可视化
-    <workspace>/oat_health.json     — OAT 健康检查结果 (mock + 真实环境混合)
+    <workspace>/llm_route_health.json — LLM 路由健康检查结果
     <workspace>/demo_report.json    — 整体 demo 摘要
 
 一定 idempotent: 跑多次没副作用 (会清空 workspace 重来).
@@ -82,24 +82,27 @@ def _step1_concurrent_learnings(workspace: str) -> dict:
     }
 
 
-def _step2_oat_health(workspace: str) -> dict:
-    _print_block("Part 2: OAT 健康监控 (无副作用)")
-    out_path = os.path.join(workspace, "oat_health.json")
-    try:
-        # 调用 monitor 不带 auto-heal, 仅检测
-        from scripts.oat_health_monitor import run_health_check  # type: ignore
-    except Exception:
-        sys.path.insert(0, os.path.join(ROOT, "scripts"))
-        from oat_health_monitor import run_health_check  # type: ignore
+def _step2_llm_route_health(workspace: str) -> dict:
+    _print_block("Part 2: LLM 路由健康检查 (无副作用)")
+    out_path = os.path.join(workspace, "llm_route_health.json")
+    from api.main import _validate_llm_runtime  # type: ignore
 
-    report = run_health_check(try_refresh=False)
+    errors, warnings, auth = _validate_llm_runtime()
+    report = {
+        "status": auth.get("status", "unknown"),
+        "active_routes": auth.get("active_routes", []),
+        "routes_file": auth.get("routes_file", ""),
+        "errors": errors,
+        "warnings": warnings,
+    }
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
-    for c in report["checks"]:
-        print(
-            f"  - {c['vendor']:8s} status={c['status']:8s} "
-            f"age={c['mtime_age_hours']}h active={c['active_check']}"
-        )
+    print(f"  status: {report['status']}")
+    print(f"  active_routes: {', '.join(report['active_routes'])}")
+    if errors:
+        print(f"  errors: {len(errors)}")
+    if warnings:
+        print(f"  warnings: {len(warnings)}")
     print(f"  报告写出: {out_path}")
     return report
 
@@ -121,15 +124,15 @@ def _step3_metrics_and_dashboard(workspace: str) -> dict:
             record_event("worker.completed",
                          workspace=workspace, reviewer=f"pm-{sid}",
                          duration_ms=duration,
-                         model=random.choice(["claude-sonnet-4-6", "claude-opus-4-6", "gpt-5"]),
+                         model=random.choice(["gpt-5.5", "gpt-5.5", "gpt-5"]),
                          cost_usd=cost, status=status,
                          details={"dim_key": dim, "items": random.randint(2, 8),
-                                  "vendor": random.choice(["claude", "openai"])},
+                                 "vendor": "openai"},
                          db_path=db)
         # 苍鹰 + final
         record_event("goshawk.completed", workspace=workspace,
                      duration_ms=random.randint(15000, 40000),
-                     model="claude-opus-4-6",
+                     model="gpt-5.5",
                      cost_usd=round(random.uniform(0.04, 0.10), 4),
                      status="success",
                      details={"verdict": random.choice(["approved", "needs_revision"]),
@@ -144,16 +147,16 @@ def _step3_metrics_and_dashboard(workspace: str) -> dict:
                      db_path=db)
         # 随机一次 LLM 调用
         record_event("llm.api_call", workspace=workspace,
-                     model="claude-haiku-4-5",
+                     model="gpt-5.5-mini",
                      duration_ms=random.randint(800, 2500),
                      cost_usd=round(random.uniform(0.0001, 0.001), 5),
                      status="success",
-                     details={"vendor": "claude", "tokens": random.randint(500, 5000)},
+                     details={"vendor": "openai", "tokens": random.randint(500, 5000)},
                      db_path=db)
 
     # 注一条 oauth 事件
-    record_event("oauth.refresh", model="claude", status="success",
-                 details={"refreshed": True}, db_path=db)
+    record_event("provider.health_check", model="gpt-5.5", status="success",
+                 details={"provider": "openai", "checked": True}, db_path=db)
 
     summary = get_summary(db, days=7)
     print(f"  KPI 7d: reviews={summary['reviews']} errors={summary['errors']} "
@@ -200,7 +203,7 @@ def main() -> int:
         "started_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
     report["part1_learnings"] = _step1_concurrent_learnings(workspace)
-    report["part2_oat"] = _step2_oat_health(workspace)
+    report["part2_llm_route"] = _step2_llm_route_health(workspace)
     report["part3_metrics"] = _step3_metrics_and_dashboard(workspace)
     report["finished_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
 

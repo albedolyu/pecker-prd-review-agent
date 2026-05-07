@@ -619,7 +619,7 @@ export function Phase2RunningV8() {
             birdId={META_BIRD_ID}
             status={metaState}
             note={metaNote}
-            model="opus-4"
+            model="gpt-5.5"
             variant="meta"
             onRetry={handleRetry}
             progress={metaState === "running" ? 40 : 0}

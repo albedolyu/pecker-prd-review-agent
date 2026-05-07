@@ -3,16 +3,16 @@
 /**
  * Phase 1 — 知识盲区预检
  *
- * 触发后端 /api/review/precheck(~15s Claude 分析),展示:
+ * 触发后端 /api/review/precheck(~15s 盲区分析),展示:
  * - 强相关 wiki 页(命中 ≥3 关键词)
  * - 弱相关 wiki 页(命中 ≥1)
- * - 知识盲区(Claude 识别 PRD 需要但 wiki 缺的主题)
+ * - 知识盲区(系统识别 PRD 需要但 wiki 缺的主题)
  *
  * 关键职责: 把后端返回的 `wiki_pages` 完整内容映射存进 store,
  * Phase 2 的 /api/review/run 必须原样带回去(是后端契约的一部分)。
  *
  * UI 状态:
- * - loading (Claude 分析中,转圈 15s)
+ * - loading (盲区分析中,转圈 15s)
  * - 成功展示 3 列结果
  * - 失败显示 retry
  */
@@ -135,7 +135,7 @@ export function Phase1Precheck() {
           </CardTitle>
           <CardDescription>
             扫描 workspace 里的 wiki 页面,识别与本次 PRD 强 / 弱相关的页面,
-            并让 Claude Sonnet 标出知识盲区。评审 worker 会在 Phase 2 看到这些页面作为上下文。
+            并标出知识盲区。下一步评审员会看到这些页面作为上下文。
           </CardDescription>
         </CardHeader>
       </Card>
@@ -146,7 +146,7 @@ export function Phase1Precheck() {
           <Loader2 className="h-4 w-4 animate-spin" />
           <AlertTitle>正在预检...</AlertTitle>
           <AlertDescription>
-            本地 wiki 扫描 + Claude 盲区分析,大约 10-15 秒。期间请不要关闭页面。
+            本地 wiki 扫描 + 盲区分析,大约 10-15 秒。期间请不要关闭页面。
           </AlertDescription>
         </Alert>
       )}
@@ -193,7 +193,7 @@ export function Phase1Precheck() {
           <ResultColumn
             icon={<HelpCircle className="h-4 w-4" />}
             title="知识盲区"
-            hint="Claude 识别的缺失主题"
+            hint="系统识别的缺失主题"
             items={precheckResult.gaps}
             emptyText="无明显盲区"
             accent="warning"

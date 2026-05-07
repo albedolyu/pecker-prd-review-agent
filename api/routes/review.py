@@ -223,16 +223,15 @@ async def precheck(
         wiki_scan = await asyncio.to_thread(_scan_wiki_for_prd, req.prd_content, wiki_path)
         _wiki_scan_cache[cache_key] = {"result": wiki_scan, "ts": _time.time()}
 
-    # 调 Claude 做 gap 分析
+    # 预检也走 model_routes.yaml, 避免 Web 团队版回落到个人 Claude/OAT 会话。
     try:
-        client = get_client()
         context = f"PRD 内容:\n{req.prd_content[:3000]}"
         if req.raw_materials:
             context += "\n\n补充资料:\n" + "\n---\n".join(t[:1000] for t in req.raw_materials)
 
-        from agent_config import MODEL_TIERS
-        response = client.create(
-            model=MODEL_TIERS["sonnet"],
+        from model_router import route_call
+        response = route_call(
+            "precheck.gaps",
             max_tokens=2048,
             system='''你是啄木鸟知识盲区预检模块。分析 PRD 内容,输出以下 3 类信息(JSON 格式):
 {
@@ -250,7 +249,7 @@ async def precheck(
         # 预检成本计入每日预算(防 precheck 端点被无限刷 → 逃票)
         try:
             from api_adapter import compute_call_cost_usd
-            _cost = compute_call_cost_usd(MODEL_TIERS["sonnet"], response.usage)
+            _cost = compute_call_cost_usd(getattr(response, "model", ""), response.usage)
             record_review_cost(project_root, _cost, user.get("reviewer", ""))
         except Exception:
             pass  # 记账失败不阻塞预检
@@ -314,7 +313,7 @@ async def run_review(
     require_workspace_access(ws_dir, user)
 
     # 预算卡: 超限直接 429 阻止新评审
-    budget_status = check_budget(get_project_root())
+    budget_status = check_budget(get_project_root(), reviewer=user["reviewer"])
 
     # 绝对路径作为 workspace 显式参数下传给 parallel_review, 不再写 os.environ.
     # 历史上用 env var 传递会让 2 个并发 review 互污染 rule_perf_history 查询
@@ -322,7 +321,9 @@ async def run_review(
     ws_abs_path = str(get_project_root() / req.workspace)
 
     emitter = ReviewProgressEmitter()
-    client = get_client()
+    # None is intentional: worker / NLI / goshawk use model_router.route_call.
+    # Passing a legacy client here forces worker/evidence paths back to Claude/OAT.
+    client = None
 
     async def _pipeline():
         """评审主任务:parallel_review + goshawk,完成后 return 最终 payload。"""

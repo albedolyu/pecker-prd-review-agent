@@ -280,17 +280,18 @@ describe("formatDuration", () => {
 // modelForRole
 
 describe("modelForRole", () => {
-  it("quick 模式全部 sonnet", () => {
-    expect(modelForRole("structure", "quick")).toBe("sonnet-4-6");
-    expect(modelForRole("ai_coding", "quick")).toBe("sonnet-4-6");
+  it("quick 模式使用轻量 GPT 路由", () => {
+    expect(modelForRole("structure", "quick")).toBe("gpt-5.4-mini");
+    expect(modelForRole("ai_coding", "quick")).toBe("gpt-5.4-mini");
   });
-  it("standard 模式 ai_coding 用 opus", () => {
-    expect(modelForRole("ai_coding", "standard")).toBe("opus-4");
+  it("standard 模式风险与终审使用更强 GPT 路由", () => {
+    expect(modelForRole("ai_coding", "standard")).toBe("gpt-5.5");
+    expect(modelForRole("final-reviewer", "standard")).toBe("gpt-5.5");
   });
-  it("standard 模式其他 worker 用 sonnet", () => {
-    expect(modelForRole("structure", "standard")).toBe("sonnet-4-6");
-    expect(modelForRole("quality", "standard")).toBe("sonnet-4-6");
-    expect(modelForRole("data_quality", "standard")).toBe("sonnet-4-6");
+  it("standard 模式其他评审方向使用默认 GPT 路由", () => {
+    expect(modelForRole("structure", "standard")).toBe("gpt-5.4");
+    expect(modelForRole("quality", "standard")).toBe("gpt-5.4");
+    expect(modelForRole("data_quality", "standard")).toBe("gpt-5.4");
   });
 });
 

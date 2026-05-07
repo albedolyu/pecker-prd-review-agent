@@ -4,7 +4,12 @@
     uvicorn api.main:app --reload --port 8000 --host 0.0.0.0
 
 依赖 env var:
-    USE_CLAUDE_CODE=1                   必须,走本地 Claude Code CLI
+    OPENAI_API_KEY=xxx                  团队上线默认,走 OpenAI 兼容 API
+    OPENAI_BASE_URL=xxx                 可选,OpenAI 兼容中转地址
+    OPENAI_WIRE_API=responses           可选,OpenAI wire: responses / chat_completions
+    OPENAI_REASONING_EFFORT=xhigh       可选,Responses 推理强度
+    OPENAI_DISABLE_RESPONSE_STORAGE=true 可选,不保存 Responses 输出
+    USE_CLAUDE_CODE=1                   可选,仅本地开发走 Claude CLI
     PECKER_MAX_CONCURRENT=2             同时评审数上限(防公共账号 rate limit)
     PECKER_WEB_PASSWORD=xxx             可选,Web 访问密码
     PECKER_READONLY_USERS=a,b           可选,只读 reviewer 白名单
@@ -25,40 +30,84 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-# 在 import 任何啄木鸟业务模块前先加载 .env
+# 在 import 任何啄木鸟业务模块前先加载 .env。
+# 已由 systemd / CI / pytest 显式设置的环境变量优先,避免 .env 覆盖运行时注入的 secret。
 _PROJECT_ROOT = Path(__file__).parent.parent
-load_dotenv(_PROJECT_ROOT / ".env", override=True)
+load_dotenv(_PROJECT_ROOT / ".env", override=False)
 
 # 确保业务模块可 import(project root 在 sys.path)
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 
+def _validate_llm_runtime():
+    """按 model_routes.yaml 校验真实启用中的 LLM 运行方式,不回显任何密钥。"""
+    errors = []
+    warnings = []
+    auth = {
+        "status": "unknown",
+        "routes_file": "",
+        "active_routes": [],
+    }
+
+    try:
+        from model_router import get_route_config
+
+        cfg = get_route_config(force_reload=True)
+        auth["routes_file"] = cfg.routes_path
+        active_pairs = set()
+        for route in cfg.routes.values():
+            if route.get("enabled", True):
+                active_pairs.add((route.get("vendor", ""), route.get("transport", "")))
+        auth["active_routes"] = sorted(
+            f"{vendor}:{transport}" for vendor, transport in active_pairs
+        )
+    except Exception as exc:
+        errors.append(f"模型路由配置不可用: {type(exc).__name__}: {exc}")
+        auth["status"] = "error"
+        return errors, warnings, auth
+
+    active = set(auth["active_routes"])
+    if "openai:native" in active and not (
+        os.environ.get("OPENAI_API_KEY") or os.environ.get("API_KEY")
+    ):
+        errors.append("OPENAI_API_KEY/API_KEY 未设置 — 团队版 GPT API 路由无法发起评审")
+
+    if "openai:cli" in active:
+        try:
+            from clients.codex_cli import _find_codex_entry
+
+            _node_bin, codex_js = _find_codex_entry()
+            if not codex_js:
+                errors.append("找不到 Codex CLI — 本地开发模式需先安装并登录 Codex")
+        except Exception as exc:
+            errors.append(f"Codex CLI 自检失败: {type(exc).__name__}: {exc}")
+
+    if "anthropic:cli" in active:
+        import shutil
+
+        if not shutil.which("claude"):
+            errors.append("找不到 Claude CLI — 本地开发模式需先安装并登录 Claude Code")
+
+    if "anthropic:native" in active and not (
+        os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("API_KEY")
+    ):
+        errors.append("ANTHROPIC_API_KEY/API_KEY 未设置 — Anthropic API 路由不可用")
+
+    if "deepseek:native" in active and not os.environ.get("DEEPSEEK_API_KEY"):
+        errors.append("DEEPSEEK_API_KEY 未设置 — DeepSeek API 路由不可用")
+
+    auth["status"] = "ok" if not errors else "error"
+    return errors, warnings, auth
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """启动时做必要的 env var 校验,缺失关键密钥直接拒绝启动。"""
-    errors = []
-
-    use_cc = os.environ.get("USE_CLAUDE_CODE", "").strip().lower() in ("1", "true", "yes", "on")
-    api_key_set = bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("API_KEY"))
-    claude_path = None
-    if use_cc:
-        # CLI 模式: 走 subprocess 复用本地 claude CLI 登录态(零 API key 成本)
-        import shutil
-        claude_path = shutil.which("claude")
-        if not claude_path:
-            errors.append("找不到 claude CLI,请先 `npm install -g @anthropic-ai/claude-code && claude login`")
-    elif api_key_set:
-        # Native API 模式: 直连 Anthropic SDK, 走 API_KEY 计费
-        # client 层 (clients.anthropic_native) 启动时按需读 env, 此处只校验配置存在
-        pass
-    else:
-        errors.append(
-            "鉴权未配置 — 二选一: "
-            "USE_CLAUDE_CODE=1 + claude CLI 已登录, 或 .env 设 API_KEY=sk-ant-... (Anthropic API 直连)"
-        )
-
-    warnings = []
+    errors, warnings, llm_auth = _validate_llm_runtime()
+    app.state.llm_auth = llm_auth
+    # 兼容旧前端/脚本读取字段,不再代表 Claude 专属鉴权。
+    app.state.claude_auth = llm_auth.get("status", "unknown")
 
     def _check_secret(name: str, required_min=16, recommended_min=32):
         val = os.environ.get(name, "")
@@ -76,25 +125,6 @@ async def lifespan(app: FastAPI):
 
     _check_secret("PECKER_SIGNATURE_SECRET")
     _check_secret("PECKER_JWT_SECRET")
-
-    # 鉴权状态自检: 写入 app.state 让 /api/health 暴露
-    # CLI 模式: subprocess 跑 `claude auth status` 检测登录态(过期会 warn 提示 setup-token)
-    # Native API 模式: 不做主动调用,只标记 native_api(实际可用性由首次 review 验证)
-    app.state.claude_auth = "unknown"
-    if use_cc and claude_path:
-        # Windows 下 claude 是 .cmd shim, 必须用 shutil.which 解析后的完整路径
-        import subprocess
-        try:
-            r = subprocess.run([claude_path, "auth", "status"], capture_output=True, text=True, timeout=10)
-            if r.returncode == 0:
-                app.state.claude_auth = "ok"
-            else:
-                app.state.claude_auth = "expired"
-                warnings.append("Claude CLI 未登录或凭证过期 — 终端跑 `claude setup-token` 续期(长效 token)")
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            pass
-    elif api_key_set:
-        app.state.claude_auth = "native_api"
 
     if errors:
         print("\n[FastAPI 启动失败]", file=sys.stderr)
@@ -144,11 +174,12 @@ app.add_middleware(
 
 @app.get("/api/health")
 async def health(request: Request):
-    """Liveness probe — 附带 Claude CLI 登录态(启动时一次性自检结果)"""
+    """Liveness probe — 附带 LLM 路由鉴权自检结果,不暴露密钥。"""
     return {
         "status": "ok",
         "service": "pecker-api",
         "version": "2.0.0",
+        "llm_auth": getattr(request.app.state, "llm_auth", {"status": "unknown"}),
         "claude_auth": getattr(request.app.state, "claude_auth", "unknown"),
     }
 

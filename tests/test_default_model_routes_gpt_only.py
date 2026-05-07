@@ -12,6 +12,7 @@ ACTIVE_ROUTE_IDS = [
     "advisor.goshawk",
     "advisor.goshawk.recheck",
     "verify.nli",
+    "precheck.gaps",
     "eval.cuckoo",
 ]
 
@@ -35,7 +36,7 @@ def test_default_routes_use_gpt_only_active_routes(monkeypatch):
         route = cfg.resolve(route_id)
         assert route["enabled"] is True
         assert route["vendor"] == "openai", route_id
-        assert route["transport"] == "cli", route_id
+        assert route["transport"] == "native", route_id
         assert route["model"].startswith("gpt-"), route_id
 
 
@@ -53,6 +54,7 @@ def test_default_routes_keep_smooth_gpt_tier_split(monkeypatch):
         "advisor.goshawk": "gpt55",
         "advisor.goshawk.recheck": "gpt54",
         "verify.nli": "gpt54mini",
+        "precheck.gaps": "gpt54mini",
         "eval.cuckoo": "gpt54",
     }
 
@@ -61,13 +63,13 @@ def test_default_routes_keep_smooth_gpt_tier_split(monkeypatch):
         assert route["tier"] == tier, route_id
 
 
-def test_gpt_route_tier_aliases_have_cost_placeholders():
+def test_gpt_route_tier_aliases_have_nonzero_api_costs():
     from clients.token_tracker import compute_call_cost_usd
 
     usage = {"input_tokens": 100, "output_tokens": 50}
-    assert compute_call_cost_usd("gpt55", usage) == 0.0
-    assert compute_call_cost_usd("gpt54", usage) == 0.0
-    assert compute_call_cost_usd("gpt54mini", usage) == 0.0
+    assert compute_call_cost_usd("gpt55", usage) > 0.0
+    assert compute_call_cost_usd("gpt54", usage) > 0.0
+    assert compute_call_cost_usd("gpt54mini", usage) > 0.0
 
 
 def test_default_routes_cover_actual_review_dimensions(monkeypatch):

@@ -408,7 +408,7 @@ export function Phase2Running() {
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>
             {reviewFailedEvent?.reason === "quota_exhausted"
-              ? "Claude CLI 配额已用完"
+              ? "评审额度不足"
               : reviewFailedEvent
                 ? "评审失败 — 所有编辑都出错"
                 : "评审失败"}

@@ -5,14 +5,14 @@
  * - 色源和 BirdAvatar 同:--bird-{id}
  * - 2 尺寸:md(12px 字号 · 默认) / sm(11px · 紧凑)
  * - meta 类型(id=5 苍鹰)额外带 "meta" 小字标识层级
- * - placeholder 类型(id 6-10)显示为占位标签,视觉弱化
+ * - support 类型(id 6-10)用于维护、反馈、质检等后台协作角色
  *
  * 规范源:design-system/啄木鸟-pecker-v8/components/bird-badge.jsx
  */
 
 import type { BirdId } from "./BirdAvatar";
 
-export type BirdType = "worker" | "meta" | "placeholder";
+export type BirdType = "worker" | "meta" | "support";
 
 interface BirdMeta {
   code: string;
@@ -27,11 +27,11 @@ export const BIRD_META: Readonly<Record<BirdId, BirdMeta>> = Object.freeze({
   3: { code: "ux", label: "体验", type: "worker" },
   4: { code: "risk", label: "风险", type: "worker" },
   5: { code: "eagle", label: "苍鹰", type: "meta" },
-  6: { code: "bird-06", label: "bird-06", type: "placeholder" },
-  7: { code: "bird-07", label: "bird-07", type: "placeholder" },
-  8: { code: "bird-08", label: "bird-08", type: "placeholder" },
-  9: { code: "bird-09", label: "bird-09", type: "placeholder" },
-  10: { code: "bird-10", label: "bird-10", type: "placeholder" },
+  6: { code: "editor", label: "主编", type: "support" },
+  7: { code: "feedback", label: "反馈", type: "support" },
+  8: { code: "sample", label: "试读", type: "support" },
+  9: { code: "archive", label: "资料", type: "support" },
+  10: { code: "qa", label: "质检", type: "support" },
 });
 
 interface BirdBadgeProps {
@@ -72,7 +72,7 @@ export function BirdBadge({
         lineHeight: 1,
         whiteSpace: "nowrap",
         fontVariantNumeric: "tabular-nums",
-        opacity: meta.type === "placeholder" ? 0.6 : 1,
+        opacity: 1,
         ...style,
       }}
     >

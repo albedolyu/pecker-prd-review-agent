@@ -31,7 +31,7 @@ interface AgentStatusCardProps {
   tokens?: string;
   /** 耗时,如 "12.4s" */
   elapsed?: string;
-  /** 模型,如 "sonnet-4-6" */
+  /** 模型,如 "gpt-5.4" */
   model?: string;
   /** 已提交 items 数量 */
   submissions?: number;
@@ -76,7 +76,7 @@ export function AgentStatusCard({
   progress = 0,
   tokens,
   elapsed,
-  model = "sonnet-4-6",
+  model = "gpt-5.4",
   submissions,
   note,
   failReason,

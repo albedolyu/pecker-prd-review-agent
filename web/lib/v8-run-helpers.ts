@@ -240,11 +240,13 @@ export function formatDuration(ms?: number): string | undefined {
 
 /**
  * 根据 roleKey 选模型。
- * quick mode 统一 sonnet;standard 下 ai_coding 用 opus(深推理),其他 sonnet。
+ * quick mode 走轻量 GPT;standard 下风险和苍鹰走更强 GPT,其他方向走默认 GPT。
  */
 export function modelForRole(roleKey: RoleKey, mode: string): string {
-  if (mode === "quick") return "sonnet-4-6";
-  return roleKey === "ai_coding" ? "opus-4" : "sonnet-4-6";
+  if (mode === "quick") return "gpt-5.4-mini";
+  return roleKey === "ai_coding" || roleKey === "final-reviewer"
+    ? "gpt-5.5"
+    : "gpt-5.4";
 }
 
 // ============================================================

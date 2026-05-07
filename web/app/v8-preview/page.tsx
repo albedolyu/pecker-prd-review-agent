@@ -176,7 +176,7 @@ export default function V8PreviewPage() {
                 submissions={18}
                 tokens="2.1k"
                 elapsed="12.3s"
-                model="sonnet-4-6"
+                model="gpt-5.4"
               />
               <AgentStatusCard
                 birdId={2}
@@ -185,12 +185,12 @@ export default function V8PreviewPage() {
                 submissions={8}
                 tokens="1.4k"
                 elapsed="14.8s"
-                model="sonnet-4-6"
+                model="gpt-5.4"
               />
               <AgentStatusCard
                 birdId={3}
                 status="queued"
-                model="sonnet-4-6"
+                model="gpt-5.4"
               />
               <AgentStatusCard
                 birdId={4}
@@ -198,7 +198,7 @@ export default function V8PreviewPage() {
                 tokens="0.3k"
                 elapsed="3.2s"
                 failReason="empty_submission"
-                model="opus-4"
+                model="gpt-5.5"
                 onRetry={() => {}}
               />
             </div>
@@ -209,7 +209,7 @@ export default function V8PreviewPage() {
                 variant="meta"
                 progress={40}
                 note="漏报补充 2/5"
-                model="opus-4"
+                model="gpt-5.5"
                 tokens="5.8k"
                 elapsed="32.7s"
               />
@@ -323,7 +323,7 @@ export default function V8PreviewPage() {
                 source: "§1.1 · line 4",
                 verification: "verified",
               }}
-              meta={{ model: "sonnet-4-6", conf: 0.92, tokens: "2.1k", rule: "R042" }}
+              meta={{ model: "gpt-5.4", conf: 0.92, tokens: "2.1k", rule: "R042" }}
             />
             <CommentThread
               birdId={2}
@@ -336,7 +336,7 @@ export default function V8PreviewPage() {
                 source: "§2.3 · line 18",
                 verification: "verified",
               }}
-              meta={{ model: "sonnet-4-6", conf: 0.85, tokens: "1.8k", rule: "R203" }}
+              meta={{ model: "gpt-5.4", conf: 0.85, tokens: "1.8k", rule: "R203" }}
             />
             <CommentThread
               birdId={4}
@@ -344,7 +344,7 @@ export default function V8PreviewPage() {
               dimension="风险 / 依赖"
               title="(苍鹰补充)下游 risk_service SLA 未声明"
               body="4 只 worker 都没提,苍鹰在交叉校验时补上。PRD 依赖 risk_service 做等级评估,但没给 P99 / 降级策略。"
-              meta={{ model: "opus-4", conf: 0.78, tokens: "3.4k", rule: "R109" }}
+              meta={{ model: "gpt-5.5", conf: 0.78, tokens: "3.4k", rule: "R109" }}
             />
             <CommentThread
               birdId={3}
@@ -357,7 +357,7 @@ export default function V8PreviewPage() {
                 source: "§3.2 · line 27",
                 verification: "failed",
               }}
-              meta={{ model: "sonnet-4-6", conf: 0.62, tokens: "1.2k", rule: "R087" }}
+              meta={{ model: "gpt-5.4", conf: 0.62, tokens: "1.2k", rule: "R087" }}
             />
             <CommentThread
               birdId={2}
@@ -365,7 +365,7 @@ export default function V8PreviewPage() {
               dimension="数据"
               title="补偿逻辑未定义"
               body="升级失败时是否补偿用户,PRD 没说。"
-              meta={{ model: "haiku-4-5", conf: 0.58, tokens: "0.9k", rule: "R211" }}
+              meta={{ model: "gpt-5.4-mini", conf: 0.58, tokens: "0.9k", rule: "R211" }}
             />
             <CommentThread
               birdId={1}
@@ -373,7 +373,7 @@ export default function V8PreviewPage() {
               dimension="业务"
               title="已接受示例"
               body="这一条演示 accepted=true 的视觉效果。"
-              meta={{ model: "sonnet-4-6", conf: 0.88, tokens: "1.5k" }}
+              meta={{ model: "gpt-5.4", conf: 0.88, tokens: "1.5k" }}
               accepted={true}
             />
           </div>
@@ -556,7 +556,7 @@ const PHASE3_COMMENTS = [
       source: "§1.1 · line 4",
       verification: "verified" as const,
     },
-    meta: { model: "sonnet-4-6", conf: 0.92, tokens: "2.1k", rule: "R042" },
+    meta: { model: "gpt-5.4", conf: 0.92, tokens: "2.1k", rule: "R042" },
   },
   {
     id: "c2",
@@ -571,7 +571,7 @@ const PHASE3_COMMENTS = [
       source: "§2.3 · line 18",
       verification: "verified" as const,
     },
-    meta: { model: "sonnet-4-6", conf: 0.85, tokens: "1.8k", rule: "R203" },
+    meta: { model: "gpt-5.4", conf: 0.85, tokens: "1.8k", rule: "R203" },
   },
   {
     id: "c3",
@@ -586,7 +586,7 @@ const PHASE3_COMMENTS = [
       source: "§3.2 · line 27",
       verification: "failed" as const,
     },
-    meta: { model: "sonnet-4-6", conf: 0.62, tokens: "1.2k", rule: "R087" },
+    meta: { model: "gpt-5.4", conf: 0.62, tokens: "1.2k", rule: "R087" },
   },
   {
     id: "c4",
@@ -596,7 +596,7 @@ const PHASE3_COMMENTS = [
     dimension: "风险 / 依赖",
     title: "(苍鹰补充)下游 risk_service SLA 未声明",
     body: "4 只 worker 都没提,苍鹰交叉校验时补上。",
-    meta: { model: "opus-4", conf: 0.78, tokens: "3.4k", rule: "R109" },
+    meta: { model: "gpt-5.5", conf: 0.78, tokens: "3.4k", rule: "R109" },
   },
 ];
 

@@ -25,7 +25,7 @@ import { ShortcutHint } from "@/components/misc/ShortcutHint";
 export type EagleMarkKind = "passed" | "revoked" | "added";
 
 export interface CommentMeta {
-  /** 用的模型(如 "sonnet-4-6") */
+  /** 用的模型(如 "gpt-5.4") */
   model?: string;
   /** 置信度 0-1,< 0.7 视觉弱化 */
   conf?: number;

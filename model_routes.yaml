@@ -26,10 +26,11 @@ vendors:
       haiku:  claude-haiku-4-5-20251001
     fallback_chain: [opus, sonnet, haiku]
 
-  # OpenAI 接入 (2026-04-28): 走 codex CLI 复用 ChatGPT Pro OAuth, 零 API key
-  # 用法: 先 `codex login` (已经做过). worker 单调用 ~30K input token (codex 自带 system overhead)
+  # OpenAI 接入: 团队上线默认走 API key, 避免单机 Codex OAuth/OAT session 被多人并发挤掉.
+  # 本地开发仍可把单个 route transport 临时改回 cli.
   openai:
     cli_client: clients.codex_cli.CodexCLIClient
+    native_client: clients.openai_native.OpenAINativeClient
     model_tiers:
       gpt55:    gpt-5.5                # ChatGPT Pro 通过 codex 默认 model
       gpt54:    gpt-5.4                # codex 兼容降级 (notice.model_migrations 默认 fallback)
@@ -53,27 +54,27 @@ routes:
   # dimensions.yaml 的 legacy dim["model"] 仅保留为历史配置, 不再覆盖路由分档。
   # ============================================================
   # 2026-05-04: GPT-only smooth routes. 轻维度走 gpt54, 高风险维度保留 gpt55.
-  worker.default:      {vendor: openai, transport: cli, model: gpt54, retry_policy: worker}
-  worker.structure:    {vendor: openai, transport: cli, model: gpt55, retry_policy: worker}
-  worker.compliance:   {vendor: openai, transport: cli, model: gpt54, retry_policy: worker}
-  worker.data_quality: {vendor: openai, transport: cli, model: gpt55, retry_policy: worker}
-  worker.quality:      {vendor: openai, transport: cli, model: gpt55, retry_policy: worker}
-  worker.consistency:  {vendor: openai, transport: cli, model: gpt55, retry_policy: worker}
-  worker.ai_coding:    {vendor: openai, transport: cli, model: gpt55, retry_policy: worker}
-  worker.ai_friendly:  {vendor: openai, transport: cli, model: gpt55, retry_policy: worker}
+  worker.default:      {vendor: openai, transport: native, model: gpt54, retry_policy: worker}
+  worker.structure:    {vendor: openai, transport: native, model: gpt55, retry_policy: worker}
+  worker.compliance:   {vendor: openai, transport: native, model: gpt54, retry_policy: worker}
+  worker.data_quality: {vendor: openai, transport: native, model: gpt55, retry_policy: worker}
+  worker.quality:      {vendor: openai, transport: native, model: gpt55, retry_policy: worker}
+  worker.consistency:  {vendor: openai, transport: native, model: gpt55, retry_policy: worker}
+  worker.ai_coding:    {vendor: openai, transport: native, model: gpt55, retry_policy: worker}
+  worker.ai_friendly:  {vendor: openai, transport: native, model: gpt55, retry_policy: worker}
 
   # ============================================================
   # 苍鹰 meta-reviewer
   # ============================================================
   advisor.goshawk:
     vendor: openai
-    transport: cli
+    transport: native
     model: gpt55             # GPT-only pilot: 终审仍保留最高档, 控制漏报/误判风险
     retry_policy: advisor
 
   advisor.goshawk.recheck:
     vendor: openai
-    transport: cli
+    transport: native
     model: gpt54             # 因果复核比 NLI 重, 但不必常驻最高档
     retry_policy: router
 
@@ -82,7 +83,7 @@ routes:
   # scripts/eval_dual_advisor.py 启用此 route 跑跨 vendor 互补率实验
   advisor.goshawk.shadow:
     vendor: openai
-    transport: cli
+    transport: native
     model: gpt54
     retry_policy: advisor
     enabled: false
@@ -92,7 +93,14 @@ routes:
   # GPT-only pilot: 用 GPT mini 档减少校验链路体感延迟, 保持统一 provider.
   verify.nli:
     vendor: openai
-    transport: cli
+    transport: native
+    model: gpt54mini
+    retry_policy: router
+
+  # 知识盲区预检: Web Phase 1 也必须走 GPT 路由,避免团队版回落到个人 Claude/OAT.
+  precheck.gaps:
+    vendor: openai
+    transport: native
     model: gpt54mini
     retry_policy: router
 
@@ -104,6 +112,6 @@ routes:
   # ============================================================
   eval.cuckoo:
     vendor: openai
-    transport: cli
+    transport: native
     model: gpt54
     retry_policy: foreground

@@ -2,7 +2,7 @@
 
 > 给 ship 的人按表打钩。从空机到全员上线，按 7 个 phase 顺序做，每条都有可执行命令 / 路径。
 > 目标：5-15 人 PM 团队稳定使用，不需要公网 / 不需要 PIPL 合规 / 不需要多 org。
-> 配套阅读：[ONBOARDING.md](./ONBOARDING.md)（同事看的）、[OAT_RENEWAL_SOP.md](./OAT_RENEWAL_SOP.md)（运维兜底）。
+> 配套阅读：[ONBOARDING.md](./ONBOARDING.md)（同事看的）。OAT/CLI 方案只保留为历史兜底,团队上线默认走 API key。
 
 ---
 
@@ -13,14 +13,14 @@
 - [ ] 一台 24/7 开机的服务器（**Linux 推荐**，Mac/Windows 也行；4C8G 起，KG 构建期内存峰值 6G）
 - [ ] 公司内网域名或固定 IP（同事浏览器能访问 `:3000` + `:8000`）
 - [ ] SSD ≥ 50G（workspace × N + KG entities + sqlite db + logs）
-- [ ] 默认能出网到：anthropic.com / api.deepseek.com / open.feishu.cn
+- [ ] 默认能出网到：OpenAI 兼容中转地址 / open.feishu.cn
 
 ### 系统软件
 
 - [ ] **Python 3.10+** （`python --version` 验证）
 - [ ] **Node 20+** + **pnpm 8+** （`node --version && pnpm --version` 验证）
-- [ ] **Claude Code CLI**：`npm i -g @anthropic-ai/claude-code`
-- [ ] **codex CLI**（可选，worker 路由用，没装时自动 fallback 到 deepseek）
+- [ ] **OpenAI API key** 已在服务端准备好（不要发给前端或同事）
+- [ ] **Claude/Codex CLI**（可选，仅本地开发兜底，不作为团队上线依赖）
 - [ ] **git** 已装且能 clone
 
 ### 代码
@@ -32,13 +32,17 @@
 
 ## Phase 1: 凭证配置（关键）
 
-### 1.1 Claude / Codex CLI 登录
+### 1.1 OpenAI API key
 
-> OAT（OAuth Access Token）在服务器上 login，浏览器交互一次性拿到，监控脚本会盯活性。
+> 团队上线默认走 API key,避免多人同时评审时挤占个人 CLI/OAT session。真实 key 只写服务端 `.env`,不写日志、不进 git、不出现在前端。
 
-- [ ] `claude login` （服务器上跑，复制 URL → 浏览器登录 → 粘贴 token 回服务器）
-- [ ] `claude --print "echo test"` 验证能返回
-- [ ] `codex login`（如装了 codex；流程类似）
+- [ ] `OPENAI_API_KEY=<服务端真实 key>` 已写入 `.env`
+- [ ] `OPENAI_BASE_URL=<OpenAI 兼容中转地址>` 已按实际网关填写（没有中转则留空）
+- [ ] `OPENAI_WIRE_API=responses`
+- [ ] `OPENAI_REASONING_EFFORT=xhigh`
+- [ ] `OPENAI_DISABLE_RESPONSE_STORAGE=true`
+- [ ] `PECKER_MODEL_OVERRIDE=`（留空,让 route 表自动分档；临时深度压测时才设 gpt55）
+- [ ] 已轮换掉任何曾在聊天、文档、截图里暴露过的 key
 
 ### 1.2 .env 必填项
 
@@ -48,23 +52,32 @@
   # 然后用编辑器打开 .env 填剩下的
   ```
 
-- [ ] `USE_CLAUDE_CODE=1` （强制走本地 CC CLI，零 API key）
+- [ ] `OPENAI_API_KEY=<服务端真实 key>` （团队上线必填）
+- [ ] `OPENAI_BASE_URL=<OpenAI 兼容中转地址>` （如使用中转则必填）
+- [ ] `OPENAI_WIRE_API=responses`
+- [ ] `OPENAI_REASONING_EFFORT=xhigh`
+- [ ] `OPENAI_DISABLE_RESPONSE_STORAGE=true`
+- [ ] `PECKER_MODEL_OVERRIDE=`
 - [ ] `PECKER_SIGNATURE_SECRET=<32+ hex>` （gen-secrets.sh 已生成）
 - [ ] `PECKER_JWT_SECRET=<32+ hex>` （同上）
 - [ ] `PECKER_WEB_PASSWORD=<给同事用的密码>` （ONBOARDING.md 里告诉同事）
 - [ ] `WIKI_PATH=./shared-wiki` （或 git clone 来的本地路径）
 - [ ] `REVIEWER=<部署者名字>` （CLI 跑测试时用）
 - [ ] `PECKER_PROFILE=chill` （内部团队默认 chill，少 nitpick）
+- [ ] `PECKER_REVIEW_HARD_CAP_USD=3`
+- [ ] `PECKER_REVIEWER_DAILY_BUDGET_USD=30`
+- [ ] `PECKER_DAILY_BUDGET_USD=100`
+- [ ] `PECKER_MONTHLY_BUDGET_USD=500`
 
 ### 1.3 .env 可选项
 
-- [ ] `PECKER_MAX_CONCURRENT=2` （asyncio.Semaphore 并发上限，CC OAT rate limit 限制 ≤ 3）
+- [ ] `PECKER_MAX_CONCURRENT=2` （asyncio.Semaphore 并发上限，先控制成本和排队体验）
 - [ ] `PECKER_READONLY_USERS=张三,李四` （只读用户名单，逗号分隔）
-- [ ] `DEEPSEEK_API_KEY=sk-...` （worker 路由 fallback 必需，去 platform.deepseek.com 拿）
+- [ ] `DEEPSEEK_API_KEY=sk-...` （仅作为临时降级方案时需要）
 - [ ] `FEISHU_APP_ID=cli_xxx` + `FEISHU_APP_SECRET=xxx` （飞书机器人配了再填）
 - [ ] `FEISHU_VERIFY_TOKEN=v_xxx` （飞书事件订阅校验，强烈建议生产开）
 - [ ] `FEISHU_REPORT_CHAT_ID=oc_xxx` （报告默认推送的群 ID）
-- [ ] `FEISHU_WEBHOOK=https://...` （OAT 监控告警群 webhook，独立于报告群）
+- [ ] `FEISHU_WEBHOOK=https://...` （运维/反馈告警群 webhook，独立于报告群）
 
 ### 1.4 安全检查
 
@@ -150,12 +163,12 @@ systemctl status pecker-api    # 验证 active (running)
 - [ ] 用 `PECKER_WEB_PASSWORD` 登录成功，跳到 `/review`
 - [ ] `curl http://<服务器>:8000/health` 返回 200（如有 health endpoint）
 
-### 3.3 OAT 监控起来
+### 3.3 路由与成本自检
 
-- [ ] **Linux/Mac**：`bash scripts/setup_oat_cron.sh "$(pwd)"`（每 30min 跑一次 `oat_health_monitor.py --auto-heal`，日志 `/tmp/oat_health.log`）
-- [ ] **Windows**：`powershell scripts\setup_oat_task_scheduler.ps1`
-- [ ] 立刻测一次：`python scripts/oat_health_monitor.py --auto-heal` 应输出 JSON `status: ok`
-- [ ] 飞书告警群收到 OAT 心跳测试消息
+- [ ] `curl http://<服务器>:8000/api/health` 返回 `llm_auth.status=ok`
+- [ ] `/api/health` 不回显任何 `sk-*` / token / base auth header
+- [ ] 手动构造一次超预算 review,前端明确提示额度不足且后端不发起 LLM 调用
+- [ ] `model_routes.yaml` 的团队启用 route 均为 `openai:native`
 
 ---
 
@@ -240,9 +253,6 @@ systemctl status pecker-api    # 验证 active (running)
 **Linux/Mac crontab：**
 
 ```cron
-# OAT 监控（已在 Phase 3.3 装）
-0 */4 * * * cd /opt/pecker && python scripts/oat_health_monitor.py --auto-heal
-
 # KG 增量更新（每天凌晨 3 点扫一次新增 raw/）
 0 3 * * * cd /opt/pecker && python scripts/incremental_kg_update.py --all
 
@@ -253,7 +263,6 @@ systemctl status pecker-api    # 验证 active (running)
 0 9 * * 1 cd /opt/pecker && python scripts/kg_health_check.py --all
 ```
 
-- [ ] OAT 监控 cron 已装（Phase 3.3）
 - [ ] KG 增量 cron 已装并跑过一次
 - [ ] Metrics 聚合 cron 已装
 - [ ] KG 健康度周报 cron 已装
@@ -271,11 +280,11 @@ systemctl status pecker-api    # 验证 active (running)
 
 ## Phase 7: 故障兜底文档化
 
-- [ ] **OAT 续期 SOP**：[OAT_RENEWAL_SOP.md](./OAT_RENEWAL_SOP.md) 已写
+- [ ] **API key 轮换 SOP**：谁能换 key、换完重启什么服务、怎么验证
 - [ ] 「挂了怎么办」流程文档化（写在飞书群置顶 / wiki 也行）
 - [ ] **指定 1 个工程师 on-call**（[TODO] 主 oncall）
 - [ ] **指定 1 个备份 oncall**（[TODO] 备份 oncall）
-- [ ] OAT 续期演练 1 次：模拟过期 → 走 SOP → 验证恢复
+- [ ] API key 轮换演练 1 次：换测试 key → 重启后端 → `/api/health` 与测试评审通过
 
 ---
 
@@ -287,7 +296,7 @@ systemctl status pecker-api    # 验证 active (running)
 - [ ] 第 2 个 PM 反馈「误报」，看 Learnings 数据库真记录（`get_recent_outcomes`）
 - [ ] 第 3 周 metrics dashboard 有 ≥ 50 review × 3 PM 的真数据
 - [ ] CI gate（self-hosted runner，如配）真在 PR 时跑过 1 次
-- [ ] OAT 监控连续 1 周无 expired 告警漏报
+- [ ] API key / 路由健康检查连续 1 周无误报或漏报
 - [ ] 飞书 `_event_seen` 去重未误杀（看后端日志无 replay 重处理）
 - [ ] [TODO 系统责任人]、[TODO 规则维护人]、[TODO oncall] 三个角色都有人
 
@@ -296,7 +305,7 @@ systemctl status pecker-api    # 验证 active (running)
 ## 回滚策略（万一 ship 后炸）
 
 - [ ] **PR 回滚**：`git revert <commit>` 然后 systemd restart
-- [ ] **worker 路由降级**：改 `model_routes.yaml` 把 `worker.*` vendor 从 openai/codex 切到 deepseek，重启后端
+- [ ] **worker 路由降级**：改 `model_routes.yaml` 把高成本 route 临时降到 `gpt54mini` 或切到备用 provider，重启后端
 - [ ] **profile 全局收紧**：`PECKER_PROFILE=chill` env 强制（已经默认）
 - [ ] **Web 关停**：`systemctl stop pecker-web pecker-api`，PM 切回 CLI 用法（用 `python run_session.py`）
 - [ ] **数据备份**：每天 cron 备份 `learnings.db` / `metrics.db` / `regression_baseline.json` / `workspace-*/wiki/` / `workspace-*/output/` 到外部盘
@@ -319,7 +328,7 @@ systemctl status pecker-api    # 验证 active (running)
 | 文档 | 用途 |
 |---|---|
 | [ONBOARDING.md](./ONBOARDING.md) | 同事 PM 第一次用看的 |
-| [OAT_RENEWAL_SOP.md](./OAT_RENEWAL_SOP.md) | OAT 过期续期 SOP |
+| [legacy/OAT_RENEWAL_SOP.md](./legacy/OAT_RENEWAL_SOP.md) | 历史 CLI/OAT 方案归档,团队上线不再依赖 |
 | [DEV.md](./DEV.md) | 开发者指南（架构 / env / 测试） |
 | [docs/MIGRATION_v1_to_v2.md](./docs/MIGRATION_v1_to_v2.md) | v1 → v2 迁移 |
 | [docs/CI_SELF_HOSTED_RUNNER_SETUP.md](./docs/CI_SELF_HOSTED_RUNNER_SETUP.md) | self-hosted runner 配置 |

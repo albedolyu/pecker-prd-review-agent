@@ -255,8 +255,7 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
         kind ∈ {goshawk_initial, goshawk_retry (指数退避), goshawk_prompt_followup
         (催促), goshawk_empty_retry_followup (空提交复检)}.
     """
-    if client is None:
-        client = _make_client()
+    use_router = client is None or client.__class__.__name__ == "ClaudeCodeCLIClient"
 
     print(GOSHAWK_ART)
 
@@ -285,9 +284,8 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
     # Wave 2: 主审默认走 advisor.goshawk route. _make_client 仍可调,
     # 但显式 mock client (e2e / 单测) 路径继续走 client.create 兼容老 mock.
     from model_router import route_call
-    # _make_client 兜底已在前面赋值 (client is None → _make_client() → 真 CLI 实例),
-    # use_router 通过判定 client 是否是真 CLI 实例区分: e2e/test 注入的 MagicMock 走老路径
-    use_router = client.__class__.__name__ == "ClaudeCodeCLIClient"
+    # client=None 是 Web 团队版的路由哨兵: 直接走 model_router, 不再构造个人 Claude/OAT client.
+    # 显式 mock client (e2e / 单测) 仍走 client.create 兼容旧测试。
 
     def _call(msgs, call_kind="goshawk_initial"):
         _t0 = time.time()

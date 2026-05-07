@@ -37,4 +37,23 @@ describe("PM-friendly navigation copy", () => {
     expect(prompts).not.toContain("Harness · Prompts & Rules");
     expect(prompts).not.toContain("Prompt / Rule 透明度");
   });
+
+  it("does not expose legacy Claude model names in PM-facing surfaces", () => {
+    const visibleSources = [
+      readSource("lib/roles.ts"),
+      readSource("app/system/prompts/page.tsx"),
+      readSource("components/phases/Phase1Precheck.tsx"),
+      readSource("components/phases/Phase2Running.tsx"),
+      readSource("components/phases/Phase2RunningV8.tsx"),
+      readSource("components/run/AgentStatusCard.tsx"),
+      readSource("lib/v8-run-helpers.ts"),
+    ].join("\n");
+
+    expect(visibleSources).toContain("gpt-5.5");
+    expect(visibleSources).not.toContain("sonnet-4-6");
+    expect(visibleSources).not.toContain("opus-4");
+    expect(visibleSources).not.toContain("Opus");
+    expect(visibleSources).not.toContain("Claude Sonnet");
+    expect(visibleSources).not.toContain("Claude CLI 配额已用完");
+  });
 });

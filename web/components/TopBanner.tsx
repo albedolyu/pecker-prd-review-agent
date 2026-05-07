@@ -10,7 +10,7 @@
  *
  * v8 视觉:
  * - 无衬线字体 · 紧凑 · monospace 元数据
- * - brand:小方块 + "Pecker" 字样,去 "2026 春" 季节标签
+ * - brand:主编鸟头像 + "Pecker" 字样,去 "2026 春" 季节标签
  * - 中间:reviewer + 今日次数(mono)· 去散文式"你好"
  * - 右:About / 登出 极简文字链
  */
@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
+import { BirdAvatar } from "@/components/birds/BirdAvatar";
 import { authApi, auditApi, ApiError } from "@/lib/api";
 
 export function TopBanner() {
@@ -82,7 +83,7 @@ export function TopBanner() {
           style={{
             fontSize: 14,
             fontWeight: 600,
-            letterSpacing: "-0.01em",
+            letterSpacing: 0,
           }}
         >
           Pecker
@@ -92,7 +93,7 @@ export function TopBanner() {
             fontSize: 11,
             color: "var(--text-faint)",
             fontWeight: 500,
-            letterSpacing: "-0.005em",
+            letterSpacing: 0,
           }}
         >
           评审工作台
@@ -284,7 +285,7 @@ export function TopBanner() {
 }
 
 // ============================================================
-// v8 · 极简 brand mark · 圆角方块 + 内凹圆点
+// v8 · brand mark · 主编鸟头像
 // ============================================================
 function BrandMark() {
   return (
@@ -295,20 +296,22 @@ function BrandMark() {
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-        width: 18,
-        height: 18,
-        borderRadius: "var(--r-3)",
-        background: "var(--accent-500)",
-        color: "var(--accent-fg)",
+        width: 30,
+        height: 30,
+        borderRadius: "50%",
+        background: "var(--surface-raised)",
+        border: "1px solid color-mix(in oklch, var(--accent-500) 35%, var(--border-default))",
+        boxShadow: "0 0 0 2px var(--accent-50)",
+        overflow: "hidden",
+        flexShrink: 0,
       }}
     >
-      <span
+      <BirdAvatar
+        id={6}
+        size="lg"
         style={{
-          width: 6,
-          height: 6,
-          borderRadius: "50%",
-          background: "var(--accent-fg)",
-          opacity: 0.9,
+          width: 28,
+          height: 28,
         }}
       />
     </span>

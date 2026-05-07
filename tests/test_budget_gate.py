@@ -34,7 +34,13 @@ def root(tmp_path, monkeypatch):
     """临时项目根目录,logs/ 子目录留给 daily_cost jsonl。"""
     (tmp_path / "logs").mkdir()
     # 清理环境变量,避免测试之间串扰
-    for k in ("PECKER_DAILY_BUDGET_USD", "PECKER_BUDGET_WARN_PCT"):
+    for k in (
+        "PECKER_DAILY_BUDGET_USD",
+        "PECKER_BUDGET_WARN_PCT",
+        "PECKER_REVIEW_HARD_CAP_USD",
+        "PECKER_REVIEWER_DAILY_BUDGET_USD",
+        "PECKER_MONTHLY_BUDGET_USD",
+    ):
         monkeypatch.delenv(k, raising=False)
     return tmp_path
 
@@ -79,6 +85,32 @@ def test_check_429_when_projected_exceeds(root, monkeypatch):
         check_budget(root, estimated_usd=2.0)  # 4 + 2 = 6 > 5
     assert ei.value.status_code == 429
     assert "预算" in ei.value.detail or "USD" in ei.value.detail
+
+
+def test_single_review_hard_cap_blocks_expensive_review(root, monkeypatch):
+    """单次评审预估成本超过 hard cap 时,应在发起前拒绝。"""
+    monkeypatch.setenv("PECKER_REVIEW_HARD_CAP_USD", "1")
+
+    with pytest.raises(HTTPException) as ei:
+        check_budget(root, estimated_usd=2.0, reviewer="alice")
+
+    assert ei.value.status_code == 429
+    assert "单次评审额度" in ei.value.detail
+
+
+def test_reviewer_daily_cap_is_per_person(root, monkeypatch):
+    """单人日限额只拦超额 PM,不被其他人的成本误伤。"""
+    monkeypatch.setenv("PECKER_REVIEWER_DAILY_BUDGET_USD", "3")
+    record_review_cost(root, 2.5, "alice")
+    record_review_cost(root, 0.5, "bob")
+
+    with pytest.raises(HTTPException) as ei:
+        check_budget(root, estimated_usd=1.0, reviewer="alice")
+    assert ei.value.status_code == 429
+    assert "个人今日额度" in ei.value.detail
+
+    status = check_budget(root, estimated_usd=1.0, reviewer="bob")
+    assert status["reviewer_daily"]["spent"] == 0.5
 
 
 def test_warn_triggers_at_threshold(root, monkeypatch):

@@ -5,12 +5,12 @@
  *
  * - 3 尺寸:lg(32) / md(24) / sm(16)
  * - 10 只全集(id 1-10),内部复用 BirdArt-v2 现成线稿 SVG
- * - lg 尺寸 + 已上线 1-5 鸟 → hand-drawn PNG 大头像(放在 /public/birds/)
+ * - lg 尺寸 + 1-10 鸟 → hand-drawn PNG 大头像(放在 /public/birds/)
  *   PNG 加载失败时 onError 自动回退到原 SVG 线稿,无缝降级
  * - 四态状态灯(+warn):queued / running / done / failed / warn
  *   running 态用 dot-breathe 呼吸动画(1.4s infinite)
  * - 外层 pill 背景色用 --bird-{id} 的 color-mix,和徽章同源
- * - placeholder 模式:id 6-10 未上线鸟可用虚线圆占位
+ * - placeholder 模式可显式降级为虚线圆占位
  *
  * 规范源:design-system/啄木鸟-pecker-v8/components/bird-avatar.jsx
  */
@@ -37,9 +37,9 @@ export type BirdStatus = "queued" | "running" | "done" | "failed" | "warn";
 
 const BIRD_SIZES: Record<BirdSize, number> = { lg: 32, md: 24, sm: 16 };
 
-// v8 birdId → BirdArt-v2 SVG · 1-5 已上线(业务/数据/体验/风险/苍鹰),6-10 占位
-// 注:lg 尺寸的 1-5 已切到 hand-drawn PNG 大头像(见 LG_PORTRAIT),BIRD_SVG 仅
-// 用于 sm/md 尺寸 + lg 6-10 placeholder。
+// v8 birdId → BirdArt-v2 SVG。
+// 注:lg 尺寸默认切到 hand-drawn PNG 大头像(见 LG_PORTRAIT),BIRD_SVG 仅
+// 用于 sm/md 尺寸 + placeholder / 图片加载失败兜底。
 const BIRD_SVG: Record<
   BirdId,
   React.FC<{ size?: number; className?: string }>
@@ -48,30 +48,40 @@ const BIRD_SVG: Record<
   2: CormorantArtV2, // 数据
   3: OwlArtV2, // 体验(审校)
   4: RavenArtV2, // 风险(技编)
-  5: GoshawkArtV2, // 苍鹰 meta
-  6: WoodpeckerArtV2, // 占位
+  5: GoshawkArtV2, // 苍鹰交叉校验
+  6: WoodpeckerArtV2, // 主编
   7: DoveArtV2,
   8: CuckooArtV2,
   9: KakapoArtV2,
   10: ShrikeArtV2,
 };
 
-// lg 尺寸 hand-drawn PNG 路径 · 仅 1-5 已上线
+// lg 尺寸 hand-drawn PNG 路径 · 1-10 全量上线
 // 文件需存在于 /public/birds/ 下,详见 public/birds/README.md
-const LG_PORTRAIT: Record<1 | 2 | 3 | 4 | 5, string> = {
+const LG_PORTRAIT: Record<BirdId, string> = {
   1: "/birds/biz-lg.png",
   2: "/birds/data-lg.png",
   3: "/birds/ux-lg.png",
   4: "/birds/risk-lg.png",
   5: "/birds/goshawk-lg.png",
+  6: "/birds/woodpecker-lg.png",
+  7: "/birds/dove-lg.png",
+  8: "/birds/cuckoo-lg.png",
+  9: "/birds/kakapo-lg.png",
+  10: "/birds/shrike-lg.png",
 };
 
-const BIRD_ALT_TEXT: Record<1 | 2 | 3 | 4 | 5, string> = {
+const BIRD_ALT_TEXT: Record<BirdId, string> = {
   1: "业务鸟",
   2: "数据鸟",
   3: "体验鸟",
   4: "风险鸟",
   5: "苍鹰",
+  6: "主编",
+  7: "读者反馈员",
+  8: "试读员",
+  9: "资料员",
+  10: "质检员",
 };
 
 interface BirdAvatarProps {
@@ -96,10 +106,10 @@ export function BirdAvatar({
   const dotSize = size === "sm" ? 6 : size === "md" ? 8 : 10;
   const Art = BIRD_SVG[id];
 
-  // lg 尺寸 + 已上线 5 鸟 + 非 placeholder 模式 → 用 hand-drawn PNG 大头像
+  // lg 尺寸 + 非 placeholder 模式 → 用 hand-drawn PNG 大头像
   // img onError 时 setPortraitFailed → 自动回退到原 SVG 线稿(无缝降级)
   const eligibleForPortrait =
-    size === "lg" && !placeholder && id >= 1 && id <= 5;
+    size === "lg" && !placeholder && id >= 1 && id <= 10;
   const [portraitFailed, setPortraitFailed] = useState(false);
   const useHandDrawnPortrait = eligibleForPortrait && !portraitFailed;
 
@@ -117,8 +127,8 @@ export function BirdAvatar({
     >
       {useHandDrawnPortrait ? (
         <img
-          src={LG_PORTRAIT[id as 1 | 2 | 3 | 4 | 5]}
-          alt={BIRD_ALT_TEXT[id as 1 | 2 | 3 | 4 | 5]}
+          src={LG_PORTRAIT[id]}
+          alt={BIRD_ALT_TEXT[id]}
           width={px}
           height={px}
           onError={() => setPortraitFailed(true)}
@@ -182,11 +192,11 @@ const BIRD_LABEL_TEXT: Record<BirdId, string> = {
   3: "体验鸟",
   4: "风险鸟",
   5: "苍鹰",
-  6: "—",
-  7: "—",
-  8: "—",
-  9: "—",
-  10: "—",
+  6: "主编",
+  7: "反馈",
+  8: "试读",
+  9: "资料",
+  10: "质检",
 };
 
 interface BirdLabelProps {

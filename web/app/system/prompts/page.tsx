@@ -44,7 +44,7 @@ const PROMPTS: Record<BirdId, PromptMeta | null> = {
   1: {
     version: "biz-v2.3",
     updated: "2026-04-15",
-    model: "sonnet-4-6",
+    model: "gpt-5.4",
     temperature: 0.2,
     maxTokens: 4096,
     summary:
@@ -54,7 +54,7 @@ const PROMPTS: Record<BirdId, PromptMeta | null> = {
   2: {
     version: "data-v1.8",
     updated: "2026-04-17",
-    model: "sonnet-4-6",
+    model: "gpt-5.4",
     temperature: 0.15,
     maxTokens: 4096,
     summary:
@@ -64,7 +64,7 @@ const PROMPTS: Record<BirdId, PromptMeta | null> = {
   3: {
     version: "ux-v2.1",
     updated: "2026-04-12",
-    model: "sonnet-4-6",
+    model: "gpt-5.4",
     temperature: 0.3,
     maxTokens: 4096,
     summary:
@@ -74,7 +74,7 @@ const PROMPTS: Record<BirdId, PromptMeta | null> = {
   4: {
     version: "risk-v1.5",
     updated: "2026-04-16",
-    model: "opus-4", // 深推理
+    model: "gpt-5.5",
     temperature: 0.25,
     maxTokens: 6144,
     summary:
@@ -84,11 +84,11 @@ const PROMPTS: Record<BirdId, PromptMeta | null> = {
   5: {
     version: "eagle-v3.0",
     updated: "2026-04-18",
-    model: "opus-4",
+    model: "gpt-5.5",
     temperature: 0.1,
     maxTokens: 8192,
     summary:
-      "你是苍鹰(meta-reviewer),4 worker 跑完之后才登场。你只做一件事:交叉校验 worker 产出。撤回证据不足的 / 补充明显遗漏的(最多 2 条 · 硬上限)。你 **绝对不** 重审已经说过的内容。",
+      "你是苍鹰,四位评审员跑完之后才登场。你只做一件事:交叉校验评审产出。撤回证据不足的 / 补充明显遗漏的(最多 2 条 · 硬上限)。你 **绝对不** 重审已经说过的内容。",
     injectedRules: ["META-001", "META-002", "META-dedup"],
   },
   6: null,

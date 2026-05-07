@@ -9,7 +9,7 @@
  * - localStorage.pecker_last_reviewer 记住上次用户名
  *
  * v8 UI:
- * - 单列 400px 居中卡片 · 去 2 列 grid + GateDoorScene SVG + 刊头散文
+ * - 生成式 10 鸟协作插画 + 400px 登录表单
  * - 无衬线表单 · accent 主按钮 · 极简
  */
 
@@ -19,6 +19,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
+import { BirdAvatar } from "@/components/birds/BirdAvatar";
 import { authApi, ApiError } from "@/lib/api";
 
 export function LoginForm() {
@@ -91,207 +92,191 @@ export function LoginForm() {
     <main
       style={{
         minHeight: "calc(100vh - 60px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
+        display: "grid",
+        placeItems: "center",
         padding: "40px 24px",
         fontFamily: "var(--font-sans)",
         background: "var(--surface-canvas)",
       }}
     >
-      <div style={{ width: "100%", maxWidth: 400 }}>
-        {/* brand */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            marginBottom: 24,
-          }}
-        >
-          <span
-            aria-hidden
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 24,
-              height: 24,
-              borderRadius: "var(--r-3)",
-              background: "var(--accent-500)",
-            }}
-          >
-            <span
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                background: "var(--accent-fg)",
-              }}
-            />
-          </span>
-          <span
-            style={{
-              fontSize: 15,
-              fontWeight: 600,
-              color: "var(--text-strong)",
-              letterSpacing: "-0.01em",
-            }}
-          >
-            Pecker
-          </span>
-        </div>
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 980,
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 360px), 1fr))",
+          alignItems: "center",
+          gap: 36,
+        }}
+      >
+        <LoginBirdTeamIllustration />
 
-        {/* card */}
-        <form
-          onSubmit={handleSubmit}
-          style={{
-            background: "var(--surface-raised)",
-            border: "1px solid var(--border-default)",
-            borderRadius: "var(--r-4)",
-            padding: "28px 28px 24px",
-            boxShadow: "var(--shadow-sm)",
-          }}
-        >
-          <header style={{ marginBottom: 20 }}>
-            <h1
-              style={{
-                fontSize: 20,
-                fontWeight: 600,
-                color: "var(--text-strong)",
-                margin: 0,
-                letterSpacing: "-0.015em",
-              }}
-            >
-              登录
-            </h1>
-            <p
-              style={{
-                fontSize: 12,
-                color: "var(--text-muted)",
-                marginTop: 4,
-              }}
-            >
-              PRD 评审工作台 · 需管理员分配的密码
-            </p>
-          </header>
-
+        <div style={{ width: "100%", maxWidth: 400, justifySelf: "center" }}>
           <div
             style={{
               display: "flex",
-              flexDirection: "column",
-              gap: 14,
+              alignItems: "center",
+              gap: 10,
+              marginBottom: 24,
             }}
           >
-            <Field label="评审人" hint="会出现在评审报告署名">
-              <input
-                type="text"
-                value={reviewer}
-                onChange={(e) => setReviewer(e.target.value)}
-                maxLength={40}
-                required
-                placeholder="晨舒"
-                autoFocus
-                style={inputStyle}
-              />
-            </Field>
+            <BrandMark />
+            <span
+              style={{
+                fontSize: 15,
+                fontWeight: 600,
+                color: "var(--text-strong)",
+              }}
+            >
+              Pecker
+            </span>
+          </div>
 
-            <Field label="密码">
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="············"
-                style={inputStyle}
-              />
-            </Field>
+          <form
+            onSubmit={handleSubmit}
+            style={{
+              background: "var(--surface-raised)",
+              border: "1px solid var(--border-default)",
+              borderRadius: "var(--r-4)",
+              padding: "28px 28px 24px",
+              boxShadow: "var(--shadow-sm)",
+            }}
+          >
+            <header style={{ marginBottom: 20 }}>
+              <h1
+                style={{
+                  fontSize: 20,
+                  fontWeight: 600,
+                  color: "var(--text-strong)",
+                  margin: 0,
+                }}
+              >
+                登录
+              </h1>
+              <p
+                style={{
+                  fontSize: 12,
+                  color: "var(--text-muted)",
+                  marginTop: 4,
+                }}
+              >
+                PRD 评审工作台 · 需管理员分配的密码
+              </p>
+            </header>
 
-            {/* remember */}
-            <label
+            <div
               style={{
                 display: "flex",
-                alignItems: "center",
-                gap: 8,
-                cursor: "pointer",
-                fontSize: 12,
-                color: "var(--text-muted)",
-                paddingTop: 2,
+                flexDirection: "column",
+                gap: 14,
               }}
             >
-              <input
-                type="checkbox"
-                checked={remember}
-                onChange={(e) => setRemember(e.target.checked)}
+              <Field label="评审人" hint="会出现在评审报告署名">
+                <input
+                  type="text"
+                  value={reviewer}
+                  onChange={(e) => setReviewer(e.target.value)}
+                  maxLength={40}
+                  required
+                  placeholder="晨舒"
+                  autoFocus
+                  style={inputStyle}
+                />
+              </Field>
+
+              <Field label="密码">
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  placeholder="············"
+                  style={inputStyle}
+                />
+              </Field>
+
+              <label
                 style={{
-                  width: 14,
-                  height: 14,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
                   cursor: "pointer",
-                  accentColor: "var(--accent-500)",
+                  fontSize: 12,
+                  color: "var(--text-muted)",
+                  paddingTop: 2,
                 }}
-              />
-              记住我 · 8 小时内免登录
-            </label>
+              >
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                  style={{
+                    width: 14,
+                    height: 14,
+                    cursor: "pointer",
+                    accentColor: "var(--accent-500)",
+                  }}
+                />
+                记住我 · 8 小时内免登录
+              </label>
 
-            {/* CTA */}
-            <button
-              type="submit"
-              disabled={loginMutation.isPending}
+              <button
+                type="submit"
+                disabled={loginMutation.isPending}
+                style={{
+                  height: 38,
+                  marginTop: 6,
+                  border: 0,
+                  borderRadius: "var(--r-3)",
+                  background: loginMutation.isPending
+                    ? "var(--neutral-200)"
+                    : "var(--accent-500)",
+                  color: loginMutation.isPending
+                    ? "var(--text-muted)"
+                    : "var(--accent-fg)",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: loginMutation.isPending ? "not-allowed" : "pointer",
+                  fontFamily: "var(--font-sans)",
+                  transition: "background var(--dur-fast) var(--ease-out)",
+                }}
+              >
+                {loginMutation.isPending ? "登录中…" : "登录 →"}
+              </button>
+            </div>
+
+            <div
               style={{
-                height: 38,
-                marginTop: 6,
-                border: 0,
-                borderRadius: "var(--r-3)",
-                background: loginMutation.isPending
-                  ? "var(--neutral-200)"
-                  : "var(--accent-500)",
-                color: loginMutation.isPending
-                  ? "var(--text-muted)"
-                  : "var(--accent-fg)",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: loginMutation.isPending ? "not-allowed" : "pointer",
-                fontFamily: "var(--font-sans)",
-                transition: "background var(--dur-fast) var(--ease-out)",
+                marginTop: 20,
+                paddingTop: 14,
+                borderTop: "1px solid var(--border-subtle)",
+                fontSize: 11,
+                color: "var(--text-faint)",
+                textAlign: "center",
+                lineHeight: 1.65,
               }}
             >
-              {loginMutation.isPending ? "登录中…" : "登录 →"}
-            </button>
-          </div>
+              第一次来？找系统管理员要密码，登录后即可使用评审工作台。
+            </div>
+          </form>
 
-          {/* foot */}
           <div
             style={{
-              marginTop: 20,
-              paddingTop: 14,
-              borderTop: "1px solid var(--border-subtle)",
-              fontSize: 11,
-              color: "var(--text-faint)",
+              marginTop: 16,
               textAlign: "center",
-              lineHeight: 1.65,
             }}
           >
-            第一次来?找系统管理员要密码,登录后即可使用评审工作台
+            <Link
+              href="/"
+              style={{
+                fontSize: 12,
+                color: "var(--text-muted)",
+                textDecoration: "none",
+              }}
+            >
+              ← 回首页
+            </Link>
           </div>
-        </form>
-
-        {/* 回首页 */}
-        <div
-          style={{
-            marginTop: 16,
-            textAlign: "center",
-          }}
-        >
-          <Link
-            href="/"
-            style={{
-              fontSize: 12,
-              color: "var(--text-muted)",
-              textDecoration: "none",
-            }}
-          >
-            ← 回首页
-          </Link>
         </div>
       </div>
     </main>
@@ -299,6 +284,68 @@ export function LoginForm() {
 }
 
 // ============================================================
+
+function LoginBirdTeamIllustration() {
+  return (
+    <section
+      aria-label="十只鸟协作评审插画"
+      style={{
+        width: "100%",
+        minWidth: 0,
+        justifySelf: "center",
+      }}
+    >
+      <img
+        src="/illustrations/login-bird-team.jpg"
+        alt="十只鸟围绕 PRD 评审桌协作"
+        style={{
+          display: "block",
+          width: "100%",
+          aspectRatio: "16 / 10",
+          objectFit: "cover",
+          borderRadius: "var(--r-4)",
+          border: "1px solid var(--border-default)",
+          boxShadow: "var(--shadow-sm)",
+        }}
+      />
+      <p
+        style={{
+          margin: "14px 0 0",
+          maxWidth: 560,
+          fontSize: 13,
+          lineHeight: 1.7,
+          color: "var(--text-muted)",
+        }}
+      >
+        十只评审鸟围在同一张桌上协作：先分头看 PRD，再交叉校验，最后交给 PM 确认。
+      </p>
+    </section>
+  );
+}
+
+function BrandMark() {
+  return (
+    <span
+      aria-hidden
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 30,
+        height: 30,
+        borderRadius: "50%",
+        background: "var(--surface-raised)",
+        border:
+          "1px solid color-mix(in oklch, var(--accent-500) 35%, var(--border-default))",
+        boxShadow: "0 0 0 2px var(--accent-50)",
+        overflow: "hidden",
+        flexShrink: 0,
+      }}
+    >
+      <BirdAvatar id={6} size="lg" style={{ width: 28, height: 28 }} />
+    </span>
+  );
+}
 
 function Field({
   label,
@@ -323,7 +370,6 @@ function Field({
             fontSize: 12,
             fontWeight: 600,
             color: "var(--text-strong)",
-            letterSpacing: "0.02em",
           }}
         >
           {label}

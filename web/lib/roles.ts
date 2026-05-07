@@ -100,7 +100,7 @@ export const ROLES: Readonly<Record<RoleKey, Role>> = Object.freeze({
     birdEmoji: "🐦‍⬛",
     responsibility: "AI Coding 友好度 / 技术约定",
     description:
-      "渡鸦聪明,会用工具,也偏执地讲究。它专门替下游写代码的同事把关:技术约定节有没有写、四态 UI 有没有覆盖、关键流程有没有伪代码、筛选条件能不能追到字段。这一类活儿费脑子,所以这位编辑用的是 Opus。",
+      "渡鸦聪明,会用工具,也偏执地讲究。它专门替下游写代码的同事把关:技术约定节有没有写、四态 UI 有没有覆盖、关键流程有没有伪代码、筛选条件能不能追到字段。这一类活儿费脑子,所以会走更强的 GPT 评审路由。",
     frequency: "high",
     isWorker: true,
     accentColor: "violet",
