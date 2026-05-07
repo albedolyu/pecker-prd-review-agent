@@ -151,6 +151,9 @@ class RouteConfig:
 
 _config_lock = threading.Lock()
 _config_cache: Optional[RouteConfig] = None
+_model_call_limiter_lock = threading.Lock()
+_model_call_limiter: Optional[threading.BoundedSemaphore] = None
+_model_call_limiter_size: Optional[int] = None
 
 
 def get_route_config(force_reload: bool = False) -> RouteConfig:
@@ -184,6 +187,34 @@ def reset_config_cache():
     global _config_cache
     with _config_lock:
         _config_cache = None
+
+
+def _get_model_call_limiter() -> Optional[threading.BoundedSemaphore]:
+    raw = os.environ.get("PECKER_MAX_CONCURRENT_MODEL_CALLS", "").strip()
+    if not raw:
+        return None
+    try:
+        size = int(raw)
+    except ValueError:
+        log.warning("PECKER_MAX_CONCURRENT_MODEL_CALLS must be an integer; limiter disabled")
+        return None
+    if size <= 0:
+        return None
+
+    global _model_call_limiter, _model_call_limiter_size
+    with _model_call_limiter_lock:
+        if _model_call_limiter is None or _model_call_limiter_size != size:
+            _model_call_limiter = threading.BoundedSemaphore(size)
+            _model_call_limiter_size = size
+        return _model_call_limiter
+
+
+def reset_model_call_limiter():
+    """Test helper: clear the process-wide model-call gate."""
+    global _model_call_limiter, _model_call_limiter_size
+    with _model_call_limiter_lock:
+        _model_call_limiter = None
+        _model_call_limiter_size = None
 
 
 # ============================================================
@@ -229,16 +260,32 @@ def route_call(
         f"(tier={resolved['tier']}) policy={resolved['retry_policy']}"
     )
 
-    return client.create(
-        model=resolved["model"],
-        max_tokens=max_tokens,
-        system=system,
-        messages=messages,
-        tools=tools,
-        tool_choice=tool_choice,
-        temperature=temperature,
-        retry_policy=resolved["retry_policy"],
-    )
+    limiter = _get_model_call_limiter()
+    acquired = False
+    wait_start = time.time()
+    try:
+        if limiter is not None:
+            limiter.acquire()
+            acquired = True
+            waited_ms = int((time.time() - wait_start) * 1000)
+            if waited_ms > 1000:
+                log.info(
+                    f"[route_call] waited {waited_ms}ms for model-call slot "
+                    f"route={route_id} model={resolved['model']}"
+                )
+        return client.create(
+            model=resolved["model"],
+            max_tokens=max_tokens,
+            system=system,
+            messages=messages,
+            tools=tools,
+            tool_choice=tool_choice,
+            temperature=temperature,
+            retry_policy=resolved["retry_policy"],
+        )
+    finally:
+        if acquired and limiter is not None:
+            limiter.release()
 
 
 # ============================================================

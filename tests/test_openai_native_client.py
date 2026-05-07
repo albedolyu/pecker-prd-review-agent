@@ -198,3 +198,44 @@ def test_openai_native_client_sets_request_timeout_and_uses_own_retries(monkeypa
     assert captured["base_url"] == "https://pikachu.claudecode.love"
     assert captured["timeout"] == 45.0
     assert captured["max_retries"] == 0
+
+
+def test_openai_native_client_can_override_worker_retry_count(monkeypatch):
+    from clients.openai_native import OpenAINativeClient
+
+    class FailingResponses:
+        def __init__(self):
+            self.calls = 0
+
+        def create(self, **_kwargs):
+            self.calls += 1
+            raise TimeoutError("gateway timed out")
+
+    fake_responses = FailingResponses()
+    fake_client = types.SimpleNamespace(responses=fake_responses)
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_WIRE_API", "responses")
+    monkeypatch.setenv("OPENAI_WORKER_MAX_RETRIES", "0")
+    monkeypatch.delenv("OPENAI_REASONING_EFFORT", raising=False)
+    monkeypatch.setattr(
+        OpenAINativeClient,
+        "_build_client",
+        lambda self, api_key, base_url: fake_client,
+    )
+
+    client = OpenAINativeClient()
+    try:
+        client.create(
+            model="gpt-5.5",
+            max_tokens=8,
+            system="system",
+            messages=[{"role": "user", "content": "hello"}],
+            retry_policy="worker",
+        )
+    except TimeoutError:
+        pass
+    else:
+        raise AssertionError("expected request to fail")
+
+    assert fake_responses.calls == 1

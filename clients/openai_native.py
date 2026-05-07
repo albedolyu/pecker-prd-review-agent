@@ -126,6 +126,26 @@ class OpenAINativeClient:
         except ValueError:
             return default
 
+    @staticmethod
+    def _env_int(name: str, default: int) -> int:
+        try:
+            return int(os.environ.get(name, str(default)) or default)
+        except ValueError:
+            return default
+
+    def _max_retries_for_policy(self, retry_policy: str) -> int:
+        policy = RETRY_POLICIES.get(retry_policy, RETRY_POLICIES["foreground"])
+        default = int(policy["max_retries"])
+        suffix = retry_policy.upper()
+        for name in (
+            f"OPENAI_{suffix}_MAX_RETRIES",
+            f"PECKER_OPENAI_{suffix}_MAX_RETRIES",
+            "OPENAI_MAX_RETRIES",
+        ):
+            if os.environ.get(name, "").strip():
+                return max(0, self._env_int(name, default))
+        return default
+
     @classmethod
     def _response_input(cls, system: Any, messages: List[Dict[str, Any]]) -> str:
         parts: List[str] = []
@@ -224,8 +244,7 @@ class OpenAINativeClient:
         retry_policy="foreground",
         metric_start=None,
     ):
-        policy = RETRY_POLICIES.get(retry_policy, RETRY_POLICIES["foreground"])
-        max_retries = policy["max_retries"]
+        max_retries = self._max_retries_for_policy(retry_policy)
         selected_tool = self._selected_tool(tools, tool_choice)
         req_id = _gen_req_id()
         last_exc: Optional[Exception] = None
@@ -316,6 +335,7 @@ class OpenAINativeClient:
                 "tokens_in": usage.get("input_tokens", 0),
                 "tokens_out": usage.get("output_tokens", 0),
                 "retry_policy": retry_policy,
+                "max_retries": max_retries,
             },
         )
         return unified
