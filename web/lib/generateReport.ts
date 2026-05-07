@@ -55,6 +55,9 @@ export interface ReportStats {
   peckLabel: string;
 }
 
+const SENSITIVE_WATERMARK =
+  "内部资料 / 仅限啄木鸟内网试用 / 可能包含未脱敏 PRD 内容";
+
 /**
  * 基于决策计算 "啄伤度" — 经验公式:
  *   base = min(100, accepted * 10 + edited * 6 + rejected * 2)
@@ -249,6 +252,106 @@ export function generateReportMarkdown(
   lines.push("```");
   lines.push("");
   lines.push("</details>");
+  lines.push("");
+
+  return lines.join("\n");
+}
+
+/**
+ * 生成 PM 可带回原 PRD 的修订建议包。
+ *
+ * 不伪造“已自动改好”的正文,只输出 PM 已接受/改写的条目、位置、依据和建议。
+ * 这份文件适合发给需求 owner 自己逐条落回原文。
+ */
+export function generateRevisionAdviceMarkdown(
+  result: ReviewResult,
+  decisions: Record<string, ItemDecision>,
+): string {
+  const applicableItems = result.items.filter((item) => {
+    const action = decisions[item.id]?.action;
+    return action === "accept" || action === "edit";
+  });
+  const createdAt = new Date().toLocaleString("zh-CN", { hour12: false });
+
+  const lines: string[] = [];
+  lines.push(`# PRD 修订建议包 - ${result.prd_name}`);
+  lines.push("");
+  lines.push(`> ${SENSITIVE_WATERMARK}  `);
+  lines.push(`> **生成时间**: ${createdAt}  `);
+  lines.push(`> **Review ID**: \`${result.review_id}\`  `);
+  lines.push(`> **说明**: 只收录 PM 已确认采纳或改写的建议；被驳回项不进入本包。`);
+  lines.push("");
+  lines.push("## 使用方式");
+  lines.push("");
+  lines.push("1. 回到原 PRD。");
+  lines.push("2. 按位置逐条处理下方建议。");
+  lines.push("3. 修改后保留本文件作为评审留痕。");
+  lines.push("");
+  lines.push("## 待落地修订");
+  lines.push("");
+
+  if (applicableItems.length === 0) {
+    lines.push("> 暂无 PM 确认采纳或改写的建议。");
+    lines.push("");
+    return lines.join("\n");
+  }
+
+  applicableItems.forEach((item, idx) => {
+    const decision = decisions[item.id];
+    const actionLabel = decision?.action === "edit" ? "PM 改写后采纳" : "确认采纳";
+    lines.push(`### ${idx + 1}. ${item.id} · ${actionLabel}`);
+    lines.push("");
+    if (item.location) lines.push(`- **建议落点**: ${item.location}`);
+    if (item.severity) lines.push(`- **优先级**: ${formatSeverity(item.severity).replaceAll("*", "")}`);
+    if (decision?.action === "edit" && decision.edited_problem) {
+      lines.push(`- **PM 修订后的问题描述**: ${decision.edited_problem}`);
+      if (item.problem) lines.push(`- **原始评审问题**: ${item.problem}`);
+    } else if (item.problem) {
+      lines.push(`- **问题**: ${item.problem}`);
+    }
+    if (item.evidence) lines.push(`- **依据**: ${item.evidence}`);
+    if (item.suggestion) lines.push(`- **建议改法**: ${item.suggestion}`);
+    if (typeof item.confidence === "number") {
+      lines.push(`- **置信度**: ${(item.confidence * 100).toFixed(0)}%`);
+    }
+    lines.push("");
+  });
+
+  return lines.join("\n");
+}
+
+/**
+ * 生成“修订稿草案”。
+ *
+ * 为了避免 AI 未经确认改写业务事实,第一版不直接重写 PRD 正文。
+ * 输出为: 原 PRD 全文 + PM 已确认建议附录。PM 可在此基础上人工改正文。
+ */
+export function generateRevisionDraftMarkdown(
+  result: ReviewResult,
+  decisions: Record<string, ItemDecision>,
+  originalPrd: string,
+): string {
+  const createdAt = new Date().toLocaleString("zh-CN", { hour12: false });
+  const adviceMarkdown = generateRevisionAdviceMarkdown(result, decisions);
+  const source = originalPrd.trim() || "_原 PRD 正文为空或未在浏览器状态中保留。_";
+
+  const lines: string[] = [];
+  lines.push(`# ${result.prd_name.replace(/\.[^.]+$/, "") || "PRD"} - 修订稿草案`);
+  lines.push("");
+  lines.push(`> ${SENSITIVE_WATERMARK}  `);
+  lines.push(`> **生成时间**: ${createdAt}  `);
+  lines.push(`> **Review ID**: \`${result.review_id}\`  `);
+  lines.push("> **重要说明**: 本文件没有覆盖原文事实。正文保持原 PRD 内容,附录列出 PM 已确认的修订建议。");
+  lines.push("");
+  lines.push("## 原 PRD 正文");
+  lines.push("");
+  lines.push(source);
+  lines.push("");
+  lines.push("---");
+  lines.push("");
+  lines.push("## 啄木鸟修订建议附录");
+  lines.push("");
+  lines.push(adviceMarkdown);
   lines.push("");
 
   return lines.join("\n");

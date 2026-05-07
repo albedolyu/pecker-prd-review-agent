@@ -28,7 +28,12 @@ import {
   type ReviewItem,
 } from "@/lib/api";
 import { useReviewStore } from "@/lib/store";
-import { generateReportMarkdown, computeStats } from "@/lib/generateReport";
+import {
+  generateReportMarkdown,
+  generateRevisionAdviceMarkdown,
+  generateRevisionDraftMarkdown,
+  computeStats,
+} from "@/lib/generateReport";
 import {
   buildPmFriendlySnapshot,
   formatReviewModeLabel,
@@ -58,6 +63,7 @@ export function Phase4ReportV8() {
   const decisions = useReviewStore((s) => s.decisions);
   const workspace = useReviewStore((s) => s.workspace);
   const prdName = useReviewStore((s) => s.prdName);
+  const prdContent = useReviewStore((s) => s.prdContent);
   const reviewer = useReviewStore((s) => s.reviewer);
   const mode = useReviewStore((s) => s.mode);
   const confirmedReportMarkdown = useReviewStore(
@@ -130,12 +136,8 @@ export function Phase4ReportV8() {
     return reviewResult.items.filter((it) => it.cross_boundary).length;
   }, [reviewResult]);
 
-  const handleDownload = () => {
-    if (!markdown) return;
-    const safeName = (prdName || "PRD").replace(/\.[^.]+$/, "");
-    const dateTag = new Date().toISOString().slice(0, 10);
-    const filename = `评审报告-${safeName}-${dateTag}.md`;
-    const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+  const downloadMarkdownFile = (filename: string, content: string) => {
+    const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -144,6 +146,17 @@ export function Phase4ReportV8() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const safePrdStem = () =>
+    (prdName || "PRD").replace(/\.[^.]+$/, "").replace(/[\\/:*?"<>|\s]+/g, "_");
+
+  const handleDownload = () => {
+    if (!markdown) return;
+    const safeName = safePrdStem();
+    const dateTag = new Date().toISOString().slice(0, 10);
+    const filename = `评审报告-${safeName}-${dateTag}.md`;
+    downloadMarkdownFile(filename, markdown);
     toast.success(`已下载 ${filename}`);
     void auditApi
       .log({
@@ -155,9 +168,49 @@ export function Phase4ReportV8() {
       .catch(() => {});
   };
 
+  const handleDownloadRevisionAdvice = () => {
+    if (!reviewResult) return;
+    const safeName = safePrdStem();
+    const dateTag = new Date().toISOString().slice(0, 10);
+    const filename = `修订建议包-${safeName}-${dateTag}.md`;
+    const content = generateRevisionAdviceMarkdown(reviewResult, decisions);
+    downloadMarkdownFile(filename, content);
+    toast.success(`已下载 ${filename}`);
+    void auditApi
+      .log({
+        event: "downloaded_revision_advice",
+        workspace,
+        prd_name: prdName || "未命名",
+        extra: { filename, review_id: reviewResult.review_id },
+      })
+      .catch(() => {});
+  };
+
+  const handleDownloadRevisionDraft = () => {
+    if (!reviewResult) return;
+    const safeName = safePrdStem();
+    const dateTag = new Date().toISOString().slice(0, 10);
+    const filename = `修订稿草案-${safeName}-${dateTag}.md`;
+    const content = generateRevisionDraftMarkdown(
+      reviewResult,
+      decisions,
+      prdContent,
+    );
+    downloadMarkdownFile(filename, content);
+    toast.success(`已下载 ${filename}`);
+    void auditApi
+      .log({
+        event: "downloaded_revision_draft",
+        workspace,
+        prd_name: prdName || "未命名",
+        extra: { filename, review_id: reviewResult.review_id },
+      })
+      .catch(() => {});
+  };
+
   const handleDownloadZhiquHandoff = () => {
     if (!pmSnapshot) return;
-    const safeName = (prdName || "PRD").replace(/\.[^.]+$/, "");
+    const safeName = safePrdStem();
     const dateTag = new Date().toISOString().slice(0, 10);
     const filename = `织雀交接包-${safeName}-${dateTag}.json`;
     const blob = new Blob(
@@ -640,6 +693,22 @@ export function Phase4ReportV8() {
           </button>
           <button
             type="button"
+            onClick={handleDownloadRevisionAdvice}
+            style={btnSecondaryStyle}
+            title="只导出 PM 已确认采纳或改写的建议,不包含原 PRD 全文"
+          >
+            下载修订建议包
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadRevisionDraft}
+            style={btnSecondaryStyle}
+            title="包含原 PRD 全文和已确认建议附录,仅限内网流转"
+          >
+            下载修订稿草案
+          </button>
+          <button
+            type="button"
             onClick={() => saveWikiMutation.mutate()}
             disabled={isReadonly || saveWikiMutation.isPending}
             style={
@@ -664,6 +733,18 @@ export function Phase4ReportV8() {
             {feishuMutation.isPending ? "推送中…" : "推送到飞书"}
           </button>
         </div>
+        <p
+          style={{
+            flexBasis: "100%",
+            margin: "4px 0 0",
+            fontSize: 12,
+            lineHeight: 1.6,
+            color: "var(--text-muted)",
+            textAlign: "right",
+          }}
+        >
+          修订稿草案会包含原 PRD 全文,仅限内网试用流转;如要外发,请先由 PM 自行脱敏。
+        </p>
       </footer>
     </div>
   );
