@@ -57,6 +57,8 @@
 - [ ] `OPENAI_WIRE_API=responses`
 - [ ] `OPENAI_REASONING_EFFORT=xhigh`
 - [ ] `OPENAI_DISABLE_RESPONSE_STORAGE=true`
+- [ ] `OPENAI_REQUEST_TIMEOUT=90`
+- [ ] `OPENAI_WORKER_MAX_RETRIES=0`
 - [ ] `PECKER_MODEL_OVERRIDE=`
 - [ ] `PECKER_SIGNATURE_SECRET=<32+ hex>` （gen-secrets.sh 已生成）
 - [ ] `PECKER_JWT_SECRET=<32+ hex>` （同上）
@@ -71,7 +73,8 @@
 
 ### 1.3 .env 可选项
 
-- [ ] `PECKER_MAX_CONCURRENT=2` （asyncio.Semaphore 并发上限，先控制成本和排队体验）
+- [ ] `PECKER_MAX_CONCURRENT=6` （允许 5-6 个 PM 同时提交评审）
+- [ ] `PECKER_MAX_CONCURRENT_MODEL_CALLS=3` （全局模型调用阀门，避免 6*4 worker 同时打满中转站）
 - [ ] `PECKER_READONLY_USERS=张三,李四` （只读用户名单，逗号分隔）
 - [ ] `DEEPSEEK_API_KEY=sk-...` （仅作为临时降级方案时需要）
 - [ ] `FEISHU_APP_ID=cli_xxx` + `FEISHU_APP_SECRET=xxx` （飞书机器人配了再填）

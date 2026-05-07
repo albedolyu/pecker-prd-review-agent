@@ -2,6 +2,14 @@
 
 所有重要变更记录。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [v0.1.2-beta] - 2026-05-07 团队并发上线保护
+
+- 支持 5-6 个 PM 同时提交评审：`PECKER_MAX_CONCURRENT=6`。
+- 新增模型调用层全局阀门：`PECKER_MAX_CONCURRENT_MODEL_CALLS=3`，避免 6*4 worker 同时打满 OpenAI 兼容中转站。
+- OpenAI worker 默认快速降级：`OPENAI_REQUEST_TIMEOUT=90`、`OPENAI_WORKER_MAX_RETRIES=0`。
+- 修正团队版中转地址示例为 `https://pikachu.claudecode.love/v1`。
+- 验证：真实 6 并发 quick review 压测 `ok_count=6 / fail_count=0`，后端全量测试 `1339 passed`。
+
 ## [Unreleased] - 2026-04-23 Harness 薄弱点三波修复 (7 层 agent + 记忆系统 + e2e)
 
 ### 🎯 7 层 agent 架构薄弱点修复 (commit b5ddf25)
