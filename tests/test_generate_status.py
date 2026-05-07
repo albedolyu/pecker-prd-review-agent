@@ -469,3 +469,75 @@ class TestRecentWindow:
         assert stats["sessions"] == 1
         assert stats["all_time"]["sessions"] == 1
         assert stats["effective_consistency"] == stats["all_time"]["effective_consistency"]
+
+
+class TestStressSessionFiltering:
+    def _session_file(self, tmp_path, name: str, events: list):
+        import json as _j
+        p = tmp_path / "workspace-w" / "output" / "sessions"
+        p.mkdir(parents=True, exist_ok=True)
+        jsonl = p / f"{name}.jsonl"
+        with jsonl.open("w", encoding="utf-8") as f:
+            for e in events:
+                f.write(_j.dumps(e, ensure_ascii=False) + "\n")
+        return jsonl
+
+    def test_tagged_stress_sessions_are_excluded_by_default(self, tmp_path, monkeypatch):
+        from generate_status import collect_session_stats
+        import generate_status as gs
+
+        self._session_file(tmp_path, "rev_1700000000_real", [
+            {"type": "review_started", "prd_name": "real.md", "reviewer": "pm-a"},
+            {"type": "worker_done", "dim": "structure", "items_count": 3, "error": None},
+        ])
+        self._session_file(tmp_path, "rev_1800000000_stress", [
+            {"type": "review_started", "session_tags": ["stress"], "session_kind": "stress"},
+            {"type": "worker_done", "dim": "structure", "items_count": 0, "error": None},
+        ])
+        monkeypatch.setattr(gs, "ROOT", tmp_path)
+
+        stats = collect_session_stats()
+
+        assert stats["sessions"] == 1
+        assert stats["outcomes"] == {"productive": 1}
+        assert stats["stress_sessions_excluded"] == 1
+        assert stats["all_time"]["stress_sessions_excluded"] == 1
+
+    def test_stress_sessions_can_be_included_explicitly(self, tmp_path, monkeypatch):
+        from generate_status import collect_session_stats
+        import generate_status as gs
+
+        self._session_file(tmp_path, "rev_1700000000_real", [
+            {"type": "review_started", "prd_name": "real.md", "reviewer": "pm-a"},
+            {"type": "worker_done", "dim": "structure", "items_count": 3, "error": None},
+        ])
+        self._session_file(tmp_path, "rev_1800000000_stress", [
+            {"type": "review_started", "session_tags": ["stress"], "session_kind": "stress"},
+            {"type": "worker_done", "dim": "structure", "items_count": 0, "error": None},
+        ])
+        monkeypatch.setattr(gs, "ROOT", tmp_path)
+
+        stats = collect_session_stats(include_stress=True)
+
+        assert stats["sessions"] == 2
+        assert stats["stress_sessions_excluded"] == 0
+        assert stats["outcomes"] == {"productive": 1, "empty_bug": 1}
+
+    def test_legacy_stress_names_are_excluded(self, tmp_path, monkeypatch):
+        from generate_status import collect_session_stats
+        import generate_status as gs
+
+        self._session_file(tmp_path, "rev_1800000000_stress", [
+            {
+                "type": "review_started",
+                "prd_name": "team-beta-stress-1.md",
+                "reviewer": "stress-pm-1",
+            },
+            {"type": "worker_done", "dim": "structure", "items_count": 0, "error": None},
+        ])
+        monkeypatch.setattr(gs, "ROOT", tmp_path)
+
+        stats = collect_session_stats()
+
+        assert stats["sessions"] == 0
+        assert stats["stress_sessions_excluded"] == 1

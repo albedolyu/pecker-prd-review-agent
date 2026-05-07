@@ -115,6 +115,51 @@ def _is_confirmed_empty_worker(w: dict) -> bool:
     )
 
 
+def _read_session_events(session_file: Path) -> list | None:
+    try:
+        text = session_file.read_text(encoding="utf-8", errors="replace").strip()
+        return [json.loads(line) for line in text.split("\n") if line]
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def _normalize_session_tag(tag) -> str:
+    text = str(tag or "").strip().lower()
+    aliases = {
+        "load-test": "stress",
+        "load_test": "stress",
+        "pressure-test": "stress",
+        "pressure_test": "stress",
+        "压测": "stress",
+    }
+    return aliases.get(text, text)
+
+
+def _session_tags(events: list) -> set[str]:
+    started = next((e for e in events if e.get("type") == "review_started"), {})
+    raw_tags = started.get("session_tags") or started.get("tags") or []
+    if isinstance(raw_tags, str):
+        raw_tags = [raw_tags]
+    elif not isinstance(raw_tags, list):
+        raw_tags = []
+
+    tags = {_normalize_session_tag(tag) for tag in raw_tags}
+    for key in ("session_kind", "run_kind"):
+        if started.get(key):
+            tags.add(_normalize_session_tag(started.get(key)))
+    return {tag for tag in tags if tag}
+
+
+def _is_stress_session(events: list) -> bool:
+    started = next((e for e in events if e.get("type") == "review_started"), {})
+    if "stress" in _session_tags(events):
+        return True
+
+    prd_name = str(started.get("prd_name") or "").strip().lower()
+    reviewer = str(started.get("reviewer") or "").strip().lower()
+    return prd_name.startswith("team-beta-stress-") or reviewer.startswith("stress-pm-")
+
+
 def classify_session(workers_done: list) -> str:
     """把一次 session 分类为 ops/bug 分层结果:
 
@@ -179,13 +224,13 @@ def _error_fingerprint(err: str) -> str:
     return s[:80]
 
 
-def _analyze_sessions(session_files: list) -> dict:
+def _analyze_sessions(session_files: list, include_stress: bool = False) -> dict:
     """核心分析逻辑,给定一批 session jsonl 文件,返回统计字典.
 
     抽出这层是为了支持"全量 vs 最近 N 条"双口径对比。
     """
     if not session_files:
-        return {"sessions": 0, "note": "no sessions found"}
+        return {"sessions": 0, "note": "no sessions found", "stress_sessions_excluded": 0}
 
     outcomes = Counter()
     worker_silent = Counter()
@@ -211,12 +256,14 @@ def _analyze_sessions(session_files: list) -> dict:
     goshawk_verdicts = Counter()
     goshawk_empty_retry_used = 0
     goshawk_instrumented = 0  # 带 verdict 字段的 final_reviewer_done 计数
+    stress_sessions_excluded = 0
 
     for sf in session_files:
-        try:
-            events = [json.loads(l) for l in sf.read_text(encoding="utf-8",
-                                                         errors="replace").strip().split("\n") if l]
-        except (json.JSONDecodeError, OSError):
+        events = _read_session_events(sf)
+        if events is None:
+            continue
+        if not include_stress and _is_stress_session(events):
+            stress_sessions_excluded += 1
             continue
 
         workers_done = [e for e in events if e.get("type") == "worker_done"]
@@ -317,6 +364,7 @@ def _analyze_sessions(session_files: list) -> dict:
     return {
         "sessions": total,
         "outcomes": dict(outcomes),
+        "stress_sessions_excluded": stress_sessions_excluded,
         "quota_hit_rate": round(outcomes["quota_exhausted"] / total, 3) if total else 0,
         "auth_expired_rate": round(outcomes.get("auth_expired", 0) / total, 3) if total else 0,
         "effective_consistency": round(effective_consistency, 3),
@@ -348,7 +396,7 @@ def _analyze_sessions(session_files: list) -> dict:
     }
 
 
-def collect_session_stats(recent_window: int = 20) -> dict:
+def collect_session_stats(recent_window: int = 20, include_stress: bool = False) -> dict:
     """扫描所有 workspace-*/output/sessions/*.jsonl,给出分层一致性指标.
 
     关键区分: quota_exhausted (ops) vs empty_bug (代码 bug) vs partial_silent (worker 稳定性)。
@@ -367,13 +415,22 @@ def collect_session_stats(recent_window: int = 20) -> dict:
     # 文件名格式 rev_<epoch_ts>_<uid>.jsonl,按文件名即按时间升序
     session_files.sort(key=lambda p: p.name)
 
-    all_time = _analyze_sessions(session_files)
-    recent = _analyze_sessions(session_files[-recent_window:])
+    all_time = _analyze_sessions(session_files, include_stress=include_stress)
+    if include_stress:
+        recent_files = session_files[-recent_window:]
+    else:
+        recent_files = [
+            sf for sf in session_files
+            if (events := _read_session_events(sf)) is not None and not _is_stress_session(events)
+        ][-recent_window:]
+    recent = _analyze_sessions(recent_files, include_stress=include_stress)
 
     # 合并: 默认指标用 recent (更反映现状),同时保留 all_time 做对照
     out = dict(recent)
     out["recent_window"] = recent_window
     out["all_time"] = all_time
+    out["stress_sessions_excluded"] = all_time.get("stress_sessions_excluded", 0)
+    out["include_stress"] = include_stress
     return out
 
 
@@ -414,6 +471,12 @@ def format_report(git_info, test_info, code_info, session_info) -> str:
         "## 真实运行指标 (evidence-based)",
         "",
     ]
+    excluded_stress = session_info.get("stress_sessions_excluded", 0)
+    if excluded_stress and not session_info.get("include_stress"):
+        lines += [
+            f"- 已排除压测 session: **{excluded_stress}** (默认不计入真实运行指标)",
+            "",
+        ]
     if session_info.get("sessions", 0) == 0:
         lines.append("- 尚无 session 数据")
     else:
@@ -571,12 +634,17 @@ def main():
     parser.add_argument("--days", type=int, default=14, help="git 活动窗口 (天)")
     parser.add_argument("--recent-window", type=int, default=20,
                         help="recent 口径的 session 数,默认最近 20 条")
+    parser.add_argument("--include-stress", action="store_true",
+                        help="包含压测 session;默认排除,避免污染真实运行指标")
     args = parser.parse_args()
 
     git_info = collect_git_activity(args.days)
     test_info = collect_test_status()
     code_info = collect_code_stats()
-    session_info = collect_session_stats(recent_window=args.recent_window)
+    session_info = collect_session_stats(
+        recent_window=args.recent_window,
+        include_stress=args.include_stress,
+    )
 
     report = format_report(git_info, test_info, code_info, session_info)
 

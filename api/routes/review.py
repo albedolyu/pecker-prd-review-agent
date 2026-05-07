@@ -291,6 +291,36 @@ class ReviewRequest(BaseModel):
     reviewer: str = "unknown"
     mode: str = Field("standard", pattern="^(standard|quick)$")
     wiki_pages: Dict[str, str] = Field(default_factory=dict)
+    session_tags: List[str] = Field(default_factory=list)
+
+
+def _normalize_session_tag(tag: Any) -> str:
+    text = str(tag or "").strip().lower()
+    aliases = {
+        "load-test": "stress",
+        "load_test": "stress",
+        "pressure-test": "stress",
+        "pressure_test": "stress",
+        "压测": "stress",
+    }
+    return aliases.get(text, text)
+
+
+def _derive_session_tags(req: ReviewRequest, reviewer: str) -> List[str]:
+    tags: List[str] = []
+    for tag in req.session_tags:
+        normalized = _normalize_session_tag(tag)
+        if normalized and normalized not in tags:
+            tags.append(normalized)
+
+    prd_name = (req.prd_name or "").strip().lower()
+    reviewer_name = (reviewer or "").strip().lower()
+    if (
+        prd_name.startswith("team-beta-stress-")
+        or reviewer_name.startswith("stress-pm-")
+    ) and "stress" not in tags:
+        tags.append("stress")
+    return tags
 
 
 @router.post("/review/run")
@@ -350,13 +380,19 @@ async def run_review(
                 f"[review][{req.workspace}] prompt injection risk on run: "
                 f"{_inj['hit_count']} hits / {_inj.get('unique_tags')} tags"
             )
-        evt.append("review_started", {
+        session_tags = _derive_session_tags(req, user["reviewer"])
+        review_started_payload = {
             "prd_name": req.prd_name,
             "mode": req.mode,
             "reviewer": user["reviewer"],  # 2026-04-24 P1: 审计用 JWT 认证过的 reviewer, 非前端 body
             "wiki_pages_count": len(req.wiki_pages),
             "injection_scan": _inj,
-        })
+        }
+        if session_tags:
+            review_started_payload["session_tags"] = session_tags
+        if "stress" in session_tags:
+            review_started_payload["session_kind"] = "stress"
+        evt.append("review_started", review_started_payload)
 
         # 1. 构建增强 PRD
         enhanced_prd = req.prd_content

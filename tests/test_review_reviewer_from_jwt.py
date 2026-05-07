@@ -100,3 +100,27 @@ class TestReviewRequestSchemaKeepsField:
             "ReviewRequest.reviewer 字段附近应有注释说明后端以 JWT 为准, 否则下次重构容易"
             "把 req.reviewer 拿回来用"
         )
+
+
+class TestReviewSessionTags:
+    def test_request_accepts_session_tags_for_operational_runs(self):
+        from api.routes.review import ReviewRequest
+
+        req = ReviewRequest(
+            prd_content="dummy",
+            workspace="workspace-x",
+            session_tags=["stress"],
+        )
+
+        assert req.session_tags == ["stress"]
+
+    def test_legacy_stress_request_is_tagged(self):
+        from api.routes.review import ReviewRequest, _derive_session_tags
+
+        req = ReviewRequest(
+            prd_content="dummy",
+            workspace="workspace-x",
+            prd_name="team-beta-stress-1.md",
+        )
+
+        assert _derive_session_tags(req, reviewer="stress-pm-1") == ["stress"]
