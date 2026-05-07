@@ -2,6 +2,9 @@
 
 > v8 前端(Next.js 16)+ v7 后端(FastAPI)部署 · 两个方案可选
 
+> ⚠️ 旧版预览部署文档:团队 Beta/服务器上线请以根目录 [DEPLOYMENT_CHECKLIST.md](../DEPLOYMENT_CHECKLIST.md) 为准。
+> 本文保留 Vercel、GHCR、Docker Compose 的历史路径说明;文中的 Claude/OAT、`ANTHROPIC_API_KEY`、旧 commit 号不代表当前默认上线方案。
+
 本文档面向:**第一次把 v8 跑起来给同事使用** 的情况。
 
 ---

@@ -5,7 +5,7 @@
 ```mermaid
 flowchart TD
     subgraph "Phase 1 — Precheck"
-        A["POST /api/review/precheck<br/>wiki scan + Claude gap analysis<br/>+ prompt_injection_scanner (warn-only)<br/>model: sonnet | timeout: 30s"]
+        A["POST /api/review/precheck<br/>wiki scan + GPT gap analysis via model_router<br/>+ prompt_injection_scanner (warn-only)<br/>route: precheck.gaps | timeout: 30s"]
     end
 
     subgraph "Phase 2 — Parallel Review (SSE)"
@@ -13,20 +13,20 @@ flowchart TD
         B --> C["precheck<br/>_scan_wiki_for_prd<br/>local, <1s"]
         C --> D0["stagger 0.3s delay per worker"]
 
-        D0 --> D1["Worker: structure<br/>codename: 织布鸟<br/>model: sonnet<br/>timeout: WORKER_TIMEOUT<br/>rules: V-02~V-06"]
-        D0 --> D2["Worker: quality<br/>codename: 猫头鹰<br/>model: sonnet<br/>timeout: WORKER_TIMEOUT<br/>rules: V-07~V-12"]
-        D0 --> D3["Worker: ai_coding<br/>codename: 渡鸦<br/>model: opus<br/>timeout: WORKER_TIMEOUT<br/>rules: RC-004~RC-008, RC-013~RC-015"]
-        D0 --> D4["Worker: data_quality<br/>codename: 鸬鹚<br/>model: sonnet<br/>timeout: WORKER_TIMEOUT<br/>rules: RC-009~RC-010"]
+        D0 --> D1["Worker: structure<br/>codename: 业务鸟<br/>route: worker.structure<br/>OpenAI native / gpt55<br/>timeout: WORKER_TIMEOUT<br/>rules: V-02~V-06"]
+        D0 --> D2["Worker: quality<br/>codename: 体验鸟<br/>route: worker.quality<br/>OpenAI native / gpt55<br/>timeout: WORKER_TIMEOUT<br/>rules: V-07~V-12"]
+        D0 --> D3["Worker: ai_coding<br/>codename: 风险鸟<br/>route: worker.ai_coding<br/>OpenAI native / gpt55<br/>timeout: WORKER_TIMEOUT<br/>rules: RC-004~RC-008, RC-013~RC-015"]
+        D0 --> D4["Worker: data_quality<br/>codename: 数据鸟<br/>route: worker.data_quality<br/>OpenAI native / gpt55<br/>timeout: WORKER_TIMEOUT<br/>rules: RC-009~RC-010"]
 
         D1 --> E["merge_and_deduplicate<br/>review/aggregation.py<br/>dedup threshold: 0.8 similarity"]
         D2 --> E
         D3 --> E
         D4 --> E
 
-        E --> F["Goshawk Advisor<br/>codename: 苍鹰<br/>model: opus<br/>timeout: default<br/>goshawk_advisor.py"]
+        E --> F["Goshawk Advisor<br/>codename: 苍鹰<br/>route: advisor.goshawk<br/>OpenAI native / gpt55<br/>timeout: default<br/>goshawk_advisor.py"]
 
         F --> G["apply_advisor_result<br/>false_positive / additional / conflict"]
-        G --> H["Haiku sanity check<br/>_sanity_check_false_positives<br/>model: haiku | timeout: 10s"]
+        G --> H["Advisor recheck<br/>_sanity_check_false_positives<br/>route: advisor.goshawk.recheck | timeout: 10s"]
         H --> I["compute_signature<br/>HMAC-SHA256<br/>api/models.py"]
         I --> J["SSE: result event<br/>ReviewResult opaque handle"]
     end

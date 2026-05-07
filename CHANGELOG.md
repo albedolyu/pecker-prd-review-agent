@@ -2,6 +2,17 @@
 
 所有重要变更记录。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [v0.1.4-beta] - 2026-05-07 压测 session 口径收口
+
+- `/api/review/run` 支持 `session_tags`,并对 `team-beta-stress-*` / `stress-pm-*` 自动打 `stress` 标记。
+- `scripts/generate_status.py` 默认排除压测 session,避免团队压测污染真实运行健康度;需要复盘压测时可加 `--include-stress`。
+- `STATUS.md` 本地生成口径已刷新:排除压测 session 24 条,后端全量测试 `1344 passed`。
+
+## [v0.1.3-beta] - 2026-05-07 团队 Beta 部署文档同步
+
+- 同步团队版部署清单,明确 OpenAI 兼容 API key 是团队上线默认路径,CLI/OAT 仅作为本地开发兜底。
+- 补充并发、预算、失败降级、workspace 隔离、secret 治理和上线前验证清单。
+
 ## [v0.1.2-beta] - 2026-05-07 团队并发上线保护
 
 - 支持 5-6 个 PM 同时提交评审：`PECKER_MAX_CONCURRENT=6`。

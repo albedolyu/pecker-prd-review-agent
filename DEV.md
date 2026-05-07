@@ -19,7 +19,7 @@ make install   # 一次完成: pip 装 deps + 前端 pnpm install + git pre-push
 
 完成后还要做 (脚本会提示):
 
-1. 配 `.env`: `bash scripts/gen-secrets.sh > .env`, 然后填 `FEISHU_*` / `API_KEY` / 数据库等
+1. 配 `.env`: `bash scripts/gen-secrets.sh > .env`, 然后填 `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `FEISHU_*` 等
 2. 启后端: `make dev-api` (uvicorn :8000)
 3. 启前端: `make dev-web` (Next.js :3000)
 
@@ -39,10 +39,10 @@ make install   # 一次完成: pip 装 deps + 前端 pnpm install + git pre-push
 
 ```
 ┌─────────────────┐  pnpm dev          ┌────────────────┐  uvicorn      ┌───────────────┐
-│ Next.js 16      │ ◀────────────────▶ │ FastAPI        │ ◀───────────▶ │ Claude Code   │
-│ web/ :3000      │  /api/* rewrite    │ api/* :8000    │  本地直连      │ CLI (子进程)  │
+│ Next.js 16      │ ◀────────────────▶ │ FastAPI        │ ◀───────────▶ │ model_router  │
+│ web/ :3000      │  /api/* rewrite    │ api/* :8000    │ OpenAI native  │ GPT routes    │
 │ React 19 + TS   │                    │ SSE 流式评审    │                │               │
-│ shadcn/ui       │                    │ 无 API Key     │                │               │
+│ shadcn/ui       │                    │ API key 服务端  │                │               │
 └─────────────────┘                    └────────────────┘                └───────────────┘
       ▲                                        ▲
       │ JWT HttpOnly cookie                   │ 复用现有 10 个鸟模块
@@ -84,13 +84,20 @@ streamlit run legacy/app.py --server.port 8501
 
 ```bash
 # 必需
-USE_CLAUDE_CODE=1                           # 只支持本地 CC CLI
+OPENAI_API_KEY=<服务端真实 key>              # 团队版默认 OpenAI 兼容 API
+OPENAI_BASE_URL=https://pikachu.claudecode.love/v1
+OPENAI_WIRE_API=responses
+OPENAI_REASONING_EFFORT=xhigh
+OPENAI_DISABLE_RESPONSE_STORAGE=true
+OPENAI_REQUEST_TIMEOUT=90
+OPENAI_WORKER_MAX_RETRIES=0
 PECKER_SIGNATURE_SECRET=<32+ 字符随机串>    # openssl rand -hex 32
 PECKER_JWT_SECRET=<32+ 字符随机串>          # openssl rand -hex 32
 PECKER_WEB_PASSWORD=<团队共享密码>          # 登录页会校验
 
 # 可选
-PECKER_MAX_CONCURRENT=2                     # asyncio.Semaphore 并发上限
+PECKER_MAX_CONCURRENT=6                     # 团队版允许 5-6 人同时提交
+PECKER_MAX_CONCURRENT_MODEL_CALLS=3         # 全局模型调用阀门
 PECKER_READONLY_USERS=张三,李四             # 这些 reviewer 不能 push/归档
 WIKI_PATH=./shared-wiki                     # 全局知识库(workspace 优先)
 FEISHU_APP_ID=cli_xxx                       # 飞书推送可选
@@ -109,7 +116,8 @@ FEISHU_REPORT_CHAT_ID=oc_xxx
 | Python | 3.10+ | 后端 |
 | Node | 20+ | 前端 |
 | pnpm | 8+ | `web/` 的包管理(plan 钦定,不要换 npm/yarn) |
-| Claude Code CLI | 最新 | 本地 agent 调用,需先 `claude login` |
+| OpenAI 兼容 API key | 服务端 `.env` | 团队版默认模型调用路径 |
+| Claude/Codex CLI | 可选 | 仅本地开发兜底,不作为团队上线依赖 |
 
 Python deps:`pip install -r requirements.txt`
 Web deps:`cd web && pnpm install`
@@ -119,7 +127,7 @@ Web deps:`cd web && pnpm install`
 ## 测试三件套
 
 ```bash
-# Python: 105 tests(parallel_review / goshawk / feedback / api auth 等)
+# Python: 全量后端回归
 python -m pytest tests/ -q
 
 # Web TypeScript: 严格模式 + vitest 单测(markdown-lint 7 个 fixture)
@@ -129,12 +137,12 @@ cd web && pnpm exec tsc --noEmit && pnpm test
 cd web && pnpm exec playwright test
 ```
 
-零回归基线(Phase D):
+当前团队 Beta 基线:
 
-- `pytest`: **105 passed**
+- `pytest`: **1344 passed**
 - `tsc --noEmit`: 零 error
-- `vitest`: **7/7**
-- `next build`: 5 routes 静态预渲染
+- `vitest`: **91 passed**
+- `next build`: 生产构建通过
 
 ---
 
@@ -176,7 +184,7 @@ prd review/
 ├── review/                 拆分后的评审核心包 (2026-04-19 SPLIT_PLAN 落地)
 │   ├── dimensions.py       YAML 维度配置 + schema 校验 + _cn_label
 │   ├── prompting.py        Worker system / user messages 构建 + wiki 清单注入
-│   ├── worker.py           单 Worker 执行 (prompt → Claude API → items 抽取)
+│   ├── worker.py           单 Worker 执行 (prompt → model_router → items 抽取)
 │   ├── orchestration.py    4 Worker 并行编排 + 多轮投票 + scratchpad
 │   ├── evidence_verify.py  A/B/C 三类依据硬验证 + wiki 索引
 │   └── aggregation.py      merge_and_deduplicate + majority_vote
