@@ -97,6 +97,24 @@ async def test_sync_is_disconnected_true_breaks_early():
 
 
 @pytest.mark.asyncio
+async def test_sse_emits_heartbeat_when_review_is_silent():
+    """No worker event for a while should still keep the SSE connection alive."""
+    emitter = ReviewProgressEmitter()
+
+    async def slow_coro():
+        await asyncio.sleep(0.05)
+        return {"ok": True}
+
+    chunks = await _collect(
+        sse_review_pipeline(emitter, slow_coro(), heartbeat_seconds=0.01),
+        max_chunks=1,
+    )
+
+    assert chunks
+    assert "event: heartbeat" in chunks[0]
+
+
+@pytest.mark.asyncio
 async def test_async_is_disconnected_false_awaited_and_passes():
     """async def 签名 (starlette Request.is_disconnected 就是这种) 返回 False 时
     pipeline 应 await 结果后不 cancel 继续。这是上次 SSE bug 的回归测试核心。

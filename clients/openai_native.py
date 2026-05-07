@@ -48,7 +48,11 @@ class OpenAINativeClient:
     def _build_client(self, api_key: str, base_url: Optional[str]):
         from openai import OpenAI
 
-        kwargs: Dict[str, Any] = {"api_key": api_key}
+        kwargs: Dict[str, Any] = {
+            "api_key": api_key,
+            "timeout": self._env_float("OPENAI_REQUEST_TIMEOUT", 120.0),
+            "max_retries": 0,
+        }
         if base_url:
             kwargs["base_url"] = base_url
         return OpenAI(**kwargs)
@@ -114,6 +118,13 @@ class OpenAINativeClient:
     @staticmethod
     def _env_bool(name: str) -> bool:
         return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+    @staticmethod
+    def _env_float(name: str, default: float) -> float:
+        try:
+            return float(os.environ.get(name, str(default)) or default)
+        except ValueError:
+            return default
 
     @classmethod
     def _response_input(cls, system: Any, messages: List[Dict[str, Any]]) -> str:

@@ -330,7 +330,7 @@ async def run_review(
         import time as _time
         _pipeline_start = _time.time()
 
-        from parallel_review import parallel_review, parallel_review_sync
+        from parallel_review import parallel_review
         # 修法 C (2026-04-26): 默认走 advisor_review_default_async → 内部 advisor_review_with_resampling
         # 让 sprint #2 多次重采样 + DAR 少数派保留 + sprint #6 NLI 真在 web 路径生效.
         # PM 可 PECKER_GOSHAWK_RESAMPLE=1 紧急回退老单次行为.
@@ -382,17 +382,17 @@ async def run_review(
                     pass
 
             if req.mode == "quick":
-                # 快速模式:全 sonnet,不显示 per-worker 进度细节
+                # Quick also uses async workers so each model call keeps the
+                # same timeout/degraded-return protection as standard review.
                 quick_tiers = {k: MODEL_TIERS["sonnet"] for k in MODEL_TIERS}
-                import functools
-                loop = asyncio.get_running_loop()
-                result = await loop.run_in_executor(
-                    None,
-                    functools.partial(
-                        parallel_review_sync, client, enhanced_prd,
-                        req.wiki_pages, quick_tiers, workspace=ws_abs_path,
-                        on_tool_call=_on_tool_call,
-                    ),
+                def _on_worker_done(dim, r):
+                    emitter.emit_worker_done(dim, r)
+                    evt.append("worker_done", _build_worker_done_event_payload(dim, r))
+
+                result = await parallel_review(
+                    client, enhanced_prd, req.wiki_pages, quick_tiers,
+                    on_worker_done=_on_worker_done, workspace=ws_abs_path,
+                    on_tool_call=_on_tool_call,
                 )
             else:
                 def _on_worker_done(dim, r):

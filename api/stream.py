@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
 
@@ -137,14 +138,26 @@ class ReviewProgressEmitter:
         except asyncio.QueueFull:
             pass
 
-    async def stream(self):
+    async def stream(self, heartbeat_seconds: Optional[float] = None):
         """异步生成器,从 queue 产出 SSE 格式的字符串。
 
         FastAPI 的 StreamingResponse 直接 async for 这个就行。
         每个事件格式: `event: <event_name>\\ndata: <json>\\n\\n`
         """
+        if heartbeat_seconds is None:
+            try:
+                heartbeat_seconds = float(os.environ.get("PECKER_SSE_HEARTBEAT_SECONDS", "15"))
+            except ValueError:
+                heartbeat_seconds = 15.0
         while True:
-            item = await self.queue.get()
+            try:
+                if heartbeat_seconds and heartbeat_seconds > 0:
+                    item = await asyncio.wait_for(self.queue.get(), timeout=heartbeat_seconds)
+                else:
+                    item = await self.queue.get()
+            except asyncio.TimeoutError:
+                yield 'event: heartbeat\ndata: {"event": "heartbeat"}\n\n'
+                continue
             if item is None:  # sentinel
                 return
             event_name = item.get("event", "message")
@@ -176,6 +189,7 @@ async def sse_review_pipeline(
     emitter: ReviewProgressEmitter,
     review_coro,
     is_disconnected: Optional[Callable[[], Union[bool, Awaitable[bool]]]] = None,
+    heartbeat_seconds: Optional[float] = None,
 ):
     """把 review_coro (parallel_review + goshawk) 包装成 SSE pipeline。
 
@@ -202,7 +216,7 @@ async def sse_review_pipeline(
     task = asyncio.create_task(_runner())
 
     try:
-        async for chunk in emitter.stream():
+        async for chunk in emitter.stream(heartbeat_seconds=heartbeat_seconds):
             # 检查客户端是否断开(兼容 sync/async 两种实现)
             if is_disconnected is not None:
                 result = is_disconnected()

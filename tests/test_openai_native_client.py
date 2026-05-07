@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import types
 import sys
 from types import SimpleNamespace
 
@@ -176,3 +177,24 @@ def test_openai_native_client_accepts_legacy_api_key_alias(monkeypatch):
     client = OpenAINativeClient()
 
     assert client.client is fake_client
+
+
+def test_openai_native_client_sets_request_timeout_and_uses_own_retries(monkeypatch):
+    from clients.openai_native import OpenAINativeClient
+
+    captured = {}
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=FakeOpenAI))
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_REQUEST_TIMEOUT", "45")
+
+    OpenAINativeClient(base_url="https://pikachu.claudecode.love")
+
+    assert captured["api_key"] == "test-key"
+    assert captured["base_url"] == "https://pikachu.claudecode.love"
+    assert captured["timeout"] == 45.0
+    assert captured["max_retries"] == 0
