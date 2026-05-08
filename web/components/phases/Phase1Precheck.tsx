@@ -73,7 +73,7 @@ export function Phase1Precheck() {
       setPrecheckResult(data);
       setWikiPages({ ...data.wiki_pages });
       toast.success(
-        `预检完成:强相关 ${data.strong.length} · 弱相关 ${data.weak.length} · 盲区 ${data.gaps.length}`,
+        `预检完成:高度相关 ${data.strong.length} · 可参考 ${data.weak.length} · 资料缺口 ${data.gaps.length}`,
       );
       // 预检是非交互步骤,完成后自动推进到 Phase 2,和 Phase 2 → Phase 3
       // 的自动推进保持一致。给 800ms 让用户看一眼 toast + 弱相关/盲区结果。
@@ -131,11 +131,11 @@ export function Phase1Precheck() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-muted-foreground" />
-            知识盲区预检
+            资料预检
           </CardTitle>
           <CardDescription>
-            扫描 workspace 里的 wiki 页面,识别与本次 PRD 强 / 弱相关的页面,
-            并标出知识盲区。下一步评审员会看到这些页面作为上下文。
+            扫描资料库里和本次 PRD 相关的材料,并标出需要补背景的地方。
+            下一步会带着这些材料生成评审意见。
           </CardDescription>
         </CardHeader>
       </Card>
@@ -146,7 +146,7 @@ export function Phase1Precheck() {
           <Loader2 className="h-4 w-4 animate-spin" />
           <AlertTitle>正在预检...</AlertTitle>
           <AlertDescription>
-            本地 wiki 扫描 + 盲区分析,大约 10-15 秒。期间请不要关闭页面。
+            正在扫描资料库并整理相关材料,大约 10-15 秒。期间请不要关闭页面。
           </AlertDescription>
         </Alert>
       )}
@@ -174,28 +174,28 @@ export function Phase1Precheck() {
           {/* 强相关 */}
           <ResultColumn
             icon={<BookMarked className="h-4 w-4" />}
-            title="强相关"
-            hint="命中 ≥3 关键词"
+            title="高度相关"
+            hint="建议优先参考"
             items={precheckResult.strong}
-            emptyText="没有强相关 wiki 页"
+            emptyText="暂无高度相关资料"
             accent="primary"
           />
           {/* 弱相关 */}
           <ResultColumn
             icon={<BookOpen className="h-4 w-4" />}
-            title="弱相关"
-            hint="命中 ≥1 关键词"
+            title="可参考"
+            hint="可能提供背景"
             items={precheckResult.weak}
-            emptyText="没有弱相关 wiki 页"
+            emptyText="暂无可参考资料"
             accent="secondary"
           />
           {/* 知识盲区 */}
           <ResultColumn
             icon={<HelpCircle className="h-4 w-4" />}
-            title="知识盲区"
-            hint="系统识别的缺失主题"
+            title="资料缺口"
+            hint="建议补充的背景"
             items={precheckResult.gaps}
-            emptyText="无明显盲区"
+            emptyText="暂无明显缺口"
             accent="warning"
           />
         </div>
@@ -207,8 +207,8 @@ export function Phase1Precheck() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base">补充说明(可选)</CardTitle>
             <CardDescription className="text-xs">
-              看完预检结果后,如果想提醒下一步的编辑关注某些点,写在这里。
-              会和 PRD 一起送到 4 位编辑。
+              看完预检结果后,如果想提醒下一步重点关注某些点,写在这里。
+              会和 PRD 一起进入评审。
             </CardDescription>
           </CardHeader>
           <CardContent>

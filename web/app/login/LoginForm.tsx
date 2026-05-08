@@ -160,7 +160,7 @@ export function LoginForm() {
                   marginTop: 4,
                 }}
               >
-                PRD 评审工作台 · 需管理员分配的密码
+                PRD 评审工作台 · 使用团队密码登录
               </p>
             </header>
 

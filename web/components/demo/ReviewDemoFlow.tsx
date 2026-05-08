@@ -127,8 +127,8 @@ function DemoUpload() {
         desc="样例 PRD 已自动接入,你可以直接看后续每个阶段。"
       />
       <div style={fieldGridStyle}>
-        <DemoField label="资料库" value={DEMO_WORKSPACE.replace(/^workspace-/, "")} hint="演示使用积分支付相关知识库" />
-        <DemoField label="评审模式" value="深评审" hint="四个评审方向 + 苍鹰交叉校验" />
+        <DemoField label="资料库" value={DEMO_WORKSPACE.replace(/^workspace-/, "")} hint="演示使用积分支付相关资料" />
+        <DemoField label="评审模式" value="深评审" hint="四个方向检查 + 结果完整性确认" />
         <div style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
             <div>
@@ -148,13 +148,13 @@ function DemoPrecheck() {
   return (
     <main style={pageStyle(980)}>
       <SectionHead
-        title="盲区预检"
-        desc="先看资料库覆盖情况,正式评审前就能知道哪些点需要补上下文。"
+        title="资料预检"
+        desc="先看资料库覆盖情况,正式评审前就能知道哪些背景还需要补。"
       />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
         <PrecheckColumn title="已覆盖" tone="done" items={DEMO_PRECHECK.strong} />
         <PrecheckColumn title="部分覆盖" tone="warn" items={DEMO_PRECHECK.weak} />
-        <PrecheckColumn title="知识盲区" tone="fail" items={DEMO_PRECHECK.gaps} />
+        <PrecheckColumn title="资料缺口" tone="fail" items={DEMO_PRECHECK.gaps} />
       </div>
       <div style={{ ...cardStyle, marginTop: 16 }}>
         <div style={eyebrowStyle}>补充说明</div>
@@ -168,18 +168,18 @@ function DemoPrecheck() {
 
 function DemoRunning() {
   const lines: ConsoleLine[] = [
-    { t: "0.0s", src: { name: "系统" }, level: "info", text: "PRD 已接入,正在加载知识库" },
-    { t: "0.8s", src: { name: "调度" }, level: "accent", text: "四个评审方向开始并行检查(深评审)" },
-    { t: "3.1s", src: { name: "结构", bird: 1 }, level: "ok", text: "已完成 · 提交 1 条意见 · 耗时 3.1 秒" },
-    { t: "3.8s", src: { name: "数据质量", bird: 2 }, level: "ok", text: "已完成 · 提交 1 条意见 · 耗时 3.8 秒" },
-    { t: "5.6s", src: { name: "苍鹰", bird: 5 }, level: "ok", text: "交叉校验完成" },
+    { t: "0.0s", src: { name: "进度" }, level: "info", text: "PRD 已接入,正在加载资料库" },
+    { t: "0.8s", src: { name: "进度" }, level: "accent", text: "四个方向开始并行检查(深评审)" },
+    { t: "3.1s", src: { name: "业务完整性", bird: 1 }, level: "ok", text: "已完成 · 提交 1 条意见 · 耗时 3.1 秒" },
+    { t: "3.8s", src: { name: "字段口径", bird: 2 }, level: "ok", text: "已完成 · 提交 1 条意见 · 耗时 3.8 秒" },
+    { t: "5.6s", src: { name: "收口", bird: 5 }, level: "ok", text: "意见合并完成" },
   ];
 
   return (
     <main style={pageStyle(1120)}>
       <SectionHead
-        title="评审运行状态"
-        desc="演示里直接展示完成态,真实评审会边跑边刷新。"
+        title="正在生成评审意见"
+        desc="演示里直接展示完成态,真实评审会实时刷新处理进度。"
       />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 18 }}>
         {DEMO_REVIEW_RESULT.workers.map((worker) => (
@@ -202,8 +202,8 @@ function DemoHealth() {
   return (
     <main style={pageStyle(900)}>
       <SectionHead
-        title="运行质量检查"
-        desc="进入逐条确认前,先确认本次评审是否可信。"
+        title="结果完整性检查"
+        desc="进入逐条确认前,先确认本次结果是否完整。"
       />
       <RunHealthCheck
         sessionClass="productive"
@@ -228,7 +228,7 @@ function DemoConfirm() {
     <main style={pageStyle(1200)}>
       <SectionHead
         title="逐条确认"
-        desc="左边看 PRD 原文,右边处理评审意见;演示按钮不可提交。"
+        desc="左边看 PRD 原文,右边逐条处理意见;演示按钮不可提交。"
       />
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 460px", gap: 16 }}>
         <div style={cardStyle}>
@@ -254,8 +254,8 @@ function DemoReport() {
   return (
     <main style={pageStyle(1080)}>
       <SectionHead
-        title="评审报告"
-        desc="这里展示 PM 摘要、织雀交接包和最终 markdown 出口。"
+        title="导出报告"
+        desc="这里展示 PM 摘要、修订建议包和最终报告出口。"
       />
       <div style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: 16 }}>
         <div style={cardStyle}>

@@ -705,7 +705,7 @@ function buildConsoleLines(
           t,
           src: { name: "进度" },
           level: "accent",
-          text: `四个评审方向开始并行检查(${"mode" in e && e.mode === "quick" ? "轻评审" : "深评审"})`,
+          text: `四个方向开始并行检查(${"mode" in e && e.mode === "quick" ? "轻评审" : "深评审"})`,
         });
         break;
       case "worker_done": {
