@@ -97,13 +97,19 @@ cd web && pnpm install
 必填项：
 
 ```bash
-OPENAI_API_KEY=<服务端真实 key>
+OPENAI_API_KEY=<服务端真实 key，单 key 兜底>
+# 推荐: 多 key 池。5-6 人试用时用 5-10 个中转 key 分摊 worker 调用。
+# 只放服务端 .env，不提交 git，不发前端。
+OPENAI_API_KEYS=key_1=<sk...>,key_2=<sk...>,key_3=<sk...>,key_4=<sk...>,key_5=<sk...>
 OPENAI_BASE_URL=<OpenAI 兼容中转地址>
 OPENAI_WIRE_API=responses
 OPENAI_REASONING_EFFORT=xhigh
 OPENAI_DISABLE_RESPONSE_STORAGE=true
 OPENAI_REQUEST_TIMEOUT=360
-OPENAI_WORKER_MAX_RETRIES=0
+OPENAI_WORKER_MAX_RETRIES=2
+OPENAI_ADVISOR_MAX_RETRIES=2
+OPENAI_ROUTER_MAX_RETRIES=1
+PECKER_PRECHECK_TIMEOUT=90
 
 PECKER_SIGNATURE_SECRET=<32+ hex>
 PECKER_JWT_SECRET=<32+ hex>
@@ -111,7 +117,7 @@ PECKER_WEB_PASSWORD=<给内部同事登录用的密码>
 PECKER_ADMIN_USERS=lvxinhang
 
 PECKER_MAX_CONCURRENT=3
-PECKER_MAX_CONCURRENT_MODEL_CALLS=3
+PECKER_MAX_CONCURRENT_MODEL_CALLS=5
 PECKER_MODEL_CALL_QUEUE_TIMEOUT=240
 PECKER_ENABLE_WORKER_TIMEOUT_RECOVERY=0
 
@@ -237,15 +243,18 @@ rule_performance_history.json
 
 ```bash
 PECKER_MAX_CONCURRENT=3
-PECKER_MAX_CONCURRENT_MODEL_CALLS=3
+PECKER_MAX_CONCURRENT_MODEL_CALLS=5
 PECKER_MODEL_CALL_QUEUE_TIMEOUT=240
 PECKER_ENABLE_WORKER_TIMEOUT_RECOVERY=0
+OPENAI_WORKER_MAX_RETRIES=2
+OPENAI_API_KEYS=<服务端多 key 池>
 ```
 
 部署后请研发协助做一次内网并发 smoke：
 
 - 5-6 个账号或浏览器 session 同时发起 demo 或真实 PRD 评审。
 - 后端不出现大量 401。
+- 遇到 524、timeout、429、5xx 时，后端可换下一个 key 重试，日志不打印真实 `sk-*`。
 - 前端不白屏。
 - 失败时能看到明确提示。
 - 预算闸生效。

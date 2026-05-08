@@ -192,6 +192,37 @@ def _scan_wiki_for_prd(prd_content: str, wiki_path: Path) -> Dict[str, Any]:
     return {"strong": strong, "weak": weak, "gaps": [], "wiki_pages": wiki_pages}
 
 
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.environ.get(name, str(default)) or default)
+    except ValueError:
+        return default
+
+
+def _call_precheck_gaps(req: PrecheckRequest):
+    context = f"PRD 内容:\n{req.prd_content[:3000]}"
+    if req.raw_materials:
+        context += "\n\n补充资料:\n" + "\n---\n".join(t[:1000] for t in req.raw_materials)
+
+    from model_router import route_call
+    response = route_call(
+        "precheck.gaps",
+        max_tokens=2048,
+        system='''你是啄木鸟知识盲区预检模块。分析 PRD 内容,输出以下 3 类信息(JSON 格式):
+{
+  "strong": ["强相关的已知知识点"],
+  "weak": ["弱相关的知识点"],
+  "gaps": ["知识盲区——PRD 涉及但你没有足够信息判断的领域"]
+}
+每类最多 5 条。盲区要具体说明缺什么信息。''',
+        messages=[{"role": "user", "content": context}],
+    )
+    text = response.content[0].text if response.content else "{}"
+    m = re.search(r'\{[\s\S]*\}', text)
+    llm_result = json.loads(m.group()) if m else {"strong": [], "weak": [], "gaps": []}
+    return llm_result, response
+
+
 @router.post("/review/precheck", response_model=PrecheckResponse)
 async def precheck(
     req: PrecheckRequest,
@@ -224,27 +255,12 @@ async def precheck(
         _wiki_scan_cache[cache_key] = {"result": wiki_scan, "ts": _time.time()}
 
     # 预检也走 model_routes.yaml, 避免 Web 团队版回落到个人 Claude/OAT 会话。
+    # LLM 盲区分析是增强项: 超时或失败时只返回本地 wiki 扫描,不把技术错误暴露给 PM。
     try:
-        context = f"PRD 内容:\n{req.prd_content[:3000]}"
-        if req.raw_materials:
-            context += "\n\n补充资料:\n" + "\n---\n".join(t[:1000] for t in req.raw_materials)
-
-        from model_router import route_call
-        response = route_call(
-            "precheck.gaps",
-            max_tokens=2048,
-            system='''你是啄木鸟知识盲区预检模块。分析 PRD 内容,输出以下 3 类信息(JSON 格式):
-{
-  "strong": ["强相关的已知知识点"],
-  "weak": ["弱相关的知识点"],
-  "gaps": ["知识盲区——PRD 涉及但你没有足够信息判断的领域"]
-}
-每类最多 5 条。盲区要具体说明缺什么信息。''',
-            messages=[{"role": "user", "content": context}],
+        llm_result, response = await asyncio.wait_for(
+            asyncio.to_thread(_call_precheck_gaps, req),
+            timeout=max(0.1, _env_float("PECKER_PRECHECK_TIMEOUT", 90.0)),
         )
-        text = response.content[0].text if response.content else "{}"
-        m = re.search(r'\{[\s\S]*\}', text)
-        llm_result = json.loads(m.group()) if m else {"strong": [], "weak": [], "gaps": []}
 
         # 预检成本计入每日预算(防 precheck 端点被无限刷 → 逃票)
         try:
@@ -253,9 +269,15 @@ async def precheck(
             record_review_cost(project_root, _cost, user.get("reviewer", ""))
         except Exception:
             pass  # 记账失败不阻塞预检
+    except asyncio.TimeoutError:
+        log.warning(
+            f"[precheck][{req.workspace}] LLM 预检超过 "
+            f"{_env_float('PECKER_PRECHECK_TIMEOUT', 90.0):.0f}s,已降级为本地资料库扫描"
+        )
+        llm_result = {"strong": [], "weak": [], "gaps": []}
     except Exception as e:
-        # 预检失败不阻塞流程,返回本地 wiki 扫描结果
-        llm_result = {"strong": [], "weak": [], "gaps": [f"预检失败: {str(e)[:100]}"]}
+        log.warning(f"[precheck][{req.workspace}] LLM 预检失败,已降级为本地资料库扫描: {str(e)[:120]}")
+        llm_result = {"strong": [], "weak": [], "gaps": []}
 
     # 2026-04-23 C: 扫 PRD + raw_materials 里的 prompt injection pattern
     from prompt_injection_scanner import scan_inputs

@@ -36,7 +36,8 @@
 
 > 团队上线默认走 API key,避免多人同时评审时挤占个人 CLI/OAT session。真实 key 只写服务端 `.env`,不写日志、不进 git、不出现在前端。
 
-- [ ] `OPENAI_API_KEY=<服务端真实 key>` 已写入 `.env`
+- [ ] `OPENAI_API_KEY=<服务端真实 key>` 已写入 `.env`（单 key 兜底）
+- [ ] `OPENAI_API_KEYS=key_1=<sk...>,key_2=<sk...>,...` 已写入 `.env`（团队版推荐 5-10 个 key,只放服务端）
 - [ ] `OPENAI_BASE_URL=<OpenAI 兼容中转地址>` 已按实际网关填写（没有中转则留空）
 - [ ] `OPENAI_WIRE_API=responses`
 - [ ] `OPENAI_REASONING_EFFORT=xhigh`
@@ -52,13 +53,17 @@
   # 然后用编辑器打开 .env 填剩下的
   ```
 
-- [ ] `OPENAI_API_KEY=<服务端真实 key>` （团队上线必填）
+- [ ] `OPENAI_API_KEY=<服务端真实 key>` （单 key 兜底）
+- [ ] `OPENAI_API_KEYS=<服务端多 key 池>` （团队上线建议填,真实 key 不进 git/日志/前端）
 - [ ] `OPENAI_BASE_URL=<OpenAI 兼容中转地址>` （如使用中转则必填）
 - [ ] `OPENAI_WIRE_API=responses`
 - [ ] `OPENAI_REASONING_EFFORT=xhigh`
 - [ ] `OPENAI_DISABLE_RESPONSE_STORAGE=true`
 - [ ] `OPENAI_REQUEST_TIMEOUT=360`
-- [ ] `OPENAI_WORKER_MAX_RETRIES=0`
+- [ ] `OPENAI_WORKER_MAX_RETRIES=2`
+- [ ] `OPENAI_ADVISOR_MAX_RETRIES=2`
+- [ ] `OPENAI_ROUTER_MAX_RETRIES=1`
+- [ ] `PECKER_PRECHECK_TIMEOUT=90`
 - [ ] `PECKER_MODEL_OVERRIDE=`
 - [ ] `PECKER_SIGNATURE_SECRET=<32+ hex>` （gen-secrets.sh 已生成）
 - [ ] `PECKER_JWT_SECRET=<32+ hex>` （同上）
@@ -75,7 +80,7 @@
 ### 1.3 .env 可选项
 
 - [ ] `PECKER_MAX_CONCURRENT=3` （允许 5-6 个 PM 使用，实际评审任务排队，避免 API 被长任务拖住）
-- [ ] `PECKER_MAX_CONCURRENT_MODEL_CALLS=3` （全局模型调用阀门，避免 6*4 worker 同时打满中转站）
+- [ ] `PECKER_MAX_CONCURRENT_MODEL_CALLS=5` （全局模型调用阀门；配合多 key 池，让单次深评 4 worker + 复核能更顺）
 - [ ] `PECKER_MODEL_CALL_QUEUE_TIMEOUT=240` （模型调用排队过久时快速降级，同时允许单次深评的第 4 个 worker 正常等待）
 - [ ] `PECKER_ENABLE_WORKER_TIMEOUT_RECOVERY=0` （团队试用期关闭超时自动二次请求，避免中转站异常时雪上加霜）
 - [ ] `PECKER_READONLY_USERS=张三,李四` （只读用户名单，逗号分隔）

@@ -653,6 +653,9 @@ def _worker_core(
                     "input_tokens": resp.usage.get("input_tokens", 0),
                     "output_tokens": resp.usage.get("output_tokens", 0),
                     "cache_read_tokens": resp.usage.get("cache_read_input_tokens", 0),
+                    "key_id": resp.usage.get("key_id"),
+                    "key_pool_size": resp.usage.get("key_pool_size"),
+                    "attempts": resp.usage.get("attempts"),
                     "use_compact_tool": use_compact_tool,
                 })
             except Exception:

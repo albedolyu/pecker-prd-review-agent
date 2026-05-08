@@ -105,6 +105,125 @@ class _FakeResponsesOpenAI:
         self.responses = _FakeResponses()
 
 
+class _SuccessfulResponses:
+    def __init__(self, api_key: str, calls: list[str]):
+        self.api_key = api_key
+        self.calls = calls
+
+    def create(self, **kwargs):
+        self.calls.append(self.api_key)
+        usage = SimpleNamespace(input_tokens=1, output_tokens=1)
+        return SimpleNamespace(
+            output=[],
+            output_text="ok",
+            usage=usage,
+            model=kwargs["model"],
+            status="completed",
+        )
+
+
+def test_openai_native_client_spreads_calls_across_key_pool(monkeypatch):
+    from clients.openai_native import OpenAINativeClient
+
+    calls: list[str] = []
+
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("API_KEY", raising=False)
+    monkeypatch.delenv("PECKER_OPENAI_API_KEYS", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEYS", "key-a,key-b")
+    monkeypatch.setenv("OPENAI_WIRE_API", "responses")
+    monkeypatch.delenv("OPENAI_REASONING_EFFORT", raising=False)
+    monkeypatch.setattr(
+        OpenAINativeClient,
+        "_build_client",
+        lambda self, api_key, base_url: types.SimpleNamespace(
+            responses=_SuccessfulResponses(api_key, calls)
+        ),
+    )
+
+    client = OpenAINativeClient()
+    for _ in range(2):
+        client.create(
+            model="gpt-5.5",
+            max_tokens=8,
+            system="system",
+            messages=[{"role": "user", "content": "hello"}],
+            retry_policy="router",
+        )
+
+    assert calls == ["key-a", "key-b"]
+
+
+class _Gateway524Error(Exception):
+    status_code = 524
+
+
+class _GatewayFlakyResponses:
+    def __init__(self, api_key: str, calls: list[str]):
+        self.api_key = api_key
+        self.calls = calls
+
+    def create(self, **kwargs):
+        self.calls.append(self.api_key)
+        if self.api_key == "key-a":
+            raise _Gateway524Error("Error code: 524")
+        usage = SimpleNamespace(input_tokens=1, output_tokens=1)
+        return SimpleNamespace(
+            output=[],
+            output_text="ok",
+            usage=usage,
+            model=kwargs["model"],
+            status="completed",
+        )
+
+
+def test_openai_native_client_retries_transient_524_on_next_key(monkeypatch):
+    from clients.openai_native import OpenAINativeClient
+
+    calls: list[str] = []
+
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("API_KEY", raising=False)
+    monkeypatch.delenv("PECKER_OPENAI_API_KEYS", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEYS", "key-a,key-b")
+    monkeypatch.setenv("OPENAI_WIRE_API", "responses")
+    monkeypatch.setenv("OPENAI_WORKER_MAX_RETRIES", "1")
+    monkeypatch.delenv("OPENAI_REASONING_EFFORT", raising=False)
+    monkeypatch.setattr("clients.openai_native.time.sleep", lambda _seconds: None)
+    monkeypatch.setattr(
+        OpenAINativeClient,
+        "_build_client",
+        lambda self, api_key, base_url: types.SimpleNamespace(
+            responses=_GatewayFlakyResponses(api_key, calls)
+        ),
+    )
+
+    client = OpenAINativeClient()
+    resp = client.create(
+        model="gpt-5.5",
+        max_tokens=8,
+        system="system",
+        messages=[{"role": "user", "content": "hello"}],
+        retry_policy="worker",
+    )
+
+    assert resp.content[0].text == "ok"
+    assert resp.usage["key_pool_size"] == 2
+    assert resp.usage["key_id"] == "key_2"
+    assert resp.usage["attempts"] == 2
+    assert calls == ["key-a", "key-b"]
+
+
+def test_openai_native_client_accepts_chinese_colon_key_labels(monkeypatch):
+    from clients.openai_native import OpenAINativeClient
+
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEYS", "key1：sk-a,key2：sk-b")
+
+    assert OpenAINativeClient._load_api_keys(None) == [("key1", "sk-a"), ("key2", "sk-b")]
+
+
 def test_openai_native_client_supports_responses_wire(monkeypatch):
     from clients.openai_native import OpenAINativeClient
 

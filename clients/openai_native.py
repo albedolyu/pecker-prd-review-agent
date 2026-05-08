@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import threading
 import time
 from typing import Any, Dict, List, Optional
 
@@ -25,10 +27,14 @@ class OpenAINativeClient:
     """OpenAI SDK client with the same create() contract as other Pecker clients."""
 
     def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None):
-        api_key = api_key or os.environ.get("OPENAI_API_KEY") or os.environ.get("API_KEY", "")
-        if not api_key:
-            raise RuntimeError("OpenAINativeClient: OPENAI_API_KEY/API_KEY 未配置")
         base_url = base_url or os.environ.get("OPENAI_BASE_URL") or None
+        self._base_url = base_url
+        self._api_keys = self._load_api_keys(api_key)
+        if not self._api_keys:
+            raise RuntimeError("OpenAINativeClient: OPENAI_API_KEYS/OPENAI_API_KEY/API_KEY 未配置")
+        self._client_lock = threading.Lock()
+        self._client_index = -1
+        self._clients: Dict[str, Any] = {}
         self.wire_api = (
             os.environ.get("OPENAI_WIRE_API")
             or os.environ.get("PECKER_OPENAI_WIRE_API")
@@ -42,7 +48,8 @@ class OpenAINativeClient:
         self.disable_response_storage = self._env_bool("OPENAI_DISABLE_RESPONSE_STORAGE") or self._env_bool(
             "PECKER_DISABLE_RESPONSE_STORAGE"
         )
-        self.client = self._build_client(api_key, base_url)
+        first_label, first_key = self._api_keys[0]
+        self.client = self._client_for(first_label, first_key)
         self.tracker = TokenTracker()
 
     def _build_client(self, api_key: str, base_url: Optional[str]):
@@ -56,6 +63,126 @@ class OpenAINativeClient:
         if base_url:
             kwargs["base_url"] = base_url
         return OpenAI(**kwargs)
+
+    @classmethod
+    def _load_api_keys(cls, explicit_key: Optional[str]) -> List[tuple[str, str]]:
+        candidates: List[tuple[str, str]] = []
+        if explicit_key:
+            candidates.append(("key_1", explicit_key))
+        else:
+            for name in ("OPENAI_API_KEYS", "PECKER_OPENAI_API_KEYS"):
+                candidates.extend(cls._parse_key_entries(os.environ.get(name, "")))
+            for prefix in ("OPENAI_API_KEY", "PECKER_OPENAI_API_KEY"):
+                for i in range(1, 11):
+                    value = os.environ.get(f"{prefix}_{i}", "").strip()
+                    if value:
+                        candidates.append((f"key_{i}", value))
+            if not candidates:
+                for name in ("OPENAI_API_KEY", "API_KEY"):
+                    value = os.environ.get(name, "").strip()
+                    if value:
+                        candidates.append(("key_1", value))
+
+        keys: List[tuple[str, str]] = []
+        seen: set[str] = set()
+        for raw_label, raw_key in candidates:
+            key = (raw_key or "").strip()
+            if not key or key in seen:
+                continue
+            label = (raw_label or "").strip() or f"key_{len(keys) + 1}"
+            if "sk-" in label.lower():
+                label = f"key_{len(keys) + 1}"
+            existing_labels = {existing_label for existing_label, _ in keys}
+            if label in existing_labels:
+                label = f"key_{len(keys) + 1}"
+            keys.append((label, key))
+            seen.add(key)
+        return keys
+
+    @staticmethod
+    def _parse_key_entries(raw: str) -> List[tuple[str, str]]:
+        entries: List[tuple[str, str]] = []
+        for entry in re.split(r"[\n,;]+", raw or ""):
+            piece = entry.strip()
+            if not piece:
+                continue
+            label = ""
+            key = piece
+            if "=" in piece:
+                label, key = piece.split("=", 1)
+            elif "：" in piece and not piece.lower().startswith("sk-"):
+                label, key = piece.split("：", 1)
+            elif ":" in piece and not piece.lower().startswith("sk-"):
+                label, key = piece.split(":", 1)
+            entries.append((label.strip(), key.strip()))
+        return entries
+
+    def _client_for(self, label: str, api_key: str):
+        with self._client_lock:
+            client = self._clients.get(label)
+            if client is None:
+                client = self._build_client(api_key, self._base_url)
+                self._clients[label] = client
+            return client
+
+    def _select_client(self):
+        with self._client_lock:
+            self._client_index = (self._client_index + 1) % len(self._api_keys)
+            label, api_key = self._api_keys[self._client_index]
+        return self._client_for(label, api_key), label
+
+    def _rotate_client(self, current_label: str):
+        if len(self._api_keys) <= 1:
+            label, api_key = self._api_keys[0]
+            return self._client_for(label, api_key), label
+        with self._client_lock:
+            current_index = next(
+                (i for i, (label, _key) in enumerate(self._api_keys) if label == current_label),
+                self._client_index,
+            )
+            self._client_index = (current_index + 1) % len(self._api_keys)
+            label, api_key = self._api_keys[self._client_index]
+        return self._client_for(label, api_key), label
+
+    @staticmethod
+    def _is_transient_error(exc: Exception) -> bool:
+        transient_codes = {408, 409, 425, 429, 500, 502, 503, 504, 520, 522, 524}
+        for attr in ("status_code", "status", "code"):
+            value = getattr(exc, attr, None)
+            try:
+                if int(value) in transient_codes:
+                    return True
+            except (TypeError, ValueError):
+                pass
+        response = getattr(exc, "response", None)
+        value = getattr(response, "status_code", None) if response is not None else None
+        try:
+            if int(value) in transient_codes:
+                return True
+        except (TypeError, ValueError):
+            pass
+        message = str(exc).lower()
+        return any(
+            marker in message
+            for marker in (
+                "524",
+                "cloudflare",
+                "timeout",
+                "timed out",
+                "rate limit",
+                "temporarily unavailable",
+                "connection reset",
+            )
+        )
+
+    @staticmethod
+    def _sleep_before_retry(attempt: int) -> None:
+        time.sleep(min(8, 2 ** (attempt + 1)))
+
+    @staticmethod
+    def _meta_usage_extra(response: UnifiedResponse) -> Dict[str, Any]:
+        value = getattr(response, "_pecker_usage_extra", None)
+        return dict(value) if isinstance(value, dict) else {}
 
     @staticmethod
     def _flatten_content(content: Any) -> str:
@@ -248,6 +375,8 @@ class OpenAINativeClient:
         selected_tool = self._selected_tool(tools, tool_choice)
         req_id = _gen_req_id()
         last_exc: Optional[Exception] = None
+        client, key_label = self._select_client()
+        attempts_used = 0
 
         if self.wire_api == "responses":
             params: Dict[str, Any] = {
@@ -269,14 +398,16 @@ class OpenAINativeClient:
                 params["tool_choice"] = converted_choice
 
             for attempt in range(max_retries + 1):
+                attempts_used = attempt + 1
                 try:
-                    response = self.client.responses.create(**params)
+                    response = client.responses.create(**params)
                     break
                 except Exception as exc:  # noqa: BLE001
                     last_exc = exc
-                    if attempt >= max_retries:
+                    if attempt >= max_retries or not self._is_transient_error(exc):
                         raise
-                    time.sleep(2 ** (attempt + 1))
+                    client, key_label = self._rotate_client(key_label)
+                    self._sleep_before_retry(attempt)
             else:
                 raise last_exc or RuntimeError("OpenAI request failed")
 
@@ -299,24 +430,36 @@ class OpenAINativeClient:
                 params["tool_choice"] = converted_choice
 
             for attempt in range(max_retries + 1):
+                attempts_used = attempt + 1
                 try:
-                    response = self.client.chat.completions.create(**params)
+                    response = client.chat.completions.create(**params)
                     break
                 except TypeError:
                     # Some OpenAI-compatible gateways still expect max_tokens.
                     params["max_tokens"] = params.pop("max_completion_tokens")
-                    response = self.client.chat.completions.create(**params)
+                    response = client.chat.completions.create(**params)
                     break
                 except Exception as exc:  # noqa: BLE001
                     last_exc = exc
-                    if attempt >= max_retries:
+                    if attempt >= max_retries or not self._is_transient_error(exc):
                         raise
-                    time.sleep(2 ** (attempt + 1))
+                    client, key_label = self._rotate_client(key_label)
+                    self._sleep_before_retry(attempt)
             else:
                 raise last_exc or RuntimeError("OpenAI request failed")
 
             unified = self._to_unified_response(response, model, req_id, selected_tool)
+        usage_extra = {
+            "attempts": attempts_used,
+            "key_id": key_label,
+            "key_pool_size": len(self._api_keys),
+        }
+        try:
+            setattr(unified, "_pecker_usage_extra", usage_extra)
+        except Exception:
+            pass
         usage = unified.usage
+        usage.update(usage_extra)
         self.tracker.record(
             unified.model,
             usage.get("input_tokens", 0),
@@ -336,6 +479,7 @@ class OpenAINativeClient:
                 "tokens_out": usage.get("output_tokens", 0),
                 "retry_policy": retry_policy,
                 "max_retries": max_retries,
+                **usage_extra,
             },
         )
         return unified
