@@ -46,6 +46,15 @@ except Exception:
         return False
 
 
+def _timeout_recovery_enabled() -> bool:
+    return os.environ.get("PECKER_ENABLE_WORKER_TIMEOUT_RECOVERY", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 # ============================================================
 # _worker_core 的两个抽出 helpers (2026-04-23 #1 refactor):
 # prepare_context 负责 dim/model/prompt/tool schema 构建 (L242-289);
@@ -883,7 +892,7 @@ async def _run_worker_async(
             timeout=timeout_s,
         )
     except asyncio.TimeoutError:
-        if retry_on_timeout and not recovery_mode:
+        if retry_on_timeout and not recovery_mode and _timeout_recovery_enabled():
             first_error = f"Worker 超时({WORKER_TIMEOUT}s)"
             log.warning(f"[{_cn_label(dim_key)}] {first_error}, recovery retry")
             recovered = await _run_worker_async(

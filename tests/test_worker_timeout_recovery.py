@@ -8,6 +8,7 @@ def test_run_worker_async_retries_timeout_with_recovery_budget(monkeypatch):
     from review import worker as worker_mod
 
     monkeypatch.setattr(agent_config, "WORKER_TIMEOUT", 0.01)
+    monkeypatch.setenv("PECKER_ENABLE_WORKER_TIMEOUT_RECOVERY", "1")
 
     calls = []
 
@@ -53,3 +54,42 @@ def test_run_worker_async_retries_timeout_with_recovery_budget(monkeypatch):
     assert calls[1]["recovery_mode"] is True
     assert calls[1]["wiki_budget_chars"] < calls[0]["wiki_budget_chars"]
 
+
+def test_run_worker_async_skips_timeout_recovery_by_default(monkeypatch):
+    import agent_config
+    from review import worker as worker_mod
+
+    monkeypatch.setattr(agent_config, "WORKER_TIMEOUT", 0.01)
+    monkeypatch.delenv("PECKER_ENABLE_WORKER_TIMEOUT_RECOVERY", raising=False)
+
+    calls = []
+
+    def fake_worker_core(*_args, **kwargs):
+        calls.append(kwargs)
+        time.sleep(0.05)
+        return {
+            "dimension": "structure",
+            "items": [{"id": "late"}],
+            "usage": {"input_tokens": 1, "output_tokens": 1},
+        }
+
+    monkeypatch.setattr(worker_mod, "_worker_core", fake_worker_core)
+
+    async def run():
+        return await worker_mod._run_worker_async(
+            None,
+            "structure",
+            "PRD" * 1000,
+            {"wiki": "A" * 1000},
+            {},
+            wiki_path="C:/tmp/ws/wiki",
+        )
+
+    import asyncio
+
+    result = asyncio.run(run())
+
+    assert result["status"] == "timeout"
+    assert result["items"] == []
+    assert result["recovery"]["attempts"] == 1
+    assert len(calls) == 1

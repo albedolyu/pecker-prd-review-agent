@@ -75,6 +75,7 @@ export function LoginForm() {
       if (e.status === 401) toast.error("密码错误");
       else if (e.status === 503)
         toast.error("还未配置登录密码,请联系工具负责人");
+      else if (e.status === 0) toast.error(e.message);
       else toast.error(`登录失败: ${e.detail ?? e.message}`);
     },
   });

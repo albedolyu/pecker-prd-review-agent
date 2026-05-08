@@ -209,6 +209,20 @@ def _get_model_call_limiter() -> Optional[threading.BoundedSemaphore]:
         return _model_call_limiter
 
 
+def _get_model_call_queue_timeout() -> Optional[float]:
+    raw = os.environ.get("PECKER_MODEL_CALL_QUEUE_TIMEOUT", "").strip()
+    if not raw:
+        return None
+    try:
+        value = float(raw)
+    except ValueError:
+        log.warning("PECKER_MODEL_CALL_QUEUE_TIMEOUT must be a number; queue timeout disabled")
+        return None
+    if value <= 0:
+        return None
+    return value
+
+
 def reset_model_call_limiter():
     """Test helper: clear the process-wide model-call gate."""
     global _model_call_limiter, _model_call_limiter_size
@@ -265,7 +279,16 @@ def route_call(
     wait_start = time.time()
     try:
         if limiter is not None:
-            limiter.acquire()
+            queue_timeout = _get_model_call_queue_timeout()
+            if queue_timeout is None:
+                limiter.acquire()
+            else:
+                acquired = limiter.acquire(timeout=queue_timeout)
+                if not acquired:
+                    raise TimeoutError(
+                        f"Timed out waiting for model-call slot after {queue_timeout:.1f}s "
+                        f"(route={route_id}, model={resolved['model']})"
+                    )
             acquired = True
             waited_ms = int((time.time() - wait_start) * 1000)
             if waited_ms > 1000:

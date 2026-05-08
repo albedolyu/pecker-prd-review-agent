@@ -37,14 +37,37 @@ export class ApiError extends Error {
 
 interface ApiFetchOptions extends Omit<RequestInit, "body"> {
   body?: unknown;
+  timeoutMs?: number;
+  timeoutMessage?: string;
 }
 
 async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
-  const { body, headers, ...rest } = options;
+  const { body, headers, timeoutMs, timeoutMessage, signal, ...rest } = options;
+  const timeoutController = timeoutMs ? new AbortController() : null;
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  let didTimeout = false;
+  let abortFromCaller: (() => void) | null = null;
+
+  if (timeoutController && signal) {
+    abortFromCaller = () => timeoutController.abort(signal.reason);
+    if (signal.aborted) {
+      abortFromCaller();
+    } else {
+      signal.addEventListener("abort", abortFromCaller, { once: true });
+    }
+  }
+
+  if (timeoutController && timeoutMs) {
+    timeoutId = setTimeout(() => {
+      didTimeout = true;
+      timeoutController.abort();
+    }, timeoutMs);
+  }
 
   const init: RequestInit = {
     credentials: "include",
     ...rest,
+    signal: timeoutController ? timeoutController.signal : signal,
     headers: {
       ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
       ...headers,
@@ -55,7 +78,27 @@ async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise
     init.body = JSON.stringify(body);
   }
 
-  const res = await fetch(path, init);
+  let res: Response;
+  try {
+    res = await fetch(path, init);
+  } catch (e) {
+    const err = e as { name?: string };
+    if (err.name === "AbortError") {
+      throw new ApiError(
+        0,
+        undefined,
+        didTimeout
+          ? (timeoutMessage ?? "服务暂时没有响应，请稍后再试")
+          : "请求已取消",
+      );
+    }
+    throw e;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+    if (signal && abortFromCaller) {
+      signal.removeEventListener("abort", abortFromCaller);
+    }
+  }
 
   if (!res.ok) {
     let detail: string | undefined;
@@ -104,6 +147,9 @@ export const authApi = {
     apiFetch<LoginResponse>("/api/auth/login", {
       method: "POST",
       body: { password, reviewer },
+      timeoutMs: 10_000,
+      timeoutMessage:
+        "服务暂时没有响应，请稍后再试；如果一直卡住，请联系工具负责人检查后端服务。",
     }),
   me: () => apiFetch<MeResponse>("/api/me"),
   logout: () =>
