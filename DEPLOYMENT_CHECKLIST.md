@@ -167,7 +167,7 @@ systemctl status pecker-api    # 验证 active (running)
 
 - [ ] 浏览器访问 `http://<服务器>:3000` 看到登录页
 - [ ] 用 `PECKER_WEB_PASSWORD` 登录成功，跳到 `/review`
-- [ ] `curl http://<服务器>:8000/health` 返回 200（如有 health endpoint）
+- [ ] `curl http://<服务器>:8000/api/health` 返回 200
 
 ### 3.3 路由与成本自检
 
