@@ -89,7 +89,7 @@ OPENAI_BASE_URL=https://pikachu.claudecode.love/v1
 OPENAI_WIRE_API=responses
 OPENAI_REASONING_EFFORT=xhigh
 OPENAI_DISABLE_RESPONSE_STORAGE=true
-OPENAI_REQUEST_TIMEOUT=90
+OPENAI_REQUEST_TIMEOUT=360
 OPENAI_WORKER_MAX_RETRIES=0
 PECKER_SIGNATURE_SECRET=<32+ 字符随机串>    # openssl rand -hex 32
 PECKER_JWT_SECRET=<32+ 字符随机串>          # openssl rand -hex 32
@@ -98,7 +98,7 @@ PECKER_WEB_PASSWORD=<团队共享密码>          # 登录页会校验
 # 可选
 PECKER_MAX_CONCURRENT=3                     # 团队版允许 5-6 人使用,实际评审排队
 PECKER_MAX_CONCURRENT_MODEL_CALLS=3         # 全局模型调用阀门
-PECKER_MODEL_CALL_QUEUE_TIMEOUT=45          # 模型调用排队超过 45s 后快速降级
+PECKER_MODEL_CALL_QUEUE_TIMEOUT=240         # 单次深评第 4 个 worker 可正常等待
 PECKER_ENABLE_WORKER_TIMEOUT_RECOVERY=0     # 团队版关闭超时二次请求,避免放大网关压力
 PECKER_ADMIN_USERS=lvxinhang                # 团队使用看板管理员
 PECKER_READONLY_USERS=张三,李四             # 这些 reviewer 不能 push/归档

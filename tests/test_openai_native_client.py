@@ -200,6 +200,25 @@ def test_openai_native_client_sets_request_timeout_and_uses_own_retries(monkeypa
     assert captured["max_retries"] == 0
 
 
+def test_openai_native_client_default_timeout_covers_deep_review_workers(monkeypatch):
+    from clients.openai_native import OpenAINativeClient
+
+    captured = {}
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=FakeOpenAI))
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.delenv("OPENAI_REQUEST_TIMEOUT", raising=False)
+
+    OpenAINativeClient()
+
+    assert captured["timeout"] >= 360.0
+    assert captured["max_retries"] == 0
+
+
 def test_openai_native_client_can_override_worker_retry_count(monkeypatch):
     from clients.openai_native import OpenAINativeClient
 

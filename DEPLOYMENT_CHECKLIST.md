@@ -57,7 +57,7 @@
 - [ ] `OPENAI_WIRE_API=responses`
 - [ ] `OPENAI_REASONING_EFFORT=xhigh`
 - [ ] `OPENAI_DISABLE_RESPONSE_STORAGE=true`
-- [ ] `OPENAI_REQUEST_TIMEOUT=90`
+- [ ] `OPENAI_REQUEST_TIMEOUT=360`
 - [ ] `OPENAI_WORKER_MAX_RETRIES=0`
 - [ ] `PECKER_MODEL_OVERRIDE=`
 - [ ] `PECKER_SIGNATURE_SECRET=<32+ hex>` （gen-secrets.sh 已生成）
@@ -76,7 +76,7 @@
 
 - [ ] `PECKER_MAX_CONCURRENT=3` （允许 5-6 个 PM 使用，实际评审任务排队，避免 API 被长任务拖住）
 - [ ] `PECKER_MAX_CONCURRENT_MODEL_CALLS=3` （全局模型调用阀门，避免 6*4 worker 同时打满中转站）
-- [ ] `PECKER_MODEL_CALL_QUEUE_TIMEOUT=45` （模型调用排队过久时快速降级，不让重跑一直卡住）
+- [ ] `PECKER_MODEL_CALL_QUEUE_TIMEOUT=240` （模型调用排队过久时快速降级，同时允许单次深评的第 4 个 worker 正常等待）
 - [ ] `PECKER_ENABLE_WORKER_TIMEOUT_RECOVERY=0` （团队试用期关闭超时自动二次请求，避免中转站异常时雪上加霜）
 - [ ] `PECKER_READONLY_USERS=张三,李四` （只读用户名单，逗号分隔）
 - [ ] `DEEPSEEK_API_KEY=sk-...` （仅作为临时降级方案时需要）

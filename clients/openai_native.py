@@ -50,7 +50,7 @@ class OpenAINativeClient:
 
         kwargs: Dict[str, Any] = {
             "api_key": api_key,
-            "timeout": self._env_float("OPENAI_REQUEST_TIMEOUT", 120.0),
+            "timeout": self._env_float("OPENAI_REQUEST_TIMEOUT", 360.0),
             "max_retries": 0,
         }
         if base_url:
