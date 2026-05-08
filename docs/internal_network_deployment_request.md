@@ -108,6 +108,7 @@ OPENAI_WORKER_MAX_RETRIES=0
 PECKER_SIGNATURE_SECRET=<32+ hex>
 PECKER_JWT_SECRET=<32+ hex>
 PECKER_WEB_PASSWORD=<给内部同事登录用的密码>
+PECKER_ADMIN_USERS=lvxinhang
 
 PECKER_MAX_CONCURRENT=3
 PECKER_MAX_CONCURRENT_MODEL_CALLS=3
@@ -310,6 +311,7 @@ PECKER_ENABLE_WORKER_TIMEOUT_RECOVERY=0
 - 内网地址可以打开登录页。
 - 使用 `PECKER_WEB_PASSWORD` 可以登录。
 - 登录后可以进入 `/review`。
+- 使用管理员账号 `lvxinhang` 可以打开 `/system/usage`，非管理员访问应返回 403。
 - 可以打开演示模式：`/review?demo=1`。
 - 演示模式可以不上传真实 PRD 走完整 UI 流程。
 - 指定 PM 可以用未脱敏真实 PRD 跑内部试用流程。

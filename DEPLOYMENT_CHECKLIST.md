@@ -63,6 +63,7 @@
 - [ ] `PECKER_SIGNATURE_SECRET=<32+ hex>` （gen-secrets.sh 已生成）
 - [ ] `PECKER_JWT_SECRET=<32+ hex>` （同上）
 - [ ] `PECKER_WEB_PASSWORD=<给同事用的密码>` （ONBOARDING.md 里告诉同事）
+- [ ] `PECKER_ADMIN_USERS=lvxinhang` （团队使用看板管理员，不配置会返回 403）
 - [ ] `WIKI_PATH=./shared-wiki` （或 git clone 来的本地路径）
 - [ ] `REVIEWER=<部署者名字>` （CLI 跑测试时用）
 - [ ] `PECKER_PROFILE=chill` （内部团队默认 chill，少 nitpick）
