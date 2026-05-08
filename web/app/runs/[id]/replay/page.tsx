@@ -62,9 +62,9 @@ const SAMPLE_EVENTS: ReplayEvent[] = [
     seq: 1,
     t: "0.0s",
     iso: "2026-04-18T10:42:00.123Z",
-    source: { name: "调度" },
+    source: { name: "进度" },
     level: "info",
-    summary: "PRD 上传完成 · 3487 字 · 42 blocks",
+    summary: "PRD 已接入 · 3487 字 · 42 段",
     payload: {
       event: "uploaded",
       prd_name: "用户等级体系改造 v0.3.md",
@@ -76,9 +76,9 @@ const SAMPLE_EVENTS: ReplayEvent[] = [
     seq: 2,
     t: "1.2s",
     iso: "2026-04-18T10:42:01.321Z",
-    source: { name: "调度" },
+    source: { name: "进度" },
     level: "info",
-    summary: "wiki 扫描完成 · 42 页 · 加载到 context",
+    summary: "资料库已加载 · 42 页",
     payload: {
       event: "wiki_scanned",
       page_count: 42,
@@ -89,9 +89,9 @@ const SAMPLE_EVENTS: ReplayEvent[] = [
     seq: 3,
     t: "1.4s",
     iso: "2026-04-18T10:42:01.521Z",
-    source: { name: "orchestrator" },
+    source: { name: "进度" },
     level: "accent",
-    summary: "4 worker 并行启动 · mode=standard",
+    summary: "四个检查方向开始并行处理",
     payload: {
       event: "workers_started",
       mode: "standard",
@@ -102,9 +102,9 @@ const SAMPLE_EVENTS: ReplayEvent[] = [
     seq: 4,
     t: "8.3s",
     iso: "2026-04-18T10:42:08.421Z",
-    source: { name: "业务鸟", bird: 1 },
+    source: { name: "业务完整性", bird: 1 },
     level: "ok",
-    summary: "done · items=6 · 7.1s · $0.0042",
+    summary: "已完成 · 6 条意见 · 7.1 秒",
     payload: {
       event: "worker_done",
       dim_key: "structure",
@@ -123,9 +123,9 @@ const SAMPLE_EVENTS: ReplayEvent[] = [
     seq: 5,
     t: "9.7s",
     iso: "2026-04-18T10:42:09.821Z",
-    source: { name: "数据鸟", bird: 2 },
+    source: { name: "字段口径", bird: 2 },
     level: "ok",
-    summary: "done · items=8 · 8.5s · $0.0038",
+    summary: "已完成 · 8 条意见 · 8.5 秒",
     payload: {
       event: "worker_done",
       dim_key: "data_quality",
@@ -144,9 +144,9 @@ const SAMPLE_EVENTS: ReplayEvent[] = [
     seq: 6,
     t: "11.4s",
     iso: "2026-04-18T10:42:11.521Z",
-    source: { name: "体验鸟", bird: 3 },
+    source: { name: "使用体验", bird: 3 },
     level: "ok",
-    summary: "done · items=4 · 10.2s · $0.0029",
+    summary: "已完成 · 4 条意见 · 10.2 秒",
     payload: {
       event: "worker_done",
       dim_key: "quality",
@@ -159,9 +159,9 @@ const SAMPLE_EVENTS: ReplayEvent[] = [
     seq: 7,
     t: "13.8s",
     iso: "2026-04-18T10:42:13.921Z",
-    source: { name: "风险鸟", bird: 4 },
+    source: { name: "实现风险", bird: 4 },
     level: "warn",
-    summary: "done(degraded) · items=3 · JSON 解析失败重试成功",
+    summary: "已完成 · 3 条意见 · 结果格式已自动修复",
     payload: {
       event: "worker_done",
       dim_key: "ai_coding",
@@ -175,9 +175,9 @@ const SAMPLE_EVENTS: ReplayEvent[] = [
     seq: 8,
     t: "14.0s",
     iso: "2026-04-18T10:42:14.121Z",
-    source: { name: "苍鹰", bird: 5 },
+    source: { name: "意见收口", bird: 5 },
     level: "accent",
-    summary: "开始交叉校验 4 worker 产出(items=21)",
+    summary: "开始合并意见,核对依据与遗漏",
     payload: {
       event: "final_reviewer_started",
       input_items: 21,
@@ -187,9 +187,9 @@ const SAMPLE_EVENTS: ReplayEvent[] = [
     seq: 9,
     t: "52.3s",
     iso: "2026-04-18T10:42:52.421Z",
-    source: { name: "苍鹰", bird: 5 },
+    source: { name: "意见收口", bird: 5 },
     level: "ok",
-    summary: "交叉校验完成 · 撤回 1 · 补充 2 · 最终 22 条",
+    summary: "意见合并完成 · 撤回 1 条 · 补充 2 条 · 最终 22 条",
     payload: {
       event: "final_reviewer_done",
       verdict: {
@@ -204,7 +204,7 @@ const SAMPLE_EVENTS: ReplayEvent[] = [
     seq: 10,
     t: "52.6s",
     iso: "2026-04-18T10:42:52.721Z",
-    source: { name: "调度" },
+    source: { name: "进度" },
     level: "ok",
     summary: "评审完成 · 24 条 · 等待 PM 决策",
     payload: {
@@ -299,7 +299,7 @@ export default function RunReplayPage({
             letterSpacing: "-0.015em",
           }}
         >
-          评审回放 · {id}
+          评审复盘 · {id}
         </h1>
         <p
           style={{
@@ -309,7 +309,7 @@ export default function RunReplayPage({
             lineHeight: 1.55,
           }}
         >
-          回看这次评审的关键步骤和原始明细,用于排查意见来源和过程异常
+          回看这次评审的关键步骤,用于确认意见来源和处理过程
         </p>
       </header>
 
@@ -383,8 +383,8 @@ export default function RunReplayPage({
             mono
           />
           <StatBlock
-            label="成本"
-            value={`$${SAMPLE_RUN.costUsd.toFixed(4)}`}
+            label="处理量"
+            value={`约 ${(SAMPLE_RUN.totalTokens / 1000).toFixed(1)}k`}
             mono
           />
         </div>
@@ -420,7 +420,7 @@ export default function RunReplayPage({
               justifyContent: "space-between",
             }}
           >
-            <span>评审过程 · {SAMPLE_EVENTS.length} 个节点</span>
+            <span>评审过程 · {SAMPLE_EVENTS.length} 步</span>
             <span>
               <span style={{ opacity: 0.5 }}>seq </span>
               <span style={{ fontWeight: 600, color: "var(--accent-500)" }}>
@@ -469,7 +469,7 @@ export default function RunReplayPage({
                     letterSpacing: "0.08em",
                   }}
                 >
-                  明细 · 节点 {focusedEvent.seq}
+                  过程明细 · 第 {focusedEvent.seq} 步
                 </div>
                 <div
                   style={{
@@ -501,25 +501,37 @@ export default function RunReplayPage({
               >
                 {focusedEvent.iso}
               </div>
-              <pre
-                style={{
-                  margin: 0,
-                  padding: 12,
-                  background: "var(--surface-sunken)",
-                  border: "1px solid var(--border-default)",
-                  borderRadius: "var(--r-3)",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 11,
-                  lineHeight: 1.55,
-                  color: "var(--text-default)",
-                  overflow: "auto",
-                  maxHeight: 420,
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                }}
-              >
-                {JSON.stringify(focusedEvent.payload, null, 2)}
-              </pre>
+              <details>
+                <summary
+                  style={{
+                    fontSize: 12,
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
+                    userSelect: "none",
+                  }}
+                >
+                  查看原始记录(排障用)
+                </summary>
+                <pre
+                  style={{
+                    margin: "8px 0 0",
+                    padding: 12,
+                    background: "var(--surface-sunken)",
+                    border: "1px solid var(--border-default)",
+                    borderRadius: "var(--r-3)",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 11,
+                    lineHeight: 1.55,
+                    color: "var(--text-default)",
+                    overflow: "auto",
+                    maxHeight: 420,
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {JSON.stringify(focusedEvent.payload, null, 2)}
+                </pre>
+              </details>
             </div>
           </aside>
         )}
@@ -542,7 +554,7 @@ export default function RunReplayPage({
         >
           ← 评审记录
         </Link>
-        <span>Pecker · 过程回放 · 演示数据</span>
+        <span>Pecker · 评审复盘 · 演示数据</span>
       </footer>
     </div>
   );

@@ -16,9 +16,9 @@ import type { Metadata } from "next";
 import { ForestLanding } from "./ForestLanding";
 
 export const metadata: Metadata = {
-  title: "啄木鸟 · 一本每天出刊的评审笔记",
+  title: "Pecker · PRD 评审工作台",
   description:
-    "一只鸟加无数次回声,比一百只鸟凭直觉乱啄要可靠得多。欢迎进入编辑部。",
+    "提交 PRD 前做一次结构化检查,把目标范围、字段口径、体验细节和实现风险收成可确认清单。",
 };
 
 export default function HomePage() {

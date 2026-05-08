@@ -54,10 +54,10 @@ const TOP_RULES: {
 ];
 
 const EVAL_BASELINE = [
-  { name: "评审员命中样例(20 例)", score: 0.88, delta: 0.03 },
-  { name: "苍鹰交叉校验(15 例)", score: 0.91, delta: 0.01 },
+  { name: "意见命中样例(20 例)", score: 0.88, delta: 0.03 },
+  { name: "意见收口样例(15 例)", score: 0.91, delta: 0.01 },
   { name: "依据可验证性(12 例)", score: 0.84, delta: -0.02 },
-  { name: "规则召回(30 例)", score: 0.79, delta: 0.05 },
+  { name: "检查项召回(30 例)", score: 0.79, delta: 0.05 },
 ];
 
 const RECENT_RUNS = [
@@ -123,7 +123,7 @@ export default function SystemHealthPage() {
             lineHeight: 1.55,
           }}
         >
-          看近 30 天一致率、异常类型、规则命中和回归样例表现
+          看近 30 天评审完成情况、异常类型、意见质量和样例表现
         </p>
       </header>
 
@@ -139,7 +139,7 @@ export default function SystemHealthPage() {
           fontFamily: "var(--font-sans)",
         }}
       >
-        <strong style={{ fontWeight: 600 }}>演示数据</strong> · 当前展示样例指标,后续接入真实稳定性和规则表现数据。
+        <strong style={{ fontWeight: 600 }}>演示数据</strong> · 当前展示样例指标,后续接入真实评审数据后自动更新。
       </div>
 
       {/* top metrics */}
@@ -152,7 +152,7 @@ export default function SystemHealthPage() {
         }}
       >
         <MetricCard
-          label="本周一致率"
+          label="本周结果一致率"
           value="90%"
           delta="+4%"
           tone="done"
@@ -170,9 +170,9 @@ export default function SystemHealthPage() {
           tone="done"
         />
         <MetricCard
-          label="单次平均成本"
-          value="$0.18"
-          delta="-$0.02"
+          label="平均处理时长"
+          value="8 分钟"
+          delta="-1 分钟"
           tone="done"
         />
       </section>
@@ -188,8 +188,8 @@ export default function SystemHealthPage() {
         {/* consistency 趋势 */}
         <section style={cardStyle}>
           <SectionHead
-            title="一致率趋势"
-            hint="近 30 天评审员判断一致率 · 阈值 80%"
+            title="结果一致率趋势"
+            hint="近 30 天同类意见的一致程度 · 阈值 80%"
           />
           <div style={{ padding: "16px 20px 20px" }}>
             <TrendLine values={LAST_30_DAYS_CONSISTENCY} threshold={0.8} />
@@ -207,8 +207,8 @@ export default function SystemHealthPage() {
         {/* rule 权重演化 */}
         <section style={{ ...cardStyle, gridColumn: "1 / -1" }}>
           <SectionHead
-            title="高影响规则 Top 6"
-            hint="命中少、驳回多的规则需要复核"
+            title="高影响检查项 Top 6"
+            hint="命中少、驳回多的检查项需要复核"
           />
           <div style={{ padding: "12px 20px 16px" }}>
             <RuleTable rules={TOP_RULES} />
@@ -228,7 +228,7 @@ export default function SystemHealthPage() {
 
         {/* 最近评审 */}
         <section style={{ ...cardStyle, gridColumn: "1 / -1" }}>
-          <SectionHead title="最近评审" hint="点评审编号查看回放" />
+          <SectionHead title="最近评审" hint="查看近期评审完成情况" />
           <ul
             style={{
               margin: 0,
@@ -294,15 +294,8 @@ export default function SystemHealthPage() {
           fontFamily: "var(--font-mono)",
         }}
       >
-        <span>
-          <Link
-            href="/system/prompts"
-            style={{ color: "inherit", textDecoration: "none" }}
-          >
-            规则配置 →
-          </Link>
-        </span>
         <span>Pecker · 质量看板 · 演示数据</span>
+        <span>真实数据接入后自动更新</span>
       </footer>
     </div>
   );
@@ -568,7 +561,7 @@ function RuleTable({
     >
       <thead>
         <tr>
-          {["规则", "方向", "权重", "命中", "驳回", "趋势"].map((h) => (
+          {["检查项", "方向", "权重", "命中", "驳回", "趋势"].map((h) => (
             <th
               key={h}
               style={{

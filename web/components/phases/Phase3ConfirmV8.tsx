@@ -66,16 +66,36 @@ const REJECT_CATEGORIES: ReadonlyArray<{
   label: string;
   hint: string;
 }> = [
-  { value: "good_issue", label: "实际是好问题(手滑点错)", hint: "PM 改主意了,不算评审员的锅" },
-  { value: "false_positive", label: "误报", hint: "PRD 确实没这个问题,评审员判断错了" },
+  { value: "good_issue", label: "实际是好问题(手滑点错)", hint: "改主意了,这条仍然算有效意见" },
+  { value: "false_positive", label: "误报", hint: "PRD 确实没这个问题,这条判断不成立" },
   { value: "known_tradeoff", label: "已知取舍,不改", hint: "业务上允许保留,不需要改动" },
-  { value: "wiki_missing", label: "知识库缺背景", hint: "规则没错,是知识库里缺背景信息" },
+  { value: "wiki_missing", label: "资料库缺背景", hint: "意见方向没错,是资料库里缺少背景信息" },
   { value: "rule_too_strict", label: "规则太严", hint: "规则适用范围太宽,误伤了正常情况" },
   { value: "impl_detail", label: "实现细节,不该 PRD 管", hint: "这是研发实现层面的事,PRD 不需要写" },
-  { value: "model_noise", label: "AI 误判", hint: "意见没业务意义,属于 AI 的随机噪音" },
+  { value: "model_noise", label: "判断不准", hint: "意见没有业务意义,不需要采纳" },
 ];
 
 const DEFAULT_REJECT_CATEGORY: RejectReason = "model_noise";
+
+type GateLogEntry = {
+  type?: string;
+  pass?: boolean;
+  detail?: string;
+  reason?: string;
+};
+
+function getGateLogEntries(gateLog: ReviewItem["gate_log"]): GateLogEntry[] {
+  if (Array.isArray(gateLog)) return gateLog;
+  if (
+    gateLog &&
+    typeof gateLog === "object" &&
+    "gates" in gateLog &&
+    Array.isArray((gateLog as { gates?: unknown }).gates)
+  ) {
+    return (gateLog as { gates: GateLogEntry[] }).gates;
+  }
+  return [];
+}
 
 export function Phase3ConfirmV8() {
   const reviewResult = useReviewStore((s) => s.reviewResult);
@@ -146,7 +166,7 @@ export function Phase3ConfirmV8() {
       if (statusFilter === "rejected") return action === "reject";
       if (statusFilter === "low_conf") {
         const lc = typeof item.confidence === "number" && item.confidence < 0.7;
-        const evFailed = (item.gate_log ?? []).some(
+        const evFailed = getGateLogEntries(item.gate_log).some(
           (g) => (g.type === "evidence_verify" || g.type === "evidence_validator") && !g.pass,
         );
         return lc || evFailed;
@@ -345,7 +365,7 @@ export function Phase3ConfirmV8() {
       else if (action === "reject") rejected += 1;
       const lc =
         typeof it.confidence === "number" && it.confidence < 0.7;
-      const evFailed = (it.gate_log ?? []).some(
+      const evFailed = getGateLogEntries(it.gate_log).some(
         (g) =>
           (g.type === "evidence_verify" || g.type === "evidence_validator") &&
           !g.pass,
@@ -452,7 +472,7 @@ export function Phase3ConfirmV8() {
                 key={dim}
                 active={currentTab === dim}
                 onClick={() => setCurrentTab(dim)}
-                label={`${BIRD_META[birdId].label}鸟`}
+                label={role.label}
                 sublabel={role.responsibility}
                 birdId={birdId}
                 count={count}
@@ -502,7 +522,7 @@ export function Phase3ConfirmV8() {
             <SevFilterBtn
               active={statusFilter === "low_conf"}
               onClick={() => setStatusFilter("low_conf")}
-              label="低置信度"
+              label="依据不足"
               count={statusCounts.low_conf}
             />
           )}
@@ -733,7 +753,7 @@ export function Phase3ConfirmV8() {
           >
             {stats.total === 0
               ? "本次评审没有发现问题"
-              : "左侧对照 PRD 原文,右侧逐条决策每个评审员提出的问题"}
+              : "左侧对照 PRD 原文,右侧逐条处理每条意见"}
           </p>
         </div>
         {stats.total > 0 && (
@@ -1002,8 +1022,9 @@ function ItemCardV8({
 
   // 从 gate_log 推断依据验证状态
   const evidenceVerification = (() => {
-    if (!item.gate_log) return "unverified" as const;
-    const verifyGate = item.gate_log.find(
+    const gateEntries = getGateLogEntries(item.gate_log);
+    if (gateEntries.length === 0) return "unverified" as const;
+    const verifyGate = gateEntries.find(
       (g) => g.type === "evidence_verify" || g.type === "evidence_validator",
     );
     if (!verifyGate) return "unverified" as const;
@@ -1124,7 +1145,7 @@ function ItemCardV8({
         />
       )}
 
-      {/* 主指标:置信度 + 多评审员引用(PM 第一眼判断这条意见是否可信) */}
+      {/* 主指标:可信度 + 多方向引用(PM 第一眼判断这条意见是否可信) */}
       <div
         style={{
           display: "flex",
@@ -1147,12 +1168,12 @@ function ItemCardV8({
               fontSize: 11,
               color: "var(--text-muted)",
             }}
-            title="多个评审员都提到这条意见"
+            title="多个检查方向都提到这条意见"
           >
-            {item.cited_by_workers.length} 位评审员同时提出
+            {item.cited_by_workers.length} 个方向同时提出
           </span>
         )}
-        {Array.isArray(item.gate_log) && item.gate_log.length > 0 && (
+        {getGateLogEntries(item.gate_log).length > 0 && (
           <details style={{ marginLeft: "auto" }}>
             <summary
               style={{
@@ -1163,7 +1184,7 @@ function ItemCardV8({
                 listStyle: "none",
               }}
             >
-              校验详情
+              检查详情
             </summary>
             <div
               style={{
@@ -1176,12 +1197,20 @@ function ItemCardV8({
                 flexWrap: "wrap",
               }}
             >
-              <span title="该意见经过的质量校验门数 / 总门数">
-                校验通过 {item.gate_log.filter((g) => g.pass).length}/{item.gate_log.length}
-              </span>
-              {typeof item.confidence === "number" && (
-                <span>置信度 {item.confidence.toFixed(2)}</span>
-              )}
+              {(() => {
+                const gateEntries = getGateLogEntries(item.gate_log);
+                const passed = gateEntries.filter((g) => g.pass).length;
+                return (
+                  <>
+                    <span title="该意见经过的检查项 / 总检查项">
+                      检查通过 {passed}/{gateEntries.length}
+                    </span>
+                    {typeof item.confidence === "number" && (
+                      <span>可信度 {item.confidence.toFixed(2)}</span>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </details>
         )}
@@ -1502,7 +1531,7 @@ function SeverityChip({ severity }: { severity: string }) {
 function PinChip() {
   return (
     <span
-      title="苍鹰标记的重点意见"
+      title="本次收口后保留的重点意见"
       style={{
         fontSize: 10,
         padding: "1px 6px",
@@ -1567,23 +1596,23 @@ function ConfidenceBadge({ value }: { value: number }) {
     high: {
       bg: "var(--status-done-bg)",
       fg: "var(--status-done-fg)",
-      label: "高置信",
+      label: "依据充分",
     },
     mid: {
       bg: "var(--neutral-100)",
       fg: "var(--text-default)",
-      label: "中置信",
+      label: "可参考",
     },
     low: {
       bg: "var(--status-warn-bg)",
       fg: "var(--status-warn-fg)",
-      label: "低置信",
+      label: "依据不足",
     },
   } as const;
   const tok = map[tier];
   return (
     <span
-      title={`置信度 ${value.toFixed(2)} · 数值越高越可信`}
+      title={`可信度 ${value.toFixed(2)} · 数值越高越可信`}
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -1951,7 +1980,7 @@ function EmptyClearState() {
           margin: "0 auto",
         }}
       >
-        四位评审员都未提出意见,苍鹰也没有补充。
+        四个检查方向都未提出意见,也没有补充项。
         <br />
         PRD 可以直接进入研发评审。
       </div>

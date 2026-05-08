@@ -12,7 +12,6 @@
  */
 
 import { BirdAvatar, type BirdId } from "@/components/birds/BirdAvatar";
-import { BIRD_META } from "@/components/birds/BirdBadge";
 
 export type SessionClass =
   | "productive"
@@ -78,9 +77,9 @@ export function RunHealthCheck({
       tone: "ok",
       fg: "var(--status-done-fg)",
       bg: "var(--status-done-bg)",
-      label: "本次运行健康",
-      headline: "本次运行健康,可进入逐条确认。",
-      desc: "所有评审员都正常返回,意见可以放心处理。",
+      label: "本次结果完整",
+      headline: "本次结果完整,可以进入逐条确认。",
+      desc: "四个方向都已返回意见,可以继续处理。",
       code: "productive",
     },
     partial_silent: {
@@ -88,13 +87,13 @@ export function RunHealthCheck({
       fg: "var(--status-warn-fg)",
       bg: "var(--status-warn-bg)",
       label: incompleteCount > 0
-        ? `本次评审有 ${incompleteCount} 个评审员未完整返回`
-        : "本次评审有评审员未完整返回",
+        ? `本次评审有 ${incompleteCount} 个方向未完整返回`
+        : "本次评审有方向未完整返回",
       headline:
         incompleteCount > 0
-          ? `本次评审有 ${incompleteCount} 个评审员未完整返回,继续确认可能遗漏问题。`
-          : "本次评审有评审员未完整返回,继续确认可能遗漏问题。",
-      desc: "建议先重跑异常评审员,再进入逐条确认。",
+          ? `本次评审有 ${incompleteCount} 个方向未完整返回,继续确认可能遗漏问题。`
+          : "本次评审有方向未完整返回,继续确认可能遗漏问题。",
+      desc: "建议先重跑异常方向,再进入逐条确认。",
       code: "partial_silent",
     },
     quota_exhausted: {
@@ -110,9 +109,9 @@ export function RunHealthCheck({
       tone: "warn",
       fg: "var(--status-warn-fg)",
       bg: "var(--status-warn-bg)",
-      label: "部分评审员降级,结果仍可参考",
-      headline: "部分评审员未完全返回,但结果仍可参考。",
-      desc: "继续确认前可以快速看一眼是哪几只鸟出了状况。",
+      label: "部分方向未完整返回,结果仍可参考",
+      headline: "部分方向未完整返回,但结果仍可参考。",
+      desc: "继续确认前可以先看哪个方向没有完整返回。",
       code: "degraded",
     },
   };
@@ -228,14 +227,14 @@ export function RunHealthCheck({
               lineHeight: 1.4,
             }}
           >
-            评审员一致率
+            结果一致率
             <div
               style={{
                 fontSize: 10,
                 color: "var(--text-faint)",
                 marginTop: 2,
               }}
-              title="effective consistency · 同维度多评审员产出的相似度"
+              title="同类意见之间的一致程度"
             >
               数值越高越可信
             </div>
@@ -253,7 +252,7 @@ export function RunHealthCheck({
                 marginBottom: 8,
               }}
             >
-              评审员状态
+              各方向状态
             </div>
             <div
               className="pecker-health-grid"
@@ -292,7 +291,7 @@ export function RunHealthCheck({
                   flexWrap: "wrap",
                 }}
               >
-                <span>异常分类</span>
+                <span>异常原因</span>
                 <span
                   style={{
                     fontSize: 11,
@@ -355,13 +354,13 @@ export function RunHealthCheck({
               ? "重跑前请确认评审额度,否则会再次中断。"
               : sessionClass === "degraded"
                 ? "可以直接进入逐条确认;如果想看到完整结果,也可以重跑。"
-                : "本次运行健康,可放心进入逐条确认。"}
+                : "本次结果完整,可放心进入逐条确认。"}
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {isPartialSilent ? (
             <>
               <button type="button" onClick={onRetry} style={btnPrimary}>
-                重跑异常评审员
+                重跑异常方向
               </button>
               <button
                 type="button"
@@ -418,6 +417,19 @@ const FAILURE_CATEGORIES: {
 const FAILURE_LABEL_MAP: Record<FailureCategory, string> = Object.fromEntries(
   FAILURE_CATEGORIES.map((f) => [f.code, f.label]),
 ) as Record<FailureCategory, string>;
+
+const HEALTH_LABELS: Record<BirdId, string> = {
+  1: "业务",
+  2: "数据",
+  3: "体验",
+  4: "风险",
+  5: "收口",
+  6: "准备",
+  7: "反馈",
+  8: "样例",
+  9: "资料",
+  10: "质检",
+};
 
 function summarizeFailures(
   failures: Partial<Record<FailureCategory, number>>,
@@ -550,7 +562,7 @@ function BirdHealth({
   const healthy = fails === 0;
   return (
     <div
-      title={`运行 ${runs} · 异常 ${fails} · 提交 ${submissions} 条意见`}
+      title={`检查 ${runs} 次 · 异常 ${fails} 次 · 提交 ${submissions} 条意见`}
       style={{
         display: "flex",
         flexDirection: "column",
@@ -578,7 +590,7 @@ function BirdHealth({
             color: "var(--text-strong)",
           }}
         >
-          {BIRD_META[id].label}鸟
+          {HEALTH_LABELS[id]}
         </span>
       </div>
       <div
@@ -590,7 +602,7 @@ function BirdHealth({
       >
         {healthy
           ? runs === 0
-            ? "未运行"
+            ? "未开始"
             : `已提交 ${submissions} 条`
           : "未完整返回"}
       </div>

@@ -148,7 +148,7 @@ export default function RunsDiffPage() {
               marginBottom: 4,
             }}
           >
-            评审记录 · 结果对比
+            历史评审 · 结果对比
           </div>
           <h1
             style={{
@@ -169,7 +169,7 @@ export default function RunsDiffPage() {
               lineHeight: 1.55,
             }}
           >
-            对比同一 PRD 在不同规则配置下的意见变化:新增、缺失和置信度变化
+            对比同一 PRD 两次评审之间的意见变化:新增、减少和可信度变化
           </p>
         </div>
         <Link
@@ -181,7 +181,7 @@ export default function RunsDiffPage() {
             fontFamily: "var(--font-sans)",
           }}
         >
-          ← 回评审主页
+          ← 返回评审
         </Link>
       </header>
 
@@ -200,7 +200,7 @@ export default function RunsDiffPage() {
       >
         <strong style={{ fontWeight: 600 }}>演示数据</strong> ·{" "}
         <span style={{ color: "var(--text-default)" }}>
-          当前展示样例评审结果,后续接入真实评审记录后可用于规则调整前后对比。
+          当前展示样例评审结果,后续接入真实评审记录后可用于口径调整前后对比。
         </span>
       </div>
 

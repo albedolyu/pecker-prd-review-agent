@@ -96,7 +96,7 @@ export function RunConsole({
             />
           </span>
           <span style={{ opacity: 0.6, letterSpacing: 0.3 }}>
-            实时日志
+            处理进度
           </span>
         </div>
         <div
@@ -134,7 +134,7 @@ export function RunConsole({
               padding: "4px 0",
             }}
           >
-            (暂无日志)
+            暂无进度
           </div>
         )}
         {lines.map((l, i) => (
@@ -208,7 +208,7 @@ function ConsoleLineRow({ line }: { line: ConsoleLine }) {
         {t}
       </span>
       <span style={{ color: srcColor, fontWeight: 500 }}>
-        {src?.name ? `[${src.name}]` : "[调度]"}
+        {src?.name ? `[${src.name}]` : "[进度]"}
       </span>
       <span
         style={{

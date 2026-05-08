@@ -122,10 +122,10 @@ export function RunDiff({ left, right, className, style }: RunDiffProps) {
             format={(v) => String(v)}
           />
           <MetricCompare
-            label="消耗"
+            label="处理量"
             leftValue={left.totalTokens}
             rightValue={right.totalTokens}
-            format={formatTokens}
+            format={formatProcessingAmount}
             higherBetter={false}
           />
           <MetricCompare
@@ -548,7 +548,7 @@ function ItemRow({
           flexShrink: 0,
         }}
       >
-        置信度 {item.confidence.toFixed(2)}
+        可信度 {item.confidence.toFixed(2)}
       </span>
     </div>
   );
@@ -619,7 +619,7 @@ function ItemRowChanged({
           flexShrink: 0,
         }}
       >
-        置信度 {left.confidence.toFixed(2)} →{" "}
+        可信度 {left.confidence.toFixed(2)} →{" "}
         <span
           style={{
             color: deltaColor,
@@ -633,7 +633,7 @@ function ItemRowChanged({
   );
 }
 
-function formatTokens(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+function formatProcessingAmount(n: number): string {
+  if (n >= 1000) return `约 ${(n / 1000).toFixed(1)}k`;
   return String(n);
 }

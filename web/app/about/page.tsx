@@ -15,10 +15,9 @@ import {
 } from "lucide-react";
 import { ROLES, type RoleKey, type Role } from "@/lib/roles";
 import { BirdAvatar, type BirdId } from "@/components/birds/BirdAvatar";
-import { BirdBadge } from "@/components/birds/BirdBadge";
 
 export const metadata = {
-  title: "关于 Pecker · 10 只鸟",
+  title: "Pecker 使用说明",
 };
 
 // RoleKey → BirdId 映射(和 Phase4ReportV8 / Phase3ConfirmV8 同源)
@@ -27,7 +26,7 @@ const ROLE_TO_BIRD_ID: Record<RoleKey, BirdId> = {
   data_quality: 2, // 数据
   quality: 3, // 体验(审校)
   ai_coding: 4, // 风险(技编)
-  "final-reviewer": 5, // 苍鹰交叉校验
+  "final-reviewer": 5, // 意见收口
   "editor-in-chief": 6,
   "reader-feedback": 7,
   "sample-reader": 8,
@@ -45,26 +44,26 @@ interface RoleSection {
 const SECTIONS: RoleSection[] = [
   {
     tag: "准备",
-    title: "入口与分工",
-    subtitle: "评审前准备材料、安排评审方向,再把结果收拢成一份报告",
+    title: "开始前要准备什么",
+    subtitle: "选择资料库、上传 PRD,确认这次评审的范围和深度",
     keys: ["editor-in-chief"],
   },
   {
-    tag: "并行评审",
-    title: "四位评审员",
-    subtitle: "业务、体验、风险、数据四个方向同时处理,每位只看自己的责任范围",
+    tag: "检查",
+    title: "重点检查四件事",
+    subtitle: "业务目标、字段口径、使用体验和实现风险会分开给出意见",
     keys: ["structure", "quality", "ai_coding", "data_quality"],
   },
   {
-    tag: "交叉校验",
-    title: "苍鹰复核",
-    subtitle: "四位评审员完成后再登场,核对误报、冲突和明显遗漏",
+    tag: "收口",
+    title: "把意见合并成可确认清单",
+    subtitle: "合并重复意见、弱化证据不足的判断,补上明显遗漏的问题",
     keys: ["final-reviewer"],
   },
   {
-    tag: "持续维护",
-    title: "反馈与知识库",
-    subtitle: "把 PM 确认、质量回归、知识库更新和安全检查沉淀到下一次评审",
+    tag: "沉淀",
+    title: "让下一次评审更准",
+    subtitle: "把 PM 的接受、驳回、补充意见沉淀为后续规则和样例",
     keys: ["reader-feedback", "sample-reader", "archivist", "qa-gatekeeper"],
   },
 ];
@@ -87,28 +86,28 @@ interface TopologyToneStyle {
 
 const REVIEWER_TOPOLOGY: TopologyStep[] = [
   {
-    label: "业务鸟",
+    label: "业务",
     title: "业务完整性",
     body: "目标、范围、验收标准是否说清",
     birdId: 1,
     tone: "reviewer",
   },
   {
-    label: "数据鸟",
+    label: "数据",
     title: "字段口径",
     body: "数据源、字段映射、枚举和指标是否一致",
     birdId: 2,
     tone: "reviewer",
   },
   {
-    label: "体验鸟",
+    label: "体验",
     title: "使用体验",
     body: "主流程、异常、空态、文案是否完整",
     birdId: 3,
     tone: "reviewer",
   },
   {
-    label: "风险鸟",
+    label: "风险",
     title: "实现风险",
     body: "实现方案、边界条件、依赖和追溯是否清楚",
     birdId: 4,
@@ -119,25 +118,25 @@ const REVIEWER_TOPOLOGY: TopologyStep[] = [
 const SUPPORT_TOPOLOGY: TopologyStep[] = [
   {
     title: "反馈回流",
-    body: "PM 的确认、驳回和补充会影响后续规则权重",
+    body: "PM 的接受、驳回和补充会用于减少后续误报",
     birdId: 7,
     tone: "support",
   },
   {
-    title: "知识库维护",
-    body: "持续清理断链、过期资料和互相打架的定义",
+    title: "资料库维护",
+    body: "持续清理过期资料和互相矛盾的定义",
     birdId: 9,
     tone: "support",
   },
   {
     title: "回归评测",
-    body: "用固定样例检查优化后有没有变差",
+    body: "用固定样例检查优化后有没有退步",
     birdId: 8,
     tone: "support",
   },
   {
     title: "安全门禁",
-    body: "上线前检查密钥、隐私和不该外发的材料",
+    body: "上线前检查隐私、权限和不该外发的材料",
     birdId: 10,
     tone: "support",
   },
@@ -172,7 +171,7 @@ export default function AboutPage() {
               marginBottom: 10,
             }}
           >
-            About · 评审团队
+            使用说明
           </div>
           <h1
             style={{
@@ -184,8 +183,7 @@ export default function AboutPage() {
               lineHeight: 1.15,
             }}
           >
-            啄木鸟编辑部 ·{" "}
-            <span style={{ color: "var(--accent-500)" }}>10 只鸟</span>
+            PRD 评审工作台怎么用
           </h1>
           <p
             style={{
@@ -196,7 +194,7 @@ export default function AboutPage() {
               lineHeight: 1.6,
             }}
           >
-            一份 PRD,4 位评审员并行审稿,1 只苍鹰交叉校验,4 位长期维护反馈闭环和知识库。这里是 10 只鸟的职能分工和协作方式。
+            适合在 PRD 发给研发评审前使用。它会把目标范围、字段口径、异常边界和实现依赖拆开检查,最后收成一份可确认、可导出、可同步的修改清单。
           </p>
         </header>
 
@@ -225,7 +223,7 @@ export default function AboutPage() {
                 marginBottom: 8,
               }}
             >
-              起源
+              工具定位
             </div>
             <p
               style={{
@@ -235,7 +233,7 @@ export default function AboutPage() {
                 margin: 0,
               }}
             >
-              这个产品叫&ldquo;啄木鸟&rdquo;,不是因为可爱,是因为啄木鸟做一件事做一辈子,而且每次敲下去都会听回声。一只鸟加无数次回声,比一百只鸟凭直觉乱啄要可靠得多。
+              Pecker 不是替 PM 写 PRD,而是帮 PM 在提交前做一次结构化检查。它会把“这份文档哪里还不够清楚”拆成可处理条目,让你知道哪些必须补、哪些可以解释、哪些可以暂时不改。
             </p>
             <p
               style={{
@@ -245,7 +243,7 @@ export default function AboutPage() {
                 margin: "12px 0 0",
               }}
             >
-              PRD 评审也一样:4 位评审员各管一维度并行审,苍鹰最后交叉校验,撤掉证据不足的、补上漏掉的。10 只鸟里有 5 只负责当次评审,5 只负责长期维护,构成一个完整的反馈闭环:每一次评审的下游信号都会回流到下一次评审的规则权重里。
+              你只需要完成三件事:上传 PRD,逐条确认意见,导出报告。接受、驳回和补充都会被记录下来,用于后续减少误报、补齐资料库,让团队反复使用时越来越贴近真实工作口径。
             </p>
           </div>
         </section>
@@ -280,9 +278,9 @@ export default function AboutPage() {
         {/* ── 拓扑图 ── */}
         <section style={{ marginBottom: 32 }}>
           <SectionHead
-            tag="协作流程"
-            title="评审从提交到确认怎么流转"
-            subtitle="先准备材料,再并行评审,最后复核与确认;长期维护能力放在侧边,不抢主流程。"
+            tag="流程"
+            title="一次评审从上传到报告"
+            subtitle="先检查资料是否足够,再生成分方向意见,最后由 PM 确认并导出报告。"
           />
           <TopologyDiagram />
         </section>
@@ -312,13 +310,7 @@ export default function AboutPage() {
               href="/review"
               style={{ color: "inherit", textDecoration: "none" }}
             >
-              进入评审
-            </Link>
-            <Link
-              href="/runs/diff"
-              style={{ color: "inherit", textDecoration: "none" }}
-            >
-              运行对比
+              开始评审
             </Link>
           </span>
         </footer>
@@ -392,37 +384,37 @@ function TopologyDiagram() {
     {
       label: "入口",
       title: "提交 PRD",
-      body: "接入 PRD、补充材料和当前工作区规则",
+      body: "上传 PRD,选择资料库和评审模式",
       icon: FileText,
       tone: "input",
     },
     {
       label: "准备",
-      title: "评审准备",
-      body: "加载资料库、做安全提醒、估算本次耗时",
+      title: "资料预检",
+      body: "检查背景资料是否足够,提前提示明显缺口",
       birdId: 6,
       tone: "input",
     },
   ];
   const finalSteps: TopologyStep[] = [
     {
-      label: "复核",
-      title: "苍鹰交叉校验",
-      body: "检查误报、补漏和多位评审员之间的冲突",
+      label: "收口",
+      title: "意见合并",
+      body: "合并重复意见,弱化证据不足的判断",
       birdId: 5,
       tone: "final",
     },
     {
-      label: "质检",
-      title: "质量检查",
-      body: "确认依据、运行健康和失败降级是否可靠",
+      label: "检查",
+      title: "结果完整性",
+      body: "确认本次结果是否完整,避免拿残缺结论决策",
       icon: ShieldCheck,
       tone: "quality",
     },
     {
       label: "确认",
       title: "PM 确认",
-      body: "逐条确认、驳回或补充遗漏意见",
+      body: "逐条接受、驳回、改写或补充遗漏意见",
       icon: CircleCheckBig,
       tone: "quality",
     },
@@ -447,8 +439,8 @@ function TopologyDiagram() {
       </FlowRow>
 
       <StageBand
-        title="四位评审员并行处理"
-        body="四个方向同时开始,彼此不互相改结论,最后统一交给苍鹰复核。"
+        title="四个方向并行检查"
+        body="每个方向只看自己的责任范围,最后统一合并成一份清单。"
       />
 
       <div
@@ -518,7 +510,7 @@ function TopologyDiagram() {
               lineHeight: 1.5,
             }}
           >
-            不直接改变当次流程,但会让下一次评审更稳。
+            不影响当次结论,但会让下一次评审更贴近团队口径。
           </div>
         </div>
         <div
@@ -797,7 +789,6 @@ function RoleCardV8({ role }: { role: Role }) {
             {role.responsibility}
           </div>
         </div>
-        {role.isWorker && <BirdBadge id={birdId} size="sm" />}
       </header>
       <p
         style={{

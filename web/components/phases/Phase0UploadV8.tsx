@@ -216,7 +216,7 @@ export function Phase0UploadV8() {
         {/* 资料库 */}
         <Field
           label="资料库"
-          hint="选一个资料库,评审会基于它的知识库与规则做上下文"
+          hint="选择和这份 PRD 最相关的资料库,用于补充业务背景和既有规则"
         >
           <Select
             value={workspace}
@@ -243,7 +243,7 @@ export function Phase0UploadV8() {
                 <SelectItem key={w.name} value={w.name}>
                   <span style={{ marginRight: 8, fontWeight: 500 }}>{w.display_name}</span>
                   <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                    知识 {w.wiki_page_count} 页 · PRD {w.prd_count} 份
+                    资料 {w.wiki_page_count} 页 · PRD {w.prd_count} 份
                   </span>
                 </SelectItem>
               ))}
@@ -251,7 +251,7 @@ export function Phase0UploadV8() {
           </Select>
           {!workspace && (
             <input
-              placeholder="或手动输入资料库名(如 对外投资 / 风险评估 等)"
+              placeholder="或手动输入资料库名,如 对外投资 / 风险评估"
               style={{
                 marginTop: 8,
                 width: "100%",
@@ -274,20 +274,20 @@ export function Phase0UploadV8() {
         </Field>
 
         {/* 评审模式 */}
-        <Field label="评审模式" hint="轻评审更快预检，深评审适合正式提交前">
+        <Field label="评审模式" hint="轻评审适合日常自查,深评审适合发给研发前">
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <ModeCardV8
               active={mode === "quick"}
               name="轻评审"
               eta="≈ 5 分钟"
-              desc="日常预检 · 更快给 PM 结论 · 跳过终审"
+              desc="日常自查 · 更快发现明显缺口 · 适合初稿"
               onClick={() => setUserInput({ mode: "quick" as ReviewMode })}
             />
             <ModeCardV8
               active={mode === "standard"}
               name="深评审"
               eta="≈ 10 分钟"
-              desc="正式评审 · 四位评审员并行 + 苍鹰交叉校验 · 适合发给同事"
+              desc="提交前检查 · 覆盖四个方向 · 适合发给同事前"
               onClick={() => setUserInput({ mode: "standard" as ReviewMode })}
             />
           </div>
@@ -413,11 +413,11 @@ export function Phase0UploadV8() {
         {/* 备注 */}
         <Field
           label="评审备注"
-          hint="可选 · 写一句关注重点,评审鸟会多看两眼"
+          hint="可选 · 写一句关注重点,本次评审会优先看"
           optional
         >
           <textarea
-            placeholder="比如:这版改了 2 个字段名,担心字段口径和现有流程对不上 — 重点看结构"
+            placeholder="比如:这版改了 2 个字段名,担心字段口径和现有流程对不上"
             rows={3}
             value={userNotes}
             onChange={(e) => setUserInput({ userNotes: e.target.value })}
@@ -478,7 +478,7 @@ export function Phase0UploadV8() {
             transition: "background var(--dur-fast) var(--ease-out)",
           }}
         >
-          下一步:盲区预检 →
+          下一步:资料预检 →
         </button>
       </div>
     </div>
@@ -710,9 +710,9 @@ function phaseLabel(phase: number): string {
     case 0:
       return "上传 PRD";
     case 1:
-      return "盲区预检";
+      return "资料预检";
     case 2:
-      return "评审运行中";
+      return "生成意见中";
     case 3:
       return "逐条确认";
     case 4:

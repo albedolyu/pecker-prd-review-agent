@@ -252,7 +252,7 @@ export function Phase4ReportV8() {
     },
     onSuccess: (resp) => {
       toast.success(
-        `已存入知识库${resp.filename ? `: ${resp.filename}` : ""}`,
+        `已存入资料库${resp.filename ? `: ${resp.filename}` : ""}`,
       );
       void auditApi
         .log({
@@ -264,7 +264,7 @@ export function Phase4ReportV8() {
         .catch(() => {});
     },
     onError: (e: ApiError) => {
-      if (e.status === 403) toast.error("只读权限不能存入知识库");
+      if (e.status === 403) toast.error("只读权限不能存入资料库");
       else toast.error(`保存失败: ${e.detail ?? e.message}`);
     },
   });
@@ -290,7 +290,7 @@ export function Phase4ReportV8() {
     },
     onError: (e: ApiError) => {
       if (e.status === 503)
-        toast.error("飞书还未配置,请联系系统管理员");
+        toast.error("飞书还未配置,请联系工具负责人");
       else if (e.status === 403) toast.error("只读权限不能推送到飞书");
       else toast.error(`推送失败: ${e.detail ?? e.message}`);
     },
@@ -394,7 +394,7 @@ export function Phase4ReportV8() {
               marginBottom: 4,
             }}
           >
-            是否建议进入研发评审 · 苍鹰建议
+            是否建议进入研发评审 · 评审建议
           </div>
           <div
             style={{
@@ -413,7 +413,7 @@ export function Phase4ReportV8() {
               ? "暂不建议直接发研发评审 — 必改项较多,建议先回炉调整。"
               : stats.peckScore >= 50
                 ? "可以发研发评审,但请先确认必改项和建议项是否要补。"
-                : "可以发研发评审 — 评审鸟未发现关键阻塞问题。"}
+                : "可以发研发评审 — 本次评审未发现关键阻塞问题。"}
           </div>
           <div
             style={{
@@ -427,10 +427,10 @@ export function Phase4ReportV8() {
             {stats.edited} 条 · 拒绝 {stats.rejected} 条
           </div>
         </div>
-        {/* 右侧苍鹰头像 · 强化"苍鹰终审建议"的视觉权重 */}
+        {/* 右侧收口头像 · 强化最终建议的视觉权重 */}
         <img
           src="/birds/goshawk-lg.png"
-          alt="苍鹰"
+          alt=""
           width={64}
           height={64}
           style={{
@@ -463,7 +463,7 @@ export function Phase4ReportV8() {
           />
           <MetaItem label="评审人" value={reviewer || "—"} />
           <MetaItem label="评审模式" value={formatReviewModeLabel(mode)} />
-          <MetaItem label="本次运行" value={revNo} />
+          <MetaItem label="评审编号" value={revNo} />
         </div>
         <div
           style={{
@@ -489,7 +489,7 @@ export function Phase4ReportV8() {
             tone="warn"
           />
           <StatBlock
-            label={`PRD 健康度 · ${stats.peckLabel}`}
+            label={`PRD 完整度 · ${stats.peckLabel}`}
             value={`${stats.peckScore} / 100`}
             tone={
               stats.peckScore >= 80
@@ -542,10 +542,10 @@ export function Phase4ReportV8() {
               color: "var(--accent-600)",
             }}
           >
-            反馈回声
+            反馈沉淀
           </span>
           <span>
-            你这周的接受 / 拒绝会反过来调整评审鸟的判断权重,完整统计在系统监控里可看。
+            你这周的接受、驳回和补充会用于减少后续误报,也会帮助资料库补齐背景。
           </span>
         </span>
         <MissingReportButton
@@ -632,10 +632,10 @@ export function Phase4ReportV8() {
           {darSummary && (
             <span
               data-testid="dar-summary"
-              title={`苍鹰多轮交叉校验:${darSummary.nSamplesSucceeded}/${darSummary.nSamples} 轮成功 · 一致 ${darSummary.unanimous} / 多数 ${darSummary.majority} / 少数 ${darSummary.minority}`}
+              title={`多轮复核:${darSummary.nSamplesSucceeded}/${darSummary.nSamples} 轮成功 · 一致 ${darSummary.unanimous} / 多数 ${darSummary.majority} / 少数 ${darSummary.minority}`}
               style={{ fontVariantNumeric: "tabular-nums" }}
             >
-              苍鹰多轮校验: {darSummary.nSamplesSucceeded}/{darSummary.nSamples} 轮 ·
+              多轮复核: {darSummary.nSamplesSucceeded}/{darSummary.nSamples} 轮 ·
               <span style={{ color: "var(--status-done-fg)", marginLeft: 4 }}>
                 一致 {darSummary.unanimous}
               </span>{" "}
@@ -657,10 +657,10 @@ export function Phase4ReportV8() {
           {crossBoundaryCount > 0 && (
             <span
               data-testid="cross-boundary-count"
-              title="评审员引用了非本维度的规则,系统已自动降低权重后保留"
+              title="这条意见引用了其他方向的检查规则,已作为辅助提醒保留"
               style={{ fontVariantNumeric: "tabular-nums" }}
             >
-              跨维度规则:{" "}
+              跨方向提醒:{" "}
               <span style={{ color: "var(--text-default)" }}>{crossBoundaryCount}</span> 条
             </span>
           )}
@@ -716,9 +716,9 @@ export function Phase4ReportV8() {
                 ? btnSecondaryDisabledStyle
                 : btnSecondaryStyle
             }
-            title="保存到团队知识库"
+            title="保存到团队资料库"
           >
-            {saveWikiMutation.isPending ? "保存中…" : "存入知识库"}
+            {saveWikiMutation.isPending ? "保存中…" : "存入资料库"}
           </button>
           <button
             type="button"
@@ -1121,7 +1121,7 @@ function DimGroup({ roleKey, items, decisions }: DimGroupProps) {
               </span>
               {typeof it.confidence === "number" && (
                 <span
-                  title={`置信度 ${it.confidence.toFixed(2)}`}
+                  title={`可信度 ${it.confidence.toFixed(2)}`}
                   style={{
                     fontSize: 11,
                     color:
@@ -1132,10 +1132,10 @@ function DimGroup({ roleKey, items, decisions }: DimGroupProps) {
                   }}
                 >
                   {it.confidence < 0.7
-                    ? "低置信"
+                    ? "依据不足"
                     : it.confidence >= 0.85
-                      ? "高置信"
-                      : "中置信"}
+                      ? "依据充分"
+                      : "可参考"}
                 </span>
               )}
             </li>
@@ -1186,7 +1186,7 @@ function CrossBoundaryChip() {
   return (
     <span
       data-testid="cross-boundary-chip"
-      title="此规则不属于本维度核心范围,系统已自动降低权重"
+      title="这条意见来自其他检查方向,请作为辅助提醒处理"
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -1203,7 +1203,7 @@ function CrossBoundaryChip() {
         cursor: "help",
       }}
     >
-      跨维度规则
+      跨方向提醒
     </span>
   );
 }

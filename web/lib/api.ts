@@ -195,7 +195,14 @@ export interface ReviewItem {
     type: string;
     pass: boolean;
     detail?: string;
-  }>;
+  }> | {
+    gates?: ReadonlyArray<{
+      type: string;
+      pass: boolean;
+      detail?: string;
+      reason?: string;
+    }>;
+  };
   /** CC deep #23: 钉选状态 — compact 时不压缩 */
   readonly pinned?: boolean;
   /**

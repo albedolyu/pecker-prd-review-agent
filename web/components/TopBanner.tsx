@@ -125,7 +125,7 @@ export function TopBanner() {
                   color: "var(--text-faint)",
                 }}
               >
-                评审人
+                当前用户
               </span>
               <span
                 style={{
@@ -237,7 +237,7 @@ export function TopBanner() {
               "var(--text-muted)")
           }
         >
-          关于
+          使用说明
         </Link>
 
         {!meLoading && !me && (
@@ -276,7 +276,7 @@ export function TopBanner() {
                 "var(--text-muted)")
             }
           >
-            登出
+            退出
           </button>
         )}
       </div>

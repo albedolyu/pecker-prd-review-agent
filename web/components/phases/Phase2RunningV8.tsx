@@ -61,10 +61,8 @@ import {
   extractWorkerErrors,
   formatDuration,
   formatElapsed,
-  formatTokens,
   inferProgress,
   isAllWorkersDone,
-  modelForRole,
   roleToBird,
   type FunnelStageKey,
   type FunnelState,
@@ -236,8 +234,8 @@ export function Phase2RunningV8() {
   }, [stream.events, stream.state]);
 
   const metaNote = useMemo(() => {
-    if (metaState === "queued") return "等待各项初审完成";
-    if (metaState === "running") return "交叉校验中";
+    if (metaState === "queued") return "等待四个方向完成";
+    if (metaState === "running") return "合并意见中";
     if (metaState === "done") return "完成";
     return undefined;
   }, [metaState]);
@@ -401,7 +399,7 @@ export function Phase2RunningV8() {
               letterSpacing: "-0.015em",
             }}
           >
-            运行质量检查
+            结果完整性检查
           </h1>
           <p
             style={{
@@ -410,7 +408,7 @@ export function Phase2RunningV8() {
               marginTop: 4,
             }}
           >
-            先确认本次评审是否可信,再决定继续还是重跑
+            先确认本次结果是否完整,再决定继续确认还是重跑
           </p>
         </header>
 
@@ -462,7 +460,7 @@ export function Phase2RunningV8() {
               letterSpacing: "-0.015em",
             }}
           >
-            评审运行状态
+            正在生成评审意见
           </h1>
           <p
             style={{
@@ -471,7 +469,7 @@ export function Phase2RunningV8() {
               marginTop: 4,
             }}
           >
-            四个评审员并行审稿,苍鹰复核漏报与误判
+            正在分方向检查 PRD,完成后会先确认结果是否完整
           </p>
         </div>
         <div
@@ -485,7 +483,7 @@ export function Phase2RunningV8() {
           }}
         >
           <span>
-            已运行{" "}
+            已用时{" "}
             <span style={{ color: "var(--text-default)", fontWeight: 500 }}>
               {formatElapsed(elapsed)}
             </span>
@@ -553,7 +551,7 @@ export function Phase2RunningV8() {
           <strong style={{ fontWeight: 600 }}>
             {failedReviewEvent?.reason === "quota_exhausted"
               ? "评审额度不足,本次评审中断"
-              : "评审运行失败"}
+              : "本次评审失败"}
           </strong>
           {" · "}
           {failedReviewEvent?.message ?? stream.error ?? "未知错误,请重试"}
@@ -571,7 +569,7 @@ export function Phase2RunningV8() {
             fontSize: 13,
           }}
         >
-          <strong style={{ fontWeight: 600 }}>部分评审员未完整返回</strong>
+          <strong style={{ fontWeight: 600 }}>部分方向未完整返回</strong>
           {" · "}
           {degradedEvent.message}
         </div>
@@ -598,9 +596,7 @@ export function Phase2RunningV8() {
                 birdId={birdId}
                 status={status}
                 submissions={ev?.items_count}
-                tokens={formatTokens(ev?.telemetry)}
                 elapsed={formatDuration(ev?.telemetry?.duration_ms)}
-                model={modelForRole(roleKey, mode)}
                 failReason={ev ? classifyFailReason(ev) : undefined}
                 onRetry={handleRetry}
                 progress={status === "running" ? inferProgress(ev) : 0}
@@ -619,7 +615,6 @@ export function Phase2RunningV8() {
             birdId={META_BIRD_ID}
             status={metaState}
             note={metaNote}
-            model="gpt-5.5"
             variant="meta"
             onRetry={handleRetry}
             progress={metaState === "running" ? 40 : 0}
@@ -692,23 +687,23 @@ function buildConsoleLines(
       case "uploaded":
         lines.push({
           t,
-          src: { name: "系统" },
+          src: { name: "进度" },
           level: "info",
-          text: "PRD 已接入,正在加载知识库",
+          text: "PRD 已接入,正在加载资料库",
         });
         break;
       case "wiki_scanned":
         lines.push({
           t,
-          src: { name: "系统" },
+          src: { name: "进度" },
           level: "info",
-          text: `知识库已加载 · ${"page_count" in e ? e.page_count : "?"} 页`,
+          text: `资料库已加载 · ${"page_count" in e ? e.page_count : "?"} 页`,
         });
         break;
       case "workers_started":
         lines.push({
           t,
-          src: { name: "调度" },
+          src: { name: "进度" },
           level: "accent",
           text: `四个评审方向开始并行检查(${"mode" in e && e.mode === "quick" ? "轻评审" : "深评审"})`,
         });
@@ -743,23 +738,23 @@ function buildConsoleLines(
       case "final_reviewer_started":
         lines.push({
           t,
-          src: { name: "苍鹰", bird: 5 },
+          src: { name: "收口", bird: 5 },
           level: "accent",
-          text: "开始交叉校验,核对依据与遗漏",
+          text: "开始合并意见,核对依据与遗漏",
         });
         break;
       case "final_reviewer_done":
         lines.push({
           t,
-          src: { name: "苍鹰", bird: 5 },
+          src: { name: "收口", bird: 5 },
           level: "ok",
-          text: "交叉校验完成",
+          text: "意见合并完成",
         });
         break;
       case "result":
         lines.push({
           t,
-          src: { name: "系统" },
+          src: { name: "进度" },
           level: "ok",
           text: `评审完成,共 ${e.payload.items.length} 条意见待确认`,
         });
@@ -767,7 +762,7 @@ function buildConsoleLines(
       case "error":
         lines.push({
           t,
-          src: { name: "系统" },
+          src: { name: "进度" },
           level: "error",
           text: `评审遇到异常:${e.message}`,
         });
@@ -776,7 +771,7 @@ function buildConsoleLines(
         const ev = e as ReviewFailedEvent;
         lines.push({
           t,
-          src: { name: "系统" },
+          src: { name: "进度" },
           level: "error",
           text: `评审中断 · ${ev.message}`,
         });
@@ -786,9 +781,9 @@ function buildConsoleLines(
         const ev = e as ReviewDegradedEvent;
         lines.push({
           t,
-          src: { name: "系统" },
+          src: { name: "进度" },
           level: "warn",
-          text: `部分评审员未完整返回 · ${ev.message}`,
+          text: `部分方向未完整返回 · ${ev.message}`,
         });
         break;
       }
@@ -989,7 +984,7 @@ function FunnelPanel({ funnel }: { funnel: FunnelState }) {
               value={funnel.retention.evidence_verify_retention}
             />
             <RetentionPill
-              label="苍鹰复核"
+              label="意见收口"
               value={funnel.retention.goshawk_retention}
             />
           </div>
@@ -1083,7 +1078,7 @@ function FunnelPanel({ funnel }: { funnel: FunnelState }) {
               userSelect: "none",
             }}
           >
-            知识库依据来源
+            资料库依据来源
             {funnel.wikiMode && (
               <span
                 style={{
@@ -1107,9 +1102,9 @@ function FunnelPanel({ funnel }: { funnel: FunnelState }) {
                 }}
               >
                 {funnel.wikiMode === "rich"
-                  ? "知识库充足"
+                  ? "资料库充足"
                   : funnel.wikiMode === "sparse"
-                    ? "知识库稀疏"
+                    ? "资料库稀疏"
                     : "未知"}
               </span>
             )}

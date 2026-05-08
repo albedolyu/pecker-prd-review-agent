@@ -1,12 +1,10 @@
 "use client";
 
 /**
- * ForestLanding · v8 · 登录前首页(工作台气质)
+ * ForestLanding · 登录前首页(团队试用入口)
  *
- * v7 是"赛博童话森林"Canvas 数字雨 + 大啄木鸟 · v8 切到极简 landing:
- * - 顶部 brand + 登录 / 进入入口
- * - 中部一句话产品介绍 + 10 鸟头像横向展示
- * - 底部:关于 / 快速开始 / 登录 三档 CTA
+ * 给 PM 同事看的第一屏只保留可理解入口,不暴露组件预览、版本代号、
+ * 老版回退等内部调试信息。
  *
  * 不依赖后端(/api/me 不在这里调),可作为未登录第一眼。
  */
@@ -14,9 +12,20 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BirdAvatar, type BirdId } from "@/components/birds/BirdAvatar";
-import { BIRD_META } from "@/components/birds/BirdBadge";
 
 const ALL_BIRDS: BirdId[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+const LANDING_BIRD_LABELS: Record<BirdId, string> = {
+  1: "完整性",
+  2: "字段",
+  3: "体验",
+  4: "风险",
+  5: "复核",
+  6: "收口",
+  7: "反馈",
+  8: "样例",
+  9: "资料",
+  10: "质检",
+};
 
 export function ForestLanding() {
   const router = useRouter();
@@ -55,7 +64,7 @@ export function ForestLanding() {
             marginBottom: 14,
           }}
         >
-          PRD Review · Agent Workbench · v8
+          Pecker · PRD 评审工作台
         </div>
 
         {/* title */}
@@ -70,8 +79,8 @@ export function ForestLanding() {
             maxWidth: 680,
           }}
         >
-          10 只鸟 · 帮 PM 把{" "}
-          <span style={{ color: "var(--accent-500)" }}>PRD</span> 评到能落地
+          提交前,先把{" "}
+          <span style={{ color: "var(--accent-500)" }}>PRD</span> 查清楚
         </h1>
 
         {/* subtitle */}
@@ -84,11 +93,12 @@ export function ForestLanding() {
             lineHeight: 1.6,
           }}
         >
-          四位评审鸟并行审稿,苍鹰复核漏报与误判 — 10 分钟出一份可追溯的 PRD 评审报告,每条意见都有来源、有依据、可签收。
+          重点检查目标范围、字段口径、异常边界和实现依赖。跑完后得到一份可确认的修改清单,方便你补充 PRD、同步研发和沉淀报告。
         </p>
 
         {/* 10 只鸟展示 */}
         <div
+          aria-label="啄木鸟评审团队"
           style={{
             display: "flex",
             gap: 10,
@@ -104,7 +114,6 @@ export function ForestLanding() {
               key={id}
               id={id}
               size="lg"
-              placeholder={id > 5}
             />
           ))}
         </div>
@@ -113,20 +122,19 @@ export function ForestLanding() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(5, 1fr)",
+            gridTemplateColumns: "repeat(10, minmax(34px, 1fr))",
             gap: 8,
             marginTop: 12,
             maxWidth: 680,
             fontSize: 11,
-            fontFamily: "var(--font-mono)",
+            fontFamily: "var(--font-sans)",
             color: "var(--text-faint)",
-            textTransform: "uppercase",
-            letterSpacing: "0.06em",
+            letterSpacing: 0,
           }}
         >
-          {[1, 2, 3, 4, 5].map((id) => (
+          {ALL_BIRDS.map((id) => (
             <div key={id} style={{ textAlign: "center" }}>
-              {BIRD_META[id as BirdId].label}
+              {LANDING_BIRD_LABELS[id as BirdId]}
             </div>
           ))}
         </div>
@@ -146,10 +154,10 @@ export function ForestLanding() {
             onClick={() => router.push("/review")}
             style={btnPrimary}
           >
-            进入评审 →
+            开始评审 →
           </button>
           <Link href="/login" style={btnSecondary}>
-            登录
+            登录工作台
           </Link>
           <Link href="/about" style={btnGhost}>
             关于 Pecker
@@ -168,19 +176,19 @@ export function ForestLanding() {
           }}
         >
           <Feature
-            tag="评审运行"
-            title="评审运行状态可视化"
-            desc="实时看到每个评审员审到哪了,谁返回了多少条意见,哪只鸟出了状况一目了然"
+            tag="过程可见"
+            title="先确认本次结果是否完整"
+            desc="评审结束前先看各方向是否都返回了意见,结果不完整时会提醒重跑,避免拿残缺结论做判断"
           />
           <Feature
-            tag="质量检查"
-            title="不让你在残缺结果上决策"
-            desc="评审跑完先看运行健康度,有评审员未完整返回时强制提示重跑,避免遗漏问题"
+            tag="结论可用"
+            title="把问题整理成可处理清单"
+            desc="每条意见对应位置、原因和建议,你可以直接接受、驳回或改写,不会被一大段泛泛建议淹没"
           />
           <Feature
-            tag="逐条确认"
-            title="左对照原文,右逐条决策"
-            desc="按维度和严重度筛选,接受 / 驳回 / 改写一键完成,低置信意见自动弱化"
+            tag="交付可追溯"
+            title="评审报告可以直接归档"
+            desc="确认后的结果会生成报告和修订建议包,后续复盘、同步研发或交给测试同事都有依据"
           />
         </div>
       </section>
@@ -200,30 +208,8 @@ export function ForestLanding() {
           flexWrap: "wrap",
         }}
       >
-        <span>Pecker · PRD 评审工作台 · 2026</span>
-        <span style={{ display: "flex", gap: 12 }}>
-          <Link
-            href="/runs/diff"
-            title="运行对比 · 内部"
-            style={{ color: "inherit", textDecoration: "none" }}
-          >
-            运行对比
-          </Link>
-          <Link
-            href="/v8-preview"
-            title="组件预览 · 内部"
-            style={{ color: "inherit", textDecoration: "none" }}
-          >
-            组件预览
-          </Link>
-          <Link
-            href="/review?v=7"
-            title="老版回退入口"
-            style={{ color: "inherit", textDecoration: "none" }}
-          >
-            老版回退
-          </Link>
-        </span>
+        <span>Pecker · PRD 评审工作台 · 内部试用</span>
+        <span>有问题请反馈给工具负责人</span>
       </footer>
     </main>
   );

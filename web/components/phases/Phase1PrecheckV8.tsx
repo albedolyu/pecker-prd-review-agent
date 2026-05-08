@@ -48,7 +48,7 @@ export function Phase1PrecheckV8() {
       setPrecheckResult(data);
       setWikiPages({ ...data.wiki_pages });
       toast.success(
-        `预检完成 · 已覆盖 ${data.strong.length} 项,${data.gaps.length} 项可能是知识盲区`,
+        `预检完成 · 已覆盖 ${data.strong.length} 项,${data.gaps.length} 项需要补背景`,
       );
       setTimeout(() => setPhase(2), 800);
     },
@@ -76,7 +76,7 @@ export function Phase1PrecheckV8() {
       return;
     }
     if (Object.keys(wikiPages).length === 0) {
-      toast.warning("知识库为空,接下来的评审拿不到上下文");
+      toast.warning("资料库为空,接下来的评审缺少背景依据");
     }
     try {
       if (reviewer) {
@@ -111,7 +111,7 @@ export function Phase1PrecheckV8() {
             letterSpacing: "-0.015em",
           }}
         >
-          盲区预检
+          资料预检
         </h1>
         <p
           style={{
@@ -120,7 +120,7 @@ export function Phase1PrecheckV8() {
             marginTop: 4,
           }}
         >
-          先翻一遍资料库,看 PRD 哪些点已有依据、哪些点是知识盲区
+          先对照资料库,看看哪些内容已有依据、哪些背景还不够
         </p>
       </header>
 
@@ -197,10 +197,10 @@ export function Phase1PrecheckV8() {
           />
           <ResultColumn
             kind="gap"
-            title="知识盲区"
-            hint="资料库缺这个主题,评审可能信息不足"
+            title="资料缺口"
+            hint="资料库缺这个主题,后续意见可能需要你补背景"
             items={precheckResult.gaps}
-            empty="未发现明显盲区"
+            empty="未发现明显资料缺口"
           />
         </div>
       )}
@@ -235,11 +235,11 @@ export function Phase1PrecheckV8() {
               可选
             </span>
             <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-              看过预检后可以再提醒一句评审重点
+              看过预检后可以再补一句本次关注重点
             </span>
           </div>
           <textarea
-            placeholder="例:本次重点检查字段映射;忽略 UI 交互部分…"
+            placeholder="例:本次重点检查字段映射;暂不关注交互细节…"
             rows={3}
             value={userNotes}
             onChange={(e) => setUserInput({ userNotes: e.target.value })}
@@ -299,7 +299,7 @@ export function Phase1PrecheckV8() {
                 : btnPrimaryStyle
             }
           >
-            下一步:开始评审 →
+            下一步:生成意见 →
           </button>
         </div>
       </footer>
@@ -363,7 +363,7 @@ function LoadingCard() {
             lineHeight: 1.55,
           }}
         >
-          扫一遍知识库索引,再让 AI 检查 PRD 可能的盲点。约 10-15 秒,请不要关闭页面。
+          正在对照资料库检查背景是否足够。约 10-15 秒,请不要关闭页面。
         </div>
       </div>
     </div>

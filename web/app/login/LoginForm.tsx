@@ -74,7 +74,7 @@ export function LoginForm() {
     onError: (e: ApiError) => {
       if (e.status === 401) toast.error("密码错误");
       else if (e.status === 503)
-        toast.error("还未配置登录密码,请联系系统管理员");
+        toast.error("还未配置登录密码,请联系工具负责人");
       else toast.error(`登录失败: ${e.detail ?? e.message}`);
     },
   });
@@ -256,7 +256,7 @@ export function LoginForm() {
                 lineHeight: 1.65,
               }}
             >
-              第一次来？找系统管理员要密码，登录后即可使用评审工作台。
+              第一次来？找工具负责人要密码,登录后即可使用评审工作台。
             </div>
           </form>
 
@@ -317,7 +317,7 @@ function LoginBirdTeamIllustration() {
           color: "var(--text-muted)",
         }}
       >
-        十只评审鸟围在同一张桌上协作：先分头看 PRD，再交叉校验，最后交给 PM 确认。
+        十个检查角色围绕同一份 PRD 协作:先分方向检查,再合并复核,最后交给 PM 确认。
       </p>
     </section>
   );

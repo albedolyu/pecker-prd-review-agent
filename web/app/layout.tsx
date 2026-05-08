@@ -7,7 +7,7 @@ import { TopBanner } from "@/components/TopBanner";
 export const metadata: Metadata = {
   title: "啄木鸟 Pecker — PRD 评审",
   description:
-    "PM 用的 PRD 评审工具:4 位编辑并行审查 + 终审交叉校验 + 飞书推送。",
+    "PM 用的 PRD 提交前检查工具:检查目标范围、字段口径、体验细节和实现风险,并导出可同步的评审报告。",
 };
 
 export default function RootLayout({

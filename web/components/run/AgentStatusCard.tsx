@@ -27,11 +27,11 @@ interface AgentStatusCardProps {
   status: AgentStatus;
   /** 0-100 */
   progress?: number;
-  /** token 消耗,如 "2.1k" */
+  /** 处理量,仅内部调试使用 */
   tokens?: string;
   /** 耗时,如 "12.4s" */
   elapsed?: string;
-  /** 模型,如 "gpt-5.4" */
+  /** 处理方式,仅内部调试使用 */
   model?: string;
   /** 已提交 items 数量 */
   submissions?: number;
@@ -49,7 +49,7 @@ const BIRD_LABELS: Record<BirdId, string> = {
   2: "数据",
   3: "体验",
   4: "风险",
-  5: "苍鹰",
+  5: "意见收口",
   6: "bird-06",
   7: "bird-07",
   8: "bird-08",
@@ -62,7 +62,7 @@ const BIRD_FUNCTIONS: Record<BirdId, string> = {
   2: "数据字段 / 指标",
   3: "UX 流程 / 交互",
   4: "风险 / 合规 / 依赖",
-  5: "交叉校验 + 漏报补充",
+  5: "意见合并 / 补漏",
   6: "未上线",
   7: "未上线",
   8: "未上线",
@@ -76,7 +76,7 @@ export function AgentStatusCard({
   progress = 0,
   tokens,
   elapsed,
-  model = "gpt-5.4",
+  model,
   submissions,
   note,
   failReason,
@@ -88,6 +88,7 @@ export function AgentStatusCard({
   const label = BIRD_LABELS[birdId];
   const fn = BIRD_FUNCTIONS[birdId];
   const isMeta = variant === "meta";
+  const displayName = label;
   const showProgress = status === "running";
   const isFailed = status === "failed";
 
@@ -135,7 +136,7 @@ export function AgentStatusCard({
                 color: "var(--text-strong)",
               }}
             >
-              {label}鸟
+              {displayName}
             </span>
             {isMeta && <MetaTag />}
           </div>
@@ -241,7 +242,7 @@ export function AgentStatusCard({
           }}
           title={`处理详情 · 耗时 ${elapsed}${
             tokens ? ` · 处理量 ${tokens}` : ""
-          }${model ? " · 模型由系统自动选择" : ""}`}
+          }${model ? " · 处理方式自动选择" : ""}`}
         >
           <span>耗时 {elapsed}</span>
         </div>
@@ -361,7 +362,7 @@ function MetaTag() {
         color: "var(--bird-5)",
       }}
     >
-      交叉校验
+      意见收口
     </span>
   );
 }
@@ -376,12 +377,12 @@ function StatusPill({ status, note }: StatusPillProps) {
     queued: {
       bg: "var(--status-queued-bg)",
       fg: "var(--status-queued-fg)",
-      label: note || "等待运行",
+      label: note || "等待开始",
     },
     running: {
       bg: "var(--status-running-bg)",
       fg: "var(--status-running-fg)",
-      label: note || "审稿中",
+      label: note || "检查中",
     },
     done: {
       bg: "var(--status-done-bg)",

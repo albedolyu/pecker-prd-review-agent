@@ -85,7 +85,7 @@ function ReviewPageInner() {
   if (isLoading) {
     return (
       <div className="mx-auto mt-20 max-w-4xl px-6 text-center text-sm text-muted-foreground">
-        加载登录态……
+        正在确认登录状态…
       </div>
     );
   }
@@ -94,14 +94,13 @@ function ReviewPageInner() {
     return (
       <div className="mx-auto mt-24 flex max-w-md flex-col items-center gap-4 px-6 text-center">
         <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-pecker-red/80">
-          ✱ 需 要 登 录
+          需要登录
         </div>
         <h2 className="text-[1.6rem] font-semibold tracking-tight">
-          先去登录口签到
+          先登录后开始评审
         </h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          评审系统需要先识别你是谁才能进入。如果你还没登录,或者后端暂时
-          没连上,请先去登录页。
+          工作台需要确认当前用户后才能保存评审记录。如果还没登录,请先进入登录页。
         </p>
         <div className="mt-2 flex gap-3">
           <Link
@@ -148,8 +147,8 @@ function ReviewPageInner() {
           }}
         >
           <span>
-            <strong style={{ fontWeight: 600 }}>legacy v7</strong> · 这是老版
-            UI 的回退入口,默认 UI 请访问{" "}
+            <strong style={{ fontWeight: 600 }}>备用页面</strong> · 这是旧版
+            评审页面的回退入口,默认页面请访问{" "}
             <Link
               href="/review"
               style={{
