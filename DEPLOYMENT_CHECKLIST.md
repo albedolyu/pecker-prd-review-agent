@@ -41,6 +41,9 @@
 - [ ] `OPENAI_BASE_URL=<OpenAI 兼容中转地址>` 已按实际网关填写（没有中转则留空）
 - [ ] `OPENAI_WIRE_API=responses`
 - [ ] `OPENAI_REASONING_EFFORT=xhigh`
+- [ ] `OPENAI_WORKER_REASONING_EFFORT=medium`（并行评审员降到稳定档,避免 4 个 worker 同时卡到网关超时）
+- [ ] `OPENAI_ADVISOR_REASONING_EFFORT=xhigh`（苍鹰终审保留高质量复核）
+- [ ] `OPENAI_ROUTER_REASONING_EFFORT=medium`
 - [ ] `OPENAI_DISABLE_RESPONSE_STORAGE=true`
 - [ ] `PECKER_MODEL_OVERRIDE=`（留空,让 route 表自动分档；临时深度压测时才设 gpt55）
 - [ ] 已轮换掉任何曾在聊天、文档、截图里暴露过的 key
@@ -58,9 +61,12 @@
 - [ ] `OPENAI_BASE_URL=<OpenAI 兼容中转地址>` （如使用中转则必填）
 - [ ] `OPENAI_WIRE_API=responses`
 - [ ] `OPENAI_REASONING_EFFORT=xhigh`
+- [ ] `OPENAI_WORKER_REASONING_EFFORT=medium`
+- [ ] `OPENAI_ADVISOR_REASONING_EFFORT=xhigh`
+- [ ] `OPENAI_ROUTER_REASONING_EFFORT=medium`
 - [ ] `OPENAI_DISABLE_RESPONSE_STORAGE=true`
-- [ ] `OPENAI_REQUEST_TIMEOUT=360`
-- [ ] `OPENAI_WORKER_MAX_RETRIES=2`
+- [ ] `OPENAI_REQUEST_TIMEOUT=240`
+- [ ] `OPENAI_WORKER_MAX_RETRIES=1`
 - [ ] `OPENAI_ADVISOR_MAX_RETRIES=2`
 - [ ] `OPENAI_ROUTER_MAX_RETRIES=1`
 - [ ] `PECKER_PRECHECK_TIMEOUT=90`
@@ -83,6 +89,8 @@
 - [ ] `PECKER_MAX_CONCURRENT_MODEL_CALLS=5` （全局模型调用阀门；配合多 key 池，让单次深评 4 worker + 复核能更顺）
 - [ ] `PECKER_MODEL_CALL_QUEUE_TIMEOUT=240` （模型调用排队过久时快速降级，同时允许单次深评的第 4 个 worker 正常等待）
 - [ ] `PECKER_ENABLE_WORKER_TIMEOUT_RECOVERY=0` （团队试用期关闭超时自动二次请求，避免中转站异常时雪上加霜）
+- [ ] `PECKER_ENABLE_ADAPTIVE_WORKER_PROMOTION=0` （团队试用期禁止大资料库自动把 worker 升到 gpt55）
+- [ ] `PECKER_MAX_WIKI_CHARS=15000` （团队试用期控制资料库注入上限，减少中转超时风险）
 - [ ] `PECKER_READONLY_USERS=张三,李四` （只读用户名单，逗号分隔）
 - [ ] `DEEPSEEK_API_KEY=sk-...` （仅作为临时降级方案时需要）
 - [ ] `FEISHU_APP_ID=cli_xxx` + `FEISHU_APP_SECRET=xxx` （飞书机器人配了再填）

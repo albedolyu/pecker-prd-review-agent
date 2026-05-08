@@ -267,6 +267,32 @@ def test_openai_native_client_supports_responses_wire(monkeypatch):
     assert fake_client.responses.last_kwargs["tool_choice"]["type"] == "function"
 
 
+def test_openai_native_client_allows_policy_reasoning_effort_override(monkeypatch):
+    from clients.openai_native import OpenAINativeClient
+
+    fake_client = _FakeResponsesOpenAI()
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_WIRE_API", "responses")
+    monkeypatch.setenv("OPENAI_REASONING_EFFORT", "xhigh")
+    monkeypatch.setenv("OPENAI_WORKER_REASONING_EFFORT", "high")
+    monkeypatch.setattr(
+        OpenAINativeClient,
+        "_build_client",
+        lambda self, api_key, base_url: fake_client,
+    )
+
+    client = OpenAINativeClient(base_url="https://pikachu.claudecode.love")
+    client.create(
+        model="gpt-5.4",
+        max_tokens=256,
+        system="system",
+        messages=[{"role": "user", "content": "hello"}],
+        retry_policy="worker",
+    )
+
+    assert fake_client.responses.last_kwargs["reasoning"] == {"effort": "high"}
+
+
 def test_openai_native_client_requires_api_key(monkeypatch):
     from clients.openai_native import OpenAINativeClient
 

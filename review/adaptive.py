@@ -66,6 +66,14 @@ def choose_worker_model_override(
     """Return a route tier override when the worker should be promoted."""
     if recovery_mode:
         return "gpt55"
+    enabled = os.environ.get("PECKER_ENABLE_ADAPTIVE_WORKER_PROMOTION", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if not enabled:
+        return None
     complexity = review_complexity(prd_content, wiki_pages)
     if complexity["is_large"] and dim_key not in {"default"}:
         return "gpt55"

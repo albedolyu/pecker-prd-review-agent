@@ -1,9 +1,23 @@
 from __future__ import annotations
 
 
-def test_large_prd_promotes_worker_to_gpt55():
+def test_large_prd_does_not_promote_worker_by_default(monkeypatch):
     from review.adaptive import choose_worker_model_override
 
+    monkeypatch.delenv("PECKER_ENABLE_ADAPTIVE_WORKER_PROMOTION", raising=False)
+    override = choose_worker_model_override(
+        "compliance",
+        prd_content="x" * 35_000,
+        wiki_pages={f"p{i}": "wiki" for i in range(60)},
+    )
+
+    assert override is None
+
+
+def test_large_prd_can_promote_worker_when_explicitly_enabled(monkeypatch):
+    from review.adaptive import choose_worker_model_override
+
+    monkeypatch.setenv("PECKER_ENABLE_ADAPTIVE_WORKER_PROMOTION", "1")
     override = choose_worker_model_override(
         "compliance",
         prd_content="x" * 35_000,

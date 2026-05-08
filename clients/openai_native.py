@@ -273,6 +273,18 @@ class OpenAINativeClient:
                 return max(0, self._env_int(name, default))
         return default
 
+    def _reasoning_effort_for_policy(self, retry_policy: str) -> str:
+        suffix = retry_policy.upper()
+        for name in (
+            f"OPENAI_{suffix}_REASONING_EFFORT",
+            f"PECKER_OPENAI_{suffix}_REASONING_EFFORT",
+            f"PECKER_{suffix}_REASONING_EFFORT",
+        ):
+            value = os.environ.get(name, "").strip()
+            if value:
+                return value
+        return self.reasoning_effort
+
     @classmethod
     def _response_input(cls, system: Any, messages: List[Dict[str, Any]]) -> str:
         parts: List[str] = []
@@ -372,6 +384,7 @@ class OpenAINativeClient:
         metric_start=None,
     ):
         max_retries = self._max_retries_for_policy(retry_policy)
+        reasoning_effort = self._reasoning_effort_for_policy(retry_policy)
         selected_tool = self._selected_tool(tools, tool_choice)
         req_id = _gen_req_id()
         last_exc: Optional[Exception] = None
@@ -386,9 +399,9 @@ class OpenAINativeClient:
             }
             if self.disable_response_storage:
                 params["store"] = False
-            if self.reasoning_effort:
-                params["reasoning"] = {"effort": self.reasoning_effort}
-            if temperature is not None and not self.reasoning_effort:
+            if reasoning_effort:
+                params["reasoning"] = {"effort": reasoning_effort}
+            if temperature is not None and not reasoning_effort:
                 params["temperature"] = temperature
             converted_tools = self._response_tools(tools)
             if converted_tools:
@@ -453,6 +466,7 @@ class OpenAINativeClient:
             "attempts": attempts_used,
             "key_id": key_label,
             "key_pool_size": len(self._api_keys),
+            "reasoning_effort": reasoning_effort,
         }
         try:
             setattr(unified, "_pecker_usage_extra", usage_extra)

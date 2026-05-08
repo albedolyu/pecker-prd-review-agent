@@ -45,12 +45,12 @@ def test_default_routes_keep_smooth_gpt_tier_split(monkeypatch):
 
     expected_tiers = {
         "worker.default": "gpt54",
-        "worker.structure": "gpt55",
+        "worker.structure": "gpt54",
         "worker.compliance": "gpt54",
-        "worker.quality": "gpt55",
-        "worker.data_quality": "gpt55",
-        "worker.consistency": "gpt55",
-        "worker.ai_coding": "gpt55",
+        "worker.quality": "gpt54",
+        "worker.data_quality": "gpt54",
+        "worker.consistency": "gpt54",
+        "worker.ai_coding": "gpt54",
         "advisor.goshawk": "gpt55",
         "advisor.goshawk.recheck": "gpt54",
         "verify.nli": "gpt54mini",

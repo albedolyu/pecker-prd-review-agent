@@ -53,15 +53,15 @@ routes:
   # GPT-only pilot: worker 默认模型由本 route 表统一控制;
   # dimensions.yaml 的 legacy dim["model"] 仅保留为历史配置, 不再覆盖路由分档。
   # ============================================================
-  # 2026-05-04: GPT-only smooth routes. 轻维度走 gpt54, 高风险维度保留 gpt55.
+  # 2026-05-08: team beta stable route. 并行 worker 默认 gpt54, 终审 advisor 保留 gpt55.
   worker.default:      {vendor: openai, transport: native, model: gpt54, retry_policy: worker}
-  worker.structure:    {vendor: openai, transport: native, model: gpt55, retry_policy: worker}
+  worker.structure:    {vendor: openai, transport: native, model: gpt54, retry_policy: worker}
   worker.compliance:   {vendor: openai, transport: native, model: gpt54, retry_policy: worker}
-  worker.data_quality: {vendor: openai, transport: native, model: gpt55, retry_policy: worker}
-  worker.quality:      {vendor: openai, transport: native, model: gpt55, retry_policy: worker}
-  worker.consistency:  {vendor: openai, transport: native, model: gpt55, retry_policy: worker}
-  worker.ai_coding:    {vendor: openai, transport: native, model: gpt55, retry_policy: worker}
-  worker.ai_friendly:  {vendor: openai, transport: native, model: gpt55, retry_policy: worker}
+  worker.data_quality: {vendor: openai, transport: native, model: gpt54, retry_policy: worker}
+  worker.quality:      {vendor: openai, transport: native, model: gpt54, retry_policy: worker}
+  worker.consistency:  {vendor: openai, transport: native, model: gpt54, retry_policy: worker}
+  worker.ai_coding:    {vendor: openai, transport: native, model: gpt54, retry_policy: worker}
+  worker.ai_friendly:  {vendor: openai, transport: native, model: gpt54, retry_policy: worker}
 
   # ============================================================
   # 苍鹰 meta-reviewer
