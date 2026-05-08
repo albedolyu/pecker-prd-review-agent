@@ -222,6 +222,24 @@ export function TopBanner() {
           质量看板
         </Link>
         <Link
+          href="/system/usage"
+          style={{
+            color: "var(--text-muted)",
+            textDecoration: "none",
+            transition: "color var(--dur-fast) var(--ease-out)",
+          }}
+          onMouseEnter={(e) =>
+            ((e.currentTarget as HTMLAnchorElement).style.color =
+              "var(--accent-600)")
+          }
+          onMouseLeave={(e) =>
+            ((e.currentTarget as HTMLAnchorElement).style.color =
+              "var(--text-muted)")
+          }
+        >
+          团队看板
+        </Link>
+        <Link
           href="/about"
           style={{
             color: "var(--text-muted)",

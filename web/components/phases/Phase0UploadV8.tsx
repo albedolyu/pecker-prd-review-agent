@@ -54,6 +54,7 @@ export function Phase0UploadV8() {
 
   const [dragOver, setDragOver] = useState(false);
   const [dismissedDraft, setDismissedDraft] = useState(false);
+  const [customWorkspaceMode, setCustomWorkspaceMode] = useState(false);
 
   const { data: workspaces, isLoading: wsLoading } = useQuery({
     queryKey: ["workspaces"],
@@ -79,6 +80,18 @@ export function Phase0UploadV8() {
   });
 
   const hasDraft = !!draft && !dismissedDraft;
+  const workspaceInList = (workspaces ?? []).some((w) => w.name === workspace);
+  const showCustomWorkspaceInput = customWorkspaceMode || !workspace;
+
+  const handleSelectWorkspace = (value: string | null) => {
+    setCustomWorkspaceMode(false);
+    setUserInput({ workspace: value ?? "" });
+  };
+
+  const handleUseCustomWorkspace = () => {
+    setCustomWorkspaceMode(true);
+    setUserInput({ workspace: "" });
+  };
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -219,8 +232,8 @@ export function Phase0UploadV8() {
           hint="选择和这份 PRD 最相关的资料库,用于补充业务背景和既有规则"
         >
           <Select
-            value={workspace}
-            onValueChange={(v) => setUserInput({ workspace: v ?? "" })}
+            value={customWorkspaceMode || !workspaceInList ? "" : workspace}
+            onValueChange={handleSelectWorkspace}
             disabled={wsLoading}
           >
             <SelectTrigger
@@ -249,9 +262,49 @@ export function Phase0UploadV8() {
               ))}
             </SelectContent>
           </Select>
-          {!workspace && (
+          {workspace && !customWorkspaceMode && (
+            <div
+              style={{
+                marginTop: 8,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 10,
+                border: "1px solid var(--border-subtle)",
+                borderRadius: "var(--r-3)",
+                background: "var(--surface-sunken)",
+                padding: "7px 10px",
+              }}
+            >
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                当前资料库：
+                <strong style={{ color: "var(--text-default)", fontWeight: 600 }}>
+                  {workspace.replace(/^workspace-/, "")}
+                </strong>
+              </span>
+              <button
+                type="button"
+                onClick={handleUseCustomWorkspace}
+                style={{
+                  border: 0,
+                  background: "transparent",
+                  color: "var(--accent-600)",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  fontFamily: "var(--font-sans)",
+                  padding: 0,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                改为新资料库
+              </button>
+            </div>
+          )}
+          {showCustomWorkspaceInput && (
             <input
-              placeholder="或手动输入资料库名,如 对外投资 / 风险评估"
+              placeholder="输入新资料库名,如 对外投资 / 风险评估"
+              value={customWorkspaceMode ? workspace : ""}
               style={{
                 marginTop: 8,
                 width: "100%",
@@ -265,9 +318,11 @@ export function Phase0UploadV8() {
                 color: "var(--text-muted)",
                 outline: "none",
               }}
+              onFocus={() => setCustomWorkspaceMode(true)}
               onChange={(e) => {
                 const v = e.target.value.trim();
-                if (v) setUserInput({ workspace: v });
+                setCustomWorkspaceMode(true);
+                setUserInput({ workspace: v });
               }}
             />
           )}

@@ -441,6 +441,77 @@ export const reportsApi = {
 } as const;
 
 // ============================================================
+// admin usage
+// ============================================================
+
+export interface UsageSummary {
+  total_reviews: number;
+  active_reviewers: number;
+  completed: number;
+  failed: number;
+  degraded: number;
+  avg_duration_ms: number;
+  p95_duration_ms: number;
+  total_cost_usd: number;
+  review_started_events: number;
+  audit_events: number;
+}
+
+export interface UsageReviewer {
+  reviewer: string;
+  reviews: number;
+  session_count: number;
+  started_events: number;
+  completed: number;
+  failed: number;
+  degraded: number;
+  last_seen: string;
+  last_prd_name: string;
+  workspaces: Record<string, number>;
+}
+
+export interface UsageRun {
+  reviewer?: string;
+  prd_name?: string;
+  workspace?: string;
+  status?: string;
+  ts_start?: string;
+  duration_ms: number;
+  cost_usd: number;
+  mode?: string;
+  items_count: number;
+}
+
+export interface UsageAction {
+  ts?: string;
+  event?: string;
+  reviewer?: string;
+  workspace?: string;
+  prd_name?: string;
+  review_id?: string;
+  items_count?: number;
+  status?: string;
+  action?: string;
+  reason_category?: string;
+}
+
+export interface AdminUsageResponse {
+  window_days: number;
+  generated_at: string;
+  summary: UsageSummary;
+  reviewers: UsageReviewer[];
+  recent_runs: UsageRun[];
+  recent_actions: UsageAction[];
+  stability: Record<string, unknown>;
+  budget: Record<string, unknown>;
+}
+
+export const adminUsageApi = {
+  get: (days = 7) =>
+    apiFetch<AdminUsageResponse>(`/api/admin/usage?days=${encodeURIComponent(days)}`),
+} as const;
+
+// ============================================================
 // audit(前端事件追踪)
 // ============================================================
 

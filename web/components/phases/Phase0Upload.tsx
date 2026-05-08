@@ -63,6 +63,7 @@ export function Phase0Upload() {
 
   const [dragOver, setDragOver] = useState(false);
   const [dismissedDraft, setDismissedDraft] = useState(false);
+  const [customWorkspaceMode, setCustomWorkspaceMode] = useState(false);
 
   // ========== workspace 列表 ==========
   const { data: workspaces, isLoading: wsLoading } = useQuery({
@@ -90,6 +91,18 @@ export function Phase0Upload() {
   });
 
   const hasDraft = !!draft && !dismissedDraft;
+  const workspaceInList = (workspaces ?? []).some((w) => w.name === workspace);
+  const showCustomWorkspaceInput = customWorkspaceMode || !workspace;
+
+  const handleSelectWorkspace = (value: string | null) => {
+    setCustomWorkspaceMode(false);
+    setUserInput({ workspace: value ?? "" });
+  };
+
+  const handleUseCustomWorkspace = () => {
+    setCustomWorkspaceMode(true);
+    setUserInput({ workspace: "" });
+  };
 
   // ========== 文件处理 ==========
   const handleFile = useCallback(
@@ -280,8 +293,8 @@ export function Phase0Upload() {
           <div className="space-y-1.5">
             <Label htmlFor="ws">Workspace</Label>
             <Select
-              value={workspace}
-              onValueChange={(v) => setUserInput({ workspace: v ?? "" })}
+              value={customWorkspaceMode || !workspaceInList ? "" : workspace}
+              onValueChange={handleSelectWorkspace}
               disabled={wsLoading}
             >
               <SelectTrigger id="ws" className="w-full">
@@ -300,14 +313,34 @@ export function Phase0Upload() {
                 ))}
               </SelectContent>
             </Select>
+            {workspace && !customWorkspaceMode && (
+              <div className="mt-1 flex items-center justify-between gap-2 rounded-md border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                <span>
+                  当前资料库：
+                  <span className="font-medium text-foreground">
+                    {workspace.replace(/^workspace-/, "")}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  className="shrink-0 font-medium text-primary hover:text-primary/80"
+                  onClick={handleUseCustomWorkspace}
+                >
+                  改为新资料库
+                </button>
+              </div>
+            )}
             {/* fallback 手动输入:下拉选不动时可以直接输 workspace 名 */}
-            {!workspace && (
+            {showCustomWorkspaceInput && (
               <Input
-                placeholder="或直接输入 workspace 名(如 workspace-对外投资)"
+                placeholder="输入新资料库名(如 workspace-对外投资)"
+                value={customWorkspaceMode ? workspace : ""}
                 className="mt-1 text-xs"
+                onFocus={() => setCustomWorkspaceMode(true)}
                 onChange={(e) => {
                   const v = e.target.value.trim();
-                  if (v) setUserInput({ workspace: v });
+                  setCustomWorkspaceMode(true);
+                  setUserInput({ workspace: v });
                 }}
               />
             )}
