@@ -56,4 +56,16 @@ describe("PM-friendly navigation copy", () => {
     expect(visibleSources).not.toContain("Claude Sonnet");
     expect(visibleSources).not.toContain("Claude CLI 配额已用完");
   });
+
+  it("does not promise a fixed 10-15 second wait for precheck", () => {
+    const precheckSources = [
+      readSource("components/phases/Phase1Precheck.tsx"),
+      readSource("components/phases/Phase1PrecheckV8.tsx"),
+    ].join("\n");
+
+    expect(precheckSources).not.toContain("10-15 秒");
+    expect(precheckSources).not.toContain("~15s");
+    expect(precheckSources).toContain("通常几十秒内完成");
+    expect(precheckSources).toContain("资料库较大或服务繁忙时会更久");
+  });
 });

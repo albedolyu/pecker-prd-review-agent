@@ -3,7 +3,7 @@
 /**
  * Phase 1 — 知识盲区预检
  *
- * 触发后端 /api/review/precheck(~15s 盲区分析),展示:
+ * 触发后端 /api/review/precheck(资料库扫描 + 模型盲区分析),展示:
  * - 强相关 wiki 页(命中 ≥3 关键词)
  * - 弱相关 wiki 页(命中 ≥1)
  * - 知识盲区(系统识别 PRD 需要但 wiki 缺的主题)
@@ -12,7 +12,7 @@
  * Phase 2 的 /api/review/run 必须原样带回去(是后端契约的一部分)。
  *
  * UI 状态:
- * - loading (盲区分析中,转圈 15s)
+ * - loading (资料库扫描 + 盲区分析中)
  * - 成功展示 3 列结果
  * - 失败显示 retry
  */
@@ -146,7 +146,7 @@ export function Phase1Precheck() {
           <Loader2 className="h-4 w-4 animate-spin" />
           <AlertTitle>正在预检...</AlertTitle>
           <AlertDescription>
-            正在扫描资料库并整理相关材料,大约 10-15 秒。期间请不要关闭页面。
+            正在扫描资料库并整理相关材料,通常几十秒内完成；资料库较大或服务繁忙时会更久。期间请不要关闭页面。
           </AlertDescription>
         </Alert>
       )}
