@@ -16,13 +16,15 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from api.deps import get_current_user, get_workspace_dir, require_writer
+from api.sanitize import redact_text
 from api.workspace_acl import require_workspace_access
 
 router = APIRouter(tags=["reports"])
 
 
 def _safe_reviewer(reviewer: str) -> str:
-    return re.sub(r'[\\/:*?"<>|\s]+', '_', (reviewer or "unknown").strip())[:20] or "unknown"
+    safe_source = redact_text((reviewer or "unknown").strip())
+    return re.sub(r'[\\/:*?"<>|\s]+', '_', safe_source)[:20] or "unknown"
 
 
 def _safe_prd_name(name: str) -> str:
@@ -31,7 +33,8 @@ def _safe_prd_name(name: str) -> str:
 
     规则: 去掉路径分隔符/通配符/. 以及首尾空白,截 50 字符,空值回退 unknown。
     """
-    safe = re.sub(r'[\\/:*?"<>|\s\.]+', '_', (name or "unknown").strip())[:50]
+    safe_source = redact_text((name or "unknown").strip())
+    safe = re.sub(r'[\\/:*?"<>|\s\.]+', '_', safe_source)[:50]
     return safe.strip("_") or "unknown"
 
 
@@ -108,6 +111,7 @@ async def save_to_wiki(
     import time
     rev_safe = _safe_reviewer(user["reviewer"])
     prd_safe = _safe_prd_name(req.prd_name)
+    peck_label_safe = _safe_prd_name(req.peck_label) if req.peck_label else ""
     date_tag = time.strftime("%Y%m%d")
     filename = f"评审记录-{prd_safe}-{rev_safe}-{date_tag}.md"
     report_path = wiki_dir / filename
@@ -116,7 +120,7 @@ async def save_to_wiki(
     frontmatter = (
         f"---\n"
         f"source: Web评审-{time.strftime('%Y-%m-%d')}\n"
-        f"reviewer: {user['reviewer']}\n"
+        f"reviewer: {rev_safe}\n"
         f"created: {time.strftime('%Y-%m-%d')}\n"
         f"tags: [domain/评审记录, status/已验证]\n"
         f"---\n\n"
@@ -134,10 +138,10 @@ async def save_to_wiki(
         # 追加 log.md
         log_path = wiki_dir / "log.md"
         log_entry = (
-            f"\n\n## [{time.strftime('%Y-%m-%d %H:%M')}] review | {req.prd_name} by {user['reviewer']}\n"
+            f"\n\n## [{time.strftime('%Y-%m-%d %H:%M')}] review | {prd_safe} by {rev_safe}\n"
             f"- 改进项: {req.items_count} 条\n"
             f"- 已接受: {req.accepted_count}, 已驳回: {req.rejected_count}, 已修改: {req.edited_count}\n"
-            f"- 啄伤度: {req.peck_score}/100 ({req.peck_label})\n"
+            f"- 啄伤度: {req.peck_score}/100 ({peck_label_safe})\n"
         )
         if log_path.exists():
             existing = log_path.read_text(encoding="utf-8")

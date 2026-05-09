@@ -26,6 +26,7 @@ from api.deps import (
 )
 from api.budget_gate import budget_status_snapshot, check_budget, record_review_cost
 from api.models import ConfirmRequest, ReviewResult, verify_review_result
+from api.sanitize import redact_text
 from api.stream import ReviewProgressEmitter, emit_and_log, sse_review_pipeline
 from api.workspace_acl import is_admin, require_workspace_access
 
@@ -178,7 +179,7 @@ def classify_worker_failures(workers_list: List[Dict[str, Any]]) -> Optional[Dic
         else f"全部 {total_count} 个评审方向都没有完整返回,请重新评审或联系维护人排查"
     )
     worker_errors_summary = [
-        {"dim": w.get("dimension", "?"), "error": (w.get("error") or "")[:200]}
+        {"dim": w.get("dimension", "?"), "error": redact_text(str(w.get("error") or ""))[:200]}
         for w in failed_workers
     ]
     return {
@@ -942,7 +943,11 @@ def _save_eval_ground_truth(
     timestamp = int(_time.time())
     # 清理 workspace 名(去掉 workspace- 前缀方便文件名)
     ws_short = workspace.replace("workspace-", "") if workspace.startswith("workspace-") else workspace
-    filename = f"{ws_short}_{reviewer}_{timestamp}.json"
+    filename = (
+        f"{_safe_ground_truth_filename_part(ws_short)}_"
+        f"{_safe_ground_truth_filename_part(reviewer)}_"
+        f"{timestamp}.json"
+    )
 
     gt_dir = os.path.join(str(get_project_root()), "eval", "ground_truth")
     os.makedirs(gt_dir, exist_ok=True)
@@ -961,6 +966,12 @@ def _save_eval_ground_truth(
         json.dump(gt_payload, f, ensure_ascii=False, indent=2)
 
     log.info(f"[ground_truth] 保存 {len(gt_items)} 条标注到 {gt_path}")
+
+
+def _safe_ground_truth_filename_part(value: Any) -> str:
+    safe_source = redact_text(str(value or "unknown").strip())
+    safe = re.sub(r'[\\/:*?"<>|\s\.]+', "_", safe_source)[:60]
+    return safe.strip("_") or "unknown"
 
 
 @router.post("/review/confirm")
@@ -991,13 +1002,9 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
 
     # Step 2: 统计决策
     decisions = req.decisions
-    accepted = sum(1 for d in decisions.values() if d.get("action") == "accept")
-    rejected = sum(1 for d in decisions.values() if d.get("action") == "reject")
-    edited = sum(1 for d in decisions.values() if d.get("action") == "edit")
-
     items = review_result.get("items", [])
-    pending = len(items) - len(decisions)
-    from review.post_review_contract import build_confirm_report_markdown
+    from review.post_review_contract import build_confirm_report_markdown, summarize_decisions
+    decision_stats = summarize_decisions(items, decisions)
     report_markdown = build_confirm_report_markdown(review_result, decisions)
 
     # Step 3: P0.1 — 决策回流到 rule_performance_history
@@ -1047,10 +1054,10 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
     return {
         "status": "confirmed",
         "review_id": review_result.get("review_id"),
-        "accepted": accepted,
-        "rejected": rejected,
-        "edited": edited,
-        "pending": pending,
-        "total": len(items),
+        "accepted": decision_stats["accepted"],
+        "rejected": decision_stats["rejected"],
+        "edited": decision_stats["edited"],
+        "pending": decision_stats["pending"],
+        "total": decision_stats["total"],
         "report_markdown": report_markdown,
     }

@@ -245,6 +245,47 @@ def test_ground_truth_empty_decisions_does_nothing(tmp_workspace, tmp_path):
     assert len(gt_files) == 0
 
 
+def test_ground_truth_filename_stays_inside_directory(tmp_workspace, tmp_path):
+    """workspace/reviewer 异常时,ground truth 文件名也不能路径穿越。"""
+    (tmp_path / "eval" / "ground_truth").mkdir(parents=True, exist_ok=True)
+    items = [_make_item("R-001", "V-05")]
+
+    _save_eval_ground_truth(
+        items,
+        {"R-001": {"action": "accept"}},
+        workspace="workspace-..\\outside",
+        reviewer="..\\alice/role",
+        prd_name="demo",
+        review_id="run-test",
+    )
+
+    gt_dir = tmp_path / "eval" / "ground_truth"
+    gt_files = list(gt_dir.glob("*.json"))
+    assert len(gt_files) == 1
+    assert gt_dir.resolve() in gt_files[0].resolve().parents
+
+
+def test_ground_truth_filename_redacts_secrets(tmp_workspace, tmp_path):
+    """workspace/reviewer 误带 API key 时,ground truth 文件名不能泄露 secret。"""
+    (tmp_path / "eval" / "ground_truth").mkdir(parents=True, exist_ok=True)
+    fake_key = "sk-01234567890abcdefABCDEFghij"
+    items = [_make_item("R-001", "V-05")]
+
+    _save_eval_ground_truth(
+        items,
+        {"R-001": {"action": "accept"}},
+        workspace=f"workspace-alpha-{fake_key}",
+        reviewer=f"alice-{fake_key}",
+        prd_name="demo",
+        review_id="run-test",
+    )
+
+    gt_files = list((tmp_path / "eval" / "ground_truth").glob("*.json"))
+    assert len(gt_files) == 1
+    assert fake_key not in gt_files[0].name
+    assert "REDACTED_SECRET" in gt_files[0].name
+
+
 @pytest.mark.asyncio
 async def test_confirm_review_returns_backend_report_markdown(tmp_workspace, monkeypatch):
     """Web confirm 应返回后端生成的报告 markdown,供 Phase4 复用同源报告。"""
@@ -290,6 +331,57 @@ async def test_confirm_review_returns_backend_report_markdown(tmp_workspace, mon
     assert "report_markdown" in resp
     assert "PRD 评审报告 - demo" in resp["report_markdown"]
     assert "下游实现约定" in resp["report_markdown"]
+
+
+@pytest.mark.asyncio
+async def test_confirm_review_ignores_stale_decisions_in_response_counts(tmp_workspace, monkeypatch):
+    """前端草稿残留旧 item_id 时,确认结果计数不能出现负待决或误计数。"""
+    import os as _os
+    from api.models import ConfirmRequest, ReviewResult
+    from api.routes.review import confirm_review
+
+    _os.environ["PECKER_SIGNATURE_SECRET"] = "unit-test-signature-secret-32-chars"
+    ws, _ = tmp_workspace
+    rr = ReviewResult.create(
+        reviewer="alice",
+        workspace=ws,
+        prd_name="demo",
+        mode="standard",
+        merged_items=[{
+            "id": "R-001",
+            "rule_id": "V-05",
+            "dimension": "structure",
+            "issue": "缺少验收标准",
+            "suggestion": "补充可执行验收标准",
+            "severity": "must",
+        }],
+        workers=[],
+        usage={},
+    )
+    req = ConfirmRequest(
+        review_result=rr.model_dump(),
+        decisions={
+            "R-001": {"action": "accept"},
+            "R-STALE": {"action": "reject", "reason_category": "model_noise"},
+        },
+    )
+
+    monkeypatch.setattr(
+        "api.routes.review.require_workspace_access", lambda *args, **kwargs: None,
+        raising=True,
+    )
+    monkeypatch.setattr(
+        "api.routes.review.get_workspace_dir", lambda name: name,
+        raising=True,
+    )
+
+    resp = await confirm_review(req, user={"reviewer": "alice"})
+
+    assert resp["accepted"] == 1
+    assert resp["rejected"] == 0
+    assert resp["edited"] == 0
+    assert resp["pending"] == 0
+    assert resp["total"] == 1
 
 
 @pytest.mark.asyncio

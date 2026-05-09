@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from api.deps import get_current_user, get_project_root
+from api.sanitize import redact_text
 from api.workspace_acl import is_admin
 
 router = APIRouter(tags=["drafts"])
@@ -56,7 +57,9 @@ def _draft_dir(project_root: Path) -> Path:
 
 def _safe_reviewer(reviewer: str) -> str:
     """把 reviewer 名规范化为安全的文件名片段,防路径穿越。"""
-    safe = re.sub(r'[\\/:*?"<>|\s]+', '_', (reviewer or "unknown").strip())[:20]
+    safe_source = redact_text((reviewer or "unknown").strip())
+    safe = re.sub(r'[\\/:*?"<>|\s]+', '_', safe_source)
+    safe = safe[:60] if "[REDACTED_SECRET]" in safe else safe[:20]
     if not safe or safe == "_":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

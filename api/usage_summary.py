@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 from api.budget_gate import budget_status_snapshot
+from api.sanitize import redact_sensitive, redact_text
 from scripts.stability_metrics import (
     _filter_by_days,
     _iter_session_files,
@@ -109,7 +110,7 @@ def _filter_records_by_days(
 
 
 def _sanitize_audit(row: Dict[str, Any]) -> Dict[str, Any]:
-    return {key: row.get(key) for key in _AUDIT_ALLOWLIST if key in row}
+    return redact_sensitive({key: row.get(key) for key in _AUDIT_ALLOWLIST if key in row})
 
 
 def _latest_ts(a: str, b: str) -> str:
@@ -139,15 +140,15 @@ def _new_reviewer_bucket(reviewer: str) -> Dict[str, Any]:
 
 
 def _finalize_reviewer(bucket: Dict[str, Any]) -> Dict[str, Any]:
-    workspaces = {
-        workspace: max(
+    workspaces: Dict[str, int] = {}
+    for workspace in set(bucket["workspaces_sessions"]) | set(bucket["workspaces_started"]):
+        safe_workspace = redact_text(str(workspace))
+        workspaces[safe_workspace] = max(
             int(bucket["workspaces_sessions"].get(workspace, 0)),
             int(bucket["workspaces_started"].get(workspace, 0)),
         )
-        for workspace in set(bucket["workspaces_sessions"]) | set(bucket["workspaces_started"])
-    }
     return {
-        "reviewer": bucket["reviewer"],
+        "reviewer": redact_text(str(bucket["reviewer"])),
         "reviews": int(max(bucket["session_count"], bucket["started_events"])),
         "session_count": int(bucket["session_count"]),
         "started_events": int(bucket["started_events"]),
@@ -155,7 +156,7 @@ def _finalize_reviewer(bucket: Dict[str, Any]) -> Dict[str, Any]:
         "failed": int(bucket["failed"]),
         "degraded": int(bucket["degraded"]),
         "last_seen": bucket["last_seen"],
-        "last_prd_name": bucket["last_prd_name"],
+        "last_prd_name": redact_text(str(bucket["last_prd_name"])),
         "workspaces": dict(sorted(workspaces.items())),
     }
 
@@ -203,7 +204,7 @@ def build_usage_summary(
             bucket["workspaces_sessions"][workspace] += 1
         if _latest_ts(bucket["last_seen"], ts_start) == ts_start:
             bucket["last_seen"] = ts_start
-            bucket["last_prd_name"] = str(run.get("prd_name") or "")
+            bucket["last_prd_name"] = redact_text(str(run.get("prd_name") or ""))
 
     for row in audit_rows:
         reviewer = str(row.get("reviewer") or "unknown")
@@ -219,7 +220,7 @@ def build_usage_summary(
         if _latest_ts(bucket["last_seen"], ts) == ts:
             bucket["last_seen"] = ts
             if row.get("prd_name"):
-                bucket["last_prd_name"] = str(row.get("prd_name"))
+                bucket["last_prd_name"] = redact_text(str(row.get("prd_name")))
 
     reviewer_rows = sorted(
         (_finalize_reviewer(bucket) for bucket in reviewers.values()),
@@ -264,14 +265,14 @@ def build_usage_summary(
         "reviewers": reviewer_rows,
         "recent_runs": [
             {
-                "reviewer": run.get("reviewer"),
-                "prd_name": run.get("prd_name"),
-                "workspace": run.get("workspace"),
+                "reviewer": redact_text(str(run.get("reviewer") or "")),
+                "prd_name": redact_text(str(run.get("prd_name") or "")),
+                "workspace": redact_text(str(run.get("workspace") or "")),
                 "status": run.get("status"),
                 "ts_start": run.get("ts_start"),
                 "duration_ms": _safe_int(run.get("duration_ms")),
                 "cost_usd": round(_safe_float(run.get("cost_usd")), 4),
-                "mode": run.get("mode"),
+                "mode": redact_text(str(run.get("mode") or "")),
                 "items_count": _safe_int(run.get("items_count")),
             }
             for run in recent_runs
@@ -333,15 +334,15 @@ def build_personal_review_history(
     return {
         "window_days": days,
         "generated_at": (now or datetime.now()).isoformat(timespec="seconds"),
-        "reviewer": reviewer,
+        "reviewer": redact_text(reviewer),
         "runs": [
             {
-                "prd_name": run.get("prd_name"),
-                "workspace": run.get("workspace"),
+                "prd_name": redact_text(str(run.get("prd_name") or "")),
+                "workspace": redact_text(str(run.get("workspace") or "")),
                 "status": run.get("status"),
                 "ts_start": run.get("ts_start"),
                 "duration_ms": _safe_int(run.get("duration_ms")),
-                "mode": run.get("mode"),
+                "mode": redact_text(str(run.get("mode") or "")),
                 "items_count": _safe_int(run.get("items_count")),
             }
             for run in runs

@@ -18,7 +18,7 @@ from fastapi import HTTPException
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from api.routes.drafts import _require_self_or_admin
-from api.routes.drafts import DraftPayload
+from api.routes.drafts import DraftPayload, write_draft_file
 
 
 class TestRequireSelfOrAdmin:
@@ -59,3 +59,15 @@ def test_draft_payload_preserves_review_mode():
     payload = DraftPayload(phase=3, prd_name="demo.md", prd_content="# Demo", mode="quick")
 
     assert payload.mode == "quick"
+
+
+def test_write_draft_file_redacts_secret_from_returned_path(tmp_path):
+    fake_key = "sk-01234567890abcdefABCDEFghij"
+    result = write_draft_file(
+        tmp_path,
+        f"alice {fake_key}",
+        DraftPayload(phase=1, prd_name="demo.md", prd_content="# Demo"),
+    )
+
+    assert fake_key not in result["path"]
+    assert "REDACTED_SECRET" in result["path"]

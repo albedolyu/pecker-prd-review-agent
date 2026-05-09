@@ -17,6 +17,7 @@ def _write_jsonl(path, rows):
 
 
 def test_usage_summary_aggregates_review_sessions_and_actions(tmp_path):
+    fake_key = "sk-01234567890abcdefABCDEFghij"
     _write_jsonl(
         tmp_path / "workspace-alpha" / "output" / "sessions" / "run-001.jsonl",
         [
@@ -25,7 +26,7 @@ def test_usage_summary_aggregates_review_sessions_and_actions(tmp_path):
                 "ts": "2026-05-08T09:00:00",
                 "reviewer": "lvxinhang",
                 "mode": "standard",
-                "prd_name": "积分抵扣 PRD.md",
+                "prd_name": f"积分抵扣 {fake_key} PRD.md",
             },
             {
                 "type": "review_completed",
@@ -44,7 +45,7 @@ def test_usage_summary_aggregates_review_sessions_and_actions(tmp_path):
                 "event": "review_started",
                 "reviewer": "lvxinhang",
                 "workspace": "workspace-alpha",
-                "prd_name": "积分抵扣 PRD.md",
+                "prd_name": f"积分抵扣 {fake_key} PRD.md",
                 "prd_content": "should not leak",
             },
             {
@@ -52,7 +53,7 @@ def test_usage_summary_aggregates_review_sessions_and_actions(tmp_path):
                 "event": "report_downloaded",
                 "reviewer": "lvxinhang",
                 "workspace": "workspace-alpha",
-                "prd_name": "积分抵扣 PRD.md",
+                "prd_name": f"积分抵扣 {fake_key} PRD.md",
             },
         ],
     )
@@ -66,10 +67,13 @@ def test_usage_summary_aggregates_review_sessions_and_actions(tmp_path):
     assert summary["summary"]["total_cost_usd"] == 0.42
     assert summary["reviewers"][0]["reviewer"] == "lvxinhang"
     assert summary["reviewers"][0]["reviews"] == 1
-    assert summary["reviewers"][0]["last_prd_name"] == "积分抵扣 PRD.md"
+    assert summary["reviewers"][0]["last_prd_name"] == "积分抵扣 [REDACTED_SECRET] PRD.md"
     assert summary["reviewers"][0]["workspaces"] == {"workspace-alpha": 1}
     assert summary["recent_runs"][0]["items_count"] == 6
-    assert "prd_content" not in json.dumps(summary, ensure_ascii=False)
+    serialized = json.dumps(summary, ensure_ascii=False)
+    assert fake_key not in serialized
+    assert "[REDACTED_SECRET]" in serialized
+    assert "prd_content" not in serialized
 
 
 @pytest.mark.asyncio
@@ -78,6 +82,7 @@ async def test_admin_usage_endpoint_includes_reconnectable_jobs(monkeypatch, tmp
     from api.routes import admin_usage
 
     store = ReviewJobStore()
+    fake_key = "sk-01234567890abcdefABCDEFghij"
 
     async def runner(job):
         job.emit("workers_started", {"prd_content": "should not leak"})
@@ -103,7 +108,8 @@ async def test_admin_usage_endpoint_includes_reconnectable_jobs(monkeypatch, tmp
                 "event": "worker_done",
                 "dim_key": "quality",
                 "items_count": 1,
-                "error": "Request timed out.",
+                "error": f"Request timed out with api_key={fake_key}",
+                "message": f"upstream leaked Bearer {fake_key}",
                 "duration_ms": 1200,
                 "tokens_in": 9000,
                 "tokens_out": 600,
@@ -124,7 +130,7 @@ async def test_admin_usage_endpoint_includes_reconnectable_jobs(monkeypatch, tmp
                 "reviewer": "pm-a",
                 "phase": 3,
                 "workspace": "workspace-alpha",
-                "prd_name": "alpha.md",
+                "prd_name": f"alpha {fake_key}.md",
                 "mode": "standard",
                 "prd_content": "should not leak",
                 "review_result": {
@@ -177,6 +183,8 @@ async def test_admin_usage_endpoint_includes_reconnectable_jobs(monkeypatch, tmp
     assert "input_tokens" not in data["recent_job_events"][0]
     assert "output_tokens" not in data["recent_job_events"][0]
     serialized_events = json.dumps(data["recent_job_events"], ensure_ascii=False)
+    assert fake_key not in serialized_events
+    assert "[REDACTED_SECRET]" in serialized_events
     assert "should not leak" not in serialized_events
     assert "derived text" not in serialized_events
     assert data["active_drafts"][0]["reviewer"] == "pm-a"
@@ -191,6 +199,8 @@ async def test_admin_usage_endpoint_includes_reconnectable_jobs(monkeypatch, tmp
     assert data["active_drafts"][0]["context_packet_workers"] == 3
     assert data["active_drafts"][0]["max_context_packet_chars"] == 8192
     serialized_drafts = json.dumps(data["active_drafts"], ensure_ascii=False)
+    assert fake_key not in serialized_drafts
+    assert "[REDACTED_SECRET]" in serialized_drafts
     assert "should not leak" not in serialized_drafts
     assert "derived text" not in serialized_drafts
     assert "internal detail" not in serialized_drafts

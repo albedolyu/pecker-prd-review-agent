@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from api.deps import get_current_user, get_project_root
 from api.feedback_summary import build_feedback_summary
 from api.review_jobs import review_job_store
+from api.sanitize import redact_sensitive, redact_text
 from api.usage_summary import build_usage_summary
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -55,7 +56,7 @@ async def get_admin_usage(
             "updated_at": job["updated_at"],
             "event_count": len(job.get("events", [])),
             "last_event": (job.get("events") or [{}])[-1].get("event"),
-            "error": job.get("error", ""),
+            "error": redact_text(str(job.get("error", "")))[:500],
         }
         for job in jobs
     ]
@@ -114,7 +115,7 @@ def _sanitize_job_event(row: Dict[str, Any]) -> Dict[str, Any]:
         "duration_ms",
         "prd_context_packet_chars",
     }
-    return {key: value for key, value in row.items() if key in allowed}
+    return redact_sensitive({key: value for key, value in row.items() if key in allowed})
 
 
 def _safe_int(value: Any, default: int = 0) -> int:
@@ -155,12 +156,12 @@ def _sanitize_draft(draft: Dict[str, Any]) -> Dict[str, Any]:
     phase = int(draft.get("phase") or 0)
     return {
         "ts": draft.get("ts", ""),
-        "reviewer": draft.get("reviewer", ""),
+        "reviewer": redact_text(str(draft.get("reviewer", ""))),
         "phase": phase,
         "phase_label": _phase_label(phase),
-        "workspace": draft.get("workspace", ""),
-        "prd_name": draft.get("prd_name", ""),
-        "mode": draft.get("mode", ""),
+        "workspace": redact_text(str(draft.get("workspace", ""))),
+        "prd_name": redact_text(str(draft.get("prd_name", ""))),
+        "mode": redact_text(str(draft.get("mode", ""))),
         "has_review_result": bool(review_result),
         "items_count": len(items) if isinstance(items, list) else 0,
         "decisions_count": len(decisions),

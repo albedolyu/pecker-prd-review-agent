@@ -78,3 +78,63 @@ class TestSafePrdName:
         result = _safe_prd_name("...abc...")
         assert not result.startswith("_")
         assert not result.endswith("_")
+
+
+@pytest.mark.asyncio
+async def test_save_to_wiki_sanitizes_frontmatter_and_log_metadata(monkeypatch, tmp_path):
+    """导出报告的元数据必须使用清洗后的 PRD 名和评审人,避免换行注入。"""
+    from api.routes import reports
+
+    ws_dir = tmp_path / "workspace-alpha"
+    monkeypatch.setattr(reports, "get_workspace_dir", lambda _workspace: ws_dir, raising=True)
+    monkeypatch.setattr(reports, "require_workspace_access", lambda *_args, **_kwargs: None, raising=True)
+
+    req = reports.SaveReviewRequest(
+        prd_name="demo\nmalicious: true",
+        report_markdown="## 正文\n报告内容",
+        items_count=1,
+    )
+
+    resp = await reports.save_to_wiki(
+        "workspace-alpha",
+        req,
+        user={"reviewer": "alice\nrole: admin"},
+    )
+
+    saved = (ws_dir / "wiki" / resp["filename"]).read_text(encoding="utf-8")
+    log_text = (ws_dir / "wiki" / "log.md").read_text(encoding="utf-8")
+
+    metadata_text = saved.split("## 正文", 1)[0] + log_text
+    assert "malicious: true" not in metadata_text
+    assert "role: admin" not in metadata_text
+
+
+@pytest.mark.asyncio
+async def test_save_to_wiki_redacts_secrets_from_filename_and_metadata(monkeypatch, tmp_path):
+    """导出报告的文件名和元数据不能暴露误填进 PRD 名/评审人的 API key。"""
+    from api.routes import reports
+
+    fake_key = "sk-01234567890abcdefABCDEFghij"
+    ws_dir = tmp_path / "workspace-alpha"
+    monkeypatch.setattr(reports, "get_workspace_dir", lambda _workspace: ws_dir, raising=True)
+    monkeypatch.setattr(reports, "require_workspace_access", lambda *_args, **_kwargs: None, raising=True)
+
+    req = reports.SaveReviewRequest(
+        prd_name=f"demo {fake_key}",
+        report_markdown="## 正文\n报告内容",
+        items_count=1,
+        peck_label=f"高风险 {fake_key}",
+    )
+
+    resp = await reports.save_to_wiki(
+        "workspace-alpha",
+        req,
+        user={"reviewer": f"alice {fake_key}"},
+    )
+
+    saved = (ws_dir / "wiki" / resp["filename"]).read_text(encoding="utf-8")
+    log_text = (ws_dir / "wiki" / "log.md").read_text(encoding="utf-8")
+    metadata_text = saved.split("## 正文", 1)[0] + log_text + resp["filename"]
+
+    assert fake_key not in metadata_text
+    assert "[REDACTED_SECRET]" in metadata_text

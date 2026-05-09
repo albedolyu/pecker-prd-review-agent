@@ -133,6 +133,20 @@ def test_worker_errors_payload_truncates_long_messages():
         assert len(we["error"]) <= 200
 
 
+def test_worker_errors_payload_redacts_secrets():
+    fake_key = "sk-01234567890abcdefABCDEFghij"
+    workers = [
+        {"dimension": "structure", "error": f"provider rejected api_key={fake_key}"},
+        {"dimension": "quality", "error": f"upstream leaked Bearer {fake_key}"},
+    ]
+
+    payload = classify_worker_failures(workers)
+    serialized = str(payload["worker_errors"])
+
+    assert fake_key not in serialized
+    assert "[REDACTED_SECRET]" in serialized
+
+
 def test_worker_errors_preserves_dim_field():
     workers = [
         {"dimension": "structure", "error": "hit your limit"},
