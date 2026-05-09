@@ -4,7 +4,7 @@
 """
 import pytest
 
-from api.routes.review import classify_worker_failures
+from api.routes.review import build_worker_degraded_payload, classify_worker_failures
 
 
 # -------------------------------------------------
@@ -32,6 +32,37 @@ def test_partial_failure_returns_none():
     assert classify_worker_failures(workers) is None
 
 
+def test_partial_failure_with_items_builds_degraded_payload():
+    workers = [
+        {"dimension": "structure", "error": "Request timed out."},
+        {"dimension": "quality", "items": [{"id": "Q-1"}]},
+        {"dimension": "ai_coding", "error": "Cloudflare 524: a timeout occurred"},
+    ]
+
+    payload = build_worker_degraded_payload(workers, items_count=1)
+
+    assert payload is not None
+    assert payload["failed_count"] == 2
+    assert payload["total_count"] == 3
+    assert payload["items_count"] == 1
+    assert "已保留" in payload["message"]
+    assert "重新评审" in payload["message"]
+    assert "只重试失败方向" not in payload["message"]
+
+
+def test_partial_failure_without_items_asks_for_rerun():
+    workers = [
+        {"dimension": "structure", "error": "Request timed out."},
+        {"dimension": "quality", "items": []},
+    ]
+
+    payload = build_worker_degraded_payload(workers, items_count=0)
+
+    assert payload is not None
+    assert "重新评审" in payload["message"]
+    assert "建议重试" not in payload["message"]
+
+
 # -------------------------------------------------
 # 全员失败场景
 # -------------------------------------------------
@@ -49,7 +80,9 @@ def test_all_quota_exhausted_classifies_as_quota():
     assert payload["failed_count"] == 4
     assert payload["total_count"] == 4
     assert len(payload["worker_errors"]) == 4
-    assert "配额" in payload["message"]
+    assert "额度" in payload["message"]
+    assert "Claude" not in payload["message"]
+    assert "CLI" not in payload["message"]
 
 
 def test_all_worker_failed_mixed_reasons():
@@ -62,7 +95,10 @@ def test_all_worker_failed_mixed_reasons():
     ]
     payload = classify_worker_failures(workers)
     assert payload["reason"] == "all_workers_failed"
-    assert "全部 4 个" in payload["message"]
+    assert "全部 4 个评审方向" in payload["message"]
+    assert "重新评审" in payload["message"]
+    assert "稍后重试" not in payload["message"]
+    assert "worker" not in payload["message"].lower()
 
 
 def test_quota_chinese_keyword_also_detected():

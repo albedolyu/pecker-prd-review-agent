@@ -56,9 +56,12 @@ def _validate_llm_runtime():
         cfg = get_route_config(force_reload=True)
         auth["routes_file"] = cfg.routes_path
         active_pairs = set()
-        for route in cfg.routes.values():
+        active_route_ids_by_pair = {}
+        for route_id, route in cfg.routes.items():
             if route.get("enabled", True):
-                active_pairs.add((route.get("vendor", ""), route.get("transport", "")))
+                pair = (route.get("vendor", ""), route.get("transport", ""))
+                active_pairs.add(pair)
+                active_route_ids_by_pair.setdefault(pair, []).append(route_id)
         auth["active_routes"] = sorted(
             f"{vendor}:{transport}" for vendor, transport in active_pairs
         )
@@ -95,7 +98,11 @@ def _validate_llm_runtime():
         errors.append("ANTHROPIC_API_KEY/API_KEY 未设置 — Anthropic API 路由不可用")
 
     if "deepseek:native" in active and not os.environ.get("DEEPSEEK_API_KEY"):
-        errors.append("DEEPSEEK_API_KEY 未设置 — DeepSeek API 路由不可用")
+        deepseek_route_ids = active_route_ids_by_pair.get(("deepseek", "native"), [])
+        if deepseek_route_ids and all(str(route_id).startswith("fallback.") for route_id in deepseek_route_ids):
+            warnings.append("DEEPSEEK_API_KEY 未设置 — DeepSeek 备选路由不可用,主 OpenAI 路由仍可启动")
+        else:
+            errors.append("DEEPSEEK_API_KEY 未设置 — DeepSeek API 路由不可用")
 
     auth["status"] = "ok" if not errors else "error"
     return errors, warnings, auth
@@ -200,11 +207,13 @@ async def root():
 # 注册路由(每个子模块独立,便于分阶段实现)
 # ============================================================
 
-from api.routes import workspaces, drafts, audit, review, reports, feishu, auth, metrics, feedback, admin_usage
+from api.routes import workspaces, drafts, audit, review, review_jobs, review_history, reports, feishu, auth, metrics, feedback, admin_usage
 app.include_router(workspaces.router, prefix="/api")
 app.include_router(drafts.router, prefix="/api")
 app.include_router(audit.router, prefix="/api")
 app.include_router(review.router, prefix="/api")
+app.include_router(review_jobs.router, prefix="/api")
+app.include_router(review_history.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
 app.include_router(feishu.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")

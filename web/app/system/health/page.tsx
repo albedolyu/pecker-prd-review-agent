@@ -12,6 +12,7 @@
  */
 
 import Link from "next/link";
+import { AdminOnlyPage } from "@/components/auth/AdminOnlyPage";
 
 // ============================================================
 // sample data
@@ -80,16 +81,17 @@ const RECENT_RUNS = [
 
 export default function SystemHealthPage() {
   return (
-    <div
-      style={{
-        maxWidth: 1120,
-        margin: "0 auto",
-        padding: "28px 24px 80px",
-        fontFamily: "var(--font-sans)",
-        background: "var(--surface-canvas)",
-        minHeight: "100vh",
-      }}
-    >
+    <AdminOnlyPage>
+      <div
+        style={{
+          maxWidth: 1120,
+          margin: "0 auto",
+          padding: "28px 24px 80px",
+          fontFamily: "var(--font-sans)",
+          background: "var(--surface-canvas)",
+          minHeight: "100vh",
+        }}
+      >
       <header style={{ marginBottom: 20 }}>
         <div
           style={{
@@ -297,7 +299,8 @@ export default function SystemHealthPage() {
         <span>Pecker · 质量看板 · 演示数据</span>
         <span>真实数据接入后自动更新</span>
       </footer>
-    </div>
+      </div>
+    </AdminOnlyPage>
   );
 }
 
@@ -454,7 +457,7 @@ function TrendLine({
         fill="var(--status-warn-fg)"
         textAnchor="end"
       >
-        threshold {threshold.toFixed(1)}
+        目标线 {Math.round(threshold * 100)}%
       </text>
       {/* data line */}
       <path
@@ -480,7 +483,7 @@ function TrendLine({
         fontFamily="var(--font-mono)"
         fill="var(--text-faint)"
       >
-        -30d
+        30 天前
       </text>
       <text
         x={w - pad.r}
@@ -490,7 +493,7 @@ function TrendLine({
         fill="var(--text-faint)"
         textAnchor="end"
       >
-        today
+        今天
       </text>
     </svg>
   );
@@ -666,7 +669,7 @@ function EvalTable({ rows }: { rows: typeof EVAL_BASELINE }) {
     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
       <thead>
         <tr>
-          {["test", "score", "Δ"].map((h) => (
+          {["样例", "得分", "变化"].map((h) => (
             <th
               key={h}
               style={{

@@ -16,6 +16,8 @@ describe("workspace entry", () => {
     expect(source).toContain("setCustomWorkspaceMode(true)");
     expect(source).toContain('setUserInput({ workspace: "" })');
     expect(source).toContain("showCustomWorkspaceInput");
+    expect(source).toContain("也可以新建资料库");
+    expect(source).toContain("继续使用这个资料库");
   });
 
   it("keeps the same workspace escape hatch in the legacy upload component", () => {
@@ -25,5 +27,6 @@ describe("workspace entry", () => {
     expect(source).toContain("setCustomWorkspaceMode(true)");
     expect(source).toContain('setUserInput({ workspace: "" })');
     expect(source).toContain("showCustomWorkspaceInput");
+    expect(source).toContain("也可以新建资料库");
   });
 });

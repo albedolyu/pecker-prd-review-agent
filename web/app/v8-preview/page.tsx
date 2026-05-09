@@ -32,8 +32,76 @@ import Link from "next/link";
 
 const ALL_BIRDS: BirdId[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 const STATUSES: BirdStatus[] = ["queued", "running", "done", "failed", "warn"];
+const PREVIEW_ENABLED = process.env.NEXT_PUBLIC_ENABLE_V8_PREVIEW === "1";
 
 export default function V8PreviewPage() {
+  if (!PREVIEW_ENABLED) {
+    return (
+      <main
+        style={{
+          minHeight: "100vh",
+          background: "var(--surface-canvas)",
+          display: "grid",
+          placeItems: "center",
+          padding: 24,
+          fontFamily: "var(--font-sans)",
+        }}
+      >
+        <section
+          style={{
+            maxWidth: 520,
+            border: "1px solid var(--border-default)",
+            borderRadius: "var(--r-4)",
+            background: "var(--surface-raised)",
+            padding: "24px 28px",
+            textAlign: "center",
+          }}
+        >
+          <h1
+            style={{
+              margin: 0,
+              fontSize: 20,
+              color: "var(--text-strong)",
+              fontWeight: 600,
+            }}
+          >
+            组件预览未开放
+          </h1>
+          <p
+            style={{
+              margin: "10px 0 0",
+              color: "var(--text-muted)",
+              fontSize: 13,
+              lineHeight: 1.7,
+            }}
+          >
+            这个页面只用于维护人验证界面组件。需要临时查看时,在前端环境里开启
+            {" "}
+            <code>NEXT_PUBLIC_ENABLE_V8_PREVIEW=1</code>
+            后重新构建。
+          </p>
+          <Link
+            href="/review"
+            style={{
+              display: "inline-flex",
+              marginTop: 18,
+              color: "var(--accent-700)",
+              textDecoration: "none",
+              fontSize: 13,
+              fontWeight: 600,
+            }}
+          >
+            返回评审工作台 →
+          </Link>
+        </section>
+      </main>
+    );
+  }
+
+  return <V8PreviewGallery />;
+}
+
+function V8PreviewGallery() {
   const [current, setCurrent] = useState<PhaseId>(2);
   const completed: PhaseId[] =
     current === 0

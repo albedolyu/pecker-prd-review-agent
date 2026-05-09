@@ -9,10 +9,21 @@
  */
 
 import Link from "next/link";
+import { useState, type CSSProperties } from "react";
+import { useQuery } from "@tanstack/react-query";
+
 import {
   RunDiff,
   type RunSummary,
 } from "@/components/run/RunDiff";
+import {
+  ApiError,
+  reviewHistoryApi,
+  type UsageAction,
+  type UsageRun,
+} from "@/lib/api";
+
+const SHOW_INTERNAL_RUNS = process.env.NEXT_PUBLIC_ENABLE_INTERNAL_RUNS === "1";
 
 const BASELINE_RUN: RunSummary = {
   label: "原始评审 · 用户等级 PRD v0.3",
@@ -114,6 +125,10 @@ const SHADOW_RUN: RunSummary = {
 };
 
 export default function RunsDiffPage() {
+  if (!SHOW_INTERNAL_RUNS) {
+    return <PersonalReviewHistoryPage />;
+  }
+
   return (
     <div
       style={{
@@ -208,3 +223,332 @@ export default function RunsDiffPage() {
     </div>
   );
 }
+
+function PersonalReviewHistoryPage() {
+  const [days, setDays] = useState(30);
+  const { data, error, isLoading, isFetching } = useQuery({
+    queryKey: ["review-history", days],
+    queryFn: () => reviewHistoryApi.get(days),
+    retry: false,
+    staleTime: 30 * 1000,
+  });
+  const apiError = error instanceof ApiError ? error : null;
+  const runs = data?.runs ?? [];
+  const actions = data?.recent_actions ?? [];
+
+  return (
+    <div
+      style={{
+        maxWidth: 980,
+        margin: "0 auto",
+        padding: "32px 24px 80px",
+        fontFamily: "var(--font-sans)",
+        background: "var(--surface-canvas)",
+        minHeight: "100vh",
+      }}
+    >
+      <header
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 16,
+          marginBottom: 20,
+        }}
+      >
+        <div>
+          <div
+            style={{
+              color: "var(--accent-600)",
+              fontSize: 11,
+              fontWeight: 700,
+              marginBottom: 5,
+            }}
+          >
+            评审记录
+          </div>
+          <h1
+            style={{
+              margin: 0,
+              color: "var(--text-strong)",
+              fontSize: 24,
+              fontWeight: 650,
+              letterSpacing: 0,
+            }}
+          >
+            我的评审记录
+          </h1>
+          <p
+            style={{
+              margin: "6px 0 0",
+              color: "var(--text-muted)",
+              fontSize: 13,
+              lineHeight: 1.6,
+            }}
+          >
+            只展示你自己的材料名、资料库、处理结果和关键动作，不展示 PRD 正文。
+          </p>
+        </div>
+        <label
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            color: "var(--text-muted)",
+            fontSize: 12,
+          }}
+        >
+          时间范围
+          <select
+            value={days}
+            onChange={(e) => setDays(Number(e.target.value))}
+            style={{
+              height: 34,
+              border: "1px solid var(--border-default)",
+              borderRadius: "var(--r-3)",
+              background: "var(--surface-raised)",
+              color: "var(--text-default)",
+              padding: "0 10px",
+              fontFamily: "var(--font-sans)",
+            }}
+          >
+            {[7, 30, 90].map((value) => (
+              <option key={value} value={value}>
+                最近 {value} 天
+              </option>
+            ))}
+          </select>
+        </label>
+      </header>
+
+      {isFetching && (
+        <div style={{ marginBottom: 12, color: "var(--text-faint)", fontSize: 12 }}>
+          正在刷新...
+        </div>
+      )}
+      {isLoading && <EmptyState title="正在读取记录" desc="稍等一下，马上就好。" />}
+      {apiError && (
+        <EmptyState
+          title={apiError.status === 401 ? "请先登录" : "读取失败"}
+          desc={
+            apiError.status === 401
+              ? "登录后可以查看自己的评审记录。"
+              : (apiError.detail ?? apiError.message)
+          }
+        />
+      )}
+
+      {data && (
+        <div style={{ display: "grid", gap: 16 }}>
+          <section style={cardStyle}>
+            <SectionHead
+              title="最近评审"
+              hint="已完成、部分完成和异常记录都会显示；这里不保存正文"
+            />
+            {runs.length ? (
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                {runs.map((run, index) => (
+                  <HistoryRunRow key={`${run.ts_start}-${index}`} run={run} />
+                ))}
+              </div>
+            ) : (
+              <InlineEmpty text="最近还没有完整评审记录。完成一次评审后会出现在这里。" />
+            )}
+          </section>
+
+          <section style={cardStyle}>
+            <SectionHead
+              title="最近动作"
+              hint="开始评审、下载报告等关键动作；用于确认是否已经成功留痕"
+            />
+            {actions.length ? (
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                {actions.map((action, index) => (
+                  <HistoryActionRow key={`${action.ts}-${action.event}-${index}`} action={action} />
+                ))}
+              </div>
+            ) : (
+              <InlineEmpty text="暂无动作记录。" />
+            )}
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HistoryRunRow({ run }: { run: UsageRun }) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 96px 92px",
+        gap: 12,
+        alignItems: "center",
+        padding: "12px 18px",
+        borderTop: "1px solid var(--border-subtle)",
+        fontSize: 13,
+      }}
+    >
+      <div>
+        <div style={{ color: "var(--text-default)", fontWeight: 650 }}>
+          {run.prd_name || "未命名材料"}
+        </div>
+        <div style={{ color: "var(--text-muted)", marginTop: 3, fontSize: 12 }}>
+          {formatWorkspace(run.workspace)} · {modeLabel(run.mode)} · {formatTime(run.ts_start)}
+        </div>
+      </div>
+      <StatusPill status={run.status} />
+      <div style={{ color: "var(--text-muted)", textAlign: "right", fontSize: 12 }}>
+        <div>{run.items_count ?? 0} 条意见</div>
+        <div style={{ color: "var(--text-faint)", marginTop: 2 }}>
+          {formatDuration(run.duration_ms)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HistoryActionRow({ action }: { action: UsageAction }) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 120px",
+        gap: 12,
+        padding: "11px 18px",
+        borderTop: "1px solid var(--border-subtle)",
+        fontSize: 12,
+      }}
+    >
+      <div>
+        <div style={{ color: "var(--text-default)", fontWeight: 650 }}>
+          {actionLabel(action.event)}
+        </div>
+        <div style={{ color: "var(--text-muted)", marginTop: 3 }}>
+          {action.prd_name || "未命名材料"} · {formatWorkspace(action.workspace)}
+        </div>
+      </div>
+      <div style={{ color: "var(--text-faint)", textAlign: "right" }}>
+        {formatTime(action.ts)}
+      </div>
+    </div>
+  );
+}
+
+function SectionHead({ title, hint }: { title: string; hint: string }) {
+  return (
+    <header
+      style={{
+        padding: "13px 18px",
+        borderBottom: "1px solid var(--border-subtle)",
+      }}
+    >
+      <div style={{ color: "var(--text-strong)", fontSize: 14, fontWeight: 650 }}>
+        {title}
+      </div>
+      <div style={{ color: "var(--text-muted)", fontSize: 11, marginTop: 2 }}>
+        {hint}
+      </div>
+    </header>
+  );
+}
+
+function EmptyState({ title, desc }: { title: string; desc: string }) {
+  return (
+    <div
+      style={{
+        ...cardStyle,
+        padding: "36px 24px",
+        color: "var(--text-muted)",
+        textAlign: "center",
+      }}
+    >
+      <h2 style={{ margin: 0, color: "var(--text-strong)", fontSize: 18 }}>
+        {title}
+      </h2>
+      <p style={{ margin: "8px 0 0", fontSize: 13 }}>{desc}</p>
+    </div>
+  );
+}
+
+function InlineEmpty({ text }: { text: string }) {
+  return <div style={{ padding: 18, color: "var(--text-muted)", fontSize: 12 }}>{text}</div>;
+}
+
+function StatusPill({ status }: { status?: string }) {
+  const tone = statusTone(status);
+  return (
+    <span
+      style={{
+        justifySelf: "start",
+        borderRadius: "var(--r-pill)",
+        padding: "2px 8px",
+        background: tone.bg,
+        color: tone.fg,
+        fontWeight: 650,
+        fontSize: 11,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {statusLabel(status)}
+    </span>
+  );
+}
+
+function statusLabel(status?: string) {
+  return {
+    completed: "已完成",
+    failed: "失败",
+    degraded: "部分完成",
+    unknown: "未确认",
+  }[status ?? "unknown"] ?? "未确认";
+}
+
+function statusTone(status?: string) {
+  if (status === "completed") {
+    return { bg: "var(--status-done-bg)", fg: "var(--status-done-fg)" };
+  }
+  if (status === "failed") {
+    return { bg: "var(--status-failed-bg)", fg: "var(--status-failed-fg)" };
+  }
+  return { bg: "var(--status-warn-bg)", fg: "var(--status-warn-fg)" };
+}
+
+function actionLabel(event?: string) {
+  return {
+    review_started: "开始评审",
+    report_downloaded: "下载报告",
+    wiki_saved: "存入资料库",
+    feishu_pushed: "推送飞书",
+    item_feedback: "处理评审意见",
+  }[event ?? ""] ?? (event || "记录动作");
+}
+
+function modeLabel(mode?: string) {
+  return mode === "quick" ? "轻评审" : "深评审";
+}
+
+function formatWorkspace(workspace?: string) {
+  return workspace?.replace(/^workspace-/, "") || "未选资料库";
+}
+
+function formatDuration(ms?: number) {
+  const value = Number(ms ?? 0);
+  if (!value) return "未记录耗时";
+  const minutes = Math.max(1, Math.round(value / 60000));
+  return `${minutes} 分钟`;
+}
+
+function formatTime(ts?: string) {
+  if (!ts) return "暂无时间";
+  const match = ts.match(/^\d{4}-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  return match ? `${match[1]}-${match[2]} ${match[3]}:${match[4]}` : ts;
+}
+
+const cardStyle: CSSProperties = {
+  background: "var(--surface-raised)",
+  border: "1px solid var(--border-default)",
+  borderRadius: "var(--r-4)",
+  overflow: "hidden",
+};

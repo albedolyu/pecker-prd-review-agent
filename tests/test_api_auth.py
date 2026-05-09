@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from jose import jwt
@@ -35,8 +35,8 @@ def _make_jwt(reviewer: str, readonly: bool = False, secret: str = _TEST_SECRET)
     payload = {
         "reviewer": reviewer,
         "readonly": readonly,
-        "exp": datetime.utcnow() + timedelta(hours=1),
-        "iat": datetime.utcnow(),
+        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
+        "iat": datetime.now(timezone.utc),
     }
     return jwt.encode(payload, secret, algorithm="HS256")
 
@@ -93,3 +93,52 @@ class TestGetCurrentUserReadsJwtCookie:
         with pytest.raises(HTTPException) as exc_info:
             get_current_user(req)
         assert exc_info.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_me_returns_admin_flag_from_env(monkeypatch):
+    """前端顶栏需要知道是否展示团队看板入口。"""
+    from api.routes.auth import get_me
+
+    monkeypatch.setenv("PECKER_ADMIN_USERS", "lvxinhang,ops")
+    token = _make_jwt("lvxinhang")
+    req = _fake_request([(b"cookie", f"pecker_session={token}".encode())])
+
+    data = await get_me(req)
+
+    assert data["reviewer"] == "lvxinhang"
+    assert data["is_admin"] is True
+
+
+@pytest.mark.asyncio
+async def test_login_missing_password_does_not_expose_env_var(monkeypatch):
+    from fastapi import HTTPException, Response
+
+    from api.routes.auth import LoginRequest, login
+
+    monkeypatch.delenv("PECKER_WEB_PASSWORD", raising=False)
+    monkeypatch.setenv("PECKER_JWT_SECRET", _TEST_SECRET)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await login(LoginRequest(password="123456", reviewer="pm-a"), Response())
+
+    assert exc_info.value.status_code == 503
+    assert "PECKER_WEB_PASSWORD" not in str(exc_info.value.detail)
+    assert "工具负责人" in str(exc_info.value.detail)
+
+
+@pytest.mark.asyncio
+async def test_login_short_jwt_secret_does_not_expose_env_var(monkeypatch):
+    from fastapi import HTTPException, Response
+
+    from api.routes.auth import LoginRequest, login
+
+    monkeypatch.setenv("PECKER_WEB_PASSWORD", "123456")
+    monkeypatch.setenv("PECKER_JWT_SECRET", "short")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await login(LoginRequest(password="123456", reviewer="pm-a"), Response())
+
+    assert exc_info.value.status_code == 500
+    assert "PECKER_JWT_SECRET" not in str(exc_info.value.detail)
+    assert "登录服务" in str(exc_info.value.detail)

@@ -13,7 +13,7 @@
 #
 # 全局开关 (env):
 #   PECKER_ROUTES_FILE                覆盖默认 model_routes.yaml 路径 (实验/灰度用)
-#   PECKER_MODEL_OVERRIDE             等价 --model auto/opus/sonnet/haiku/gpt55/gpt54/gpt54mini, 仅覆盖 worker.* 的 tier
+#   PECKER_MODEL_OVERRIDE             等价 --model auto/gpt55/gpt54/gpt54mini, 仅覆盖 worker.* 的 tier
 #   PECKER_ENABLE_SHADOW_ADVISOR=1    一键开 advisor.goshawk.shadow
 
 vendors:
@@ -37,7 +37,7 @@ vendors:
       gpt54mini: gpt-5.4-mini          # GPT-only smooth tier: 小任务 / NLI / 低风险复核
     fallback_chain: [gpt55, gpt54, gpt54mini]
 
-  # DeepSeek 接入 (2026-04-28): worker 维度走 DeepSeek 绕开 Anthropic OAuth burst
+  # DeepSeek 接入 (2026-04-28): worker 维度可走 DeepSeek 绕开主线路 burst
   # 需要 .env 配 DEEPSEEK_API_KEY; OpenAI SDK 兼容,无新依赖
   deepseek:
     native_client: clients.deepseek_native.DeepSeekNativeClient
@@ -54,14 +54,20 @@ routes:
   # dimensions.yaml 的 legacy dim["model"] 仅保留为历史配置, 不再覆盖路由分档。
   # ============================================================
   # 2026-05-08: team beta stable route. 并行 worker 默认 gpt54, 终审 advisor 保留 gpt55.
-  worker.default:      {vendor: openai, transport: native, model: gpt54, retry_policy: worker}
-  worker.structure:    {vendor: openai, transport: native, model: gpt54, retry_policy: worker}
-  worker.compliance:   {vendor: openai, transport: native, model: gpt54, retry_policy: worker}
-  worker.data_quality: {vendor: openai, transport: native, model: gpt54, retry_policy: worker}
-  worker.quality:      {vendor: openai, transport: native, model: gpt54, retry_policy: worker}
-  worker.consistency:  {vendor: openai, transport: native, model: gpt54, retry_policy: worker}
-  worker.ai_coding:    {vendor: openai, transport: native, model: gpt54, retry_policy: worker}
-  worker.ai_friendly:  {vendor: openai, transport: native, model: gpt54, retry_policy: worker}
+  worker.default:      {vendor: openai, transport: native, model: gpt54, retry_policy: worker, fallback_route: fallback.deepseek_v4_flash}
+  worker.structure:    {vendor: openai, transport: native, model: gpt54, retry_policy: worker, fallback_route: fallback.deepseek_v4_flash}
+  worker.compliance:   {vendor: openai, transport: native, model: gpt54, retry_policy: worker, fallback_route: fallback.deepseek_v4_flash}
+  worker.data_quality: {vendor: openai, transport: native, model: gpt54, retry_policy: worker, fallback_route: fallback.deepseek_v4_flash}
+  worker.quality:      {vendor: openai, transport: native, model: gpt54, retry_policy: worker, fallback_route: fallback.deepseek_v4_flash}
+  worker.consistency:  {vendor: openai, transport: native, model: gpt54, retry_policy: worker, fallback_route: fallback.deepseek_v4_flash}
+  worker.ai_coding:    {vendor: openai, transport: native, model: gpt54, retry_policy: worker, fallback_route: fallback.deepseek_v4_flash}
+  worker.ai_friendly:  {vendor: openai, transport: native, model: gpt54, retry_policy: worker, fallback_route: fallback.deepseek_v4_flash}
+
+  fallback.deepseek_v4_flash:
+    vendor: deepseek
+    transport: native
+    model: flash
+    retry_policy: worker
 
   # ============================================================
   # 苍鹰 meta-reviewer
@@ -71,6 +77,7 @@ routes:
     transport: native
     model: gpt55             # GPT-only pilot: 终审仍保留最高档, 控制漏报/误判风险
     retry_policy: advisor
+    fallback_route: fallback.deepseek_v4_flash
 
   advisor.goshawk.recheck:
     vendor: openai
@@ -105,7 +112,7 @@ routes:
     retry_policy: router
 
   # 注: router.intent (PRD 复杂度自动路由) 已删 (2026-04-28).
-  # 主啄木鸟默认 --model opus, 不需要再过 Haiku 分类层.
+  # 主啄木鸟默认由 GPT 路由表控制,不再经过单独的复杂度分类层.
 
   # ============================================================
   # Eval LLM-as-judge (cuckoo_eval scorer 调用)

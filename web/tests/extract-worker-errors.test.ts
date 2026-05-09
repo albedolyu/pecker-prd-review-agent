@@ -3,7 +3,7 @@
  *
  * 触发 bug:Claude CLI 登录态过期,4 个 worker 全部 success=false / items_count=0,
  * 但前端老 UI 只看 items_count,显示"评审完成 0 条"误导用户。修法是把 error
- * 字段抽出来,按 not_logged_in / quota / other 分类成顶部 banner。
+ * 字段抽出来,按 not_logged_in / quota / timeout / other 分类成顶部 banner。
  *
  * 跑:cd web && pnpm test tests/extract-worker-errors.test.ts
  */
@@ -69,9 +69,11 @@ describe("extractWorkerErrors", () => {
     expect(banners).toHaveLength(1);
     expect(banners[0]!.category).toBe("quota");
     expect(banners[0]!.title).toContain("额度");
+    expect(banners[0]!.hint).toContain("联系维护人");
+    expect(banners[0]!.hint).not.toContain("重试");
   });
 
-  it("其他错误 → other banner,errorPreview 含 dim + error 前缀", () => {
+  it("超时错误 → timeout banner,不把英文超时原文露在主提示里", () => {
     const ev = workerDoneEvent(
       "ai_coding",
       "AI 编码",
@@ -80,10 +82,14 @@ describe("extractWorkerErrors", () => {
     const banners = extractWorkerErrors([ev]);
     expect(banners).toHaveLength(1);
     const b = banners[0]!;
-    expect(b.category).toBe("other");
+    expect(b.category).toBe("timeout");
+    expect(b.title).toContain("响应过慢");
+    expect(`${b.title} ${b.hint}`).not.toContain("Connection timed out");
+    expect(b.hint).toContain("重新评审");
+    expect(b.hint).toContain("评审线路");
+    expect(b.hint).not.toContain("模型线路");
+    expect(b.hint).not.toContain("失败方向");
     expect(b.affectedDims[0]!.dim).toBe("ai_coding");
-    expect(b.errorPreview).toBeDefined();
-    expect(b.errorPreview!).toContain("Connection timed out");
   });
 
   it("success worker / 无 error 字段 → 0 个 banner", () => {
@@ -119,13 +125,15 @@ describe("extractWorkerErrors", () => {
     const ev = workerDoneEvent(
       "ai_coding",
       "风险",
-      "Connection timed out after 120s talking to upstream",
+      "unexpected upstream payload shape",
     );
     const banners = extractWorkerErrors([ev]);
     const b = banners[0]!;
 
     expect(b.title).toBe("风险评审未完整返回");
     expect(`${b.title} ${b.hint}`).not.toMatch(/\b(worker|debug|log)\b/i);
+    expect(b.hint).toContain("重新评审");
+    expect(b.hint).not.toContain("先重试");
   });
 });
 

@@ -11,16 +11,16 @@
         tool_choice=...,                  # 可选
         max_tokens=8192,                  # 可选
         temperature=0.2,                  # 可选
-        model_override="opus",            # 可选: tier 别名, 兼容 dim["model"] / --model
+        model_override="gpt55",           # 可选: worker tier 别名,兼容 --model 风格覆盖
     )
 
 route_id 命名空间见 model_routes.yaml 头部注释。
 
 为什么用 route_id 而不是裸 model 字符串:
-- 解耦"调用语义"(我是 worker.compliance) 与"承载实现"(用 anthropic.sonnet 还是 openai.pro)
+- 解耦"调用语义"(我是 worker.compliance) 与"承载实现"(例如 openai.gpt54 还是 deepseek.flash)
 - 一处改 routes.yaml 全链路生效, 不需要 grep 散落硬编码
 - 评测/影子/灰度可以按 route_id 切流量 (route_call_with_shadow)
-- 跨 vendor 时 model_tiers 各家不同 ("sonnet" vs "pro"), 按 tier 别名抽象避免 if-vendor 写满代码
+- 跨 vendor 时 model_tiers 各家不同,按 tier 别名抽象避免 if-vendor 写满代码
 """
 from __future__ import annotations
 
@@ -97,6 +97,14 @@ class RouteConfig:
                     f"route {rid!r}: model tier {tier!r} 不在 vendor {v!r} 的 model_tiers 中 "
                     f"(可选: {sorted(self.vendors[v]['model_tiers'].keys())})"
                 )
+            fallback_route = r.get("fallback_route")
+            if fallback_route:
+                if fallback_route == rid:
+                    raise RouteConfigError(f"route {rid!r}: fallback_route must not point to itself")
+                if fallback_route not in self.routes:
+                    raise RouteConfigError(
+                        f"route {rid!r}: fallback_route {fallback_route!r} is not registered"
+                    )
 
     def resolve(
         self,
@@ -105,8 +113,8 @@ class RouteConfig:
     ) -> Dict[str, Any]:
         """解析 route_id 到 dict(vendor, transport, model_real, retry_policy, enabled, ...)。
 
-        model_override 是 tier 别名 (opus/sonnet/haiku/pro/mid 等), 用于 worker 兼容旧
-        dim["model"] 字段以及 --model CLI 参数。如果 override 的 tier 在目标 vendor
+        model_override 是 tier 别名 (团队版常用 gpt55/gpt54/gpt54mini),用于
+        worker 兼容旧 dim["model"] 字段以及 --model CLI 参数。如果 override 的 tier 在目标 vendor
         的 model_tiers 中不存在, 回退到 route 默认 tier 并 warn。
         """
         # 未注册 route_id 时 fallback 到同 namespace 的 default
@@ -146,6 +154,7 @@ class RouteConfig:
             "enabled": r.get("enabled", True),
             "fallback_chain": list(v_cfg.get("fallback_chain", [])),
             "model_tiers": dict(v_cfg["model_tiers"]),
+            "fallback_route": r.get("fallback_route"),
         }
 
 
@@ -235,6 +244,48 @@ def reset_model_call_limiter():
 # 路由调用 — 主入口
 # ============================================================
 
+def _is_transient_route_error(exc: Exception) -> bool:
+    if isinstance(exc, TimeoutError):
+        return True
+    text = f"{type(exc).__name__}: {exc}".lower()
+    markers = (
+        "timeout",
+        "timed out",
+        "rate limit",
+        "429",
+        "500",
+        "520",
+        "521",
+        "522",
+        "523",
+        "524",
+        "502",
+        "503",
+        "504",
+        "connection",
+        "temporarily",
+        "overloaded",
+        "server error",
+    )
+    return any(marker in text for marker in markers)
+
+
+def _effective_worker_model_override(
+    route_id: str,
+    model_override: Optional[str] = None,
+) -> Optional[str]:
+    """Mirror route_call's worker-only PECKER_MODEL_OVERRIDE behavior.
+
+    Dry-run helpers and telemetry must resolve the same model that the real
+    request will use, otherwise the UI can show gpt-5.4 while the request is
+    actually sent to gpt-5.5.
+    """
+    env_override = os.environ.get("PECKER_MODEL_OVERRIDE", "").strip()
+    if env_override and env_override != "auto" and route_id.startswith("worker."):
+        return env_override
+    return model_override
+
+
 def route_call(
     route_id: str,
     *,
@@ -249,15 +300,13 @@ def route_call(
     """按 route_id 路由 LLM 调用, 返回 client.create() 的 UnifiedResponse。
 
     全局 env override (仅作用于 worker.*):
-        PECKER_MODEL_OVERRIDE=opus|sonnet|haiku|auto    覆盖所有 worker.* 的 tier
+        PECKER_MODEL_OVERRIDE=auto|gpt55|gpt54|gpt54mini    覆盖所有 worker.* 的 tier
         ("auto" 等价于不 override)
     """
     cfg = get_route_config()
 
     # 全局 PECKER_MODEL_OVERRIDE (等价 --model) 仅对 worker.* 路由生效, 模拟旧 --model 全局参数语义
-    env_override = os.environ.get("PECKER_MODEL_OVERRIDE", "").strip()
-    if env_override and env_override != "auto" and route_id.startswith("worker."):
-        model_override = env_override
+    model_override = _effective_worker_model_override(route_id, model_override)
 
     resolved = cfg.resolve(route_id, model_override=model_override)
     if not resolved["enabled"]:
@@ -296,16 +345,52 @@ def route_call(
                     f"[route_call] waited {waited_ms}ms for model-call slot "
                     f"route={route_id} model={resolved['model']}"
                 )
-        return client.create(
-            model=resolved["model"],
-            max_tokens=max_tokens,
-            system=system,
-            messages=messages,
-            tools=tools,
-            tool_choice=tool_choice,
-            temperature=temperature,
-            retry_policy=resolved["retry_policy"],
-        )
+        try:
+            return client.create(
+                model=resolved["model"],
+                max_tokens=max_tokens,
+                system=system,
+                messages=messages,
+                tools=tools,
+                tool_choice=tool_choice,
+                temperature=temperature,
+                retry_policy=resolved["retry_policy"],
+            )
+        except Exception as primary_exc:
+            fallback_route = resolved.get("fallback_route")
+            if not fallback_route or not _is_transient_route_error(primary_exc):
+                raise
+            try:
+                fallback_resolved = cfg.resolve(fallback_route)
+                if not fallback_resolved["enabled"]:
+                    raise RouteDisabledError(
+                        f"fallback route {fallback_route!r} is disabled"
+                    )
+                from clients.factory import get_client as _get_fallback_client
+                fallback_client = _get_fallback_client(
+                    fallback_resolved["vendor"],
+                    fallback_resolved["transport"],
+                )
+                log.warning(
+                    f"[route_call] {route_id} transient failure, fallback to {fallback_route}: "
+                    f"{type(primary_exc).__name__}: {str(primary_exc)[:160]}"
+                )
+                return fallback_client.create(
+                    model=fallback_resolved["model"],
+                    max_tokens=max_tokens,
+                    system=system,
+                    messages=messages,
+                    tools=tools,
+                    tool_choice=tool_choice,
+                    temperature=temperature,
+                    retry_policy=fallback_resolved["retry_policy"],
+                )
+            except Exception as fallback_exc:
+                log.warning(
+                    f"[route_call] fallback {fallback_route} also failed; keep primary error. "
+                    f"fallback={type(fallback_exc).__name__}: {str(fallback_exc)[:160]}"
+                )
+                raise primary_exc
     finally:
         if acquired and limiter is not None:
             limiter.release()
@@ -404,6 +489,7 @@ def get_model_for_route(
 ) -> str:
     """只解析 model 名, 不真的发请求 (供 migration 期 logging / metrics / dry-run 用)。"""
     cfg = get_route_config()
+    model_override = _effective_worker_model_override(route_id, model_override)
     resolved = cfg.resolve(route_id, model_override=model_override)
     return resolved["model"]
 

@@ -62,11 +62,14 @@ describe("revision download documents", () => {
     const markdown = generateRevisionAdviceMarkdown(result, decisions);
 
     expect(markdown).toContain("内部资料 / 仅限啄木鸟内网试用");
-    expect(markdown).toContain("R-001");
-    expect(markdown).toContain("R-002");
+    expect(markdown).toContain("### 1. 确认采纳");
+    expect(markdown).toContain("### 2. PM 改写后采纳");
     expect(markdown).toContain("提醒文案需要补充触发时机和失败态。");
+    expect(markdown).not.toContain("R-001");
+    expect(markdown).not.toContain("R-002");
     expect(markdown).not.toContain("R-003");
     expect(markdown).not.toContain("低价值建议");
+    expect(markdown).not.toContain("可信度");
   });
 
   it("keeps the original PRD body and appends confirmed advice in the draft", () => {
@@ -82,7 +85,8 @@ describe("revision download documents", () => {
     expect(markdown).toContain("客户: 北京某某科技");
     expect(markdown).toContain("价格: 100 万");
     expect(markdown).toContain("## 啄木鸟修订建议附录");
-    expect(markdown).toContain("R-001");
+    expect(markdown).toContain("### 1. 确认采纳");
+    expect(markdown).not.toContain("R-001");
     expect(markdown).not.toContain("R-003");
   });
 });

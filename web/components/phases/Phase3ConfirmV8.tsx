@@ -11,7 +11,7 @@
  * v8 UI 规则:
  * - 顶部 stat bar(总计 / 待决 / ✓ / ✗ / ✎)+ dim tabs(含"全部")
  * - 单列 CommentThread list(Sprint 3 再升左右分栏 + DocumentView 锚点联动)
- * - 键盘:j/k 上下 · y 接受 · n 拒绝 · e 编辑 · enter 确认生成报告
+ * - 键盘:j/k 上下 · y 采纳 · n 驳回 · e 改写 · enter 确认生成报告
  *   (focused item 外层 accent 左边框高亮)
  * - edit 态在 CommentThread 下方插 textarea
  * - 底部常驻 KeymapBar + 返回 / 生成报告按钮
@@ -26,14 +26,22 @@ import { ROLES, normalizeDimensionKey, type RoleKey } from "@/lib/roles";
 import {
   reviewApi,
   auditApi,
+  feedbackApi,
   ApiError,
   type ConfirmResponse,
   type ItemDecision,
   type RejectReason,
   type ReviewItem,
 } from "@/lib/api";
+import { saveReviewDraftSnapshot } from "@/lib/draft-persistence";
+import { explainReviewItemForPm } from "@/lib/pm-friendly";
+import {
+  findPrdAnchorMatch,
+  getPrdAnchorLineLabel,
+  getPrdAnchorSnippet,
+  type PrdAnchorMatch,
+} from "@/lib/prd-anchor";
 import { BirdLabel, type BirdId } from "@/components/birds/BirdAvatar";
-import { BIRD_META } from "@/components/birds/BirdBadge";
 import { EagleMark } from "@/components/review/CommentThread";
 import { EvidenceBlock } from "@/components/review/EvidenceBlock";
 import { MissingReportButton } from "@/components/review/MissingReportButton";
@@ -98,9 +106,14 @@ function getGateLogEntries(gateLog: ReviewItem["gate_log"]): GateLogEntry[] {
 }
 
 export function Phase3ConfirmV8() {
+  const reviewer = useReviewStore((s) => s.reviewer);
+  const workspace = useReviewStore((s) => s.workspace);
   const reviewResult = useReviewStore((s) => s.reviewResult);
   const prdContent = useReviewStore((s) => s.prdContent);
   const prdName = useReviewStore((s) => s.prdName);
+  const mode = useReviewStore((s) => s.mode);
+  const rawMaterials = useReviewStore((s) => s.rawMaterials);
+  const userNotes = useReviewStore((s) => s.userNotes);
   const decisions = useReviewStore((s) => s.decisions);
   const setDecision = useReviewStore((s) => s.setDecision);
   const setConfirmedReportMarkdown = useReviewStore(
@@ -131,7 +144,7 @@ export function Phase3ConfirmV8() {
   // 严重度过滤(must / should / 其他 / 全部)
   type SevFilter = "all" | "must" | "should" | "other";
   const [sevFilter, setSevFilter] = useState<SevFilter>("all");
-  // 状态过滤(待处理 / 已接受 / 已拒绝 / 低置信 / 全部)
+  // 状态过滤(待处理 / 已采纳 / 已驳回 / 低置信 / 全部)
   type StatusFilter = "all" | "pending" | "accepted" | "rejected" | "low_conf";
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
@@ -142,6 +155,53 @@ export function Phase3ConfirmV8() {
   // 手机端评论抽屉是否展开
   const [drawerOpen, setDrawerOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const lastDraftFingerprintRef = useRef("");
+  const draftAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
+  const saveDraftNow = useCallback(
+    (
+      nextDecisions: Record<string, ItemDecision>,
+      phase = 3,
+      confirmedReportMarkdown = "",
+    ) => {
+      if (!reviewResult) return Promise.resolve();
+      const fingerprint = JSON.stringify({
+        review_id: reviewResult.review_id,
+        phase,
+        decisions: nextDecisions,
+        confirmedReportMarkdown,
+      });
+      return saveReviewDraftSnapshot({
+        reviewer,
+        phase,
+        prdName,
+        prdContent,
+        workspace: workspace || reviewResult.workspace,
+        mode,
+        userNotes,
+        rawMaterials,
+        reviewResult,
+        decisions: nextDecisions,
+        confirmedReportMarkdown,
+      })
+        .then(() => {
+          lastDraftFingerprintRef.current = fingerprint;
+        })
+        .catch(() => {});
+    },
+    [
+      reviewResult,
+      reviewer,
+      prdName,
+      prdContent,
+      workspace,
+      mode,
+      userNotes,
+      rawMaterials,
+    ],
+  );
 
   // 当前 tab 下的 items(过滤后,pinned 优先 + 原顺序)
   const visibleItems = useMemo<ReviewItem[]>(() => {
@@ -189,11 +249,53 @@ export function Phase3ConfirmV8() {
     setFocusedIdx(0);
   }, [currentTab, sevFilter, statusFilter]);
 
+  useEffect(() => {
+    if (!reviewResult) return;
+    const fingerprint = JSON.stringify({
+      review_id: reviewResult.review_id,
+      phase: 3,
+      decisions,
+    });
+    if (fingerprint === lastDraftFingerprintRef.current) return;
+    if (draftAutosaveTimerRef.current) {
+      clearTimeout(draftAutosaveTimerRef.current);
+    }
+    draftAutosaveTimerRef.current = setTimeout(() => {
+      void saveDraftNow(decisions);
+    }, 700);
+    return () => {
+      if (draftAutosaveTimerRef.current) {
+        clearTimeout(draftAutosaveTimerRef.current);
+        draftAutosaveTimerRef.current = null;
+      }
+    };
+  }, [
+    reviewResult,
+    decisions,
+    saveDraftNow,
+  ]);
+
   // 选中的意见(右栏锚点联动用)
-  const focusedAnchor = useMemo(() => {
-    const item = visibleItems[focusedIdx];
-    return item?.location ?? undefined;
-  }, [visibleItems, focusedIdx]);
+  const focusedItem = useMemo(
+    () => visibleItems[focusedIdx],
+    [visibleItems, focusedIdx],
+  );
+  const focusedAnchor = focusedItem?.location ?? undefined;
+  const focusedPrdMatch = useMemo(
+    () =>
+      prdContent
+        ? findPrdAnchorMatch(prdContent, focusedAnchor, focusedItem?.evidence)
+        : null,
+    [prdContent, focusedAnchor, focusedItem?.evidence],
+  );
+  const focusedPrdSnippet = useMemo(
+    () => getPrdAnchorSnippet(prdContent, focusedPrdMatch, 96),
+    [prdContent, focusedPrdMatch],
+  );
+  const focusedPrdLineLabel = useMemo(
+    () => getPrdAnchorLineLabel(prdContent, focusedPrdMatch),
+    [prdContent, focusedPrdMatch],
+  );
 
   // ── stats ──
   const stats = useMemo(() => {
@@ -217,7 +319,7 @@ export function Phase3ConfirmV8() {
     },
     onSuccess: (resp: ConfirmResponse) => {
       toast.success(
-        `本次评审已确认 · 接受 ${resp.accepted} · 改写 ${resp.edited} · 拒绝 ${resp.rejected}`,
+        `本次评审已确认 · 采纳 ${resp.accepted} · 改写 ${resp.edited} · 驳回 ${resp.rejected}`,
       );
       void auditApi
         .log({
@@ -233,6 +335,19 @@ export function Phase3ConfirmV8() {
         })
         .catch(() => {});
       setConfirmedReportMarkdown(resp.report_markdown ?? "");
+      void saveReviewDraftSnapshot({
+        reviewer,
+        phase: 4,
+        prdName,
+        prdContent,
+        workspace: workspace || reviewResult?.workspace || "",
+        mode,
+        userNotes,
+        rawMaterials,
+        reviewResult,
+        decisions,
+        confirmedReportMarkdown: resp.report_markdown ?? "",
+      }).catch(() => {});
       setPhase(4);
     },
     onError: (e: ApiError) => {
@@ -245,14 +360,16 @@ export function Phase3ConfirmV8() {
   });
 
   // ── 快捷键动作 ──
-  const focusedItem = visibleItems[focusedIdx];
 
   const handleAccept = useCallback(
     (itemId: string) => {
-      setDecision(itemId, { action: "accept" });
+      const nextDecision: ItemDecision = { action: "accept" };
+      const nextDecisions = { ...decisions, [itemId]: nextDecision };
+      setDecision(itemId, nextDecision);
+      void saveDraftNow(nextDecisions);
       setEditingId(null);
     },
-    [setDecision],
+    [decisions, saveDraftNow, setDecision],
   );
 
   const handleReject = useCallback(
@@ -266,29 +383,35 @@ export function Phase3ConfirmV8() {
         existing?.action === "reject" && existing.reason_category
           ? existing.reason_category
           : DEFAULT_REJECT_CATEGORY;
-      setDecision(itemId, {
+      const nextDecision: ItemDecision = {
         action: "reject",
         reason_category: reuseCat,
         reason: existing?.action === "reject" ? existing.reason : undefined,
-      });
+      };
+      const nextDecisions = { ...decisions, [itemId]: nextDecision };
+      setDecision(itemId, nextDecision);
+      void saveDraftNow(nextDecisions);
       setEditingId(null);
     },
-    [decisions, setDecision],
+    [decisions, saveDraftNow, setDecision],
   );
 
   const handleEdit = useCallback(
     (item: ReviewItem) => {
       const existing = decisions[item.id];
-      setDecision(item.id, {
+      const nextDecision: ItemDecision = {
         action: "edit",
         edited_problem:
           existing?.action === "edit" && existing.edited_problem
             ? existing.edited_problem
             : (item.problem ?? ""),
-      });
+      };
+      const nextDecisions = { ...decisions, [item.id]: nextDecision };
+      setDecision(item.id, nextDecision);
+      void saveDraftNow(nextDecisions);
       setEditingId(item.id);
     },
-    [decisions, setDecision],
+    [decisions, saveDraftNow, setDecision],
   );
 
   // ── 键盘监听 ──
@@ -350,7 +473,7 @@ export function Phase3ConfirmV8() {
     return { must, should, other };
   }, [reviewResult]);
 
-  // 状态计数(待处理 / 已接受+已改写 / 已拒绝 / 低置信)
+  // 状态计数(待处理 / 已采纳+已改写 / 已驳回 / 低置信)
   const statusCounts = useMemo(() => {
     if (!reviewResult)
       return { pending: 0, accepted: 0, rejected: 0, low_conf: 0 };
@@ -425,13 +548,19 @@ export function Phase3ConfirmV8() {
       }}
       onRejectCategoryChange={(cat) => {
         const existing = decisions[item.id];
-        setDecision(item.id, {
+        const nextDecision: ItemDecision = {
           action: "reject",
           reason_category: cat,
           reason: existing?.action === "reject" ? existing.reason : undefined,
-        });
+        };
+        const nextDecisions = { ...decisions, [item.id]: nextDecision };
+        setDecision(item.id, nextDecision);
+        void saveDraftNow(nextDecisions);
       }}
-      onEditDone={() => setEditingId(null)}
+      onEditDone={() => {
+        setEditingId(null);
+        void saveDraftNow(decisions);
+      }}
     />
   );
 
@@ -509,13 +638,13 @@ export function Phase3ConfirmV8() {
           <SevFilterBtn
             active={statusFilter === "accepted"}
             onClick={() => setStatusFilter("accepted")}
-            label="已接受"
+            label="已采纳"
             count={statusCounts.accepted}
           />
           <SevFilterBtn
             active={statusFilter === "rejected"}
             onClick={() => setStatusFilter("rejected")}
-            label="已拒绝"
+            label="已驳回"
             count={statusCounts.rejected}
           />
           {statusCounts.low_conf > 0 && (
@@ -610,8 +739,15 @@ export function Phase3ConfirmV8() {
           }}
         >
           <MissingReportButton
-            onSubmit={(payload) => {
-              console.log("[harness · missing-report]", payload);
+            onSubmit={async (payload) => {
+              await feedbackApi.reportMissing({
+                problem: payload.problem,
+                location: payload.location,
+                responsible_bird_id: payload.responsibleBirdId,
+                workspace: workspace || reviewResult?.workspace || "",
+                prd_name: prdName || reviewResult?.prd_name || "",
+                pm_name: reviewer,
+              });
             }}
           />
         </div>
@@ -667,21 +803,80 @@ export function Phase3ConfirmV8() {
           )}
         </div>
         {focusedAnchor && (
-          <span
-            title="当前选中意见所引用的位置"
-            style={{
-              fontSize: 11,
-              padding: "2px 8px",
-              borderRadius: "var(--r-pill)",
-              background: "var(--accent-50)",
-              color: "var(--accent-700)",
-              fontWeight: 600,
-            }}
-          >
-            ↳ {focusedAnchor}
-          </span>
+          <>
+            <span
+              title="当前选中意见所引用的位置"
+              style={{
+                fontSize: 11,
+                padding: "2px 8px",
+                borderRadius: "var(--r-pill)",
+                background: "var(--accent-50)",
+                color: "var(--accent-700)",
+                fontWeight: 600,
+              }}
+            >
+              ↳ {focusedAnchor}
+            </span>
+            <span
+              title={
+                focusedPrdMatch
+                  ? "已在原文中定位并高亮"
+                  : "没有找到完全匹配的位置，仍保留完整原文供核对"
+              }
+              style={{
+                fontSize: 11,
+                padding: "2px 8px",
+                borderRadius: "var(--r-pill)",
+                background: focusedPrdMatch
+                  ? "var(--status-success-bg)"
+                  : "var(--status-warn-bg)",
+                color: focusedPrdMatch
+                  ? "var(--status-success-fg)"
+                  : "var(--status-warn-fg)",
+                fontWeight: 600,
+              }}
+            >
+              {focusedPrdMatch ? "已定位原文" : "未精确定位"}
+            </span>
+          </>
         )}
       </div>
+      {focusedAnchor && (
+        <div
+          style={{
+            borderBottom: "1px solid var(--border-subtle)",
+            background: focusedPrdMatch
+              ? "color-mix(in oklch, var(--accent-500) 7%, var(--surface-raised))"
+              : "var(--status-warn-bg)",
+            padding: "10px 16px",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              color: focusedPrdMatch
+                ? "var(--accent-700)"
+                : "var(--status-warn-fg)",
+              marginBottom: 4,
+            }}
+          >
+            {focusedPrdMatch
+              ? `定位摘录${focusedPrdLineLabel ? ` · ${focusedPrdLineLabel}` : ""}`
+              : "未找到精确位置"}
+          </div>
+          <div
+            style={{
+              fontSize: 12,
+              lineHeight: 1.65,
+              color: "var(--text-default)",
+            }}
+          >
+            {focusedPrdSnippet ||
+              "这条意见没有匹配到原文片段,请对照右侧的位置与依据人工确认。"}
+          </div>
+        </div>
+      )}
       <div
         style={{
           flex: 1,
@@ -695,7 +890,7 @@ export function Phase3ConfirmV8() {
         }}
       >
         {prdContent ? (
-          highlightPrdAnchor(prdContent, focusedAnchor)
+          renderPrdDocument(prdContent, focusedPrdMatch)
         ) : (
           <span
             style={{
@@ -769,9 +964,9 @@ export function Phase3ConfirmV8() {
               items={[
                 { keys: ["j"], label: "下一条" },
                 { keys: ["k"], label: "上一条" },
-                { keys: ["y"], label: "接受" },
+                { keys: ["y"], label: "采纳" },
                 { keys: ["n"], label: "驳回" },
-                { keys: ["e"], label: "编辑" },
+                { keys: ["e"], label: "改写" },
               ]}
             />
           </div>
@@ -840,7 +1035,7 @@ export function Phase3ConfirmV8() {
             }}
           >
             <BatchStat
-              label="已接受"
+              label="已采纳"
               value={stats.accept}
               tone="done"
             />
@@ -1039,6 +1234,7 @@ function ItemCardV8({
     !action && (lowConf || evidenceFailed);
   const accepted =
     action === "accept" ? true : action === "reject" ? false : undefined;
+  const pmExplanation = explainReviewItemForPm(item);
 
   return (
     <article
@@ -1112,6 +1308,63 @@ function ItemCardV8({
         }}
       >
         {item.problem ?? "(无描述)"}
+      </div>
+
+      <div
+        style={{
+          border: "1px solid var(--border-subtle)",
+          background: pmExplanation.is_engineering_context
+            ? "color-mix(in oklch, var(--status-warn-bg) 55%, var(--surface-subtle))"
+            : "var(--surface-subtle)",
+          borderRadius: "var(--r-3)",
+          padding: "9px 10px",
+          display: "grid",
+          gap: 6,
+          fontSize: 12,
+          lineHeight: 1.55,
+          color: "var(--text-default)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexWrap: "wrap",
+          }}
+        >
+          <span
+            style={{
+              fontWeight: 700,
+              color: "var(--text-strong)",
+            }}
+          >
+            PM 要判断
+          </span>
+          <span
+            style={{
+              padding: "1px 6px",
+              borderRadius: "var(--r-pill)",
+              background: pmExplanation.is_engineering_context
+                ? "var(--status-warn-bg)"
+                : "var(--accent-50)",
+              color: pmExplanation.is_engineering_context
+                ? "var(--status-warn-fg)"
+                : "var(--accent-700)",
+              fontWeight: 600,
+              fontSize: 11,
+            }}
+          >
+            {pmExplanation.detail_label}
+          </span>
+        </div>
+        <div style={{ color: "var(--text-strong)", fontWeight: 600 }}>
+          {pmExplanation.plain_language_summary}
+        </div>
+        <div>{pmExplanation.pm_question}</div>
+        <div style={{ color: "var(--text-muted)" }}>
+          {pmExplanation.suggested_next_step}
+        </div>
       </div>
 
       {/* 建议 */}
@@ -1234,7 +1487,7 @@ function ItemCardV8({
             disabled={accepted === true}
             onClick={onAccept}
           >
-            接受
+            采纳
           </button>
           <button
             type="button"
@@ -1242,10 +1495,10 @@ function ItemCardV8({
             disabled={accepted === false}
             onClick={onReject}
           >
-            拒绝
+            驳回
           </button>
           <button type="button" style={btnEditStyle(editing)} onClick={onEdit}>
-            编辑
+            改写
           </button>
           <CopySuggestionBtn item={item} />
         </div>
@@ -1253,9 +1506,9 @@ function ItemCardV8({
           className="pecker-shortcut-hints"
           style={{ display: "flex", gap: 10, alignItems: "center" }}
         >
-          <ShortcutHint keys={["y"]} label="接受" />
-          <ShortcutHint keys={["n"]} label="拒绝" />
-          <ShortcutHint keys={["e"]} label="编辑" />
+          <ShortcutHint keys={["y"]} label="采纳" />
+          <ShortcutHint keys={["n"]} label="驳回" />
+          <ShortcutHint keys={["e"]} label="改写" />
         </div>
       </div>
 
@@ -1406,66 +1659,15 @@ function TabBtn({ active, onClick, label, sublabel, birdId, count }: TabBtnProps
   );
 }
 
-function StatPill({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone?: "done" | "warn" | "muted";
-}) {
-  const fg =
-    tone === "done"
-      ? "var(--status-done-fg)"
-      : tone === "warn"
-        ? "var(--status-warn-fg)"
-        : tone === "muted"
-          ? "var(--text-muted)"
-          : "var(--text-strong)";
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "baseline",
-        gap: 4,
-      }}
-    >
-      <span
-        style={{
-          fontSize: 10,
-          fontFamily: "var(--font-mono)",
-          color: "var(--text-faint)",
-          textTransform: "uppercase",
-          letterSpacing: "0.08em",
-        }}
-      >
-        {label}
-      </span>
-      <span
-        style={{
-          fontSize: 15,
-          fontWeight: 600,
-          color: fg,
-          fontFamily: "var(--font-mono)",
-          fontVariantNumeric: "tabular-nums",
-        }}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
 function DecisionChip({ kind }: { kind: "accept" | "reject" | "edit" }) {
   const map = {
     accept: {
-      label: "已接受",
+      label: "已采纳",
       bg: "var(--status-done-bg)",
       fg: "var(--status-done-fg)",
     },
     reject: {
-      label: "已拒绝",
+      label: "已驳回",
       bg: "var(--neutral-100)",
       fg: "var(--text-muted)",
     },
@@ -1633,25 +1835,6 @@ function ConfidenceBadge({ value }: { value: number }) {
 // ============================================================
 // styles
 
-const statBarStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "baseline",
-  gap: 20,
-  padding: "10px 14px",
-  background: "var(--surface-raised)",
-  border: "1px solid var(--border-default)",
-  borderRadius: "var(--r-4)",
-  marginBottom: 14,
-};
-
-const tabsStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 6,
-  flexWrap: "wrap",
-  paddingBottom: 4,
-  borderBottom: "1px solid var(--border-subtle)",
-};
-
 const btnPrimaryStyle: React.CSSProperties = {
   height: 34,
   padding: "0 14px",
@@ -1793,23 +1976,134 @@ const emptyDescStyle: React.CSSProperties = {
 };
 
 // ============================================================
-// 辅助:在 PRD 原文里高亮当前选中意见引用的位置
-// 简单实现:把 anchor 字串作为 substring 找到第一处匹配,加 <mark> 包裹。
-// 找不到就原文返回(很多 location 是 §2.3 / line 42 这种,找不到很正常)。
+// 辅助:在 PRD 原文里高亮当前选中意见引用的位置。
 
-function highlightPrdAnchor(
+function renderPrdDocument(
   prd: string,
-  anchor: string | undefined,
+  match: PrdAnchorMatch | null,
 ): React.ReactNode {
-  if (!anchor || anchor === "(未标注位置)") return prd;
-  // 抽取 anchor 中的关键 token(通常是 §X / line N / 章节名)
-  const trimmed = anchor.trim().replace(/^[↳→\-·]+\s*/, "");
-  if (!trimmed) return prd;
-  const idx = prd.indexOf(trimmed);
-  if (idx < 0) return prd;
+  let offset = 0;
   return (
     <>
-      {prd.slice(0, idx)}
+      {prd.split(/\r?\n/).map((line, index) => {
+        const start = offset;
+        offset += line.length + 1;
+        return (
+          <PrdLine
+            key={`${index}-${start}`}
+            line={line}
+            lineNo={index + 1}
+            start={start}
+            match={match}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+function PrdLine({
+  line,
+  lineNo,
+  start,
+  match,
+}: {
+  line: string;
+  lineNo: number;
+  start: number;
+  match: PrdAnchorMatch | null;
+}) {
+  const trimmed = line.trim();
+  const heading = trimmed.match(/^(#{1,6})\s+(.+)$/);
+  const bullet = trimmed.match(/^([-*+]|\d+[.)])\s+(.+)$/);
+  const isEmpty = trimmed.length === 0;
+  const end = start + line.length;
+  const overlaps = Boolean(match && match.end >= start && match.start <= end);
+
+  const lineStyle: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "40px minmax(0, 1fr)",
+    gap: 10,
+    alignItems: "start",
+    minHeight: isEmpty ? 10 : 24,
+    padding: heading ? "10px 0 4px" : "2px 0",
+    borderRadius: "var(--r-2)",
+    background: overlaps
+      ? "color-mix(in oklch, var(--accent-500) 6%, transparent)"
+      : "transparent",
+  };
+  const numberStyle: React.CSSProperties = {
+    color: overlaps ? "var(--accent-700)" : "var(--text-faint)",
+    fontSize: 11,
+    lineHeight: isEmpty ? "10px" : "24px",
+    textAlign: "right",
+    userSelect: "none",
+    fontVariantNumeric: "tabular-nums",
+  };
+
+  if (isEmpty) {
+    return (
+      <div style={lineStyle}>
+        <span style={numberStyle}>{lineNo}</span>
+        <span aria-hidden="true" />
+      </div>
+    );
+  }
+
+  let content: React.ReactNode = renderLineWithAnchor(line, start, match);
+  let contentStyle: React.CSSProperties = {
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+  };
+
+  if (heading) {
+    const title = heading[2] ?? line;
+    const level = heading[1]?.length ?? 1;
+    content = renderLineWithAnchor(title, start + line.indexOf(title), match);
+    contentStyle = {
+      ...contentStyle,
+      fontSize: level <= 2 ? 17 : 15,
+      fontWeight: 700,
+      color: "var(--text-strong)",
+      lineHeight: 1.45,
+    };
+  } else if (bullet) {
+    const body = bullet[2] ?? line;
+    content = (
+      <span>
+        <span style={{ color: "var(--text-faint)", marginRight: 6 }}>
+          {bullet[1]}
+        </span>
+        {renderLineWithAnchor(body, start + line.indexOf(body), match)}
+      </span>
+    );
+  }
+
+  return (
+    <div style={lineStyle}>
+      <span style={numberStyle}>{lineNo}</span>
+      <div style={contentStyle}>{content}</div>
+    </div>
+  );
+}
+
+function renderLineWithAnchor(
+  text: string,
+  absoluteStart: number,
+  match: PrdAnchorMatch | null,
+): React.ReactNode {
+  if (!match) return text;
+  const lineStart = absoluteStart;
+  const lineEnd = absoluteStart + text.length;
+  const hitStart = Math.max(match.start, lineStart);
+  const hitEnd = Math.min(match.end, lineEnd);
+  if (hitStart >= hitEnd) return text;
+
+  const localStart = hitStart - lineStart;
+  const localEnd = hitEnd - lineStart;
+  return (
+    <>
+      {text.slice(0, localStart)}
       <mark
         style={{
           background:
@@ -1819,9 +2113,9 @@ function highlightPrdAnchor(
           color: "inherit",
         }}
       >
-        {prd.slice(idx, idx + trimmed.length)}
+        {text.slice(localStart, localEnd)}
       </mark>
-      {prd.slice(idx + trimmed.length)}
+      {text.slice(localEnd)}
     </>
   );
 }

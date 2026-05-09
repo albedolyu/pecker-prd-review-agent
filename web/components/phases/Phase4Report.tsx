@@ -4,8 +4,8 @@
  * Phase 4 — 报告出口
  *
  * 3 条出口(优先使用后端确认返回的同源 markdown):
- * 1. 下载 .md 文件(浏览器 Blob,不走后端)
- * 2. 保存到 workspace/wiki/ (POST /api/reports/{ws}/save-to-wiki)
+ * 1. 下载评审报告(浏览器保存副本)
+ * 2. 存入团队资料库 (POST /api/reports/{ws}/save-to-wiki)
  * 3. 推送飞书群(POST /api/feishu/send)
  *
  * readonly 用户:后两个按钮 disabled(并带提示),下载不受限。
@@ -106,7 +106,7 @@ export function Phase4Report() {
       .catch(() => {});
   };
 
-  // ========== 保存到 wiki ==========
+  // ========== 存入团队资料库 ==========
   const saveWikiMutation = useMutation({
     mutationFn: () => {
       if (!reviewResult || !stats) throw new Error("缺少评审结果");
@@ -122,8 +122,8 @@ export function Phase4Report() {
       });
     },
     onSuccess: (resp) => {
-      toast.success(`已保存到 wiki${resp.filename ? `: ${resp.filename}` : ""}`);
-      // P0-4: 审计 saved_to_wiki
+      toast.success(`已存入资料库${resp.filename ? `: ${resp.filename}` : ""}`);
+      // P0-4: 审计资料库归档
       void auditApi
         .log({
           event: "saved_to_wiki",
@@ -135,7 +135,7 @@ export function Phase4Report() {
     },
     onError: (e: ApiError) => {
       if (e.status === 403) {
-        toast.error("只读用户不能保存 wiki");
+        toast.error("只读权限不能存入资料库");
       } else {
         toast.error(`保存失败: ${e.detail ?? e.message}`);
       }
@@ -150,7 +150,7 @@ export function Phase4Report() {
         report_markdown: markdown,
       }),
     onSuccess: (resp) => {
-      toast.success(`已推送到飞书${resp.msg_id ? ` (msg_id=${resp.msg_id.slice(0, 12)}...)` : ""}`);
+      toast.success("已推送到飞书");
       // P0-4: 审计 pushed_feishu
       void auditApi
         .log({
@@ -163,7 +163,7 @@ export function Phase4Report() {
     },
     onError: (e: ApiError) => {
       if (e.status === 503) {
-        toast.error("飞书未配置(需要 FEISHU_APP_ID/APP_SECRET/CHAT_ID)");
+        toast.error("飞书还未配置,请联系工具负责人");
       } else if (e.status === 403) {
         toast.error("只读用户不能推送飞书");
       } else {
@@ -231,90 +231,54 @@ export function Phase4Report() {
         </CardContent>
       </Card>
 
-      {/* ========== CC advanced: telemetry 汇总 ========== */}
+      {/* ========== 运行记录: 默认折叠,避免 PM 主视图被辅助信息打断 ========== */}
       {reviewResult?.telemetry && (
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="font-mono uppercase tracking-wider">
-                运行指标
-              </span>
-              <span className="h-px flex-1 bg-border" />
-              {reviewResult.telemetry.total_duration_ms && (
-                <span className="font-mono tabular-nums">
-                  {(reviewResult.telemetry.total_duration_ms / 1000).toFixed(1)}s
-                </span>
-              )}
-            </div>
-            {reviewResult.telemetry.workers && (
-              <div className="mt-2 flex flex-wrap gap-3">
-                {Object.entries(
-                  reviewResult.telemetry.workers as Record<
-                    string,
-                    Record<string, number>
-                  >,
-                ).map(([dim, metrics]) => (
-                  <div
-                    key={dim}
-                    className="rounded-sm border bg-muted/30 px-2 py-1 text-[11px]"
-                  >
-                    <div className="font-medium text-foreground/80">{dim}</div>
-                    <div className="mt-0.5 space-x-2 text-muted-foreground">
-                      {metrics.duration_ms && (
-                        <span>{(metrics.duration_ms / 1000).toFixed(0)}s</span>
-                      )}
-                      {metrics.tokens_in && (
-                        <span>{(metrics.tokens_in / 1000).toFixed(1)}K in</span>
-                      )}
-                      {metrics.tokens_out && (
-                        <span>
-                          {(metrics.tokens_out / 1000).toFixed(1)}K out
-                        </span>
-                      )}
-                    </div>
+        <details className="rounded-lg border bg-card px-4 py-3 text-sm">
+          <summary className="cursor-pointer font-medium text-muted-foreground">
+            运行记录
+          </summary>
+          <div className="mt-3 space-y-3">
+            {reviewResult?.telemetry && (
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="font-medium">
+                      处理耗时
+                    </span>
+                    <span className="h-px flex-1 bg-border" />
+                    {reviewResult.telemetry.total_duration_ms && (
+                      <span className="tabular-nums">
+                        {(reviewResult.telemetry.total_duration_ms / 1000).toFixed(1)} 秒
+                      </span>
+                    )}
                   </div>
-                ))}
-              </div>
+                  {reviewResult.telemetry.workers && (
+                    <div className="mt-2 flex flex-wrap gap-3">
+                      {Object.entries(
+                        reviewResult.telemetry.workers as Record<
+                          string,
+                          Record<string, number>
+                        >,
+                      ).map(([dim, metrics]) => (
+                        <div
+                          key={dim}
+                          className="rounded-sm border bg-muted/30 px-2 py-1 text-[11px]"
+                        >
+                          <span className="text-muted-foreground">{dim}</span>{" "}
+                          {metrics.duration_ms && (
+                            <span className="tabular-nums">
+                              {(metrics.duration_ms / 1000).toFixed(0)} 秒
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ========== CC-pattern: 成本归因(如果后端返回了 cost_breakdown) ========== */}
-      {reviewResult?.cost_breakdown && (
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="font-mono uppercase tracking-wider">
-                成本归因
-              </span>
-              <span className="h-px flex-1 bg-border" />
-              <span className="font-mono tabular-nums">
-                $
-                {Object.values(
-                  reviewResult.cost_breakdown as Record<string, number>,
-                )
-                  .reduce((a: number, b: number) => a + b, 0)
-                  .toFixed(3)}
-              </span>
-            </div>
-            <div className="mt-2 flex flex-wrap gap-3">
-              {Object.entries(
-                reviewResult.cost_breakdown as Record<string, number>,
-              ).map(([dim, cost]) => (
-                <div
-                  key={dim}
-                  className="rounded-sm border bg-muted/30 px-2 py-1 text-[11px]"
-                >
-                  <span className="text-muted-foreground">{dim}</span>{" "}
-                  <span className="font-mono tabular-nums">
-                    ${(cost as number).toFixed(3)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        </details>
       )}
 
       {/* ========== 3 条出口 ========== */}
@@ -322,28 +286,28 @@ export function Phase4Report() {
         <CardHeader>
           <CardTitle className="text-base">报告出口</CardTitle>
           <CardDescription>
-            下载本地副本 / 归档到 workspace wiki / 推送飞书群。三者都使用同一份报告内容。
+            下载本地副本 / 存入团队资料库 / 推送飞书群。三者都使用同一份报告内容。
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-3">
           {/* 下载 */}
           <ActionCard
             icon={<Download className="h-5 w-5" />}
-            title="下载 .md"
-            hint="浏览器本地保存,不走后端"
+            title="下载评审报告"
+            hint="下载到本机,便于转发和归档"
             onClick={handleDownload}
             loading={false}
             disabled={false}
           />
 
-          {/* 保存 wiki */}
+          {/* 存入团队资料库 */}
           <ActionCard
             icon={<Save className="h-5 w-5" />}
-            title="保存到 wiki"
+            title="存入资料库"
             hint={
               isReadonly
                 ? "只读用户无权保存"
-                : `${workspace.replace(/^workspace-/, "")}/wiki/`
+                : `${workspace.replace(/^workspace-/, "")} 的报告归档`
             }
             onClick={() => saveWikiMutation.mutate()}
             loading={saveWikiMutation.isPending}
@@ -387,7 +351,7 @@ export function Phase4Report() {
           </div>
           {!showPreview && (
             <CardDescription className="text-xs">
-              {markdown.length} 字 · 展开查看完整 markdown
+              {markdown.length} 字 · 展开查看完整报告预览
             </CardDescription>
           )}
         </CardHeader>

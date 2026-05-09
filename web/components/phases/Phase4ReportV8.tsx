@@ -7,10 +7,10 @@
  * 只换 UI 层:
  * - 去封面纸片 / 意图散文 / colophon 署名
  * - 顶部元信息卡(meta 表格式)· 中段维度分组评审摘要(CommentThread 风格)
- * - 反馈回声 banner(harness 增量 P1④,本版占位文案,Sprint 4 接真数据)
- * - 底部 3 导出按钮一行排开:下载 md / 保存 wiki / 推送飞书 · 重新开始 secondary
+ * - 反馈回声 banner:解释 PM 确认/驳回/补充如何沉淀到后续规则
+ * - 底部导出按钮一行排开:下载报告 / 存入资料库 / 推送飞书 · 重新开始 secondary
  * - readonly 用户后 2 个 disabled
- * - 折叠预览完整 markdown
+ * - 折叠预览完整报告
  */
 
 import { useMemo, useState } from "react";
@@ -24,6 +24,7 @@ import {
   feishuApi,
   draftsApi,
   auditApi,
+  feedbackApi,
   ApiError,
   type ReviewItem,
 } from "@/lib/api";
@@ -225,7 +226,7 @@ export function Phase4ReportV8() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast.success(`已下载 ${filename}`);
+    toast.success("已下载测试交接材料");
     void auditApi
       .log({
         event: "downloaded_zhiqu_handoff",
@@ -274,11 +275,9 @@ export function Phase4ReportV8() {
       feishuApi.send({
         prd_name: prdName || "未命名",
         report_markdown: markdown,
-      }),
+    }),
     onSuccess: (resp) => {
-      toast.success(
-        `已推送到飞书${resp.msg_id ? ` · 消息号 ${resp.msg_id.slice(0, 8)}` : ""}`,
-      );
+      toast.success("已推送到飞书");
       void auditApi
         .log({
           event: "pushed_feishu",
@@ -549,8 +548,15 @@ export function Phase4ReportV8() {
           </span>
         </span>
         <MissingReportButton
-          onSubmit={(payload) => {
-            console.log("[harness · missing-report · phase4]", payload);
+          onSubmit={async (payload) => {
+            await feedbackApi.reportMissing({
+              problem: payload.problem,
+              location: payload.location,
+              responsible_bird_id: payload.responsibleBirdId,
+              workspace: workspace || reviewResult?.workspace || "",
+              prd_name: prdName || reviewResult?.prd_name || "",
+              pm_name: reviewer,
+            });
           }}
         />
       </section>
@@ -570,14 +576,14 @@ export function Phase4ReportV8() {
         </div>
       </section>
 
-      {/* ── 完整 markdown 预览(折叠) ── */}
+      {/* ── 完整报告预览(折叠) ── */}
       <section style={{ marginTop: 24 }}>
         <button
           type="button"
           onClick={() => setShowPreview((v) => !v)}
           style={linkStyle}
         >
-          {showPreview ? "收起完整 markdown ↑" : "展开完整 markdown ↓"}
+          {showPreview ? "收起完整报告预览 ↑" : "展开完整报告预览 ↓"}
         </button>
         {showPreview && (
           <pre
@@ -602,7 +608,7 @@ export function Phase4ReportV8() {
         )}
       </section>
 
-      {/* ── 评审治理简报 (DAR + cross_boundary) ── */}
+      {/* ── 结果复核说明 ── */}
       {(darSummary || crossBoundaryCount > 0) && (
         <section
           style={{
@@ -627,7 +633,7 @@ export function Phase4ReportV8() {
               color: "var(--accent-600)",
             }}
           >
-            评审治理摘要
+            结果复核说明
           </span>
           {darSummary && (
             <span
@@ -649,7 +655,7 @@ export function Phase4ReportV8() {
               </span>
               {darSummary.minorityKept > 0 && (
                 <span style={{ marginLeft: 4, color: "var(--accent-600)" }}>
-                  (保留少数派 {darSummary.minorityKept})
+                  (保留少数意见 {darSummary.minorityKept})
                 </span>
               )}
             </span>
@@ -667,7 +673,7 @@ export function Phase4ReportV8() {
         </section>
       )}
 
-      {/* ── 底部导出按钮行 ── */}
+      {/* ── 底部报告出口按钮行 ── */}
       <footer
         style={{
           marginTop: 32,
@@ -689,7 +695,7 @@ export function Phase4ReportV8() {
             onClick={handleDownload}
             style={btnSecondaryStyle}
           >
-            导出 Markdown
+             下载评审报告
           </button>
           <button
             type="button"
@@ -796,9 +802,9 @@ function PmFriendlySummary({
               tone={riskTone}
             />
             <SummaryMetric label="阻塞项" value={pmSummary.blocking_count} />
-            <SummaryMetric label="PM 默认" value={`${pmView.pm_count} 条`} />
+            <SummaryMetric label="可直接处理" value={`${pmView.pm_count} 条`} />
             <SummaryMetric
-              label="工程展开"
+              label="需研发一起看"
               value={`${pmView.engineering_count} 条`}
             />
           </div>
@@ -818,11 +824,13 @@ function PmFriendlySummary({
         </div>
 
         <div style={{ padding: "14px 18px" }}>
-          <div style={summaryEyebrowStyle}>织雀测试用例交接</div>
+          <div style={summaryEyebrowStyle}>测试用例准备度</div>
           <div style={summaryMetricsStyle}>
             <SummaryMetric
               label="可测性"
-              value={testabilitySummary.testability_verdict}
+              value={formatTestabilityVerdict(
+                testabilitySummary.testability_verdict,
+              )}
               tone={
                 testabilitySummary.testability_verdict === "blocked"
                   ? "failed"
@@ -852,7 +860,7 @@ function PmFriendlySummary({
               color: "var(--text-muted)",
             }}
           >
-            交接包保留来源追踪和 PM 控制项；阻塞项需要补齐后再让织雀生成对应测试用例。
+            这里判断当前 PRD 是否适合继续生成测试用例；阻塞项补齐后，再交给测试用例工具处理会更稳。
           </p>
           <button
             type="button"
@@ -862,10 +870,10 @@ function PmFriendlySummary({
               display: "inline-flex",
               alignItems: "center",
             }}
-            title="下载织雀交接包"
+            title="下载测试交接材料"
           >
             <Download size={14} strokeWidth={2} style={{ marginRight: 6 }} />
-            下载交接包
+            下载测试交接材料
           </button>
         </div>
       </div>
@@ -919,6 +927,16 @@ function SummaryMetric({
       </span>
     </span>
   );
+}
+
+function formatTestabilityVerdict(
+  verdict: PmFriendlySnapshot["testabilitySummary"]["testability_verdict"],
+) {
+  return {
+    blocked: "暂不适合生成",
+    partial: "部分可生成",
+    ready: "可生成测试用例",
+  }[verdict];
 }
 
 function MetaItem({ label, value }: { label: string; value: string }) {

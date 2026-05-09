@@ -16,6 +16,7 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn>=0.34.0",
     "streamlit>=1.35.0",
+    "langgraph>=1.1.0",
 ]
 
 [project.optional-dependencies]

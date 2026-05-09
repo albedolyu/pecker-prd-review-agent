@@ -108,7 +108,7 @@ export function Phase1Precheck() {
       return;
     }
     if (Object.keys(wikiPages).length === 0) {
-      toast.warning("wiki 内容缺失,Phase 2 会收不到上下文");
+      toast.warning("资料库内容缺失,下一步可能缺少背景依据");
     }
     // 先保存 draft(phase=2)
     try {
@@ -162,7 +162,7 @@ export function Phase1Precheck() {
             </div>
             <Button size="sm" variant="outline" onClick={handleRetry}>
               <RefreshCw className="mr-1 h-3.5 w-3.5" />
-              重试
+              重新预检
             </Button>
           </AlertDescription>
         </Alert>

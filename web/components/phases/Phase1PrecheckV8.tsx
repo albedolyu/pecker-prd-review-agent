@@ -166,7 +166,7 @@ export function Phase1PrecheckV8() {
             onClick={handleRetry}
             style={btnSecondaryStyle}
           >
-            重试
+            重新预检
           </button>
         </div>
       )}

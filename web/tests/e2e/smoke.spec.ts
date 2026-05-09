@@ -11,13 +11,14 @@ test.describe("Pecker v8 smoke · 无后端依赖", () => {
   test("根路径渲染 v8 landing", async ({ page }) => {
     await page.goto("/");
     await expect(
-      page.getByText("PRD Review · Agent Workbench · v8"),
+      page.getByText("Pecker · PRD 评审工作台", { exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: /10 只鸟.*PRD/ }),
+      page.getByRole("heading", { name: /提交前.*PRD.*查清楚/ }),
     ).toBeVisible();
+    await expect(page.getByText(/重点检查目标范围/)).toBeVisible();
     await expect(
-      page.getByRole("button", { name: /进入评审/ }),
+      page.getByRole("button", { name: /开始评审/ }),
     ).toBeVisible();
   });
 
@@ -41,27 +42,16 @@ test.describe("Pecker v8 smoke · 无后端依赖", () => {
 
   test("/about v8 agent 家族介绍", async ({ page }) => {
     await page.goto("/about");
-    await expect(page.getByText("About · Agent 家族")).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: /啄木鸟编辑部/ }),
+      page.locator("main").getByText("使用说明", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /PRD 评审工作台怎么用/ }),
     ).toBeVisible();
 
-    // 4 层分组标题
-    await expect(page.getByRole("heading", { name: /^主控层$/ })).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: /Worker 层/ }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: /Meta 层/ }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: /Agent 协作拓扑/ }),
-    ).toBeVisible();
-
-    // 抽样 3 个职能词(不穷举,避免 brittle)
-    for (const label of ["主编", "终审", "质检员"]) {
-      await expect(page.getByText(label).first()).toBeVisible();
-    }
+    await expect(page.getByText("工具定位")).toBeVisible();
+    await expect(page.getByText(/你只需要完成三件事/)).toBeVisible();
+    await expect(page.getByText("长期维护能力")).toBeVisible();
   });
 
   test("/login 空密码 HTML5 required 阻止提交", async ({ page }) => {
@@ -88,9 +78,10 @@ test.describe("Pecker v8 smoke · 无后端依赖", () => {
     await page.goto("/login");
     // brand "Pecker"(exact 避开正文其他 Pecker)
     await expect(page.getByText("Pecker", { exact: true }).first()).toBeVisible();
-    // v8 新增入口
-    await expect(page.getByRole("link", { name: /^Runs$/ })).toBeVisible();
-    await expect(page.getByRole("link", { name: /^System$/ })).toBeVisible();
-    await expect(page.getByRole("link", { name: /^关于$/ })).toBeVisible();
+    // PM 友好导航:普通未登录/非管理员视角不暴露后台治理入口
+    await expect(page.getByRole("link", { name: /^评审记录$/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^使用说明$/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Runs$/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /^System$/ })).toHaveCount(0);
   });
 });

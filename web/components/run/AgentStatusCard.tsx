@@ -281,7 +281,7 @@ export function AgentStatusCard({
                 fontFamily: "inherit",
               }}
             >
-              重跑
+              重新评审
             </button>
           )}
         </div>

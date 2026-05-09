@@ -13,6 +13,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { AdminOnlyPage } from "@/components/auth/AdminOnlyPage";
 import { BirdAvatar, type BirdId } from "@/components/birds/BirdAvatar";
 import { BirdBadge, BIRD_META } from "@/components/birds/BirdBadge";
 
@@ -141,16 +142,17 @@ export default function SystemPromptsPage() {
   const rules = RULES[selected] ?? [];
 
   return (
-    <div
-      style={{
-        maxWidth: 1120,
-        margin: "0 auto",
-        padding: "28px 24px 80px",
-        fontFamily: "var(--font-sans)",
-        background: "var(--surface-canvas)",
-        minHeight: "100vh",
-      }}
-    >
+    <AdminOnlyPage>
+      <div
+        style={{
+          maxWidth: 1120,
+          margin: "0 auto",
+          padding: "28px 24px 80px",
+          fontFamily: "var(--font-sans)",
+          background: "var(--surface-canvas)",
+          minHeight: "100vh",
+        }}
+      >
       <header style={{ marginBottom: 16 }}>
         <div
           style={{
@@ -298,7 +300,7 @@ export default function SystemPromptsPage() {
                     marginTop: 2,
                   }}
                 >
-                  {prompt.version} · updated {prompt.updated}
+                  {prompt.version} · 更新于 {prompt.updated}
                 </div>
               </div>
               <span style={{ flex: 1 }} />
@@ -605,7 +607,8 @@ export default function SystemPromptsPage() {
         </Link>
         <span>Pecker · 规则配置 · 演示数据</span>
       </footer>
-    </div>
+      </div>
+    </AdminOnlyPage>
   );
 }
 

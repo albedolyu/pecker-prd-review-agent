@@ -20,13 +20,17 @@ GET 不限权 (所有评审都能看), POST 必须登录但允许只读用户提
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import os
+from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from api.deps import get_current_user
+from api.deps import get_current_user, get_project_root
 from review.finding_outcomes_store import (
     get_all_rules_metrics,
     get_high_accept_rules,
@@ -57,6 +61,15 @@ class FeedbackBody(BaseModel):
     workspace: Optional[str] = Field(None, max_length=128)
     prd_name: Optional[str] = Field(None, max_length=128)
     severity: Optional[str] = Field(None, max_length=16)
+
+
+class MissingFeedbackBody(BaseModel):
+    problem: str = Field(..., min_length=1, max_length=2000)
+    location: str = Field("", max_length=500)
+    responsible_bird_id: Optional[int] = Field(None, ge=1, le=10)
+    workspace: Optional[str] = Field(None, max_length=128)
+    prd_name: Optional[str] = Field(None, max_length=128)
+    pm_name: Optional[str] = Field(None, max_length=64)
 
 
 def _record(outcome: str, body: FeedbackBody, user: dict) -> dict:
@@ -94,6 +107,71 @@ def _record(outcome: str, body: FeedbackBody, user: dict) -> dict:
     if outcome == "reject" and body.rule_id:
         _maybe_emit_learning(body, pm)
     return {"status": "ok", "outcome_id": new_id, "outcome": outcome}
+
+
+def _missing_feedback_path(project_root: Path) -> Path:
+    return project_root / "logs" / "missing_feedback.jsonl"
+
+
+def _short(value: Optional[str], limit: int) -> str:
+    text = (value or "").strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip() + "..."
+
+
+def record_missing_feedback(
+    body: MissingFeedbackBody,
+    *,
+    user: dict,
+    project_root: Path,
+) -> dict:
+    """Persist a PM-reported missed issue without storing PRD body."""
+    reviewer = body.pm_name or user.get("reviewer") or "anonymous"
+    ts = datetime.now().isoformat(timespec="seconds")
+    fingerprint = hashlib.sha1(
+        "|".join(
+            [
+                reviewer,
+                body.workspace or "",
+                body.prd_name or "",
+                body.problem,
+                body.location or "",
+                ts,
+            ]
+        ).encode("utf-8"),
+    ).hexdigest()[:16]
+    feedback_id = f"missing_{fingerprint}"
+    row = {
+        "feedback_id": feedback_id,
+        "timestamp": ts,
+        "reviewer": reviewer,
+        "workspace": body.workspace or "",
+        "prd_name": body.prd_name or "",
+        "problem": _short(body.problem, 500),
+        "location": _short(body.location, 240),
+        "responsible_bird_id": body.responsible_bird_id,
+        "source": "missing_report",
+    }
+    path = _missing_feedback_path(project_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    try:
+        _record_event(
+            "feedback.missing_report",
+            workspace=body.workspace,
+            reviewer=reviewer,
+            status="missing_report",
+            details={
+                "feedback_id": feedback_id,
+                "prd_name": body.prd_name,
+                "responsible_bird_id": body.responsible_bird_id,
+            },
+        )
+    except Exception:
+        pass
+    return {"status": "ok", "feedback_id": feedback_id}
 
 
 def _maybe_emit_learning(body: FeedbackBody, pm: str) -> None:
@@ -148,6 +226,16 @@ def feedback_edit(body: FeedbackBody, user: dict = Depends(get_current_user)):
     if not body.reason:
         raise HTTPException(status_code=400, detail="edit 必须填 reason (PM 改写后的描述)")
     return _record("edit", body, user)
+
+
+@router.post("/missing")
+def feedback_missing(
+    body: MissingFeedbackBody,
+    user: dict = Depends(get_current_user),
+    project_root: Path = Depends(get_project_root),
+):
+    """PM 补充模型漏掉的问题,供后台看板和规则优化使用。"""
+    return record_missing_feedback(body, user=user, project_root=project_root)
 
 
 # ============================================================

@@ -951,13 +951,24 @@ def _build_worker_messages(
     on_wiki_selection=None,
     wiki_budget_chars=None,
     recovery_mode=False,
+    prd_context_packet=None,
 ):
     """构建 worker 的 user messages，包含 PRD 和知识库内容"""
     from agent_config import MAX_WIKI_CHARS, COMPACT_THRESHOLD
     from review.wiki_selection import select_wiki_pages
 
     wk = wiki_keywords or get_wiki_keywords()
-    parts = [f"## 待评审 PRD\n\n{prd_content}"]
+    if prd_context_packet:
+        parts = [
+            (
+                "## 待评审 PRD（压缩视图）\n\n"
+                f"{prd_context_packet}\n\n"
+                "> 完整 PRD 仍是事实源；这里为降低中转站超时，只提供结构索引和本维度相关摘录。\n"
+                "> 如果摘录标题里有原文行号，提交改进项时 location / 位置字段优先写成“原文第 X-Y 行 + 章节名”。"
+            )
+        ]
+    else:
+        parts = [f"## 待评审 PRD\n\n{prd_content}"]
     if diff_context:
         parts.insert(0, diff_context)  # diff context before PRD content
     wiki_char_total = 0
@@ -1006,7 +1017,11 @@ def _build_worker_messages(
         if wiki_char_total > wiki_budget * 0.95:
             log.warning(f"[{_cn_label(dim_key) if dim_key else 'global'}] approaching wiki budget limit: {wiki_char_total:,} / {wiki_budget:,} chars (95%+)")
 
-    parts.append("请评审以上 PRD，逐条对照你的检查清单，然后调用 submit_review_items 工具提交发现的所有改进项。每条改进项必须标注 rule_id。")
+    parts.append(
+        "请评审以上 PRD，逐条对照你的检查清单，然后调用 submit_review_items 工具提交发现的所有改进项。"
+        "每条改进项必须标注 rule_id；location / 位置请写成可在 PRD 中搜索到的短句、章节名或原文行号，"
+        "避免只写“全文/整体/上述”。"
+    )
 
     messages = [{"role": "user", "content": "\n\n".join(parts)}]
 

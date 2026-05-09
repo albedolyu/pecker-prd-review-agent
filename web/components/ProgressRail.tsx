@@ -4,15 +4,15 @@
  * ProgressRail — Phase 2 的进度条(Phase D 编辑部版)
  *
  * 对齐 api/stream.py MILESTONES:
- *   uploaded(0) → wiki_scanned(10) → workers_started(15)
+ *   uploaded(0) → wiki_scanned(10) → review_queued(12) → workers_started(15)
  *   → worker_done ×4 (15→70) → final_reviewer_started(70)
  *   → final_reviewer_done(95) → result(100)
  *
- * 6 个"站点"(4 个 worker_done 合并为 "4 位编辑"):
- *   [已接收] [扫 wiki] [4 位编辑] [终审开始] [终审完成] [完成]
+ * 6 个"站点"(4 个方向完成合并为 "分向评审"):
+ *   [已接收] [读取资料] [分向评审] [复核开始] [复核完成] [完成]
  *
  * 视觉:
- * - 顶部:当前 stage 名(serif)+ 大号 Mono 百分比
+ * - 顶部:当前进度名 + 大号 Mono 百分比
  * - 中段:2px 扁平 track + 深色 fill(700ms ease)
  * - 底部:站点 Mono 编号(01 / 02 / ...) + 竖线 marker + label
  * - active 站点下方有一道 1.5px 的墨青 underline
@@ -27,10 +27,10 @@ interface Station {
 
 const STATIONS: readonly Station[] = [
   { label: "已接收", threshold: 0 },
-  { label: "扫 wiki", threshold: 10 },
-  { label: "4 位编辑", threshold: 15 },
-  { label: "终审开始", threshold: 70 },
-  { label: "终审完成", threshold: 95 },
+  { label: "读取资料", threshold: 10 },
+  { label: "分向评审", threshold: 15 },
+  { label: "复核开始", threshold: 70 },
+  { label: "复核完成", threshold: 95 },
   { label: "完成", threshold: 100 },
 ] as const;
 
@@ -55,11 +55,11 @@ export function ProgressRail({ progress, error }: ProgressRailProps) {
 
   return (
     <div className="space-y-5">
-      {/* ========== 顶部:stage 名 + 大号百分比 ========== */}
+      {/* ========== 顶部:当前进度名 + 大号百分比 ========== */}
       <div className="flex items-baseline justify-between gap-4">
         <div className="flex items-baseline gap-2 min-w-0">
           <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-            Stage
+            当前进度
           </span>
           <span className="font-serif text-base font-medium tracking-tight text-foreground truncate">
             {activeStation.label}

@@ -5,7 +5,7 @@ POST /api/auth/logout — 清 cookie
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from jose import JWTError, jwt
@@ -18,12 +18,20 @@ JWT_ALG = "HS256"
 JWT_EXP_HOURS = 8
 
 
+def _admin_users() -> set[str]:
+    return {
+        user.strip()
+        for user in os.environ.get("PECKER_ADMIN_USERS", "").split(",")
+        if user.strip()
+    }
+
+
 def _get_jwt_secret() -> str:
     secret = os.environ.get("PECKER_JWT_SECRET", "")
     if not secret or len(secret) < 16:
         raise HTTPException(
             status_code=500,
-            detail="PECKER_JWT_SECRET 未配置或过短",
+            detail="登录服务配置异常，请联系工具负责人处理",
         )
     return secret
 
@@ -45,7 +53,7 @@ async def login(req: LoginRequest, response: Response):
         # 不配置密码时禁止登录(生产环境必须配)
         raise HTTPException(
             status_code=503,
-            detail="服务端未配置 PECKER_WEB_PASSWORD,登录功能关闭",
+            detail="登录密码还未配置，请联系工具负责人处理",
         )
 
     if req.password != expected:
@@ -60,8 +68,8 @@ async def login(req: LoginRequest, response: Response):
     payload = {
         "reviewer": req.reviewer.strip(),
         "readonly": is_readonly,
-        "exp": datetime.utcnow() + timedelta(hours=JWT_EXP_HOURS),
-        "iat": datetime.utcnow(),
+        "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXP_HOURS),
+        "iat": datetime.now(timezone.utc),
     }
     token = jwt.encode(payload, _get_jwt_secret(), algorithm=JWT_ALG)
 
@@ -80,6 +88,7 @@ async def login(req: LoginRequest, response: Response):
         "status": "ok",
         "reviewer": req.reviewer,
         "readonly": is_readonly,
+        "is_admin": req.reviewer.strip() in _admin_users(),
         "exp_hours": JWT_EXP_HOURS,
     }
 
@@ -99,6 +108,7 @@ async def get_me(request: Request):
     return {
         "reviewer": payload.get("reviewer", ""),
         "readonly": payload.get("readonly", False),
+        "is_admin": payload.get("reviewer", "") in _admin_users(),
     }
 
 

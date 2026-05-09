@@ -93,7 +93,7 @@ export function RunHealthCheck({
         incompleteCount > 0
           ? `本次评审有 ${incompleteCount} 个方向未完整返回,继续确认可能遗漏问题。`
           : "本次评审有方向未完整返回,继续确认可能遗漏问题。",
-      desc: "建议先重跑异常方向,再进入逐条确认。",
+      desc: "建议先重新评审,再进入逐条确认。",
       code: "partial_silent",
     },
     quota_exhausted: {
@@ -102,7 +102,7 @@ export function RunHealthCheck({
       bg: "var(--status-failed-bg)",
       label: "评审额度不足,评审被中断",
       headline: "评审额度不足,评审中途终止。",
-      desc: "重跑前请确认额度,否则会再次中断。",
+      desc: "重新评审前请确认额度,否则会再次中断。",
       code: "quota_exhausted",
     },
     degraded: {
@@ -351,16 +351,16 @@ export function RunHealthCheck({
           {isPartialSilent
             ? "继续确认会在不完整结果上决策,有遗漏问题的风险。"
             : sessionClass === "quota_exhausted"
-              ? "重跑前请确认评审额度,否则会再次中断。"
+              ? "重新评审前请确认评审额度,否则会再次中断。"
               : sessionClass === "degraded"
-                ? "可以直接进入逐条确认;如果想看到完整结果,也可以重跑。"
+                ? "可以直接进入逐条确认;如果想看到完整结果,也可以重新评审。"
                 : "本次结果完整,可放心进入逐条确认。"}
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {isPartialSilent ? (
             <>
               <button type="button" onClick={onRetry} style={btnPrimary}>
-                重跑异常方向
+                重新评审
               </button>
               <button
                 type="button"

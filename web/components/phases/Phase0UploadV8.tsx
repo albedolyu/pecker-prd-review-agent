@@ -29,6 +29,10 @@ import {
 } from "@/lib/api";
 import { useReviewStore } from "@/lib/store";
 import {
+  estimateReviewEtaHint,
+  estimateReviewEtaLabel,
+} from "@/lib/review-eta";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -44,6 +48,7 @@ export function Phase0UploadV8() {
   const reviewer = useReviewStore((s) => s.reviewer);
   const prdName = useReviewStore((s) => s.prdName);
   const prdContent = useReviewStore((s) => s.prdContent);
+  const rawMaterials = useReviewStore((s) => s.rawMaterials);
   const workspace = useReviewStore((s) => s.workspace);
   const mode = useReviewStore((s) => s.mode);
   const userNotes = useReviewStore((s) => s.userNotes);
@@ -55,6 +60,7 @@ export function Phase0UploadV8() {
   const [dragOver, setDragOver] = useState(false);
   const [dismissedDraft, setDismissedDraft] = useState(false);
   const [customWorkspaceMode, setCustomWorkspaceMode] = useState(false);
+  const [previousWorkspace, setPreviousWorkspace] = useState("");
 
   const { data: workspaces, isLoading: wsLoading } = useQuery({
     queryKey: ["workspaces"],
@@ -82,15 +88,33 @@ export function Phase0UploadV8() {
   const hasDraft = !!draft && !dismissedDraft;
   const workspaceInList = (workspaces ?? []).some((w) => w.name === workspace);
   const showCustomWorkspaceInput = customWorkspaceMode || !workspace;
+  const selectedWorkspacePageCount =
+    (workspaces ?? []).find((w) => w.name === workspace)?.wiki_page_count ?? 0;
+  const etaInput = {
+    mode,
+    prdContent,
+    rawMaterials,
+    wikiPageCount: selectedWorkspacePageCount,
+  };
+  const reviewEtaLabel = estimateReviewEtaLabel(etaInput);
+  const reviewEtaHint = estimateReviewEtaHint(etaInput);
 
   const handleSelectWorkspace = (value: string | null) => {
+    setPreviousWorkspace(value ?? "");
     setCustomWorkspaceMode(false);
     setUserInput({ workspace: value ?? "" });
   };
 
   const handleUseCustomWorkspace = () => {
+    if (workspace) setPreviousWorkspace(workspace);
     setCustomWorkspaceMode(true);
     setUserInput({ workspace: "" });
+  };
+
+  const handleRestoreSelectedWorkspace = () => {
+    if (!previousWorkspace) return;
+    setCustomWorkspaceMode(false);
+    setUserInput({ workspace: previousWorkspace });
   };
 
   const handleFile = useCallback(
@@ -202,8 +226,8 @@ export function Phase0UploadV8() {
               marginTop: 4,
             }}
           >
-            上传 PRD,选资料库与评审模式,预计{" "}
-            {mode === "quick" ? "5 分钟" : "10 分钟"}完成
+            上传 PRD,选资料库与评审模式。{mode === "quick" ? "轻评审" : "深评审"}
+            {reviewEtaLabel}，{reviewEtaHint}
           </p>
         </div>
         <a
@@ -302,29 +326,61 @@ export function Phase0UploadV8() {
             </div>
           )}
           {showCustomWorkspaceInput && (
-            <input
-              placeholder="输入新资料库名,如 对外投资 / 风险评估"
-              value={customWorkspaceMode ? workspace : ""}
-              style={{
-                marginTop: 8,
-                width: "100%",
-                height: 32,
-                border: "1px dashed var(--border-default)",
-                borderRadius: "var(--r-3)",
-                background: "transparent",
-                padding: "0 10px",
-                fontFamily: "var(--font-mono)",
-                fontSize: 12,
-                color: "var(--text-muted)",
-                outline: "none",
-              }}
-              onFocus={() => setCustomWorkspaceMode(true)}
-              onChange={(e) => {
-                const v = e.target.value.trim();
-                setCustomWorkspaceMode(true);
-                setUserInput({ workspace: v });
-              }}
-            />
+            <div style={{ marginTop: 8 }}>
+              <input
+                placeholder="输入新资料库名,如 对外投资 / 风险评估"
+                value={customWorkspaceMode ? workspace : ""}
+                style={{
+                  width: "100%",
+                  height: 32,
+                  border: "1px dashed var(--border-default)",
+                  borderRadius: "var(--r-3)",
+                  background: "transparent",
+                  padding: "0 10px",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 12,
+                  color: "var(--text-muted)",
+                  outline: "none",
+                }}
+                onFocus={() => setCustomWorkspaceMode(true)}
+                onChange={(e) => {
+                  const v = e.target.value.trim();
+                  setCustomWorkspaceMode(true);
+                  setUserInput({ workspace: v });
+                }}
+              />
+              <div
+                style={{
+                  marginTop: 6,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 8,
+                  fontSize: 12,
+                  color: "var(--text-faint)",
+                }}
+              >
+                <span>也可以新建资料库,后续报告会归到这个名称下。</span>
+                {previousWorkspace && customWorkspaceMode && (
+                  <button
+                    type="button"
+                    onClick={handleRestoreSelectedWorkspace}
+                    style={{
+                      border: 0,
+                      background: "transparent",
+                      color: "var(--accent-600)",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      fontFamily: "var(--font-sans)",
+                      padding: 0,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    继续使用这个资料库
+                  </button>
+                )}
+              </div>
+            </div>
           )}
         </Field>
 
@@ -334,14 +390,14 @@ export function Phase0UploadV8() {
             <ModeCardV8
               active={mode === "quick"}
               name="轻评审"
-              eta="≈ 5 分钟"
+              eta={estimateReviewEtaLabel({ ...etaInput, mode: "quick" })}
               desc="日常自查 · 更快发现明显缺口 · 适合初稿"
               onClick={() => setUserInput({ mode: "quick" as ReviewMode })}
             />
             <ModeCardV8
               active={mode === "standard"}
               name="深评审"
-              eta="≈ 10 分钟"
+              eta={estimateReviewEtaLabel({ ...etaInput, mode: "standard" })}
               desc="提交前检查 · 覆盖四个方向 · 适合发给同事前"
               onClick={() => setUserInput({ mode: "standard" as ReviewMode })}
             />
@@ -712,6 +768,17 @@ function DraftBanner({ draft, onResume, onDiscard }: DraftBannerProps) {
           }}
         >
           · 进度 {phaseLabel(draft.phase)} · {formatTs(draft.ts)}
+        </span>
+        <span
+          style={{
+            display: "block",
+            marginTop: 3,
+            color: "var(--text-muted)",
+            fontSize: 12,
+            lineHeight: 1.5,
+          }}
+        >
+          如果刚才断网或刷新,点“继续上次评审”即可回到原进度,不用重新跑评审。
         </span>
       </span>
       <div style={{ display: "flex", gap: 6 }}>

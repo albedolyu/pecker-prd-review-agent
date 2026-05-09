@@ -106,8 +106,6 @@ async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise
       const json = (await res.json()) as { detail?: unknown };
       if (typeof json.detail === "string") {
         detail = json.detail;
-      } else if (json.detail !== undefined) {
-        detail = JSON.stringify(json.detail);
       }
     } catch {
       // body 不是 JSON,忽略
@@ -115,7 +113,7 @@ async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise
     throw new ApiError(
       res.status,
       detail,
-      `API ${res.status} ${res.statusText}${detail ? ": " + detail : ""}`,
+      formatApiErrorMessage(res.status),
     );
   }
 
@@ -126,6 +124,15 @@ async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise
   return (await res.json()) as T;
 }
 
+function formatApiErrorMessage(status: number): string {
+  if (status >= 500) return "服务暂时不可用，请稍后再试";
+  if (status === 401) return "登录状态已失效，请重新登录";
+  if (status === 403) return "当前账号没有权限执行这个操作";
+  if (status === 404) return "没有找到对应内容";
+  if (status === 422) return "请求内容不完整，请检查后再提交";
+  return "请求未通过，请检查信息后再试";
+}
+
 // ============================================================
 // auth
 // ============================================================
@@ -134,12 +141,14 @@ export interface LoginResponse {
   status: string;
   reviewer: string;
   readonly: boolean;
+  is_admin?: boolean;
   exp_hours: number;
 }
 
 export interface MeResponse {
   reviewer: string;
   readonly: boolean;
+  is_admin?: boolean;
 }
 
 export const authApi = {
@@ -149,9 +158,13 @@ export const authApi = {
       body: { password, reviewer },
       timeoutMs: 10_000,
       timeoutMessage:
-        "服务暂时没有响应，请稍后再试；如果一直卡住，请联系工具负责人检查后端服务。",
+        "评审服务暂时没有响应，请稍后再试；如果一直卡住，请联系工具负责人检查服务状态。",
     }),
-  me: () => apiFetch<MeResponse>("/api/me"),
+  me: () =>
+    apiFetch<MeResponse>("/api/me", {
+      timeoutMs: 5_000,
+      timeoutMessage: "暂时无法确认登录状态，请刷新后再试",
+    }),
   logout: () =>
     apiFetch<{ status: string }>("/api/auth/logout", { method: "POST" }),
 } as const;
@@ -182,6 +195,7 @@ export interface DraftPayload {
   phase: number;
   prd_name: string;
   prd_content: string;
+  mode?: ReviewMode;
   raw_materials: string[];
   user_notes: string;
   review_result: ReviewResult | null;
@@ -294,6 +308,8 @@ export interface ReviewResult {
     total_duration_ms?: number;
     total_cost_usd?: number;
     workers?: Readonly<Record<string, unknown>>;
+    orchestrator?: string | null;
+    resilience?: Readonly<Record<string, unknown>>;
   }>;
 }
 
@@ -405,6 +421,82 @@ export const reviewApi = {
 } as const;
 
 // ============================================================
+// review jobs (reconnectable Phase 2)
+// ============================================================
+
+export interface ReviewJobStartResponse {
+  job_id: string;
+  status: "queued" | "running" | "done" | "error" | "cancelled" | string;
+  workspace: string;
+  prd_name: string;
+  mode: ReviewMode;
+  reused?: boolean;
+}
+
+export interface ReviewJobEvent {
+  index: number;
+  event: string;
+  ts: number;
+  progress?: number | null;
+  label?: string;
+  payload?: ReviewResult;
+  message?: string;
+  [key: string]: unknown;
+}
+
+export interface ReviewJobSnapshot {
+  job_id: string;
+  status: "queued" | "running" | "done" | "error" | "cancelled" | string;
+  owner: string;
+  workspace: string;
+  prd_name: string;
+  mode: ReviewMode;
+  created_at: number;
+  updated_at: number;
+  events: ReviewJobEvent[];
+  result: ReviewResult | null;
+  error: string;
+}
+
+export interface ReviewJobNextEventResponse {
+  event: ReviewJobEvent | null;
+  status: ReviewJobSnapshot["status"];
+}
+
+export const reviewJobsApi = {
+  start: (req: ReviewRunRequest, signal?: AbortSignal) =>
+    apiFetch<ReviewJobStartResponse>(`${API_BASE}/api/review/jobs`, {
+      method: "POST",
+      body: req,
+      signal,
+    }),
+  get: (jobId: string, signal?: AbortSignal) =>
+    apiFetch<ReviewJobSnapshot>(
+      `${API_BASE}/api/review/jobs/${encodeURIComponent(jobId)}`,
+      { signal },
+    ),
+  nextEvent: (
+    jobId: string,
+    afterIndex: number,
+    timeoutSeconds = 25,
+    signal?: AbortSignal,
+  ) =>
+    apiFetch<ReviewJobNextEventResponse>(
+      `${API_BASE}/api/review/jobs/${encodeURIComponent(jobId)}/next-event?after_index=${encodeURIComponent(afterIndex)}&timeout=${encodeURIComponent(timeoutSeconds)}`,
+      {
+        signal,
+        timeoutMs: (timeoutSeconds + 5) * 1000,
+        timeoutMessage: "评审还在运行，正在继续等待下一步结果",
+      },
+    ),
+  cancel: (jobId: string) =>
+    apiFetch<{ status: string; job_id: string }>(
+      `${API_BASE}/api/review/jobs/${encodeURIComponent(jobId)}`,
+      { method: "DELETE" },
+    ),
+} as const;
+
+// ============================================================
 // reports
 // ============================================================
 
@@ -438,6 +530,32 @@ export const reportsApi = {
       `/api/reports/${encodeURIComponent(workspace)}/save-to-wiki`,
       { method: "POST", body: payload },
     ),
+} as const;
+
+// ============================================================
+// feedback(PM 补充线索)
+// ============================================================
+
+export interface MissingFeedbackRequest {
+  problem: string;
+  location?: string;
+  responsible_bird_id?: number | null;
+  workspace?: string;
+  prd_name?: string;
+  pm_name?: string;
+}
+
+export interface MissingFeedbackResponse {
+  status: string;
+  feedback_id: string;
+}
+
+export const feedbackApi = {
+  reportMissing: (payload: MissingFeedbackRequest) =>
+    apiFetch<MissingFeedbackResponse>("/api/feedback/missing", {
+      method: "POST",
+      body: payload,
+    }),
 } as const;
 
 // ============================================================
@@ -495,6 +613,21 @@ export interface UsageAction {
   reason_category?: string;
 }
 
+export interface ReviewHistoryResponse {
+  window_days: number;
+  generated_at: string;
+  reviewer: string;
+  runs: UsageRun[];
+  recent_actions: UsageAction[];
+}
+
+export const reviewHistoryApi = {
+  get: (days = 30, limit = 50) =>
+    apiFetch<ReviewHistoryResponse>(
+      `/api/reviews/history?days=${encodeURIComponent(days)}&limit=${encodeURIComponent(limit)}`,
+    ),
+} as const;
+
 export interface AdminUsageResponse {
   window_days: number;
   generated_at: string;
@@ -502,13 +635,172 @@ export interface AdminUsageResponse {
   reviewers: UsageReviewer[];
   recent_runs: UsageRun[];
   recent_actions: UsageAction[];
+  active_jobs?: ActiveReviewJob[];
+  active_drafts?: ActiveReviewDraft[];
+  recent_job_events?: AdminReviewJobEvent[];
   stability: Record<string, unknown>;
   budget: Record<string, unknown>;
+}
+
+export interface ActiveReviewJob {
+  job_id: string;
+  status: string;
+  owner: string;
+  workspace: string;
+  prd_name: string;
+  mode: string;
+  created_at: number;
+  updated_at: number;
+  event_count: number;
+  last_event?: string;
+  error?: string;
+}
+
+export interface ActiveReviewDraft {
+  ts?: string;
+  reviewer?: string;
+  phase: number;
+  phase_label?: string;
+  workspace?: string;
+  prd_name?: string;
+  mode?: string;
+  has_review_result?: boolean;
+  items_count?: number;
+  decisions_count?: number;
+  accepted?: number;
+  rejected?: number;
+  edited?: number;
+  has_confirmed_report?: boolean;
+  duration_ms?: number;
+  orchestrator?: string;
+  failed_workers?: number;
+  recovered_workers?: number;
+  context_packet_workers?: number;
+  max_context_packet_chars?: number;
+}
+
+export interface AdminReviewJobEvent {
+  job_id: string;
+  owner?: string;
+  workspace?: string;
+  prd_name?: string;
+  mode?: string;
+  status?: string;
+  event?: string;
+  index?: number;
+  ts?: number;
+  progress?: number;
+  label?: string;
+  dim_key?: string;
+  dim_name?: string;
+  success?: boolean;
+  items_count?: number;
+  error?: string;
+  error_type?: string;
+  message?: string;
+  failed_count?: number;
+  total_count?: number;
+  reason?: string;
+  result_review_id?: string;
+  result_items_count?: number;
+  result_status?: string;
+  duration_ms?: number;
+  prd_context_packet_chars?: number;
+}
+
+export interface FeedbackSummary {
+  total_items: number;
+  accepted: number;
+  rejected: number;
+  edited: number;
+  accept_rate: number;
+  reject_rate: number;
+  feedback_reviewers: number;
+}
+
+export interface FeedbackRecord {
+  timestamp: number;
+  ts: string;
+  reviewer: string;
+  workspace: string;
+  prd_name: string;
+  item_id: string;
+  rule_id: string;
+  dimension: string;
+  location: string;
+  severity: string;
+  action: "accept" | "reject" | "edit" | "unknown";
+  reason_category: string;
+  reason_note: string;
+  problem: string;
+  suggestion: string;
+  is_true_positive: boolean;
+  source?: "confirmed" | "draft" | string;
+}
+
+export interface MissingFeedbackRecord {
+  timestamp: number;
+  ts: string;
+  feedback_id: string;
+  reviewer: string;
+  workspace: string;
+  prd_name: string;
+  problem: string;
+  location: string;
+  responsible_bird_id?: number | null;
+  source: "missing_report" | string;
+}
+
+export interface FeedbackBucket {
+  reviewer?: string;
+  workspace?: string;
+  total_items: number;
+  accepted: number;
+  rejected: number;
+  edited: number;
+  last_seen: string;
+}
+
+export interface AdminFeedbackResponse {
+  window_days: number;
+  generated_at: string;
+  summary: FeedbackSummary;
+  draft_items?: number;
+  missing_reports?: number;
+  by_reviewer: FeedbackBucket[];
+  by_workspace: FeedbackBucket[];
+  reason_categories: Record<string, number>;
+  dimensions: Record<string, number>;
+  records: FeedbackRecord[];
+  missing_records?: MissingFeedbackRecord[];
+}
+
+export interface AdminFeedbackFilters {
+  action?: "all" | "accept" | "reject" | "edit";
+  reviewer?: string;
+  workspace?: string;
+  limit?: number;
 }
 
 export const adminUsageApi = {
   get: (days = 7) =>
     apiFetch<AdminUsageResponse>(`/api/admin/usage?days=${encodeURIComponent(days)}`),
+  feedback: (days = 7, filters: AdminFeedbackFilters = {}) => {
+    const params = new URLSearchParams({
+      days: String(days),
+      limit: String(filters.limit ?? 80),
+    });
+    if (filters.action && filters.action !== "all") {
+      params.set("action", filters.action);
+    }
+    if (filters.reviewer) {
+      params.set("reviewer", filters.reviewer);
+    }
+    if (filters.workspace) {
+      params.set("workspace", filters.workspace);
+    }
+    return apiFetch<AdminFeedbackResponse>(`/api/admin/feedback?${params.toString()}`);
+  },
 } as const;
 
 // ============================================================

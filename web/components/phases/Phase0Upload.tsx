@@ -6,7 +6,7 @@
  * 元素:
  * - 草稿恢复 Banner(如果后端 GET /api/drafts/{reviewer} 命中)
  * - 拖拽 / 点选上传 .md .txt PRD 文件
- * - workspace Select(从 /api/workspaces 拉)
+ * - 资料库 Select(从 /api/workspaces 拉)
  * - 评审模式 Tabs(fast / strict)
  * - 评审人补充说明 Textarea
  * - "下一步 → 预检" 按钮(PRD + workspace 就绪才能点)
@@ -43,6 +43,10 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import {
+  estimateReviewEtaHint,
+  estimateReviewEtaLabel,
+} from "@/lib/review-eta";
 
 const MAX_PRD_BYTES = 2 * 1024 * 1024; // 2 MB
 
@@ -53,6 +57,7 @@ export function Phase0Upload() {
   const reviewer = useReviewStore((s) => s.reviewer);
   const prdName = useReviewStore((s) => s.prdName);
   const prdContent = useReviewStore((s) => s.prdContent);
+  const rawMaterials = useReviewStore((s) => s.rawMaterials);
   const workspace = useReviewStore((s) => s.workspace);
   const mode = useReviewStore((s) => s.mode);
   const userNotes = useReviewStore((s) => s.userNotes);
@@ -64,6 +69,7 @@ export function Phase0Upload() {
   const [dragOver, setDragOver] = useState(false);
   const [dismissedDraft, setDismissedDraft] = useState(false);
   const [customWorkspaceMode, setCustomWorkspaceMode] = useState(false);
+  const [previousWorkspace, setPreviousWorkspace] = useState("");
 
   // ========== workspace 列表 ==========
   const { data: workspaces, isLoading: wsLoading } = useQuery({
@@ -93,15 +99,31 @@ export function Phase0Upload() {
   const hasDraft = !!draft && !dismissedDraft;
   const workspaceInList = (workspaces ?? []).some((w) => w.name === workspace);
   const showCustomWorkspaceInput = customWorkspaceMode || !workspace;
+  const selectedWorkspacePageCount =
+    (workspaces ?? []).find((w) => w.name === workspace)?.wiki_page_count ?? 0;
+  const etaInput = {
+    mode,
+    prdContent,
+    rawMaterials,
+    wikiPageCount: selectedWorkspacePageCount,
+  };
 
   const handleSelectWorkspace = (value: string | null) => {
+    setPreviousWorkspace(value ?? "");
     setCustomWorkspaceMode(false);
     setUserInput({ workspace: value ?? "" });
   };
 
   const handleUseCustomWorkspace = () => {
+    if (workspace) setPreviousWorkspace(workspace);
     setCustomWorkspaceMode(true);
     setUserInput({ workspace: "" });
+  };
+
+  const handleRestoreSelectedWorkspace = () => {
+    if (!previousWorkspace) return;
+    setCustomWorkspaceMode(false);
+    setUserInput({ workspace: previousWorkspace });
   };
 
   // ========== 文件处理 ==========
@@ -142,7 +164,7 @@ export function Phase0Upload() {
   const handleResume = () => {
     if (!draft) return;
     hydrateFromDraft(draft);
-    toast.success(`已恢复草稿 — Phase ${draft.phase}`);
+    toast.success(`已恢复草稿 — 进度: ${phaseLabel(draft.phase)}`);
     // hydrate 会把 phase 写成草稿里的 phase,review/page.tsx 自动切换
   };
 
@@ -181,7 +203,7 @@ export function Phase0Upload() {
           <RotateCcw className="h-4 w-4" />
           <AlertTitle className="flex items-center gap-2">
             发现未完成的评审草稿
-            <Badge variant="outline">Phase {draft.phase}</Badge>
+            <Badge variant="outline">进度 {phaseLabel(draft.phase)}</Badge>
           </AlertTitle>
           <AlertDescription className="space-y-2">
             <div className="text-sm">
@@ -284,14 +306,14 @@ export function Phase0Upload() {
         <CardHeader>
           <CardTitle>评审参数</CardTitle>
           <CardDescription>
-            workspace 决定 wiki 检索范围和报告输出目录,模式影响严格度。
+            资料库决定本次参考的背景材料和报告归档位置,模式影响检查深度。
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
-          {/* Workspace — Select + fallback 文本输入(Radix Select 在自动化测试
-              下不稳定,加一个手动输入入口让 e2e 和 CI 也能跑) */}
+          {/* 资料库选择 — Select + fallback 文本输入(Radix Select 在自动化测试
+               下不稳定,加一个手动输入入口让 e2e 和 CI 也能跑) */}
           <div className="space-y-1.5">
-            <Label htmlFor="ws">Workspace</Label>
+            <Label htmlFor="ws">资料库</Label>
             <Select
               value={customWorkspaceMode || !workspaceInList ? "" : workspace}
               onValueChange={handleSelectWorkspace}
@@ -299,7 +321,7 @@ export function Phase0Upload() {
             >
               <SelectTrigger id="ws" className="w-full">
                 <SelectValue
-                  placeholder={wsLoading ? "加载中..." : "选择一个 workspace"}
+                  placeholder={wsLoading ? "加载中..." : "选择一个资料库"}
                 />
               </SelectTrigger>
               <SelectContent>
@@ -307,7 +329,7 @@ export function Phase0Upload() {
                   <SelectItem key={w.name} value={w.name}>
                     <span className="mr-2 font-medium">{w.display_name}</span>
                     <span className="text-xs text-muted-foreground">
-                      wiki {w.wiki_page_count} · PRD {w.prd_count}
+                      资料 {w.wiki_page_count} · PRD {w.prd_count}
                     </span>
                   </SelectItem>
                 ))}
@@ -332,17 +354,31 @@ export function Phase0Upload() {
             )}
             {/* fallback 手动输入:下拉选不动时可以直接输 workspace 名 */}
             {showCustomWorkspaceInput && (
-              <Input
-                placeholder="输入新资料库名(如 workspace-对外投资)"
-                value={customWorkspaceMode ? workspace : ""}
-                className="mt-1 text-xs"
-                onFocus={() => setCustomWorkspaceMode(true)}
-                onChange={(e) => {
-                  const v = e.target.value.trim();
-                  setCustomWorkspaceMode(true);
-                  setUserInput({ workspace: v });
-                }}
-              />
+              <div className="mt-1 space-y-1">
+                <Input
+                  placeholder="输入新资料库名(如 对外投资)"
+                  value={customWorkspaceMode ? workspace : ""}
+                  className="text-xs"
+                  onFocus={() => setCustomWorkspaceMode(true)}
+                  onChange={(e) => {
+                    const v = e.target.value.trim();
+                    setCustomWorkspaceMode(true);
+                    setUserInput({ workspace: v });
+                  }}
+                />
+                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span>也可以新建资料库,后续报告会归到这个名称下。</span>
+                  {previousWorkspace && customWorkspaceMode && (
+                    <button
+                      type="button"
+                      className="shrink-0 font-medium text-primary hover:text-primary/80"
+                      onClick={handleRestoreSelectedWorkspace}
+                    >
+                      继续使用这个资料库
+                    </button>
+                  )}
+                </div>
+              </div>
             )}
           </div>
 
@@ -360,8 +396,8 @@ export function Phase0Upload() {
             </Tabs>
             <p className="text-xs text-muted-foreground">
               {mode === "quick"
-                ? "快速 = 全 sonnet 走一遍,~45 秒,跳过终审。适合初稿粗检。"
-                : "严格 = 4 位编辑并行 + 终审交叉校验,~90-150 秒。默认推荐。"}
+                ? `快速 = 轻量检查,${estimateReviewEtaLabel({ ...etaInput, mode: "quick" })}。适合初稿自查。`
+                : `严格 = 分向评审 + 复核,深评审${estimateReviewEtaLabel({ ...etaInput, mode: "standard" })},${estimateReviewEtaHint(etaInput)}。默认推荐。`}
             </p>
           </div>
 
@@ -383,7 +419,7 @@ export function Phase0Upload() {
       <div className="flex items-center justify-between rounded-lg border bg-card px-4 py-3">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Info className="h-3.5 w-3.5" />
-          下一步会把 PRD 送去&ldquo;预检&rdquo;:扫 wiki 找相关页、识别评审模式。
+          下一步会把 PRD 送去&ldquo;预检&rdquo;:读取资料库、识别背景缺口。
         </div>
         <Button onClick={handleNext} disabled={!canProceed}>
           下一步:预检
@@ -398,4 +434,19 @@ function formatTs(ts: string): string {
   // "2026-04-15T16:52:17" → "04-15 16:52"
   const match = ts.match(/^\d{4}-(\d{2}-\d{2})T(\d{2}:\d{2})/);
   return match ? `${match[1]} ${match[2]}` : ts;
+}
+
+function phaseLabel(phase: number): string {
+  switch (phase) {
+    case 1:
+      return "资料预检";
+    case 2:
+      return "生成意见";
+    case 3:
+      return "逐条确认";
+    case 4:
+      return "报告导出";
+    default:
+      return "准备材料";
+  }
 }

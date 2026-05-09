@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 
 ACTIVE_ROUTE_IDS = [
     "worker.default",
@@ -63,6 +65,24 @@ def test_default_routes_keep_smooth_gpt_tier_split(monkeypatch):
         assert route["tier"] == tier, route_id
 
 
+def test_default_worker_fallback_uses_tool_compatible_deepseek_flash(monkeypatch):
+    cfg = _load_default_config(monkeypatch)
+
+    for route_id in [
+        "worker.default",
+        "worker.structure",
+        "worker.compliance",
+        "worker.data_quality",
+        "worker.quality",
+        "worker.consistency",
+        "worker.ai_coding",
+    ]:
+        route = cfg.resolve(route_id)
+        assert route["fallback_route"] == "fallback.deepseek_v4_flash", route_id
+        fallback = cfg.resolve(route["fallback_route"])
+        assert fallback["model"] == "deepseek-v4-flash"
+
+
 def test_gpt_route_tier_aliases_have_nonzero_api_costs():
     from clients.token_tracker import compute_call_cost_usd
 
@@ -105,3 +125,12 @@ def test_worker_context_uses_route_default_not_legacy_dimension_tier(monkeypatch
 
     assert ctx["model"] == "gpt-5.5"
     assert calls == [("worker.ai_coding", None)]
+
+
+def test_review_api_cost_fallback_does_not_reintroduce_legacy_claude_model():
+    source = (Path(__file__).resolve().parents[1] / "api" / "routes" / "review.py").read_text(
+        encoding="utf-8",
+    )
+
+    assert "claude-opus-4-6" not in source
+    assert "gpt-5.5" in source

@@ -19,7 +19,7 @@ const VIEWPORTS = [
 const ROUTES = [
   { name: "landing", url: "/" },
   { name: "login", url: "/login" },
-  { name: "v8-preview", url: "/v8-preview" },
+  { name: "review-demo", url: "/review?demo=1" },
 ];
 
 test.describe("PM 工作台响应式视觉 QA", () => {

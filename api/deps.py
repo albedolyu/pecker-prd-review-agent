@@ -1,4 +1,4 @@
-"""FastAPI 依赖注入层 — 全局 semaphore + 共享 Claude client 单例。"""
+"""FastAPI 依赖注入层 — 全局 semaphore + 历史兼容 client 单例。"""
 from __future__ import annotations
 
 import asyncio
@@ -23,17 +23,17 @@ def get_max_concurrent() -> int:
 
 
 # ============================================================
-# Claude Code CLI Client 单例
+# Legacy client 单例(仅旧路径/本地调试兜底)
 # ============================================================
 
 @lru_cache(maxsize=1)
 def get_client():
-    """根据 USE_CLAUDE_CODE 选 transport:
+    """根据 USE_CLAUDE_CODE 选 legacy transport:
     - =1 → ClaudeCodeCLIClient (subprocess 调本地 claude CLI)
     - =0 → AnthropicNativeClient (直连 Anthropic SDK, 从 env 读 API_KEY)
 
-    单例缓存整个 FastAPI 进程共享, 给 precheck (client.create 直调) 和
-    parallel_review (透传给 worker, 让 use_router 判断走哪条路) 用。
+    团队版热路径传 client=None 并走 model_router。这里保留给旧脚本/
+    本地调试路径,避免误删历史兼容能力。
     """
     use_cc = os.environ.get("USE_CLAUDE_CODE", "").strip().lower() in ("1", "true", "yes", "on")
     if use_cc:

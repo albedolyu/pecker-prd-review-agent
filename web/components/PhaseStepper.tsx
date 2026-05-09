@@ -17,10 +17,10 @@ interface StepDef {
 }
 
 const STEPS: readonly StepDef[] = [
-  { index: 0, label: "上传", hint: "拖入 PRD,选 workspace" },
-  { index: 1, label: "预检", hint: "wiki 关联 + 补充说明" },
-  { index: 2, label: "评审", hint: "4 位编辑并行 + 终审" },
-  { index: 3, label: "确认", hint: "逐条决定 Y/N/E" },
+  { index: 0, label: "上传", hint: "拖入 PRD,选资料库" },
+  { index: 1, label: "预检", hint: "读取资料 + 补充说明" },
+  { index: 2, label: "评审", hint: "分向评审 + 复核" },
+  { index: 3, label: "确认", hint: "逐条确认 / 驳回 / 改写" },
   { index: 4, label: "报告", hint: "下载 / 推送" },
 ] as const;
 

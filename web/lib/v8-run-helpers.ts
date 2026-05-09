@@ -95,11 +95,15 @@ export function classifyFailReason(ev: WorkerDoneEvent): FailReason {
 // ============================================================
 // Worker error banner · 把 SSE 流里散落的 worker_done.error 聚合成顶部红条
 //
-// 触发场景:Claude CLI 登录态过期 / 配额耗尽时,4 个 worker 全部 success=false
+// 触发场景:模型线路失效 / 配额耗尽时,多个 worker 全部 success=false
 // 但前端老 UI 只看 items_count,显示"评审完成 0 条"误导 PM。
-// 这里按 not_logged_in / quota / other 分类,给出可执行的引导文案。
+// 这里按 not_logged_in / quota / timeout / other 分类,给出可执行的引导文案。
 
-export type WorkerErrorCategory = "not_logged_in" | "quota" | "other";
+export type WorkerErrorCategory =
+  | "not_logged_in"
+  | "quota"
+  | "timeout"
+  | "other";
 
 export interface WorkerErrorBanner {
   readonly category: WorkerErrorCategory;
@@ -109,7 +113,7 @@ export interface WorkerErrorBanner {
   readonly hint: string;
   /** 受影响的 worker · dedupe 后 */
   readonly affectedDims: ReadonlyArray<{ dim: string; dimName: string }>;
-  /** 仅 other 分类带 · 错误原文截断到 120 字 */
+  /** 仅 other 分类带 · 内部错误摘要,PM UI 只展示处理建议 */
   readonly errorPreview?: string;
 }
 
@@ -130,13 +134,22 @@ function categorizeError(error: string): WorkerErrorCategory {
   ) {
     return "quota";
   }
+  const lower = error.toLowerCase();
+  if (
+    lower.includes("timed out") ||
+    lower.includes("timeout") ||
+    lower.includes("524") ||
+    lower.includes("gateway time")
+  ) {
+    return "timeout";
+  }
   return "other";
 }
 
 /**
  * 从 events 流抽出 worker_done.error,分类聚合为顶部 banner。
  *
- * - not_logged_in / quota:同分类合并成 1 条 banner,affectedDims 列出所有受影响维度
+ * - not_logged_in / quota / timeout:同分类合并成 1 条 banner,affectedDims 列出所有受影响维度
  * - other:每个独立 (dim, error_prefix) 一条 banner(错误内容可能各不相同)
  * - dedupe:同 dim + 同错误前缀(60 字)只保留一次,防止重发或重连重复入栈
  */
@@ -173,7 +186,7 @@ export function extractWorkerErrors(
     banners.push({
       category: "not_logged_in",
       title: "评审服务未连接",
-      hint: "请让维护人重新登录评审服务后重试",
+      hint: "请让维护人重新连接评审服务后再重新评审",
       affectedDims: loggedInList.map((x) => ({ dim: x.dim, dimName: x.dimName })),
     });
   }
@@ -182,17 +195,28 @@ export function extractWorkerErrors(
     banners.push({
       category: "quota",
       title: "评审额度不足",
-      hint: "请稍后重试,或联系维护人补充额度",
+      hint: "请联系维护人补充额度后再重新评审",
       affectedDims: quotaList.map((x) => ({ dim: x.dim, dimName: x.dimName })),
     });
   }
+
+  const timeoutList = grouped.get("timeout");
+  if (timeoutList && timeoutList.length > 0) {
+    banners.push({
+      category: "timeout",
+      title: "评审响应过慢",
+      hint: "本次有方向没有按时返回,可以先重新评审;如果连续出现,请让维护人切换更稳定的评审线路",
+      affectedDims: timeoutList.map((x) => ({ dim: x.dim, dimName: x.dimName })),
+    });
+  }
+
   // other 分类:每个独立错误 1 条 banner(错误内容差异大,合并会丢信息)
   const otherList = grouped.get("other") ?? [];
   for (const o of otherList) {
     banners.push({
       category: "other",
       title: `${o.dimName || "该项"}评审未完整返回`,
-      hint: "可以先重试;仍失败时请把本次评审发给维护人排查",
+      hint: "可以先重新评审;仍失败时请把本次评审发给维护人排查",
       affectedDims: [{ dim: o.dim, dimName: o.dimName }],
       errorPreview: o.error.slice(0, 120),
     });

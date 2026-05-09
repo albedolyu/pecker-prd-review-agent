@@ -280,3 +280,71 @@ def build_usage_summary(
         "stability": stability,
         "budget": budget,
     }
+
+
+def build_personal_review_history(
+    project_root: Path,
+    reviewer: str,
+    days: int = 30,
+    now: Optional[datetime] = None,
+    limit: int = 50,
+) -> Dict[str, Any]:
+    """Build a PM-safe personal review history.
+
+    The response is intentionally metadata-only: material name, workspace,
+    status, timing and high-level actions. PRD body/raw event payloads are never
+    returned to the browser from this helper.
+    """
+    reviewer = str(reviewer or "").strip()
+    runs: List[Dict[str, Any]] = []
+    for path in _iter_session_files(project_root):
+        summary = _parse_session(path)
+        if summary and str(summary.get("reviewer") or "") == reviewer:
+            runs.append(summary)
+
+    if now is not None and days:
+        cutoff = now - timedelta(days=days)
+        runs = [
+            run for run in runs
+            if (ts := _parse_ts(run.get("ts_start"))) is not None and ts >= cutoff
+        ]
+    else:
+        runs = _filter_by_days(runs, days)
+
+    audit_rows: List[Dict[str, Any]] = []
+    for path in _iter_audit_files(project_root):
+        audit_rows.extend(_load_jsonl(path))
+    audit_rows = [
+        row for row in _filter_records_by_days(audit_rows, days, now)
+        if str(row.get("reviewer") or "") == reviewer
+    ]
+
+    runs = sorted(
+        runs,
+        key=lambda run: _parse_ts(run.get("ts_start")) or datetime.min,
+        reverse=True,
+    )[:limit]
+    recent_actions = sorted(
+        (_sanitize_audit(row) for row in audit_rows),
+        key=lambda row: _parse_ts(row.get("ts")) or datetime.min,
+        reverse=True,
+    )[:limit]
+
+    return {
+        "window_days": days,
+        "generated_at": (now or datetime.now()).isoformat(timespec="seconds"),
+        "reviewer": reviewer,
+        "runs": [
+            {
+                "prd_name": run.get("prd_name"),
+                "workspace": run.get("workspace"),
+                "status": run.get("status"),
+                "ts_start": run.get("ts_start"),
+                "duration_ms": _safe_int(run.get("duration_ms")),
+                "mode": run.get("mode"),
+                "items_count": _safe_int(run.get("items_count")),
+            }
+            for run in runs
+        ],
+        "recent_actions": recent_actions,
+    }

@@ -22,6 +22,15 @@ export interface PmActionItem {
   feedback_options: readonly string[];
 }
 
+export interface PmItemExplanation {
+  plain_language_summary: string;
+  pm_question: string;
+  suggested_next_step: string;
+  why_it_matters: string;
+  detail_label: string;
+  is_engineering_context: boolean;
+}
+
 export interface PmSummary {
   verdict: string;
   rework_risk: "低" | "中" | "高";
@@ -147,10 +156,10 @@ const SEVERITY_RANK: Record<string, number> = {
 
 const DIMENSION_LABELS: Record<RoleKey, string> = {
   "editor-in-chief": "主控协调",
-  structure: "结构",
-  quality: "质量",
-  ai_coding: "AI Coding",
-  data_quality: "数据质量",
+  structure: "业务完整性",
+  quality: "使用体验",
+  ai_coding: "实现风险",
+  data_quality: "字段口径",
   "final-reviewer": "终审",
   "reader-feedback": "反馈",
   "sample-reader": "评估",
@@ -169,6 +178,26 @@ const DIMENSION_IMPACT: Record<RoleKey, string> = {
   "sample-reader": "会影响评审输出本身的可读性和稳定性。",
   archivist: "会影响知识库证据和历史口径的可追溯性。",
   "qa-gatekeeper": "会影响交付前的质量门禁和回归检查。",
+};
+
+const PM_QUESTIONS: Record<RoleKey, string> = {
+  "editor-in-chief": "这条是否会影响本次评审结论的可信度？",
+  structure: "PRD 里是否已经把目标、范围、流程和验收讲清楚？",
+  quality: "异常、空态、权限、文案或边界场景是否已经能被验收？",
+  ai_coding: "这里是 PRD 需要约束的接口/字段/边界，还是研发实现细节？",
+  data_quality: "字段口径、数据来源、枚举和校验规则是否已经写清楚？",
+  "final-reviewer": "这条是否需要作为最终结论交给 PM 处理？",
+  "reader-feedback": "这条反馈是否值得沉淀为后续规则？",
+  "sample-reader": "这条是否说明当前评审样例还不够稳定？",
+  archivist: "相关背景是否需要补到资料库，避免下次继续误判？",
+  "qa-gatekeeper": "这条是否会挡住继续进入下一步确认？",
+};
+
+const PM_NEXT_STEPS: Record<string, string> = {
+  must: "建议先补到 PRD，再继续推进。",
+  should: "建议本轮补齐，减少后面返工。",
+  could: "可以作为优化项记录，不一定阻塞本次推进。",
+  suggest: "可以作为优化项记录，不一定阻塞本次推进。",
 };
 
 const TESTABILITY_BLOCKING_TERMS = [
@@ -215,6 +244,27 @@ const CASE_TYPE_TERMS: ReadonlyArray<readonly [string, string]> = [
   ["permission", "permission"],
   ["field", "data"],
   ["status", "state_transition"],
+] as const;
+
+const PM_GLOSSARY_HINTS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/状态机|状态流转/i, "状态机可以理解为业务状态怎么流转，要写清每一步怎么进入、怎么退出。"],
+  [/回滚|灰度|埋点|上游|下游|事务|超时/i, "回滚是出问题后怎么退回；灰度是先放给一小部分用户；埋点是后续看数据的记录方式；上游下游是前后依赖的系统或流程。"],
+  [/SLA|服务等级|服务承诺/i, "SLA 可以理解为服务承诺，要写清失败时谁负责、多久恢复。"],
+  [/接口|API/i, "接口可以理解为系统之间的对接方式，要写清谁调用谁、传什么、返回什么。"],
+  [/并发|重复提交/i, "并发是多人或多个请求同时发生，要写清重复提交、重复处理时的规则。"],
+  [/回调/i, "回调是别的系统处理完后再通知回来，要写清触发时机、成功和失败口径。"],
+  [/缓存/i, "缓存是临时保存旧结果来提速，要写清什么时候更新、什么时候失效。"],
+  [/DDL|表结构|数据表/i, "DDL 可以理解为数据表结构，要写清字段、类型和约束。"],
+  [/枚举|enum/i, "枚举就是可选值清单，要写清每个值代表什么。"],
+  [/幂等/i, "幂等是重复操作结果要一致，要写清重复提交怎么处理。"],
+  [/异步/i, "异步表示不会马上完成，要写清等待、成功和失败状态。"],
+  [/降级/i, "降级是服务异常时的替代方案，要写清用户看到什么、业务怎么兜底。"],
+  [/重试/i, "重试是失败后是否自动再试，要写清次数、间隔和最终失败提示。"],
+  [/权限|无权限/i, "权限要写清谁能看、谁能改、无权限时怎么提示。"],
+  [/P99|QPS|容量|限流|熔断/i, "P99、QPS、限流和熔断都可以先理解为高峰期能不能扛住、流量太大时怎么保护服务，PRD 要写清触发条件和用户提示。"],
+  [/队列|积压|排队/i, "队列积压表示异步任务排队太多时怎么处理，要写清等待提示、处理顺序和超时兜底。"],
+  [/补偿|补偿任务/i, "补偿任务是失败后怎么补救，要写清谁触发、补哪一步、补失败后怎么处理。"],
+  [/脱敏|审计|留痕|白名单|黑名单/i, "脱敏、审计和名单规则都关系到哪些字段不能直接展示或外发，PRD 要写清适用对象和例外情况。"],
 ] as const;
 
 export function formatReviewModeLabel(mode: string | undefined): string {
@@ -288,6 +338,66 @@ export function buildPmView(result: ReviewResult): PmView {
     engineering_items: engineeringItems,
     default_view: "pm",
   };
+}
+
+export function explainReviewItemForPm(item: ReviewItem): PmItemExplanation {
+  const dimKey = normalizeDimensionKey(item.dimension);
+  const severity = severityOf(item);
+  const fallbackNextStep =
+    severity === "must"
+      ? PM_NEXT_STEPS.must
+      : severity === "should"
+        ? PM_NEXT_STEPS.should
+        : PM_NEXT_STEPS.suggest;
+
+  const suggestion = stringValue(item.suggestion);
+  const isEngineeringContext = isEngineeringItem(item);
+  return {
+    plain_language_summary: plainLanguageSummary(item, dimKey, severity),
+    pm_question: PM_QUESTIONS[dimKey],
+    suggested_next_step: isEngineeringContext
+      ? "如果 PRD 不需要限定这件事，可以驳回为「实现细节」；如果会影响验收，请补充到 PRD。"
+      : suggestion
+        ? `${fallbackNextStep} ${suggestion}`
+        : fallbackNextStep,
+    why_it_matters: DIMENSION_IMPACT[dimKey],
+    detail_label: isEngineeringContext ? "偏研发细节" : "PM 可处理",
+    is_engineering_context: isEngineeringContext,
+  };
+}
+
+function plainLanguageSummary(
+  item: ReviewItem,
+  dimKey: RoleKey,
+  severity: string,
+): string {
+  const withHint = (summary: string) => withGlossaryHint(summary, item);
+  if (dimKey === "ai_coding") {
+    return withHint("这条先不用当成研发方案来看，它是在提醒：这里可能需要 PM 明确边界，否则研发会自己猜。");
+  }
+  if (dimKey === "data_quality") {
+    return withHint("这条主要在问：字段从哪里来、怎么填、错了怎么办，PRD 里是否已经说清。");
+  }
+  if (dimKey === "quality") {
+    return withHint("这条主要在问：真实用户或测试同事走到这个场景时，能不能知道下一步和验收结果。");
+  }
+  if (dimKey === "structure") {
+    return withHint("这条主要在问：目标、范围、流程和验收是不是足够完整，能不能直接给研发排期。");
+  }
+  if (severity === "must") {
+    return withHint("这条属于优先确认项：不处理可能影响研发理解、测试验收或后续交付。");
+  }
+  return withHint("这条是一个补充提醒：先判断它是否会影响本次交付，再决定接受、驳回或改写。");
+}
+
+function withGlossaryHint(summary: string, item: ReviewItem): string {
+  const text = itemText(item);
+  const hints = PM_GLOSSARY_HINTS
+    .filter(([pattern]) => pattern.test(text))
+    .map(([, hint]) => hint)
+    .slice(0, 4);
+  if (hints.length === 0) return summary;
+  return `${summary} 术语翻译：${hints.join(" ")}`;
 }
 
 export function buildTestabilitySummary(result: ReviewResult): TestabilitySummary {

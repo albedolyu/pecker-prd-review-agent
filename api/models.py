@@ -107,6 +107,7 @@ class ReviewResult(BaseModel):
     workers: List[ReviewWorkerInfo] = Field(default_factory=list)
     usage: Dict[str, int] = Field(default_factory=dict)
     goshawk_summary: Optional[Dict[str, Any]] = None
+    telemetry: Optional[Dict[str, Any]] = Field(default=None, description="运行诊断信息,供后台看板和超时复盘使用")
     cost_breakdown: Optional[Dict[str, float]] = Field(default=None, description="各维度成本归因 USD")
 
     # Opaque handle signature — 前端任何改动都会让 verify 失败
@@ -124,6 +125,7 @@ class ReviewResult(BaseModel):
         usage: Dict[str, int],
         goshawk_summary: Optional[Dict[str, Any]] = None,
         cost_breakdown: Optional[Dict[str, float]] = None,
+        telemetry: Optional[Dict[str, Any]] = None,
     ) -> "ReviewResult":
         """后端评审完成后调用,自动生成 review_id + signature。"""
         import uuid
@@ -155,6 +157,7 @@ class ReviewResult(BaseModel):
             usage=usage,
             goshawk_summary=goshawk_summary,
             cost_breakdown=cost_breakdown,
+            telemetry=telemetry,
             signature=sig,
         )
 

@@ -41,6 +41,7 @@ class DraftPayload(BaseModel):
     phase: int = Field(..., ge=0, le=4)
     prd_name: str = ""
     prd_content: str = ""
+    mode: str = Field("standard", pattern="^(standard|quick)$")
     raw_materials: list[str] = Field(default_factory=list)
     user_notes: str = ""
     review_result: Optional[Dict[str, Any]] = None
@@ -66,6 +67,54 @@ def _safe_reviewer(reviewer: str) -> str:
 
 def _draft_path(project_root: Path, reviewer: str) -> Path:
     return _draft_dir(project_root) / f"{_safe_reviewer(reviewer)}_draft.json"
+
+
+def write_draft_file(
+    project_root: Path,
+    reviewer: str,
+    payload: DraftPayload,
+) -> Dict[str, str]:
+    """Atomically write a review draft without FastAPI dependency injection."""
+    path = _draft_path(project_root, reviewer)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    draft = {
+        "ts": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+        "reviewer": reviewer,
+        **payload.model_dump(),
+    }
+
+    fd, tmp = tempfile.mkstemp(
+        prefix=".draft_",
+        suffix=".tmp",
+        dir=str(path.parent),
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(draft, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)
+    except Exception:
+        if os.path.exists(tmp):
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+        raise
+
+    return {"status": "ok", "path": str(path.name), "ts": draft["ts"]}
+
+
+def read_draft_file(project_root: Path, reviewer: str) -> Optional[Dict[str, Any]]:
+    """Read a draft from disk for internal recovery flows."""
+    path = _draft_path(project_root, reviewer)
+    if not path.is_file():
+        return None
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
 
 
 @router.get("/drafts/{reviewer}")
@@ -112,33 +161,7 @@ async def save_draft(
 ):
     """保存/覆盖草稿。原子写 (tempfile + os.replace)。"""
     _require_self_or_admin(user, reviewer)
-    path = _draft_path(project_root, reviewer)
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    draft = {
-        "ts": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
-        "reviewer": reviewer,
-        **payload.model_dump(),
-    }
-
-    fd, tmp = tempfile.mkstemp(
-        prefix=".draft_",
-        suffix=".tmp",
-        dir=str(path.parent),
-    )
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(draft, f, ensure_ascii=False, indent=2)
-        os.replace(tmp, path)
-    except Exception:
-        if os.path.exists(tmp):
-            try:
-                os.unlink(tmp)
-            except OSError:
-                pass
-        raise
-
-    return {"status": "ok", "path": str(path.name), "ts": draft["ts"]}
+    return write_draft_file(project_root, reviewer, payload)
 
 
 @router.delete("/drafts/{reviewer}")

@@ -210,13 +210,22 @@ def test_ground_truth_saves_true_positive_flag(tmp_workspace, monkeypatch, tmp_p
         "R-003": {"action": "edit"},    # true positive (edit 也算)
     }
 
-    _save_eval_ground_truth(items, decisions, ws, reviewer="tester")
+    _save_eval_ground_truth(
+        items,
+        decisions,
+        ws,
+        reviewer="tester",
+        prd_name="单测 PRD.md",
+        review_id="run-test",
+    )
 
     gt_dir = tmp_path / "eval" / "ground_truth"
     gt_files = list(gt_dir.glob("*.json"))
     assert len(gt_files) == 1, "应生成一个 ground_truth 文件"
     payload = json.loads(gt_files[0].read_text(encoding="utf-8"))
     assert payload["reviewer"] == "tester"
+    assert payload["prd_name"] == "单测 PRD.md"
+    assert payload["review_id"] == "run-test"
     # rtest 会被去掉 workspace- 前缀
     assert "rtest" in payload["workspace"] or payload["workspace"] == ws
     assert len(payload["items"]) == 3
@@ -224,6 +233,7 @@ def test_ground_truth_saves_true_positive_flag(tmp_workspace, monkeypatch, tmp_p
     assert tp_map["R-001"] is True
     assert tp_map["R-002"] is False
     assert tp_map["R-003"] is True
+    assert all("dimension" in it for it in payload["items"])
 
 
 def test_ground_truth_empty_decisions_does_nothing(tmp_workspace, tmp_path):

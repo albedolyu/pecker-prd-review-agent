@@ -160,6 +160,9 @@ class DeepSeekNativeClient:
         oai_tc = self._to_openai_tool_choice(tool_choice)
         if oai_tc is not None:
             kwargs["tool_choice"] = oai_tc
+        thinking_mode = self._thinking_mode_for_request(model, bool(oai_tools))
+        if thinking_mode:
+            kwargs["extra_body"] = {"thinking": {"type": thinking_mode}}
 
         req_id = _gen_req_id()
         tool_hint = (tools[0]["name"] if tools and isinstance(tools[0], dict) else "none")
@@ -269,3 +272,36 @@ class DeepSeekNativeClient:
             pass
 
         return unified
+
+    @staticmethod
+    def _thinking_mode_for_request(model, has_tools):
+        """Select DeepSeek V4 thinking mode.
+
+        DeepSeek V4 Pro may route to the reasoner path by default. That path is
+        useful for free-form review, but it rejects tool_choice, which Pecker
+        workers require for structured review items. Keep plain calls unchanged
+        and force non-thinking only for V4 tool-call requests unless explicitly
+        overridden.
+        """
+        raw = os.environ.get("DEEPSEEK_THINKING_MODE", "").strip().lower()
+        aliases = {
+            "on": "enabled",
+            "true": "enabled",
+            "1": "enabled",
+            "off": "disabled",
+            "false": "disabled",
+            "0": "disabled",
+        }
+        if raw in aliases:
+            return aliases[raw]
+        if raw in {"enabled", "disabled"}:
+            return raw
+        if raw and raw != "auto":
+            from logger import get_logger
+            get_logger("api").warning(
+                f"DEEPSEEK_THINKING_MODE={raw!r} is invalid; using auto"
+            )
+
+        if has_tools and str(model).lower().startswith("deepseek-v4-"):
+            return "disabled"
+        return None

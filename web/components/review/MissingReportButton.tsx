@@ -8,7 +8,7 @@
  * 2. 对应 PRD 段落 / 位置
  * 3. 应该归哪只鸟(1-5 · worker + 苍鹰)
  *
- * 提交后通过 onSubmit 回调外送(后端归因库接口待 Sprint 5,先通过 console/localStorage 占位)。
+ * 提交后通过 onSubmit 回调外送；当前正式入口会写入后端 PM 补充线索日志。
  *
  * 按钮常驻 Phase 3/4 底部。Modal 关闭后保持表单草稿(关掉也能回来继续写)。
  */

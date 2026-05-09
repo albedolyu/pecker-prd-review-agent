@@ -15,12 +15,12 @@ test("bird portraits visible on /about", async ({ page }, testInfo) => {
   });
 });
 
-test("bird portraits visible on /v8-preview", async ({ page }, testInfo) => {
+test("bird portraits visible in demo review flow", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/v8-preview", { waitUntil: "networkidle" });
+  await page.goto("/review?demo=1", { waitUntil: "networkidle" });
   await page.waitForTimeout(500);
   await page.screenshot({
-    path: testInfo.outputPath("v8-preview-1440px.png"),
+    path: testInfo.outputPath("review-demo-1440px.png"),
     fullPage: true,
   });
 });

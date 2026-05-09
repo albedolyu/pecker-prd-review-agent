@@ -75,6 +75,7 @@ def _prepare_worker_context(
     wiki_budget_chars: Optional[int] = None,
     route_model_override: Optional[str] = None,
     recovery_mode: bool = False,
+    prd_context_packet: Optional[str] = None,
 ) -> Dict[str, Any]:
     """构建单 worker 所需的上下文: dim 配置 / model 选择 / system+messages /
     维度约束后的 tool schema / cache monitor / 各种 hash 指纹.
@@ -125,6 +126,7 @@ def _prepare_worker_context(
         on_wiki_selection=_capture_wiki_selection,
         wiki_budget_chars=wiki_budget_chars,
         recovery_mode=recovery_mode,
+        prd_context_packet=prd_context_packet,
     )
 
     # system prompt 分静态/动态两段(CC DYNAMIC_BOUNDARY 模式), 静态段打 cache_control
@@ -177,6 +179,7 @@ def _prepare_worker_context(
         "dim_constrained_tool": dim_constrained_tool,
         "cache_monitor": cache_monitor,
         "wiki_selection_telemetry": wiki_selection_telemetry,
+        "prd_context_packet_chars": len(prd_context_packet or ""),
     }
 
 
@@ -536,6 +539,7 @@ def _worker_core(
     wiki_budget_chars=None,
     route_model_override=None,
     recovery_mode=False,
+    prd_context_packet=None,
 ) -> WorkerResult:
     """Worker 核心逻辑（sync），返回首次 API 响应和处理后的 items 列表。
     async 版本通过 run_in_executor 包装此函数。
@@ -570,6 +574,7 @@ def _worker_core(
             wiki_budget_chars=wiki_budget_chars,
             route_model_override=route_model_override,
             recovery_mode=recovery_mode,
+            prd_context_packet=prd_context_packet,
         )
     except Exception as _ctx_err:
         try:
@@ -794,6 +799,7 @@ def _worker_core(
         "empty_submission_confirmed": empty_submission_confirmed,
         "empty_submission_reason": empty_submission_reason[:300],
         "wiki_selection": wiki_selection_telemetry,
+        "prd_context_packet_chars": ctx.get("prd_context_packet_chars", 0),
         # 2026-04-28 P1 anti-corruption drop: LLM 出未知 rule_id 数 (任务 2 R3 暴露)
         "dropped_unknown_rule_count": drop_telemetry["dropped_unknown_rule_count"],
         "dropped_unknown_rule_ids": drop_telemetry["dropped_unknown_rule_ids"],
@@ -864,6 +870,22 @@ async def _run_worker_async(
         wiki_pages=wiki_pages,
         recovery_mode=recovery_mode,
     )
+    from review.prd_context import (
+        build_prd_context_packet,
+        prd_context_packet_budget,
+        should_use_prd_context_packet,
+    )
+    prd_context_packet = None
+    if should_use_prd_context_packet(
+        prd_content,
+        wiki_pages,
+        recovery_mode=recovery_mode,
+    ):
+        prd_context_packet = build_prd_context_packet(
+            prd_content,
+            dim_key=dim_key,
+            max_chars=prd_context_packet_budget(recovery_mode=recovery_mode),
+        )
     route_model_override = choose_worker_model_override(
         dim_key,
         prd_content=prd_content,
@@ -890,6 +912,7 @@ async def _run_worker_async(
                     wiki_budget_chars=wiki_budget_chars,
                     route_model_override=route_model_override,
                     recovery_mode=recovery_mode,
+                    prd_context_packet=prd_context_packet,
                 ),
             ),
             timeout=timeout_s,

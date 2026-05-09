@@ -146,10 +146,15 @@ class OpenAINativeClient:
 
     @staticmethod
     def _is_transient_error(exc: Exception) -> bool:
-        transient_codes = {408, 409, 425, 429, 500, 502, 503, 504, 520, 522, 524}
+        transient_codes = {408, 409, 425, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524}
+        retry_auth_401 = OpenAINativeClient._env_bool("PECKER_RETRY_INTERMITTENT_AUTH_401") or OpenAINativeClient._env_bool(
+            "OPENAI_RETRY_INTERMITTENT_AUTH_401"
+        )
         for attr in ("status_code", "status", "code"):
             value = getattr(exc, attr, None)
             try:
+                if int(value) == 401 and retry_auth_401:
+                    return True
                 if int(value) in transient_codes:
                     return True
             except (TypeError, ValueError):
@@ -157,11 +162,15 @@ class OpenAINativeClient:
         response = getattr(exc, "response", None)
         value = getattr(response, "status_code", None) if response is not None else None
         try:
+            if int(value) == 401 and retry_auth_401:
+                return True
             if int(value) in transient_codes:
                 return True
         except (TypeError, ValueError):
             pass
         message = str(exc).lower()
+        if retry_auth_401 and ("invalid_api_key" in message or "invalid api key" in message):
+            return True
         return any(
             marker in message
             for marker in (

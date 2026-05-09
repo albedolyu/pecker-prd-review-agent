@@ -293,7 +293,7 @@ function DemoReport() {
         </div>
       </div>
       <div style={{ ...cardStyle, marginTop: 16 }}>
-        <div style={eyebrowStyle}>Markdown 预览</div>
+        <div style={eyebrowStyle}>报告预览</div>
         <pre style={prdPreviewStyle}>{DEMO_REPORT_MARKDOWN}</pre>
       </div>
     </main>

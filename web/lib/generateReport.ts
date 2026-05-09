@@ -30,6 +30,7 @@ import type {
   ReviewItem,
   ReviewResult,
 } from "./api";
+import { explainReviewItemForPm } from "./pm-friendly";
 
 /**
  * 7 类 reject reason 的报告显示标签 — 与 Phase3ConfirmV8 REJECT_CATEGORIES 一致.
@@ -39,10 +40,10 @@ const REJECT_CATEGORY_LABELS: Record<RejectReason, string> = {
   good_issue: "实际是好问题(手滑点错)",
   false_positive: "误报",
   known_tradeoff: "已知取舍, 不改",
-  wiki_missing: "知识库缺失",
+  wiki_missing: "资料库缺背景",
   rule_too_strict: "规则太严",
   impl_detail: "实现细节, 不该 PRD 管",
-  model_noise: "模型噪音",
+  model_noise: "判断不准",
 };
 
 export interface ReportStats {
@@ -121,6 +122,7 @@ export function computeStats(
 export function generateReportMarkdown(
   result: ReviewResult,
   decisions: Record<string, ItemDecision>,
+  options: { includeMaintenanceDetails?: boolean } = {},
 ): string {
   const stats = computeStats(result, decisions);
   const createdAt = new Date(result.created_at * 1000).toLocaleString("zh-CN", {
@@ -131,25 +133,25 @@ export function generateReportMarkdown(
   lines.push(`# PRD 评审报告 - ${result.prd_name}`);
   lines.push("");
   lines.push(`> **评审人**: ${result.reviewer}  `);
-  lines.push(`> **Workspace**: ${result.workspace}  `);
-  lines.push(`> **模式**: ${result.mode}  `);
+  lines.push(`> **资料库**: ${formatWorkspaceName(result.workspace)}  `);
+  lines.push(`> **评审模式**: ${formatReviewMode(result.mode)}  `);
   lines.push(`> **生成时间**: ${createdAt}  `);
-  lines.push(`> **Review ID**: \`${result.review_id}\``);
+  lines.push(`> **追踪编号**: \`${result.review_id}\``);
   lines.push("");
 
   // ===== 概要 =====
   lines.push("## 评审概要");
   lines.push("");
-  lines.push(`- **啄伤度**: **${stats.peckScore} / 100** (${stats.peckLabel})`);
+  lines.push(`- **需改强度**: **${stats.peckScore} / 100** (${stats.peckLabel})`);
   lines.push(`- **改进项**: ${stats.total} 条`);
   lines.push(
-    `- **决策**: 接受 ${stats.accepted} · 改写 ${stats.edited} · 拒绝 ${stats.rejected} · 待决 ${stats.pending}`,
+    `- **决策**: 采纳 ${stats.accepted} · 改写 ${stats.edited} · 驳回 ${stats.rejected} · 待确认 ${stats.pending}`,
   );
   if (result.workers.length > 0) {
     const workerSummary = result.workers
       .map((w) => `${w.dimension_name} ${w.items_count}`)
       .join(" · ");
-    lines.push(`- **worker 贡献**: ${workerSummary}`);
+    lines.push(`- **各方向提交**: ${workerSummary}`);
   }
   if (result.goshawk_summary) {
     const fp = (result.goshawk_summary["flagged_as_false_positive"] as unknown[] | undefined)?.length ?? 0;
@@ -182,41 +184,51 @@ export function generateReportMarkdown(
       const action = d?.action ?? "pending";
       const actionTag =
         action === "accept"
-          ? "✅ 已接受"
+          ? "✅ 已采纳"
           : action === "edit"
             ? "✏️ 已改写"
             : action === "reject"
-              ? "❌ 已拒绝"
-              : "⏳ 待决";
+              ? "❌ 已驳回"
+              : "⏳ 待确认";
       const severity = formatSeverity(item.severity);
 
-      lines.push(`### ${idx + 1}. ${item.id ?? "-"} ${severity} ${actionTag}`);
+      lines.push(`### ${idx + 1}. ${severity} ${actionTag}`.replace(/\s+/g, " ").trim());
       lines.push("");
       if (item.location) lines.push(`- **位置**: ${item.location}`);
       // 改写态:显示改写后的问题;否则显示原始
       if (action === "edit" && d?.edited_problem) {
         lines.push(`- **问题(改写后)**: ${d.edited_problem}`);
         if (item.problem) {
-          lines.push(`  - 原始: ${item.problem}`);
+          lines.push(`  - 原意见: ${item.problem}`);
         }
       } else if (item.problem) {
         lines.push(`- **问题**: ${item.problem}`);
       }
       if (item.evidence) lines.push(`- **依据**: ${item.evidence}`);
       if (item.suggestion) lines.push(`- **建议**: ${item.suggestion}`);
+      const pmExplanation = explainReviewItemForPm(item);
+      if (pmExplanation.plain_language_summary) {
+        lines.push(`- **PM 处理提示**: ${pmExplanation.plain_language_summary}`);
+      }
+      if (pmExplanation.pm_question) {
+        lines.push(`- **PM 需要判断**: ${pmExplanation.pm_question}`);
+      }
+      if (pmExplanation.suggested_next_step) {
+        lines.push(`- **建议动作**: ${pmExplanation.suggested_next_step}`);
+      }
       if (action === "reject") {
         // P0 step 2 (2026-04-28): 报告里区分 7 类 reason_category + 自由文本备注
         // 老版本只有 reason 自由文本, 现在带 category label 让读报告的人知道驳因归类
         const cat = d?.reason_category;
         if (cat) {
-          lines.push(`- **拒绝原因**: ${REJECT_CATEGORY_LABELS[cat] ?? cat}`);
+          lines.push(`- **驳回原因**: ${REJECT_CATEGORY_LABELS[cat] ?? cat}`);
         }
         if (d?.reason) {
           lines.push(`- **驳回备注**: ${d.reason}`);
         }
       }
       if (typeof item.confidence === "number") {
-        lines.push(`- **置信度**: ${(item.confidence * 100).toFixed(0)}%`);
+        lines.push(`- **参考程度**: ${formatConfidenceLabel(item.confidence)}`);
       }
       lines.push("");
     });
@@ -226,33 +238,34 @@ export function generateReportMarkdown(
   if (result.items.length === 0) {
     lines.push("## 改进项");
     lines.push("");
-    lines.push("> 本次评审**没有发现问题**。PRD 结构清晰、逻辑自洽、技术约定完整。");
+    lines.push("> 本次评审**没有发现问题**。PRD 结构清晰、逻辑自洽、实现边界清楚。");
     lines.push("");
   }
 
-  // ===== 原始 JSON(便于后续 eval) =====
-  lines.push("---");
-  lines.push("");
-  lines.push("<details>");
-  lines.push("<summary>原始 Opaque Handle(调试用)</summary>");
-  lines.push("");
-  lines.push("```json");
-  lines.push(
-    JSON.stringify(
-      {
-        review_id: result.review_id,
-        signature: result.signature,
-        items_count: result.items.length,
-        usage: result.usage,
-      },
-      null,
-      2,
-    ),
-  );
-  lines.push("```");
-  lines.push("");
-  lines.push("</details>");
-  lines.push("");
+  if (options.includeMaintenanceDetails) {
+    // ===== 维护人处理记录(默认不放入 PM 下载报告) =====
+    lines.push("---");
+    lines.push("");
+    lines.push("<details>");
+    lines.push("<summary>维护人处理记录</summary>");
+    lines.push("");
+    lines.push("```json");
+    lines.push(
+      JSON.stringify(
+        {
+          review_id: result.review_id,
+          items_count: result.items.length,
+          usage: result.usage,
+        },
+        null,
+        2,
+      ),
+    );
+    lines.push("```");
+    lines.push("");
+    lines.push("</details>");
+    lines.push("");
+  }
 
   return lines.join("\n");
 }
@@ -278,7 +291,7 @@ export function generateRevisionAdviceMarkdown(
   lines.push("");
   lines.push(`> ${SENSITIVE_WATERMARK}  `);
   lines.push(`> **生成时间**: ${createdAt}  `);
-  lines.push(`> **Review ID**: \`${result.review_id}\`  `);
+  lines.push(`> **追踪编号**: \`${result.review_id}\`  `);
   lines.push(`> **说明**: 只收录 PM 已确认采纳或改写的建议；被驳回项不进入本包。`);
   lines.push("");
   lines.push("## 使用方式");
@@ -299,20 +312,20 @@ export function generateRevisionAdviceMarkdown(
   applicableItems.forEach((item, idx) => {
     const decision = decisions[item.id];
     const actionLabel = decision?.action === "edit" ? "PM 改写后采纳" : "确认采纳";
-    lines.push(`### ${idx + 1}. ${item.id} · ${actionLabel}`);
+    lines.push(`### ${idx + 1}. ${actionLabel}`);
     lines.push("");
     if (item.location) lines.push(`- **建议落点**: ${item.location}`);
     if (item.severity) lines.push(`- **优先级**: ${formatSeverity(item.severity).replaceAll("*", "")}`);
     if (decision?.action === "edit" && decision.edited_problem) {
       lines.push(`- **PM 修订后的问题描述**: ${decision.edited_problem}`);
-      if (item.problem) lines.push(`- **原始评审问题**: ${item.problem}`);
+      if (item.problem) lines.push(`- **原意见**: ${item.problem}`);
     } else if (item.problem) {
       lines.push(`- **问题**: ${item.problem}`);
     }
     if (item.evidence) lines.push(`- **依据**: ${item.evidence}`);
     if (item.suggestion) lines.push(`- **建议改法**: ${item.suggestion}`);
     if (typeof item.confidence === "number") {
-      lines.push(`- **置信度**: ${(item.confidence * 100).toFixed(0)}%`);
+      lines.push(`- **参考程度**: ${formatConfidenceLabel(item.confidence)}`);
     }
     lines.push("");
   });
@@ -340,7 +353,7 @@ export function generateRevisionDraftMarkdown(
   lines.push("");
   lines.push(`> ${SENSITIVE_WATERMARK}  `);
   lines.push(`> **生成时间**: ${createdAt}  `);
-  lines.push(`> **Review ID**: \`${result.review_id}\`  `);
+  lines.push(`> **追踪编号**: \`${result.review_id}\`  `);
   lines.push("> **重要说明**: 本文件没有覆盖原文事实。正文保持原 PRD 内容,附录列出 PM 已确认的修订建议。");
   lines.push("");
   lines.push("## 原 PRD 正文");
@@ -376,4 +389,20 @@ function formatSeverity(sev?: string): string {
   if (sev === "should") return "**[建议]**";
   if (sev === "suggest") return "[参考]";
   return `[${sev}]`;
+}
+
+function formatWorkspaceName(workspace: string): string {
+  return (workspace || "未选资料库").replace(/^workspace-/, "");
+}
+
+function formatReviewMode(mode: string): string {
+  if (mode === "quick") return "轻评审";
+  if (mode === "standard") return "深评审";
+  return mode || "未标明";
+}
+
+function formatConfidenceLabel(value: number): string {
+  if (value >= 0.85) return "依据充分";
+  if (value >= 0.7) return "可参考";
+  return "需再核对";
 }

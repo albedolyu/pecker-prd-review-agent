@@ -19,6 +19,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
 
+from api.sanitize import redact_sensitive, redact_text
 from logger import get_logger
 
 log = get_logger("sse_stream")
@@ -30,9 +31,10 @@ log = get_logger("sse_stream")
 
 MILESTONES = {
     "uploaded":              {"progress": 0,   "label": "已接收"},
-    "wiki_scanned":          {"progress": 10,  "label": "wiki 扫描完成"},
+    "wiki_scanned":          {"progress": 10,  "label": "资料库读取完成"},
+    "review_queued":         {"progress": 12,  "label": "等待空闲评审位"},
     "workers_started":       {"progress": 15,  "label": "评审启动"},
-    "worker_done":           {"progress": None, "label": "worker 完成"},  # 动态 15→70
+    "worker_done":           {"progress": None, "label": "评审方向完成"},  # 动态 15→70
     "final_reviewer_started":{"progress": 70,  "label": "终审开始"},
     "final_reviewer_done":   {"progress": 95,  "label": "终审完成"},
     "result":                {"progress": 100, "label": "完成"},
@@ -41,13 +43,13 @@ MILESTONES = {
     # 但显式登记后前端 useReviewStream 能在 union type 里识别, dashboard
     # 可以根据 event 名挂面板而不是按 progress% 跳站.
     # 七位 telemetry event 对应 review/funnel_telemetry.py 各 compute_* + evidence_verify_done 升级.
-    "funnel_stage_worker_raw":            {"progress": None, "label": "N0 worker 原始产出"},
-    "funnel_stage_after_dedup":           {"progress": None, "label": "N1 去重后"},
-    "funnel_stage_after_evidence_verify": {"progress": None, "label": "N2 evidence verify 后"},
-    "funnel_stage_after_goshawk":         {"progress": None, "label": "N3 苍鹰终审后"},
-    "funnel_stage_after_pm_decision":     {"progress": None, "label": "N4 PM 决策后"},
-    "funnel_summary":                     {"progress": None, "label": "漏斗汇总"},
-    "evidence_verify_done":               {"progress": None, "label": "evidence verify 完成"},
+    "funnel_stage_worker_raw":            {"progress": None, "label": "初步意见已汇总"},
+    "funnel_stage_after_dedup":           {"progress": None, "label": "重复意见已合并"},
+    "funnel_stage_after_evidence_verify": {"progress": None, "label": "依据校验完成"},
+    "funnel_stage_after_goshawk":         {"progress": None, "label": "交叉校验完成"},
+    "funnel_stage_after_pm_decision":     {"progress": None, "label": "PM 决策已记录"},
+    "funnel_summary":                     {"progress": None, "label": "处理结果汇总"},
+    "evidence_verify_done":               {"progress": None, "label": "依据校验完成"},
 }
 
 # 每个 worker 占 (70 - 15) / 4 = 13.75%,从 15% 递增到 70%
@@ -87,7 +89,7 @@ class ReviewProgressEmitter:
             "event": event,
             "progress": milestone.get("progress"),
             "label": milestone.get("label"),
-            **(data or {}),
+            **redact_sensitive(data or {}),
         }
         try:
             self.queue.put_nowait(payload)
@@ -106,14 +108,14 @@ class ReviewProgressEmitter:
         payload = {
             "event": "worker_done",
             "progress": progress,
-            "label": f"worker {self._workers_done_count}/4 完成",
+            "label": f"评审方向 {self._workers_done_count}/4 完成",
             "dim_key": dim_key,
             "success": "error" not in result,
             "items_count": len(result.get("items", [])) if "items" not in ("error",) else 0,
             "dim_name": result.get("dimension_name", dim_key),
         }
         if "error" in result:
-            payload["error"] = str(result["error"])[:200]
+            payload["error"] = redact_text(str(result["error"]))[:200]
         else:
             payload["items_count"] = len(result.get("items", []))
         # 3b: 透传 worker telemetry (duration_ms, tokens, cost, degraded 等)
@@ -126,7 +128,7 @@ class ReviewProgressEmitter:
 
     def emit_error(self, error: str):
         """主任务失败时调用,触发前端显示错误状态。"""
-        self.emit("error", data={"message": str(error)[:500]})
+        self.emit("error", data={"message": redact_text(str(error))[:500]})
 
     def close(self):
         """结束流,SSE generator 会收到 sentinel 后退出。"""
@@ -235,4 +237,4 @@ async def sse_review_pipeline(
                 pass  # 取消是预期路径, 不用日志
             except Exception as e:
                 # 主评审 task 异常结束 — 保留运维可见性, 不吞错
-                log.warning(f"SSE pipeline 主任务异常: {type(e).__name__}: {str(e)[:100]}")
+                log.warning(f"SSE pipeline 主任务异常: {type(e).__name__}: {redact_text(str(e))[:100]}")

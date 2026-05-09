@@ -11,6 +11,7 @@ asyncio.iscoroutine() + await 做 runtime dispatch, 兼容 sync 测试 lambda �
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import sys
 
@@ -19,6 +20,34 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from api.stream import ReviewProgressEmitter, sse_review_pipeline
+
+
+def test_stream_labels_are_pm_facing():
+    from api.stream import MILESTONES
+
+    assert "wiki" not in MILESTONES["wiki_scanned"]["label"].lower()
+    assert "worker" not in MILESTONES["worker_done"]["label"].lower()
+
+    emitter = ReviewProgressEmitter()
+    emitter.emit_worker_done("structure", {"dimension_name": "业务", "items": []})
+    payload = emitter.queue.get_nowait()
+
+    assert payload["label"] == "评审方向 1/4 完成"
+    assert "worker" not in payload["label"].lower()
+
+
+def test_stream_redacts_secrets_from_public_errors():
+    fake_key = "sk-01234567890abcdefABCDEFghij"
+    emitter = ReviewProgressEmitter()
+
+    emitter.emit_worker_done("quality", {"error": f"provider rejected {fake_key}"})
+    worker_payload = emitter.queue.get_nowait()
+    emitter.emit_error(f"upstream leaked Bearer {fake_key}")
+    error_payload = emitter.queue.get_nowait()
+
+    serialized = json.dumps([worker_payload, error_payload], ensure_ascii=False)
+    assert fake_key not in serialized
+    assert "[REDACTED_SECRET]" in serialized
 
 
 async def _collect(gen, max_chunks=50):

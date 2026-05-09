@@ -214,6 +214,69 @@ def test_openai_native_client_retries_transient_524_on_next_key(monkeypatch):
     assert calls == ["key-a", "key-b"]
 
 
+def test_openai_native_client_treats_cloudflare_521_and_523_as_transient():
+    from clients.openai_native import OpenAINativeClient
+
+    for status_code in (521, 523):
+        exc = types.SimpleNamespace(status_code=status_code)
+
+        assert OpenAINativeClient._is_transient_error(exc) is True
+
+
+class _IntermittentAuth401Error(Exception):
+    status_code = 401
+
+
+class _IntermittentAuthResponses:
+    def __init__(self):
+        self.calls = 0
+
+    def create(self, **kwargs):
+        self.calls += 1
+        if self.calls == 1:
+            raise _IntermittentAuth401Error("Error code: 401 - {'code': 'INVALID_API_KEY'}")
+        usage = SimpleNamespace(input_tokens=1, output_tokens=1)
+        return SimpleNamespace(
+            output=[],
+            output_text="ok",
+            usage=usage,
+            model=kwargs["model"],
+            status="completed",
+        )
+
+
+def test_openai_native_client_can_retry_gateway_intermittent_401(monkeypatch):
+    from clients.openai_native import OpenAINativeClient
+
+    fake_responses = _IntermittentAuthResponses()
+    fake_client = types.SimpleNamespace(responses=fake_responses)
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_WIRE_API", "responses")
+    monkeypatch.setenv("OPENAI_WORKER_MAX_RETRIES", "1")
+    monkeypatch.setenv("PECKER_RETRY_INTERMITTENT_AUTH_401", "1")
+    monkeypatch.delenv("OPENAI_REASONING_EFFORT", raising=False)
+    monkeypatch.setattr("clients.openai_native.time.sleep", lambda _seconds: None)
+    monkeypatch.setattr(
+        OpenAINativeClient,
+        "_build_client",
+        lambda self, api_key, base_url: fake_client,
+    )
+
+    client = OpenAINativeClient()
+    resp = client.create(
+        model="gpt-5.4",
+        max_tokens=8,
+        system="system",
+        messages=[{"role": "user", "content": "hello"}],
+        retry_policy="worker",
+    )
+
+    assert resp.content[0].text == "ok"
+    assert resp.usage["attempts"] == 2
+    assert fake_responses.calls == 2
+
+
 def test_openai_native_client_accepts_chinese_colon_key_labels(monkeypatch):
     from clients.openai_native import OpenAINativeClient
 

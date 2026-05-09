@@ -31,6 +31,7 @@ import { toast } from "sonner";
 import { useReviewStore } from "@/lib/store";
 import { ROLES, WORKER_ROLE_KEYS, type RoleKey } from "@/lib/roles";
 import {
+  pmFacingReviewMessage,
   useReviewStream,
   type WorkerDoneEvent,
   type ReviewFailedEvent,
@@ -42,6 +43,10 @@ import { ProgressRail } from "@/components/ProgressRail";
 import { RoleCard, type RoleCardState } from "@/components/RoleCard";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  estimateReviewEtaHint,
+  estimateReviewEtaLabel,
+} from "@/lib/review-eta";
 
 export function Phase2Running() {
   // ========== store ==========
@@ -129,9 +134,8 @@ export function Phase2Running() {
     }
   }, [stream.state, stream.result, setReviewResult, setPhase]);
 
-  // ========== 派生:每个 worker 当前状态 ==========
-  // Phase G #1+#2: degraded 状态(JSON 解析失败重试无效 / timeout 触发空 fallback)
-  // 算 done 而非 error,因为 worker 仍然返了一个空块,流程能继续。视觉上和 done
+  // ========== 派生:每个评审方向当前状态 ==========
+  // degraded 状态表示该方向返回不完整但流程仍可继续。视觉上和 done
   // 区分,用浅琥珀边 + 警告 icon。
   const workerStates = useMemo(() => {
     const states = new Map<RoleKey, RoleCardState>();
@@ -193,9 +197,9 @@ export function Phase2Running() {
         const ev = e as WorkerDoneEvent;
         if (ev.error) m.set(ev.dim_key as RoleKey, ev.error);
         else if (ev.timeout)
-          m.set(ev.dim_key as RoleKey, "超时 - 走空兜底");
+          m.set(ev.dim_key as RoleKey, "评审响应过慢,本方向未完整返回");
         else if (ev.degraded)
-          m.set(ev.dim_key as RoleKey, "JSON 解析失败 + 重试无效");
+          m.set(ev.dim_key as RoleKey, "部分方向返回不完整");
       }
     }
     return m;
@@ -249,6 +253,14 @@ export function Phase2Running() {
       startReview();
     }, 50);
   };
+  const etaInput = {
+    mode,
+    prdContent,
+    rawMaterials,
+    wikiPageCount: Object.keys(wikiPages ?? {}).length,
+  };
+  const reviewEtaLabel = estimateReviewEtaLabel(etaInput);
+  const reviewEtaHint = estimateReviewEtaHint(etaInput);
 
   // ========== UI ==========
   return (
@@ -270,8 +282,8 @@ export function Phase2Running() {
         </h2>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
           {mode === "standard"
-            ? "严格模式 —— 4 位编辑并行审稿,终审合议后输出可确认条目。预计 90–150 秒。"
-            : "快速模式 —— 轻量走一遍,跳过终审。预计 40–60 秒。"}
+            ? `深评审 —— 四个方向并行检查,结果完整性确认后输出可处理意见。${reviewEtaLabel},${reviewEtaHint}。`
+            : `轻评审 —— 快速预检一轮,跳过结果完整性确认。${reviewEtaLabel},${reviewEtaHint}。`}
         </p>
       </header>
 
@@ -297,7 +309,7 @@ export function Phase2Running() {
           </h3>
           <span className="h-px flex-1 bg-border/70" />
           <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-            4 Workers
+            四个方向并行检查
           </span>
         </div>
         {/* 12-col 错位网格:头版头条占 7,其余 5/5/7,md:mt-8 / md:-mt-4 打破对齐 */}
@@ -407,36 +419,44 @@ export function Phase2Running() {
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>
-            {reviewFailedEvent?.reason === "quota_exhausted"
-              ? "评审额度不足"
-              : reviewFailedEvent
-                ? "评审失败 — 所有编辑都出错"
-                : "评审失败"}
+             {reviewFailedEvent?.reason === "quota_exhausted"
+               ? "评审额度不足"
+               : reviewFailedEvent
+                 ? "评审失败 — 所有评审方向都未完整返回"
+                 : "评审失败"}
           </AlertTitle>
           <AlertDescription>
             {reviewFailedEvent?.message ??
               stream.error ??
-              "未知错误,请重试或返回上一步"}
-            {reviewFailedEvent?.worker_errors &&
-              reviewFailedEvent.worker_errors.length > 0 && (
-                <ul className="mt-2 space-y-1 text-xs opacity-80">
-                  {reviewFailedEvent.worker_errors.map((we, i) => (
-                    <li key={i}>
-                      <span className="font-mono">{we.dim}</span>:{" "}
-                      {we.error.slice(0, 120)}
-                    </li>
-                  ))}
-                </ul>
-              )}
+              "未知错误,请重新评审或返回上一步"}
+             {reviewFailedEvent?.worker_errors &&
+                reviewFailedEvent.worker_errors.length > 0 && (
+                 <details className="mt-2 text-xs opacity-80">
+                   <summary className="cursor-pointer select-none">
+                     查看未完成方向
+                   </summary>
+                   <ul className="mt-2 space-y-1">
+                     {reviewFailedEvent.worker_errors.map((we, i) => (
+                       <li key={i}>
+                         <span>{formatFailureDimForPm(we.dim)}</span>:{" "}
+                         <span>{pmFacingReviewMessage(
+                           we.error,
+                           "该方向未完整返回,可以重新评审;连续失败时请联系工具负责人。",
+                         )}</span>
+                       </li>
+                     ))}
+                   </ul>
+                 </details>
+                )}
           </AlertDescription>
         </Alert>
       )}
 
-      {/* ========== 降级态(部分 worker 失败但未 abort) ========== */}
+      {/* ========== 降级态(部分方向未完整返回但未中断) ========== */}
       {stream.state !== "error" && reviewDegradedEvent && (
         <Alert>
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>部分编辑失败,建议重试</AlertTitle>
+          <AlertTitle>部分方向未完整返回,建议重新评审</AlertTitle>
           <AlertDescription>
             {reviewDegradedEvent.message}
           </AlertDescription>
@@ -488,4 +508,9 @@ function formatElapsed(sec: number): string {
   const m = Math.floor(sec / 60);
   const s = sec % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function formatFailureDimForPm(dim: string): string {
+  const role = ROLES[dim as RoleKey];
+  return role?.label || dim || "未知方向";
 }

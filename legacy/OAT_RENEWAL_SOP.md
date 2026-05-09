@@ -163,7 +163,7 @@ OAT 续期是订阅制本质上的痛，长期方案：
 
 - [ ] 找 Anthropic 谈 long-lived token / Enterprise plan（可能要换合同）
 - [ ] 找 OpenAI 谈 codex 的同等方案
-- [ ] **或迁到真 API key**：`ANTHROPIC_API_KEY=sk-ant-api03-...` + `OPENAI_API_KEY=sk-proj-...`（按量付费，公司账户出钱，**不再有 OAT 续期问题**）
+- [ ] **或迁到真 API key**：`ANTHROPIC_API_KEY=[REDACTED]` + `OPENAI_API_KEY=[REDACTED]`（按量付费，公司账户出钱，**不再有 OAT 续期问题**）
 - [ ] 备份方案 deepseek-flash（已部分支持，方案 1 即此）
 
 > 决策权在 [TODO 业务负责人]，按月度成本和稳定性 trade-off 决定。

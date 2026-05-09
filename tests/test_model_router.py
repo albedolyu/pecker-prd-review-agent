@@ -81,6 +81,27 @@ class FakeFailingClient:
         raise RuntimeError("simulated client failure")
 
 
+class FakeTransientFailingClient:
+    def create(self, *a, **kw):
+        raise TimeoutError("Request timed out.")
+
+
+class FakeGateway524FailingClient:
+    def create(self, *a, **kw):
+        raise RuntimeError("HTTP 524")
+
+
+class FakeDeepSeekNative:
+    last_call: dict = {}
+
+    def create(self, model, max_tokens, system, messages, tools=None, tool_choice=None,
+               temperature=0.2, retry_policy="foreground"):
+        FakeDeepSeekNative.last_call = {
+            "model": model, "retry_policy": retry_policy,
+        }
+        return _FakeUnifiedResponse(model, text=f"deepseek-native:{model}")
+
+
 # ============================================================
 # Fixtures
 # ============================================================
@@ -301,6 +322,97 @@ def test_route_call_disabled_raises(routes_file):
         )
 
 
+def test_route_call_uses_fallback_route_on_transient_failure(tmp_path, monkeypatch):
+    yml = textwrap.dedent("""
+    vendors:
+      openai:
+        cli_client: tests.test_model_router.FakeTransientFailingClient
+        model_tiers: {gpt55: gpt-5.5}
+        fallback_chain: [gpt55]
+      deepseek:
+        native_client: tests.test_model_router.FakeDeepSeekNative
+        model_tiers: {pro: deepseek-v4-pro}
+        fallback_chain: [pro]
+    routes:
+      worker.structure:
+        vendor: openai
+        transport: cli
+        model: gpt55
+        retry_policy: worker
+        fallback_route: fallback.deepseek_v4_pro
+      fallback.deepseek_v4_pro:
+        vendor: deepseek
+        transport: native
+        model: pro
+        retry_policy: worker
+    """)
+    path = tmp_path / "routes.yaml"
+    path.write_text(yml, encoding="utf-8")
+    monkeypatch.setenv("PECKER_ROUTES_FILE", str(path))
+
+    import model_router
+    from clients import factory
+    model_router.reset_config_cache()
+    factory.reset_clients()
+    FakeDeepSeekNative.last_call = {}
+
+    resp = model_router.route_call(
+        "worker.structure",
+        system="x",
+        messages=[],
+        tools=[{"name": "submit_review_items", "input_schema": {"type": "object"}}],
+        tool_choice={"type": "any"},
+    )
+
+    assert resp.model == "deepseek-v4-pro"
+    assert FakeDeepSeekNative.last_call["model"] == "deepseek-v4-pro"
+    assert FakeDeepSeekNative.last_call["retry_policy"] == "worker"
+
+
+def test_route_call_uses_fallback_route_on_cloudflare_524(tmp_path, monkeypatch):
+    yml = textwrap.dedent("""
+    vendors:
+      openai:
+        cli_client: tests.test_model_router.FakeGateway524FailingClient
+        model_tiers: {gpt55: gpt-5.5}
+        fallback_chain: [gpt55]
+      deepseek:
+        native_client: tests.test_model_router.FakeDeepSeekNative
+        model_tiers: {pro: deepseek-v4-pro}
+        fallback_chain: [pro]
+    routes:
+      worker.structure:
+        vendor: openai
+        transport: cli
+        model: gpt55
+        retry_policy: worker
+        fallback_route: fallback.deepseek_v4_pro
+      fallback.deepseek_v4_pro:
+        vendor: deepseek
+        transport: native
+        model: pro
+        retry_policy: worker
+    """)
+    path = tmp_path / "routes.yaml"
+    path.write_text(yml, encoding="utf-8")
+    monkeypatch.setenv("PECKER_ROUTES_FILE", str(path))
+
+    import model_router
+    from clients import factory
+    model_router.reset_config_cache()
+    factory.reset_clients()
+    FakeDeepSeekNative.last_call = {}
+
+    resp = model_router.route_call(
+        "worker.structure",
+        system="x",
+        messages=[],
+    )
+
+    assert resp.model == "deepseek-v4-pro"
+    assert FakeDeepSeekNative.last_call["model"] == "deepseek-v4-pro"
+
+
 def test_pecker_model_override_env_only_applies_to_worker(routes_file, monkeypatch):
     """PECKER_MODEL_OVERRIDE 应只覆盖 worker.* tier, advisor/verify/router 不受影响"""
     from model_router import route_call
@@ -321,6 +433,16 @@ def test_pecker_model_override_auto_is_noop(routes_file, monkeypatch):
     route_call("worker.compliance", system="x", messages=[])
     # auto = 不 override, 用 route 默认 sonnet
     assert FakeAnthropicCLI.last_call["model"] == "claude-sonnet-x"
+
+
+def test_get_model_for_route_respects_worker_env_override(routes_file, monkeypatch):
+    """dry-run/telemetry model resolution must match route_call for worker routes."""
+    from model_router import get_model_for_route
+
+    monkeypatch.setenv("PECKER_MODEL_OVERRIDE", "haiku")
+
+    assert get_model_for_route("worker.compliance") == "claude-haiku-x"
+    assert get_model_for_route("advisor.goshawk") == "claude-sonnet-x"
 
 
 # ============================================================

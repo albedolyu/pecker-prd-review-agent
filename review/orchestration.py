@@ -12,6 +12,7 @@
 
 import asyncio
 import json
+import os
 import time
 
 from io_utils import try_read_json
@@ -21,6 +22,10 @@ from review.dimensions import (
     _cn_label,
     _get_rule_perf_history_path,
     get_review_dimensions,
+)
+from review.gateway_resilience import (
+    classify_worker_error,
+    is_transient_error_type,
 )
 from review.types import ParallelReviewResult
 from review.worker import _run_worker_async, _run_worker_sync
@@ -33,6 +38,234 @@ except Exception:  # noqa: BLE001
         return False
 
 log = get_logger("parallel")
+
+
+def _get_review_orchestrator_mode() -> str:
+    raw = os.environ.get("PECKER_REVIEW_ORCHESTRATOR", "langgraph").strip().lower()
+    aliases = {
+        "0": "legacy",
+        "off": "legacy",
+        "old": "legacy",
+        "rollback": "legacy",
+        "legacy": "legacy",
+        "1": "langgraph",
+        "on": "langgraph",
+        "graph": "langgraph",
+        "langgraph": "langgraph",
+    }
+    mode = aliases.get(raw)
+    if mode is None:
+        log.warning("Invalid PECKER_REVIEW_ORCHESTRATOR=%r; using langgraph", raw)
+        return "langgraph"
+    return mode
+
+
+def _get_worker_batch_size(total_workers: int) -> int:
+    raw = os.environ.get("PECKER_WORKER_BATCH_SIZE", "").strip()
+    if not raw:
+        return max(1, total_workers)
+    try:
+        value = int(raw)
+    except ValueError:
+        log.warning("Invalid PECKER_WORKER_BATCH_SIZE=%r; using full parallel workers", raw)
+        return max(1, total_workers)
+    if value <= 0:
+        log.warning("Invalid PECKER_WORKER_BATCH_SIZE=%r; using full parallel workers", raw)
+        return max(1, total_workers)
+    return max(1, min(value, total_workers))
+
+
+def _worker_error_result(dim_key, dimensions, error) -> dict:
+    err_msg = str(error)
+    err_type = classify_worker_error(error)
+    status = "timeout" if err_type in {"timeout", "gateway_timeout"} else "failed"
+    return {
+        "dimension": dim_key,
+        "dimension_name": dimensions.get(dim_key, {}).get("name", dim_key),
+        "error": err_msg,
+        "error_type": err_type,
+        "items": [],
+        "usage": {"input_tokens": 0, "output_tokens": 0},
+        "status": status,
+    }
+
+
+def _normalize_worker_result(dim_key, dimensions, result) -> dict:
+    if isinstance(result, Exception):
+        return _worker_error_result(dim_key, dimensions, result)
+    if not isinstance(result, dict):
+        return _worker_error_result(dim_key, dimensions, RuntimeError(f"invalid worker result: {type(result).__name__}"))
+    result.setdefault("dimension", dim_key)
+    result.setdefault("dimension_name", dimensions.get(dim_key, {}).get("name", dim_key))
+    result.setdefault("items", [])
+    result.setdefault("usage", {"input_tokens": 0, "output_tokens": 0})
+    if result.get("error"):
+        result.setdefault("error_type", classify_worker_error(result.get("error")))
+        result.setdefault("status", "timeout" if result["error_type"] in {"timeout", "gateway_timeout"} else "failed")
+    else:
+        result.setdefault("status", "success")
+    return result
+
+
+def _gateway_recovery_enabled() -> bool:
+    return os.environ.get("PECKER_ENABLE_WORKER_GATEWAY_RECOVERY", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+async def _retry_dimension_worker_recovery(
+    client,
+    dim_key,
+    prd_content,
+    wiki_pages,
+    model_tiers,
+    rule_perf_history,
+    wiki_path=None,
+    diff_context=None,
+    on_tool_call=None,
+    *,
+    dimensions,
+    first_result: dict,
+):
+    first_error = str(first_result.get("error") or "")
+    first_error_type = str(first_result.get("error_type") or classify_worker_error(first_error))
+    try:
+        recovered = await _run_worker_async(
+            client,
+            dim_key,
+            prd_content,
+            wiki_pages,
+            model_tiers,
+            rule_perf_history,
+            wiki_path,
+            diff_context,
+            on_tool_call,
+            retry_on_timeout=False,
+            recovery_mode=True,
+        )
+        recovered = _normalize_worker_result(dim_key, dimensions, recovered)
+        recovery = dict(recovered.get("recovery") or {})
+        recovery.update({
+            "attempts": 2,
+            "first_error": first_error[:200],
+            "first_error_type": first_error_type,
+            "mode": "gateway_recovery",
+        })
+        recovered["recovery"] = recovery
+        if not recovered.get("error"):
+            recovered["status"] = "recovered"
+        else:
+            recovered["recovery"]["recovery_error"] = str(recovered.get("error"))[:200]
+        return recovered
+    except Exception as recovery_exc:
+        first_result["recovery"] = {
+            "attempts": 2,
+            "first_error": first_error[:200],
+            "first_error_type": first_error_type,
+            "mode": "gateway_recovery",
+            "recovery_error": str(recovery_exc)[:200],
+        }
+        return first_result
+
+
+async def _run_dimension_worker_async(
+    client,
+    dim_key,
+    prd_content,
+    wiki_pages,
+    model_tiers,
+    rule_perf_history,
+    wiki_path=None,
+    diff_context=None,
+    on_worker_done=None,
+    workspace=None,
+    on_tool_call=None,
+    *,
+    stagger_index: int = 0,
+    dimensions=None,
+):
+    dimensions = dimensions or get_review_dimensions()
+    await asyncio.sleep(stagger_index * 0.3)
+    _w_t0 = time.time()
+    try:
+        result = await _run_worker_async(
+            client, dim_key, prd_content, wiki_pages, model_tiers,
+            rule_perf_history, wiki_path, diff_context, on_tool_call,
+        )
+        result = _normalize_worker_result(dim_key, dimensions, result)
+        if (
+            result.get("error")
+            and _gateway_recovery_enabled()
+            and is_transient_error_type(str(result.get("error_type") or ""))
+        ):
+            result = await _retry_dimension_worker_recovery(
+                client,
+                dim_key,
+                prd_content,
+                wiki_pages,
+                model_tiers,
+                rule_perf_history,
+                wiki_path,
+                diff_context,
+                on_tool_call,
+                dimensions=dimensions,
+                first_result=result,
+            )
+        if on_worker_done is not None:
+            try:
+                on_worker_done(dim_key, result)
+            except Exception:
+                pass
+        _u = result.get("usage") or {}
+        status = "failed" if result.get("error") else "success"
+        _metrics_record(
+            "worker.completed",
+            workspace=workspace,
+            duration_ms=int((time.time() - _w_t0) * 1000),
+            model=(result.get("model") or model_tiers.get("sonnet")),
+            cost_usd=result.get("cost_usd"),
+            status=status,
+            details={
+                "dim_key": dim_key,
+                "items": len(result.get("items") or []),
+                "input_tokens": _u.get("input_tokens"),
+                "output_tokens": _u.get("output_tokens"),
+                "error_type": result.get("error_type"),
+            },
+        )
+        return result
+    except Exception as e:
+        result = _worker_error_result(dim_key, dimensions, e)
+        if _gateway_recovery_enabled() and is_transient_error_type(str(result.get("error_type") or "")):
+            result = await _retry_dimension_worker_recovery(
+                client,
+                dim_key,
+                prd_content,
+                wiki_pages,
+                model_tiers,
+                rule_perf_history,
+                wiki_path,
+                diff_context,
+                on_tool_call,
+                dimensions=dimensions,
+                first_result=result,
+            )
+        if on_worker_done is not None:
+            try:
+                on_worker_done(dim_key, result)
+            except Exception:
+                pass
+        _metrics_record(
+            "worker.completed",
+            workspace=workspace,
+            duration_ms=int((time.time() - _w_t0) * 1000),
+            status="failed",
+            details={"dim_key": dim_key, "error": str(e)[:200], "error_type": result.get("error_type")},
+        )
+        return result
 
 
 async def _single_round_async(client, prd_content, wiki_pages, model_tiers, wiki_path=None, diff_context=None, on_worker_done=None, workspace=None, on_tool_call=None):
@@ -53,73 +286,99 @@ async def _single_round_async(client, prd_content, wiki_pages, model_tiers, wiki
     # 读一次 rule performance history，传给所有 worker（避免 N 次 I/O）
     rule_perf_history = try_read_json(_get_rule_perf_history_path(workspace), default=None)
 
-    # 错峰启动: Windows 下 N 个 claude CLI 子进程同时启动会触发 Node.js libuv assertion
-    # (UV_HANDLE_CLOSING / 0xC0000409 STATUS_STACK_BUFFER_OVERRUN),给每个 worker 加 stagger
-    async def _staggered(idx, dim_key):
-        await asyncio.sleep(idx * 0.3)  # 0.5→0.3: 省 0.8s 总启动时间
-        _w_t0 = time.time()
-        try:
-            result = await _run_worker_async(
-                client, dim_key, prd_content, wiki_pages, model_tiers, rule_perf_history, wiki_path, diff_context, on_tool_call
-            )
-            # 新增: worker 完成后通知外层(FastAPI SSE 用,CLI 模式下 callback 为 None 就跳过)
-            if on_worker_done is not None:
-                try:
-                    on_worker_done(dim_key, result)
-                except Exception:
-                    pass  # callback 异常绝不影响主流程
-            # Metrics: worker 完成 (含 token / 成本)
-            _u = result.get("usage") or {}
-            _metrics_record(
-                "worker.completed",
-                workspace=workspace,
-                duration_ms=int((time.time() - _w_t0) * 1000),
-                model=(result.get("model") or model_tiers.get("sonnet")),
-                cost_usd=result.get("cost_usd"),
-                status="success",
-                details={
-                    "dim_key": dim_key,
-                    "items": len(result.get("items") or []),
-                    "input_tokens": _u.get("input_tokens"),
-                    "output_tokens": _u.get("output_tokens"),
-                },
-            )
-            return result
-        except Exception as e:
-            # 失败也要通知,这样 UI 能显示 worker 失败状态而不是永远挂 pending
-            if on_worker_done is not None:
-                try:
-                    on_worker_done(dim_key, {"error": str(e)[:200]})
-                except Exception:
-                    pass
-            _metrics_record(
-                "worker.completed",
-                workspace=workspace,
-                duration_ms=int((time.time() - _w_t0) * 1000),
-                status="failed",
-                details={"dim_key": dim_key, "error": str(e)[:200]},
-            )
-            raise
+    dim_keys = list(dimensions)
+    worker_batch_size = _get_worker_batch_size(len(dim_keys))
 
-    tasks = [
-        _staggered(idx, dim_key)
-        for idx, dim_key in enumerate(dimensions)
-    ]
+    def _total_timeout_result(dim_key, timeout_seconds):
+        result = _worker_error_result(
+            dim_key,
+            dimensions,
+            asyncio.TimeoutError(f"总体超时({timeout_seconds}s)"),
+        )
+        if on_worker_done is not None:
+            try:
+                on_worker_done(dim_key, result)
+            except Exception:
+                pass
+        return result
+
+    async def _run_worker_batches_with_deadline(total_timeout):
+        ordered_results = []
+        deadline = time.monotonic() + max(0.1, float(total_timeout))
+        for start in range(0, len(dim_keys), worker_batch_size):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                log.error("并行评审总体超时(%ss),剩余方向标记为超时", total_timeout)
+                ordered_results.extend(
+                    _total_timeout_result(dim_key, total_timeout)
+                    for dim_key in dim_keys[start:]
+                )
+                break
+
+            batch = dim_keys[start:start + worker_batch_size]
+            tasks = {
+                asyncio.create_task(
+                    _run_dimension_worker_async(
+                        client,
+                        dim_key,
+                        prd_content,
+                        wiki_pages,
+                        model_tiers,
+                        rule_perf_history,
+                        wiki_path,
+                        diff_context,
+                        on_worker_done=on_worker_done,
+                        workspace=workspace,
+                        on_tool_call=on_tool_call,
+                        stagger_index=idx,
+                        dimensions=dimensions,
+                    )
+                ): dim_key
+                for idx, dim_key in enumerate(batch)
+            }
+            done, pending = await asyncio.wait(tasks.keys(), timeout=remaining)
+
+            if pending:
+                log.error(
+                    "并行评审总体超时(%ss),已完成批次结果将保留,未完成方向标记为超时",
+                    total_timeout,
+                )
+                for task in pending:
+                    task.cancel()
+                try:
+                    await asyncio.wait_for(
+                        asyncio.gather(*pending, return_exceptions=True),
+                        timeout=0.5,
+                    )
+                except asyncio.TimeoutError:
+                    pass
+
+            batch_results = {}
+            for task in done:
+                dim_key = tasks[task]
+                try:
+                    batch_results[dim_key] = task.result()
+                except Exception as exc:  # noqa: BLE001
+                    batch_results[dim_key] = exc
+
+            for dim_key in batch:
+                if dim_key in batch_results:
+                    ordered_results.append(batch_results[dim_key])
+                else:
+                    ordered_results.append(_total_timeout_result(dim_key, total_timeout))
+
+            if pending:
+                next_start = start + len(batch)
+                ordered_results.extend(
+                    _total_timeout_result(dim_key, total_timeout)
+                    for dim_key in dim_keys[next_start:]
+                )
+                break
+        return ordered_results
 
     # 总体超时兜底:即使单 Worker 超时被捕获,线程池层面仍可能因极端情况拖住
     from agent_config import TOTAL_REVIEW_TIMEOUT
-    try:
-        results = await asyncio.wait_for(
-            asyncio.gather(*tasks, return_exceptions=True),
-            timeout=TOTAL_REVIEW_TIMEOUT,
-        )
-    except asyncio.TimeoutError:
-        # 外层 deadman switch 触发,把未完成的任务占位为 timeout 错误
-        log.error(f"并行评审总体超时({TOTAL_REVIEW_TIMEOUT}s),强制结束")
-        results = [
-            asyncio.TimeoutError(f"总体超时({TOTAL_REVIEW_TIMEOUT}s)")
-            for _ in tasks
-        ]
+    results = await _run_worker_batches_with_deadline(TOTAL_REVIEW_TIMEOUT)
 
     workers = []
     all_items = []
@@ -128,18 +387,14 @@ async def _single_round_async(client, prd_content, wiki_pages, model_tiers, wiki
 
     failed_dims = []
     api_unavailable = False
-    for dim_key, result in zip(dimensions, results):
-        if isinstance(result, Exception):
-            err_msg = str(result)
+    for dim_key, result in zip(dim_keys, results):
+        result = _normalize_worker_result(dim_key, dimensions, result)
+        if result.get("error"):
+            err_msg = str(result.get("error") or "")
             log.warning(f"[{_cn_label(dim_key)}] Worker 失败: {err_msg[:80]}")
             failed_dims.append(dim_key)
-            workers.append({
-                "dimension": dim_key,
-                "dimension_name": dimensions[dim_key]["name"],
-                "error": err_msg,
-                "items": [],
-            })
-            if "503" in err_msg or "No available account" in err_msg or "upstream_error" in err_msg:
+            workers.append(result)
+            if result.get("error_type") == "api_unavailable":
                 api_unavailable = True
         else:
             workers.append(result)
@@ -150,13 +405,22 @@ async def _single_round_async(client, prd_content, wiki_pages, model_tiers, wiki
     # 断路器: 可配置的最大 worker 连续失败数 (CC circuit breaker 模式)
     from agent_config import MAX_CONSECUTIVE_WORKER_FAILURES
 
-    # API 不可用时给出明确提示，不要报"过多 Worker 失败"
-    if api_unavailable and len(failed_dims) > MAX_CONSECUTIVE_WORKER_FAILURES:
+    has_usable_items = len(all_items) > 0
+
+    # API 不可用且没有任何有效产出时给出明确提示，不要报"过多 Worker 失败"
+    if api_unavailable and len(failed_dims) > MAX_CONSECUTIVE_WORKER_FAILURES and not has_usable_items:
         raise RuntimeError(f"API 不可用（503），请检查中转站额度后重试")
 
-    # 断路器触发: 失败 worker 数超过阈值
-    if len(failed_dims) > MAX_CONSECUTIVE_WORKER_FAILURES:
+    # 断路器触发: 失败 worker 数超过阈值且没有任何有效产出。
+    # 如果至少有一个方向产出了意见，保留部分结果交给上层降级提示，避免 PM 因单次中转站抖动丢掉已完成工作。
+    if len(failed_dims) > MAX_CONSECUTIVE_WORKER_FAILURES and not has_usable_items:
         raise RuntimeError(f"断路器触发: Worker 失败 ({len(failed_dims)}/4) 超过阈值 {MAX_CONSECUTIVE_WORKER_FAILURES}: {failed_dims}")
+    if len(failed_dims) > MAX_CONSECUTIVE_WORKER_FAILURES and has_usable_items:
+        log.warning(
+            "Worker 失败数超过阈值但保留部分评审结果: failed=%s items=%s",
+            failed_dims,
+            len(all_items),
+        )
 
     # Scratchpad：记录各 worker 发现的规则 ID（CC coordinatorMode.ts 的 scratchpad 模式）
     scratchpad = {}
@@ -172,7 +436,7 @@ async def _single_round_async(client, prd_content, wiki_pages, model_tiers, wiki
     return workers, merged, total_input, total_output
 
 
-async def parallel_review(client, prd_content, wiki_pages, model_tiers, voting_rounds=1, wiki_path=None, diff_context=None, on_worker_done=None, workspace=None, on_tool_call=None) -> ParallelReviewResult:
+async def _parallel_review_legacy(client, prd_content, wiki_pages, model_tiers, voting_rounds=1, wiki_path=None, diff_context=None, on_worker_done=None, workspace=None, on_tool_call=None) -> ParallelReviewResult:
     """
     并行执行 4 个评审维度的 worker，合并结果
     - client: anthropic.Anthropic 实例
@@ -219,6 +483,7 @@ async def parallel_review(client, prd_content, wiki_pages, model_tiers, voting_r
                 "input_tokens": total_input,
                 "output_tokens": total_output,
             },
+            "orchestrator": "legacy",
         }
 
     # 多轮评审 + 多数投票
@@ -254,7 +519,39 @@ async def parallel_review(client, prd_content, wiki_pages, model_tiers, voting_r
             "input_tokens": total_input,
             "output_tokens": total_output,
         },
+        "orchestrator": "legacy",
     }
+
+
+async def parallel_review(client, prd_content, wiki_pages, model_tiers, voting_rounds=1, wiki_path=None, diff_context=None, on_worker_done=None, workspace=None, on_tool_call=None) -> ParallelReviewResult:
+    """Run the review through the selected orchestration backend.
+
+    Default is LangGraph so production gets checkpointable, inspectable flow.
+    Roll back with PECKER_REVIEW_ORCHESTRATOR=legacy without changing code.
+    """
+    if _get_review_orchestrator_mode() == "legacy":
+        return await _parallel_review_legacy(
+            client, prd_content, wiki_pages, model_tiers,
+            voting_rounds=voting_rounds,
+            wiki_path=wiki_path,
+            diff_context=diff_context,
+            on_worker_done=on_worker_done,
+            workspace=workspace,
+            on_tool_call=on_tool_call,
+        )
+
+    graph_runner = globals().get("langgraph_parallel_review")
+    if graph_runner is None:
+        from review.langgraph_orchestration import langgraph_parallel_review as graph_runner
+    return await graph_runner(
+        client, prd_content, wiki_pages, model_tiers,
+        voting_rounds=voting_rounds,
+        wiki_path=wiki_path,
+        diff_context=diff_context,
+        on_worker_done=on_worker_done,
+        workspace=workspace,
+        on_tool_call=on_tool_call,
+    )
 
 
 def _single_round_sync(client, prd_content, wiki_pages, model_tiers, wiki_path=None, diff_context=None, workspace=None, on_tool_call=None):

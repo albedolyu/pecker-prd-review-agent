@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from api.deps import (
     get_client,
     get_current_user,
+    get_max_concurrent,
     get_project_root,
     get_workspace_dir,
     review_semaphore,
@@ -119,9 +120,9 @@ def classify_worker_failures(workers_list: List[Dict[str, Any]]) -> Optional[Dic
     all_quota = all(_is_quota_err(w) for w in failed_workers)
     reason = "quota_exhausted" if all_quota else "all_workers_failed"
     message = (
-        "Claude CLI 配额已用完,请稍后重试或联系管理员"
+        "评审额度已用完,请联系维护人补充额度后再重新评审"
         if all_quota
-        else f"全部 {total_count} 个 worker 失败,请重试"
+        else f"全部 {total_count} 个评审方向都没有完整返回,请重新评审或联系维护人排查"
     )
     worker_errors_summary = [
         {"dim": w.get("dimension", "?"), "error": (w.get("error") or "")[:200]}
@@ -136,8 +137,41 @@ def classify_worker_failures(workers_list: List[Dict[str, Any]]) -> Optional[Dic
     }
 
 
+def build_worker_degraded_payload(
+    workers_list: List[Dict[str, Any]],
+    *,
+    items_count: int,
+) -> Optional[Dict[str, Any]]:
+    """Build a non-fatal degraded review payload when some workers failed."""
+    if not workers_list:
+        return None
+    failed_workers = [w for w in workers_list if w.get("error")]
+    failed_count = len(failed_workers)
+    total_count = len(workers_list)
+    if failed_count == 0 or failed_count == total_count:
+        return None
+
+    if items_count > 0:
+        message = (
+            f"部分方向未完整返回({failed_count}/{total_count}),"
+            f"已保留 {items_count} 条可用意见；可以先继续确认,如需完整结果请重新评审。"
+        )
+    else:
+        message = (
+            f"部分方向未完整返回({failed_count}/{total_count}),"
+            "本轮未获得可用意见,请重新评审或联系维护人排查。"
+        )
+
+    return {
+        "failed_count": failed_count,
+        "total_count": total_count,
+        "items_count": items_count,
+        "message": message,
+    }
+
+
 # ============================================================
-# 预检 (Phase 1): 扫 wiki + Claude 知识盲区分析
+# 预检 (Phase 1): 扫 wiki + LLM 知识盲区分析
 # ============================================================
 
 class PrecheckRequest(BaseModel):
@@ -229,11 +263,11 @@ async def precheck(
     project_root: Path = Depends(get_project_root),
     user: dict = Depends(get_current_user),
 ):
-    """Phase 1 预检: wiki 扫描 + Claude 知识盲区分析。
+    """Phase 1 预检: wiki 扫描 + LLM 知识盲区分析。
 
     两步:
     1. 本地扫 wiki 目录(无 LLM 调用,<1s) — 10 分钟内复用缓存
-    2. 调 Claude Sonnet 做知识盲区分析(~10s)
+    2. 走 model_routes.yaml 调轻量模型做知识盲区分析
 
     预检不走 semaphore(短且只读),只对正式评审做并发保护。
     """
@@ -354,7 +388,7 @@ async def run_review(
     """Phase 2 评审 (SSE 流): 4 worker 并行 + 终审交叉校验。
 
     事件序列:
-    - uploaded → wiki_scanned → workers_started
+    - uploaded → wiki_scanned → review_queued → workers_started
     - worker_done × 4 (15% → 70%)
     - final_reviewer_started → final_reviewer_done
     - result (最终 payload) 或 error
@@ -425,11 +459,19 @@ async def run_review(
 
         emitter.emit("uploaded")
         emitter.emit("wiki_scanned", data={"page_count": len(req.wiki_pages)})
-        emitter.emit("workers_started", data={"mode": req.mode})
-        evt.append("workers_started", {"mode": req.mode})
+        emitter.emit(
+            "review_queued",
+            data={
+                "message": "已进入评审队列，等待空闲评审位",
+                "max_concurrent": get_max_concurrent(),
+            },
+        )
+        evt.append("review_queued", {"max_concurrent": get_max_concurrent()})
 
         # 2. 并行评审 (semaphore 保护)
         async with review_semaphore:
+            emitter.emit("workers_started", data={"mode": req.mode})
+            evt.append("workers_started", {"mode": req.mode})
             # Per-tool-call trace callback (2026-04-23 B 优化):
             # 每次 worker / goshawk 里的 client.create 返回后会调用, trace 写
             # EventStore 的 tool_call_done 事件, 给 stability_metrics 聚合用.
@@ -545,19 +587,11 @@ async def run_review(
                     **failure_payload,
                 }
 
-            # 部分失败 + 无 items 的降级提示(非 abort,仅告警)
-            failed_count = sum(1 for w in workers_list if w.get("error"))
-            total_count = len(workers_list)
-            if failed_count > 0 and len(items) == 0:
-                emitter.emit("review_degraded", data={
-                    "failed_count": failed_count,
-                    "total_count": total_count,
-                    "message": f"部分 worker 失败({failed_count}/{total_count}),未获得任何评审项,建议重试",
-                })
-                evt.append("review_degraded", {
-                    "failed_count": failed_count,
-                    "total_count": total_count,
-                })
+            # 部分失败降级提示(非 abort):有可用意见时继续推进,但让 PM 知道本轮不完整。
+            degraded_payload = build_worker_degraded_payload(workers_list, items_count=len(items))
+            if degraded_payload is not None:
+                emitter.emit("review_degraded", data=degraded_payload)
+                evt.append("review_degraded", degraded_payload)
 
             # 3. 终审 (苍鹰) — 仅标准模式
             if req.mode == "standard" and items:
@@ -614,7 +648,7 @@ async def run_review(
         if goshawk_res and goshawk_res.get("usage"):
             from api_adapter import compute_call_cost_usd
             gc = compute_call_cost_usd(
-                goshawk_res.get("model_used", "claude-opus-4-6"),
+                goshawk_res.get("model_used", "gpt-5.5"),
                 goshawk_res["usage"],
             )
             cost_breakdown["goshawk"] = round(gc, 6)
@@ -655,6 +689,7 @@ async def run_review(
             usage=result.get("total_usage", {}),
             goshawk_summary=result.get("goshawk"),
             cost_breakdown=cost_breakdown,
+            telemetry=result.get("telemetry"),
         )
 
         # T3 2026-04-24: funnel_summary — PM decision (N4) 在 confirm_review 走另一条 path, 这里
@@ -813,6 +848,8 @@ def _save_eval_ground_truth(
     decisions: Dict[str, Dict[str, Any]],
     workspace: str,
     reviewer: str,
+    prd_name: str = "",
+    review_id: str = "",
 ):
     """把 Phase 3 的 Y/N/E 决策保存为 Eval ground truth
 
@@ -833,12 +870,16 @@ def _save_eval_ground_truth(
         gt_items.append({
             "id": item_id,
             "rule_id": item.get("rule_id", ""),
+            "dimension": item.get("dimension", ""),
             "location": item.get("location", ""),
             "severity": item.get("severity", ""),
             "action": action,
             # 2026-04-24 T2: 7 分类 reason, 让 calibration_runner 按 reason 切分布
             "reason_category": decision.get("reason_category", ""),
             "reason_note": (decision.get("reason_note", "") or decision.get("reason", ""))[:200],
+            # admin feedback 看板只展示短摘要,不保存/展示 PRD 正文或原始材料。
+            "problem": (item.get("problem", "") or "")[:300],
+            "suggestion": (item.get("suggestion", "") or "")[:300],
             "is_true_positive": action in ("accept", "edit"),
         })
 
@@ -856,6 +897,8 @@ def _save_eval_ground_truth(
     gt_payload = {
         "workspace": workspace,
         "reviewer": reviewer,
+        "prd_name": prd_name,
+        "review_id": review_id,
         "timestamp": timestamp,
         "items": gt_items,
     }
@@ -911,7 +954,13 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
     if workspace and decisions:
         try:
             await asyncio.to_thread(
-                _save_eval_ground_truth, items, decisions, workspace, reviewer,
+                _save_eval_ground_truth,
+                items,
+                decisions,
+                workspace,
+                reviewer,
+                req.review_result.get("prd_name", ""),
+                req.review_result.get("review_id", ""),
             )
         except Exception as e:
             log.warning(f"[ground_truth] 保存失败,不阻塞确认流程: {e}")

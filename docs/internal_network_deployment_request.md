@@ -72,8 +72,8 @@ git --version
 
 - 仓库：`prd-review-agent`
 - 分支：`main`
-- 当前建议部署提交：以交付包 `VERSION.txt` 记录为准
-- 稳定代码 tag：`v0.1.4-beta`，如需包含真实 PRD 下载能力请使用交付包记录的更新提交
+- 当前建议部署提交：以 GitLab `main` 最新提交为准；部署前请记录 `git rev-parse --short HEAD`
+- 稳定代码 tag：如需固定版本，可在运维确认后从当前 GitLab `main` 打 `v0.1.5-beta`
 
 建议部署路径：
 
@@ -108,10 +108,12 @@ OPENAI_WORKER_REASONING_EFFORT=medium
 OPENAI_ADVISOR_REASONING_EFFORT=xhigh
 OPENAI_ROUTER_REASONING_EFFORT=medium
 OPENAI_DISABLE_RESPONSE_STORAGE=true
-OPENAI_REQUEST_TIMEOUT=240
+OPENAI_REQUEST_TIMEOUT=420
 OPENAI_WORKER_MAX_RETRIES=1
 OPENAI_ADVISOR_MAX_RETRIES=2
 OPENAI_ROUTER_MAX_RETRIES=1
+# 部分中转站会对有效 key 偶发返回 401/invalid_api_key；只按瞬时网关错误重试，不放宽真实鉴权失败。
+PECKER_RETRY_INTERMITTENT_AUTH_401=1
 PECKER_PRECHECK_TIMEOUT=90
 
 PECKER_SIGNATURE_SECRET=<32+ hex>
@@ -119,12 +121,23 @@ PECKER_JWT_SECRET=<32+ hex>
 PECKER_WEB_PASSWORD=<给内部同事登录用的密码>
 PECKER_ADMIN_USERS=lvxinhang
 
+# Web 开关：PM 内网试用建议开启可恢复任务，关闭维护人预览页。
+NEXT_PUBLIC_REVIEW_JOB_MODE=1
+NEXT_PUBLIC_ENABLE_INTERNAL_RUNS=0
+NEXT_PUBLIC_ENABLE_V8_PREVIEW=0
+
 PECKER_MAX_CONCURRENT=3
 PECKER_MAX_CONCURRENT_MODEL_CALLS=5
-PECKER_MODEL_CALL_QUEUE_TIMEOUT=240
+PECKER_WORKER_BATCH_SIZE=4
+PECKER_MODEL_CALL_QUEUE_TIMEOUT=480
 PECKER_ENABLE_WORKER_TIMEOUT_RECOVERY=0
 PECKER_ENABLE_ADAPTIVE_WORKER_PROMOTION=0
 PECKER_MAX_WIKI_CHARS=15000
+PECKER_REVIEW_ORCHESTRATOR=langgraph
+PECKER_ENABLE_WORKER_GATEWAY_RECOVERY=1
+PECKER_PRD_CONTEXT_MODE=auto
+PECKER_PRD_CONTEXT_AUTO_CHARS=12000
+PECKER_PRD_CONTEXT_PACKET_CHARS=12000
 
 PECKER_PROFILE=chill
 WIKI_PATH=./shared-wiki
@@ -249,13 +262,18 @@ rule_performance_history.json
 ```bash
 PECKER_MAX_CONCURRENT=3
 PECKER_MAX_CONCURRENT_MODEL_CALLS=5
-PECKER_MODEL_CALL_QUEUE_TIMEOUT=240
+PECKER_WORKER_BATCH_SIZE=4
+PECKER_MODEL_CALL_QUEUE_TIMEOUT=480
 PECKER_ENABLE_WORKER_TIMEOUT_RECOVERY=0
 PECKER_ENABLE_ADAPTIVE_WORKER_PROMOTION=0
+PECKER_ENABLE_WORKER_GATEWAY_RECOVERY=1
+PECKER_REVIEW_ORCHESTRATOR=langgraph
 OPENAI_WORKER_MAX_RETRIES=1
 OPENAI_WORKER_REASONING_EFFORT=medium
 OPENAI_API_KEYS=<服务端多 key 池>
 PECKER_MAX_WIKI_CHARS=15000
+PECKER_PRD_CONTEXT_MODE=auto
+PECKER_PRD_CONTEXT_PACKET_CHARS=12000
 ```
 
 部署后请研发协助做一次内网并发 smoke：
@@ -366,3 +384,35 @@ PECKER_MAX_WIKI_CHARS=15000
 ## 给研发的简短说明
 
 本次不是公网正式上线，而是内网 Beta 部署。目标是让 2-6 位产品同事通过内网 Web 页面试用啄木鸟，验证 PRD 评审流程、反馈闭环、稳定性和成本控制。部署重点不是复杂架构，而是内网可访问、服务可重启、数据可备份、密钥不泄露、失败可排查。
+
+## 本次上线前验证记录（2026-05-09）
+
+本地已完成以下部署前验证：
+
+```bash
+python -m pytest tests -q
+# 1436 passed, 4 warnings
+
+cd web && npm test -- --run tests/review-job-resume.test.ts tests/draft-persistence.test.ts tests/prd-anchor.test.ts tests/review-eta.test.ts tests/report-markdown-copy.test.ts tests/pm-friendly-navigation-copy.test.ts tests/login-timeout.test.ts tests/workspace-entry.test.ts tests/revision-downloads.test.ts tests/report-contract-store.test.ts tests/extract-worker-errors.test.ts
+# 80 passed
+
+cd web && npx tsc --noEmit
+# passed
+
+cd web && npm run build
+# passed
+
+git diff --check
+# passed
+```
+
+本次重点包含：
+
+- 登录失败不再长时间卡在“登录中”。
+- Phase 2 评审支持后台 job 和断线续接，刷新后尽量接回原任务，不强制重跑。
+- 逐条确认阶段会保存评审结果和 PM 决策草稿，降低网络断开后的丢失风险。
+- 管理员 `lvxinhang` 可以通过 `/system/usage` 查看团队试用概览、最近任务、活跃任务和反馈摘要。
+- 资料库选择后可以返回新建资料库入口。
+- Worker 部分失败时保留已产出的评审意见，并给 PM 友好提示。
+- LangGraph 主编排默认启用，`PECKER_REVIEW_ORCHESTRATOR=legacy` 可作为紧急回滚开关。
+- DeepSeek flash 仅作为中转站临时失败的备用线路，真实 key 只放服务端 `.env`。

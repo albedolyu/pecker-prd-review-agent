@@ -18,6 +18,7 @@ from fastapi import HTTPException
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from api.routes.drafts import _require_self_or_admin
+from api.routes.drafts import DraftPayload
 
 
 class TestRequireSelfOrAdmin:
@@ -52,3 +53,9 @@ class TestRequireSelfOrAdmin:
         """admin 读自己的草稿也应放行(走 reviewer == reviewer 分支,不依赖 admin bypass)。"""
         monkeypatch.setenv("PECKER_ADMIN_USERS", "root")
         _require_self_or_admin({"reviewer": "root"}, "root")
+
+
+def test_draft_payload_preserves_review_mode():
+    payload = DraftPayload(phase=3, prd_name="demo.md", prd_content="# Demo", mode="quick")
+
+    assert payload.mode == "quick"

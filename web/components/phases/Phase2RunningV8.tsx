@@ -31,13 +31,17 @@ import { toast } from "sonner";
 import { useReviewStore } from "@/lib/store";
 import { WORKER_ROLE_KEYS, type RoleKey } from "@/lib/roles";
 import {
+  pmFacingReviewMessage,
   useReviewStream,
   type ReviewStreamEvent,
   type WorkerDoneEvent,
   type ReviewFailedEvent,
   type ReviewDegradedEvent,
+  type ReviewJobReusedEvent,
+  type ReviewQueuedEvent,
 } from "@/lib/useReviewStream";
 import { auditApi } from "@/lib/api";
+import { saveReviewDraftSnapshot } from "@/lib/draft-persistence";
 import type { BirdId } from "@/components/birds/BirdAvatar";
 import {
   AgentStatusCard,
@@ -68,6 +72,10 @@ import {
   type FunnelState,
   type WorkerErrorBanner,
 } from "@/lib/v8-run-helpers";
+import {
+  estimateReviewEtaLabel,
+  reviewEtaSoftLimitSeconds,
+} from "@/lib/review-eta";
 
 // worker 侧 4 鸟 · 展示顺序和 parallel_review _DEFAULT_REVIEW_DIMENSIONS 一致
 const WORKER_BIRDS: { roleKey: RoleKey; birdId: BirdId }[] =
@@ -93,6 +101,16 @@ export function Phase2RunningV8() {
 
   const [elapsed, setElapsed] = useState(0);
   const startedAtRef = useRef<number | null>(null);
+  const savedReviewIdRef = useRef<string | null>(null);
+  const [showRunDetails, setShowRunDetails] = useState(false);
+  const etaInput = {
+    mode,
+    prdContent,
+    rawMaterials,
+    wikiPageCount: Object.keys(wikiPages ?? {}).length,
+  };
+  const reviewEtaLabel = estimateReviewEtaLabel(etaInput);
+  const softLimitSeconds = reviewEtaSoftLimitSeconds(etaInput);
 
   // 完成后是否已切到健康度页
   const [showHealthCheck, setShowHealthCheck] = useState(false);
@@ -155,10 +173,39 @@ export function Phase2RunningV8() {
   useEffect(() => {
     if (stream.state === "done" && stream.result) {
       setReviewResult(stream.result);
+      if (savedReviewIdRef.current !== stream.result.review_id) {
+        savedReviewIdRef.current = stream.result.review_id;
+        void saveReviewDraftSnapshot({
+          reviewer,
+          phase: 3,
+          prdName: prdName || "未命名.md",
+          prdContent,
+          workspace,
+          mode,
+          userNotes,
+          rawMaterials,
+          reviewResult: stream.result,
+          decisions: {},
+          confirmedReportMarkdown: "",
+        }).catch(() => {
+          toast.warning("评审结果已生成，但草稿保存失败。刷新前请先进入确认页。");
+        });
+      }
       // eslint-disable-next-line react-hooks/set-state-in-effect -- 只在 done 时切换一次到健康度页,条件收敛
       setShowHealthCheck(true);
     }
-  }, [stream.state, stream.result, setReviewResult]);
+  }, [
+    stream.state,
+    stream.result,
+    setReviewResult,
+    reviewer,
+    prdName,
+    prdContent,
+    workspace,
+    mode,
+    userNotes,
+    rawMaterials,
+  ]);
 
   // ============================================================
   // 派生 worker / meta 状态
@@ -359,8 +406,33 @@ export function Phase2RunningV8() {
 
   const handleContinue = useCallback(() => {
     toast.success("评审完成,进入确认");
+    if (stream.result) {
+      void saveReviewDraftSnapshot({
+        reviewer,
+        phase: 3,
+        prdName: prdName || "未命名.md",
+        prdContent,
+        workspace,
+        mode,
+        userNotes,
+        rawMaterials,
+        reviewResult: stream.result,
+        decisions: {},
+        confirmedReportMarkdown: "",
+      }).catch(() => {});
+    }
     setPhase(3);
-  }, [setPhase]);
+  }, [
+    setPhase,
+    stream.result,
+    reviewer,
+    prdName,
+    prdContent,
+    workspace,
+    mode,
+    userNotes,
+    rawMaterials,
+  ]);
 
   // ============================================================
   // 渲染
@@ -408,7 +480,7 @@ export function Phase2RunningV8() {
               marginTop: 4,
             }}
           >
-            先确认本次结果是否完整,再决定继续确认还是重跑
+            先确认本次结果是否完整,再决定继续逐条确认或重新评审
           </p>
         </header>
 
@@ -500,14 +572,14 @@ export function Phase2RunningV8() {
               <span
                 style={{
                   color:
-                    elapsed > 480
+                    elapsed > softLimitSeconds
                       ? "var(--status-failed-dot)"
                       : "var(--text-muted)",
                 }}
               >
-                {elapsed > 480
+                {elapsed > softLimitSeconds
                   ? "已超预期,仍在评审"
-                  : "预计 3–8 分钟完成"}
+                  : `${reviewEtaLabel}完成`}
               </span>
             </>
           )}
@@ -554,7 +626,7 @@ export function Phase2RunningV8() {
               : "本次评审失败"}
           </strong>
           {" · "}
-          {failedReviewEvent?.message ?? stream.error ?? "未知错误,请重试"}
+          {failedReviewEvent?.message ?? stream.error ?? "评审服务暂时不可用,请返回上一步或重新评审"}
         </div>
       )}
       {!hasError && degradedEvent && (
@@ -625,13 +697,56 @@ export function Phase2RunningV8() {
       {/* ── 评审漏斗实时进度 (step 1c) ── */}
       <FunnelPanel funnel={funnelState} />
 
-      {/* ── RunConsole ── */}
-      <RunConsole
-        lines={consoleLines}
-        live={stream.state === "running" || stream.state === "connecting"}
-        height={240}
-        style={{ marginBottom: 16 }}
-      />
+      {/* ── 处理明细: 默认收起,避免 PM 首屏看到排障日志 ── */}
+      <section
+        style={{
+          marginBottom: 16,
+          border: "1px solid var(--border-default)",
+          borderRadius: "var(--r-4)",
+          background: "var(--surface-panel)",
+          overflow: "hidden",
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setShowRunDetails((value) => !value)}
+          style={{
+            width: "100%",
+            border: 0,
+            background: "transparent",
+            padding: "12px 14px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            cursor: "pointer",
+            color: "var(--text-default)",
+            fontSize: 13,
+            fontWeight: 600,
+          }}
+        >
+          <span>
+            {showRunDetails ? "收起处理明细" : "查看处理明细"}
+          </span>
+          <span
+            style={{
+              color: "var(--text-muted)",
+              fontSize: 12,
+              fontWeight: 400,
+            }}
+          >
+            {showRunDetails
+              ? "已显示本次评审的阶段记录"
+              : "需要复盘时可查看每个阶段的处理记录"}
+          </span>
+        </button>
+        {showRunDetails && (
+          <RunConsole
+            lines={consoleLines}
+            live={stream.state === "running" || stream.state === "connecting"}
+            height={240}
+          />
+        )}
+      </section>
 
       {/* ── footer ── */}
       <footer
@@ -684,6 +799,16 @@ function buildConsoleLines(
   events.forEach((e) => {
     const t = tag();
     switch (e.event) {
+      case "job_reused": {
+        const ev = e as ReviewJobReusedEvent;
+        lines.push({
+          t,
+          src: { name: "进度" },
+          level: "info",
+          text: ev.message,
+        });
+        break;
+      }
       case "uploaded":
         lines.push({
           t,
@@ -700,6 +825,16 @@ function buildConsoleLines(
           text: `资料库已加载 · ${"page_count" in e ? e.page_count : "?"} 页`,
         });
         break;
+      case "review_queued": {
+        const ev = e as ReviewQueuedEvent;
+        lines.push({
+          t,
+          src: { name: "进度" },
+          level: "info",
+          text: ev.message ?? "已进入评审队列，等待空闲评审位",
+        });
+        break;
+      }
       case "workers_started":
         lines.push({
           t,
@@ -764,7 +899,7 @@ function buildConsoleLines(
           t,
           src: { name: "进度" },
           level: "error",
-          text: `评审遇到异常:${e.message}`,
+          text: `评审遇到异常:${pmFacingReviewMessage(e.message)}`,
         });
         break;
       case "review_failed": {
@@ -840,17 +975,17 @@ function WorkerErrorBannerView({ banner }: { banner: WorkerErrorBanner }) {
           }}
         >
           <summary style={{ cursor: "pointer", userSelect: "none" }}>
-            给维护人看的错误原文
+            查看处理建议
           </summary>
           <div
             style={{
               marginTop: 6,
-              fontFamily: "var(--font-mono)",
-              whiteSpace: "pre-wrap",
+              fontFamily: "var(--font-sans)",
+              whiteSpace: "normal",
               wordBreak: "break-word",
             }}
           >
-            {banner.errorPreview}
+            该方向未完整返回,可以先重新评审;如果连续失败,请把本次评审记录发给工具负责人查看。
           </div>
         </details>
       )}

@@ -62,6 +62,7 @@ describe("post-review report contract in store", () => {
       phase: 4,
       prd_name: "demo.md",
       prd_content: "# Demo",
+      mode: "quick",
       raw_materials: [],
       user_notes: "",
       review_result: reviewResult,
@@ -75,5 +76,6 @@ describe("post-review report contract in store", () => {
     expect(useReviewStore.getState().confirmedReportMarkdown).toBe(
       "# 后端报告\n",
     );
+    expect(useReviewStore.getState().mode).toBe("quick");
   });
 });

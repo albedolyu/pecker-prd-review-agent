@@ -3,19 +3,20 @@
 /**
  * /runs/[id]/replay · v8 Sprint 5(v2 预留)
  *
- * Audit trail replay · 某次 run 的完整 event 流回放。
+ * 评审过程回放 · 某次评审的完整过程流回放。
  * 数据来源:event_store(后端 `api/routes/audit.py` 暴露,待 v2 接入)。
  * 当前用 sample data 演示 UI 壳。
  *
  * 功能:
- * - 顶部 run 摘要卡(reviewer / workspace / mode / session_class / duration)
- * - 中段 event timeline(复用 RunConsole 样式,但 live=false)
- * - 点事件行 → 右侧 drawer 展开完整 payload(JSON)
+ * - 顶部评审摘要卡(评审人 / 资料库 / 模式 / 状态 / 耗时)
+ * - 中段过程时间线(复用 RunConsole 样式,但 live=false)
+ * - 点事件行 → 右侧 drawer 展开处理原始记录
  * - 键盘 j/k 上下切换焦点事件
  */
 
 import { use, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { AdminOnlyPage } from "@/components/auth/AdminOnlyPage";
 import type { BirdId } from "@/components/birds/BirdAvatar";
 import { BirdAvatar } from "@/components/birds/BirdAvatar";
 
@@ -220,6 +221,18 @@ export default function RunReplayPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  return (
+    <AdminOnlyPage>
+      <RunReplayContent params={params} />
+    </AdminOnlyPage>
+  );
+}
+
+function RunReplayContent({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = use(params);
   const [focusedSeq, setFocusedSeq] = useState<number>(SAMPLE_EVENTS[0].seq);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -328,7 +341,7 @@ export default function RunReplayPage({
       >
         <strong style={{ fontWeight: 600 }}>演示数据</strong> ·{" "}
         <span style={{ color: "var(--text-default)" }}>
-          当前展示样例过程,后续接入真实评审记录后可用于复盘和排障。
+          当前展示样例过程,后续接入真实评审记录后可用于复盘和处理追踪。
         </span>
       </div>
 
@@ -422,7 +435,7 @@ export default function RunReplayPage({
           >
             <span>评审过程 · {SAMPLE_EVENTS.length} 步</span>
             <span>
-              <span style={{ opacity: 0.5 }}>seq </span>
+              <span style={{ opacity: 0.5 }}>第 </span>
               <span style={{ fontWeight: 600, color: "var(--accent-500)" }}>
                 {focusedEvent.seq}
               </span>
@@ -510,7 +523,7 @@ export default function RunReplayPage({
                     userSelect: "none",
                   }}
                 >
-                  查看原始记录(排障用)
+                  查看处理原始记录
                 </summary>
                 <pre
                   style={{

@@ -126,6 +126,32 @@ class TestReviewResultCreateBindsContext:
             verify_review_result(tampered2)
         assert ei.value.status_code == 403
 
+    def test_create_preserves_telemetry_without_weakening_signature(self):
+        """Telemetry is operator-facing context; preserving it must not affect item verification."""
+        rr = ReviewResult.create(
+            reviewer="alice",
+            workspace="workspace-a",
+            prd_name="test.md",
+            mode="standard",
+            merged_items=_ITEMS,
+            workers=[],
+            usage={},
+            telemetry={
+                "total_duration_ms": 1234,
+                "workers": {"structure": {"duration_ms": 700}},
+                "resilience": {"failed_workers": 0},
+            },
+        )
+
+        rr_dict = rr.model_dump()
+        assert rr_dict["telemetry"]["total_duration_ms"] == 1234
+        assert rr_dict["telemetry"]["workers"]["structure"]["duration_ms"] == 700
+        verify_review_result(rr_dict)
+
+        tampered = dict(rr_dict)
+        tampered["telemetry"] = {"total_duration_ms": 9999}
+        verify_review_result(tampered)
+
 
 class TestBackwardIncompatIsIntentional:
     """v2 prefix 确保旧 v1 签名(如果有任何遗留)直接 verify 失败,

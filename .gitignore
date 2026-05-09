@@ -26,6 +26,7 @@ eval/results/
 eval/__pycache__/
 
 # Eval ad-hoc run reports (curated baselines can still be added with git add -f)
+eval_reports/**
 eval_reports/gpt_route_*
 eval_reports/output_gate_*
 eval_reports/verify_nli_openai_*

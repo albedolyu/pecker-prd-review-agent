@@ -219,6 +219,9 @@ class CodexCLIClient:
                 cmd += ["--output-schema", schema_path]
             if model:
                 cmd += ["-m", model]
+            reasoning_effort = os.environ.get("PECKER_CODEX_REASONING_EFFORT", "").strip()
+            if reasoning_effort:
+                cmd += ["-c", f'model_reasoning_effort="{reasoning_effort}"']
             # 2026-04-28: prompt 走 stdin (用 "-" 占位), 不放 argv. Windows argv 32K 限制
             # 在苍鹰这种长 prompt 场景会触发 [WinError 206]. 与 claude_cli.py 同款规避.
             cmd += ["-"]
@@ -229,6 +232,12 @@ class CodexCLIClient:
             stderr = ""
             for attempt in range(max_retries + 1):
                 try:
+                    cli_timeout = float(
+                        os.environ.get(
+                            "PECKER_CODEX_CLI_TIMEOUT",
+                            str(self._SCHEMA_REQUIRED_TIMEOUT_S),
+                        )
+                    )
                     proc = subprocess.run(
                         cmd,
                         input=prompt_text,
@@ -236,7 +245,7 @@ class CodexCLIClient:
                         text=True,
                         encoding="utf-8",
                         errors="replace",
-                        timeout=self._SCHEMA_REQUIRED_TIMEOUT_S,
+                        timeout=cli_timeout,
                     )
                     stdout, stderr = proc.stdout or "", proc.stderr or ""
                     if proc.returncode == 0:
@@ -252,7 +261,7 @@ class CodexCLIClient:
                     time.sleep(delay)
                 except subprocess.TimeoutExpired:
                     from exceptions import APIError
-                    raise APIError(f"codex exec 超时 {self._SCHEMA_REQUIRED_TIMEOUT_S}s")
+                    raise APIError(f"codex exec 超时 {cli_timeout}s")
 
             # 解析 last_path 里的最终 message
             last_text = ""

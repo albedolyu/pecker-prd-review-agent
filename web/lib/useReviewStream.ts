@@ -20,7 +20,14 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import type { ReviewResult, ReviewRunRequest } from "./api";
+import {
+  ApiError,
+  reviewJobsApi,
+  type ReviewJobEvent,
+  type ReviewJobSnapshot,
+  type ReviewResult,
+  type ReviewRunRequest,
+} from "./api";
 
 // ============================================================
 // 事件类型(与后端 stream.py 对齐)
@@ -52,6 +59,12 @@ export interface WikiScannedEvent extends BaseEvent {
 export interface WorkersStartedEvent extends BaseEvent {
   readonly event: "workers_started";
   readonly mode?: string;
+}
+
+export interface ReviewQueuedEvent extends BaseEvent {
+  readonly event: "review_queued";
+  readonly message?: string;
+  readonly max_concurrent?: number;
 }
 
 export interface WorkerDoneEvent extends BaseEvent {
@@ -244,17 +257,24 @@ export interface ReviewFailedEvent extends BaseEvent {
   readonly worker_errors?: ReadonlyArray<{ dim: string; error: string }>;
 }
 
-// P0-1: 部分 worker 失败且 merged_items 为空时的降级提示(非致命,不 abort)
+// P0-1: 部分 worker 失败时的降级提示(非致命,不 abort)
 export interface ReviewDegradedEvent extends BaseEvent {
   readonly event: "review_degraded";
   readonly failed_count?: number;
   readonly total_count?: number;
+  readonly items_count?: number;
+  readonly message: string;
+}
+
+export interface ReviewJobReusedEvent extends BaseEvent {
+  readonly event: "job_reused";
   readonly message: string;
 }
 
 export type ReviewStreamEvent =
   | UploadedEvent
   | WikiScannedEvent
+  | ReviewQueuedEvent
   | WorkersStartedEvent
   | WorkerDoneEvent
   | FinalReviewerStartedEvent
@@ -263,6 +283,7 @@ export type ReviewStreamEvent =
   | ErrorEvent
   | ReviewFailedEvent
   | ReviewDegradedEvent
+  | ReviewJobReusedEvent
   // 2026-04-28 step 1b: funnel telemetry SSE (5 新增 + evidence_verify_done 升级)
   | FunnelStageWorkerRawEvent
   | FunnelStageAfterDedupEvent
@@ -313,6 +334,123 @@ function parseSseFrame(frame: string): { event: string; data: string } | null {
 }
 
 // ============================================================
+// Reconnectable job mode helpers
+// ============================================================
+
+const REVIEW_JOB_STORAGE_PREFIX = "pecker:review-job:";
+export const REVIEW_JOB_RESUME_LOST_MESSAGE =
+  "上一次评审任务已过期或服务刚重启，无法继续接回；如仍需这份结果，请重新发起评审。";
+
+export function isBackgroundReviewJobModeEnabled(): boolean {
+  const raw = (process.env.NEXT_PUBLIC_REVIEW_JOB_MODE ?? "").trim().toLowerCase();
+  return !["0", "false", "off", "no"].includes(raw);
+}
+
+export function reviewJobResumeKey(req: ReviewRunRequest): string {
+  const materialHash = hashReviewInput([
+    req.prd_content,
+    ...(req.raw_materials ?? []),
+    req.user_notes ?? "",
+    stableWikiPagesForResume(req.wiki_pages ?? {}),
+  ].join("\n---\n"));
+  return `${REVIEW_JOB_STORAGE_PREFIX}${req.reviewer}:${req.workspace}:${req.prd_name}:${req.mode}:${materialHash}`;
+}
+
+function stableWikiPagesForResume(wikiPages: Readonly<Record<string, string>>): string {
+  return Object.keys(wikiPages)
+    .sort()
+    .map((key) => `${key}\n${wikiPages[key] ?? ""}`)
+    .join("\n---wiki-page---\n");
+}
+
+function hashReviewInput(value: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function readStoredJobId(key: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function storeJobId(key: string, jobId: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(key, jobId);
+  } catch {
+    // localStorage can be unavailable in hardened browser contexts.
+  }
+}
+
+function clearStoredJobId(key: string | null): void {
+  if (typeof window === "undefined" || !key) return;
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // ignore storage cleanup errors
+  }
+}
+
+export function reviewJobEventToStreamEvent(event: ReviewJobEvent): ReviewStreamEvent | null {
+  const publicPayload: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(event)) {
+    if (key !== "index" && key !== "ts") {
+      publicPayload[key] = value;
+    }
+  }
+  if (typeof publicPayload.event !== "string") return null;
+  return publicPayload as unknown as ReviewStreamEvent;
+}
+
+export function pmFacingReviewMessage(
+  message: string | null | undefined,
+  fallback = "评审失败",
+): string {
+  const text = (message ?? "").trim();
+  if (!text) return fallback;
+  const lower = text.toLowerCase();
+  if (
+    lower.includes("timed out") ||
+    lower.includes("timeout") ||
+    lower.includes("524") ||
+    lower.includes("gateway time")
+  ) {
+    return "评审响应过慢，本次结果可能不完整；可以先重新评审，连续出现时请联系工具负责人检查评审线路。";
+  }
+  if (
+    lower.includes("failed to fetch") ||
+    lower.includes("networkerror") ||
+    lower.includes("network error") ||
+    lower.includes("load failed")
+  ) {
+    return "网络连接中断，评审任务会继续处理；请刷新页面，页面会尝试接回本次评审。";
+  }
+  if (text.startsWith("API ") || text.startsWith("HTTP ")) {
+    return "评审服务暂时无法处理，请稍后再试；如果连续失败，请联系工具负责人检查服务状态。";
+  }
+  return text;
+}
+
+export function reviewStreamErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.detail && !error.detail.startsWith("API ") && !error.detail.startsWith("HTTP ")) {
+      return error.detail;
+    }
+    return pmFacingReviewMessage(error.message, "评审服务暂时无法处理，请稍后再试");
+  }
+  const err = error as { message?: string };
+  return pmFacingReviewMessage(err.message, "连接失败");
+}
+
+// ============================================================
 // Hook
 // ============================================================
 
@@ -335,10 +473,35 @@ export function useReviewStream(): UseReviewStreamResult {
   const [result, setResult] = useState<ReviewResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const activeJobResumeKeyRef = useRef<string | null>(null);
+  const activeJobIdRef = useRef<string | null>(null);
+
+  const applyStreamEvent = useCallback((ev: ReviewStreamEvent) => {
+    setEvents((prev) => [...prev, ev]);
+
+    if (typeof ev.progress === "number") {
+      setProgress(ev.progress);
+    }
+
+    if (ev.event === "result") {
+      setResult(ev.payload);
+      setProgress(100);
+      setState("done");
+    } else if (ev.event === "error") {
+      setError(pmFacingReviewMessage(ev.message));
+      setState("error");
+    } else if (ev.event === "review_failed") {
+      setError(pmFacingReviewMessage(ev.message));
+      setState("error");
+    }
+  }, []);
 
   const reset = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
+    clearStoredJobId(activeJobResumeKeyRef.current);
+    activeJobResumeKeyRef.current = null;
+    activeJobIdRef.current = null;
     setState("idle");
     setEvents([]);
     setProgress(0);
@@ -348,7 +511,14 @@ export function useReviewStream(): UseReviewStreamResult {
 
   const cancel = useCallback(() => {
     if (abortRef.current) {
+      const jobId = activeJobIdRef.current;
+      if (jobId) {
+        void reviewJobsApi.cancel(jobId).catch(() => {});
+      }
       abortRef.current.abort();
+      clearStoredJobId(activeJobResumeKeyRef.current);
+      activeJobResumeKeyRef.current = null;
+      activeJobIdRef.current = null;
       setState("cancelled");
     }
   }, []);
@@ -367,6 +537,146 @@ export function useReviewStream(): UseReviewStreamResult {
       abortRef.current = controller;
 
       try {
+        if (isBackgroundReviewJobModeEnabled()) {
+          const resumeKey = reviewJobResumeKey(req);
+          activeJobResumeKeyRef.current = resumeKey;
+          let jobId = readStoredJobId(resumeKey);
+          let lastIndex = -1;
+          let sawTerminalEvent = false;
+
+          const replaySnapshot = (snapshot: ReviewJobSnapshot) => {
+            for (const jobEvent of snapshot.events) {
+              if (jobEvent.index <= lastIndex) continue;
+              const ev = reviewJobEventToStreamEvent(jobEvent);
+              if (!ev) continue;
+              lastIndex = Math.max(lastIndex, jobEvent.index);
+              if (
+                ev.event === "result" ||
+                ev.event === "error" ||
+                ev.event === "review_failed"
+              ) {
+                sawTerminalEvent = true;
+              }
+              applyStreamEvent(ev);
+            }
+
+            if (snapshot.status === "done" && snapshot.result && !sawTerminalEvent) {
+              applyStreamEvent({
+                event: "result",
+                progress: 100,
+                label: "完成",
+                payload: snapshot.result,
+              });
+              sawTerminalEvent = true;
+            } else if (snapshot.status === "error" && snapshot.error && !sawTerminalEvent) {
+              applyStreamEvent({
+                event: "error",
+                progress: null,
+                label: "失败",
+                message: snapshot.error,
+              });
+              sawTerminalEvent = true;
+            }
+          };
+
+          if (jobId) {
+            activeJobIdRef.current = jobId;
+            try {
+              const snapshot = await reviewJobsApi.get(jobId, controller.signal);
+              if (snapshot.status === "cancelled") {
+                clearStoredJobId(resumeKey);
+                activeJobResumeKeyRef.current = null;
+                activeJobIdRef.current = null;
+                setError(REVIEW_JOB_RESUME_LOST_MESSAGE);
+                setState("error");
+                return;
+              }
+              setState(snapshot.status === "done" ? "done" : snapshot.status === "error" ? "error" : "running");
+              replaySnapshot(snapshot);
+              if (snapshot.status === "error") {
+                if (sawTerminalEvent) {
+                  clearStoredJobId(resumeKey);
+                  activeJobResumeKeyRef.current = null;
+                  activeJobIdRef.current = null;
+                } else {
+                  clearStoredJobId(resumeKey);
+                  activeJobResumeKeyRef.current = null;
+                  activeJobIdRef.current = null;
+                  setError(REVIEW_JOB_RESUME_LOST_MESSAGE);
+                }
+                return;
+              }
+            } catch {
+              clearStoredJobId(resumeKey);
+              activeJobResumeKeyRef.current = null;
+              activeJobIdRef.current = null;
+              setError(REVIEW_JOB_RESUME_LOST_MESSAGE);
+              setState("error");
+              return;
+            }
+          }
+
+          if (!jobId) {
+            const started = await reviewJobsApi.start(req, controller.signal);
+            jobId = started.job_id;
+            activeJobIdRef.current = jobId;
+            storeJobId(resumeKey, jobId);
+            if (started.reused) {
+              applyStreamEvent({
+                event: "job_reused",
+                progress: null,
+                label: "已接回进行中的评审",
+                message: "已接回进行中的评审，本次不会重复生成。",
+              });
+            }
+            setState("running");
+          }
+
+          while (!controller.signal.aborted && !sawTerminalEvent) {
+            const next = await reviewJobsApi.nextEvent(
+              jobId,
+              lastIndex,
+              25,
+              controller.signal,
+            );
+            if (next.event) {
+              const ev = reviewJobEventToStreamEvent(next.event);
+              lastIndex = Math.max(lastIndex, next.event.index);
+              if (ev) {
+                if (
+                  ev.event === "result" ||
+                  ev.event === "error" ||
+                  ev.event === "review_failed"
+                ) {
+                  sawTerminalEvent = true;
+                }
+                applyStreamEvent(ev);
+              }
+              continue;
+            }
+
+            if (
+              next.status === "done" ||
+              next.status === "error" ||
+              next.status === "cancelled"
+            ) {
+              const snapshot = await reviewJobsApi.get(jobId, controller.signal);
+              replaySnapshot(snapshot);
+              break;
+            }
+          }
+
+          if (controller.signal.aborted) {
+            setState("cancelled");
+          }
+          if (sawTerminalEvent) {
+            clearStoredJobId(resumeKey);
+            activeJobResumeKeyRef.current = null;
+            activeJobIdRef.current = null;
+          }
+          return;
+        }
+
         // SSE 必须直连后端,绕开 Next.js dev rewrite 对 streaming response
         // 的 buffer 行为(rewrite 会等整个 stream 关闭才一次性 forward)。
         // dev: web/.env.local 里设 NEXT_PUBLIC_SSE_BASE=http://localhost:8000 直连
@@ -427,11 +737,11 @@ export function useReviewStream(): UseReviewStreamResult {
               setProgress(100);
               setState("done");
             } else if (ev.event === "error") {
-              setError(ev.message ?? "评审失败");
+              setError(pmFacingReviewMessage(ev.message));
               setState("error");
             } else if (ev.event === "review_failed") {
               // P0-1: 全员失败 abort,不让 UI 自动推进到 Phase 3
-              setError(ev.message ?? "评审失败");
+              setError(pmFacingReviewMessage(ev.message));
               setState("error");
             }
             // review_degraded 不改 state,只留在 events 里供 UI 读取展示
@@ -442,10 +752,10 @@ export function useReviewStream(): UseReviewStreamResult {
         setState((cur) => (cur === "running" ? "done" : cur));
       } catch (e) {
         const err = e as { name?: string; message?: string };
-        if (err.name === "AbortError") {
+        if (err.name === "AbortError" || controller.signal.aborted) {
           setState("cancelled");
         } else {
-          setError(err.message ?? "连接失败");
+          setError(reviewStreamErrorMessage(e));
           setState("error");
         }
       } finally {
@@ -454,7 +764,7 @@ export function useReviewStream(): UseReviewStreamResult {
         }
       }
     },
-    [],
+    [applyStreamEvent],
   );
 
   const lastEvent = events.length > 0 ? events[events.length - 1]! : null;
