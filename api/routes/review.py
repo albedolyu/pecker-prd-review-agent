@@ -27,7 +27,7 @@ from api.deps import (
 from api.budget_gate import budget_status_snapshot, check_budget, record_review_cost
 from api.models import ConfirmRequest, ReviewResult, verify_review_result
 from api.stream import ReviewProgressEmitter, emit_and_log, sse_review_pipeline
-from api.workspace_acl import require_workspace_access
+from api.workspace_acl import is_admin, require_workspace_access
 
 # 预检 wiki scan 缓存(同一 workspace 10 分钟内复用)
 _wiki_scan_cache: Dict[str, Any] = {}
@@ -37,6 +37,59 @@ from logger import get_logger
 log = get_logger("review_api")
 
 router = APIRouter(tags=["review"])
+
+
+def _item_ids(items: Any) -> List[str]:
+    if not isinstance(items, list):
+        return []
+    return [str(item.get("id")) for item in items if isinstance(item, dict) and item.get("id")]
+
+
+def _recover_review_result_from_job_store(
+    submitted_result: Dict[str, Any],
+    *,
+    user: dict,
+) -> Optional[Dict[str, Any]]:
+    """Recover a trusted result handle from the in-memory job store.
+
+    This is intentionally narrow: if a reconnect draft carries a stale or
+    browser-mutated handle, only a server-side completed job with the same
+    review_id and item ids can be used as the source of truth.
+    """
+    review_id = str((submitted_result or {}).get("review_id") or "")
+    if not review_id:
+        return None
+
+    try:
+        from api.review_jobs import review_job_store
+
+        jobs = review_job_store.list_jobs(
+            owner=str((user or {}).get("reviewer") or ""),
+            admin=is_admin(user),
+            limit=200,
+        )
+    except Exception:
+        return None
+
+    submitted_ids = _item_ids((submitted_result or {}).get("items"))
+    for job in jobs:
+        if not isinstance(job, dict):
+            continue
+        if job.get("status") != "done":
+            continue
+        result = job.get("result")
+        if not isinstance(result, dict):
+            continue
+        if result.get("review_id") != review_id:
+            continue
+        for key in ("workspace", "reviewer", "prd_name", "mode"):
+            if submitted_result.get(key) and result.get(key) != submitted_result.get(key):
+                return None
+        recovered_ids = _item_ids(result.get("items"))
+        if submitted_ids and recovered_ids != submitted_ids:
+            return None
+        return result
+    return None
 
 
 # ============================================================
@@ -918,11 +971,20 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
     这里只做 signature 校验 + 决策计数 + 规则历史回流。
     """
     # Step 1: 验证 opaque handle signature
-    verify_review_result(req.review_result)
+    review_result = req.review_result
+    try:
+        verify_review_result(review_result)
+    except HTTPException as exc:
+        if exc.status_code != 403:
+            raise
+        recovered_result = _recover_review_result_from_job_store(review_result, user=user)
+        if recovered_result is None:
+            raise
+        review_result = recovered_result
 
     # ACL: workspace/reviewer 已绑入 signature v2 (2026-04-24 收紧), 这里用于 ACL 二道防线 —
     # signature 挡前端篡改, ACL 挡"合法用户误写他人 workspace"(如 admin 共享 cookie 场景)
-    _ws_name = (req.review_result.get("workspace") or "").strip()
+    _ws_name = (review_result.get("workspace") or "").strip()
     if _ws_name:
         _ws_dir = get_workspace_dir(_ws_name)
         require_workspace_access(_ws_dir, user)
@@ -933,14 +995,14 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
     rejected = sum(1 for d in decisions.values() if d.get("action") == "reject")
     edited = sum(1 for d in decisions.values() if d.get("action") == "edit")
 
-    items = req.review_result.get("items", [])
+    items = review_result.get("items", [])
     pending = len(items) - len(decisions)
     from review.post_review_contract import build_confirm_report_markdown
-    report_markdown = build_confirm_report_markdown(req.review_result, decisions)
+    report_markdown = build_confirm_report_markdown(review_result, decisions)
 
     # Step 3: P0.1 — 决策回流到 rule_performance_history
     # 这两个函数含同步文件 I/O (open/json.dump), 放线程池避免阻塞 event loop
-    workspace = req.review_result.get("workspace", "")
+    workspace = review_result.get("workspace", "")
     if workspace and decisions:
         try:
             await asyncio.to_thread(
@@ -950,7 +1012,7 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
             log.warning(f"[决策回流] 写入失败,不阻塞确认流程: {e}")
 
     # Step 4: 保存 Eval ground truth(人类标注 -> 回归测试)
-    reviewer = req.review_result.get("reviewer", "unknown")
+    reviewer = review_result.get("reviewer", "unknown")
     if workspace and decisions:
         try:
             await asyncio.to_thread(
@@ -959,8 +1021,8 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
                 decisions,
                 workspace,
                 reviewer,
-                req.review_result.get("prd_name", ""),
-                req.review_result.get("review_id", ""),
+                review_result.get("prd_name", ""),
+                review_result.get("review_id", ""),
             )
         except Exception as e:
             log.warning(f"[ground_truth] 保存失败,不阻塞确认流程: {e}")
@@ -970,7 +1032,7 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
     # 2026-04-28 step 1a 注: confirm_review 是独立 POST endpoint, 无 SSE 流 (Phase 2 的 emitter
     # 在 /run 完成时已 close). 前端拿 N4 数据通过 confirm 返回 body 或后续轮询 jsonl.
     # 因此本处 evt.append 单发是 by-design, 不是 step 1a 双发遗漏.
-    review_id = req.review_result.get("review_id", "")
+    review_id = review_result.get("review_id", "")
     if workspace and review_id and decisions:
         try:
             from event_store import EventStore
@@ -984,7 +1046,7 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
 
     return {
         "status": "confirmed",
-        "review_id": req.review_result.get("review_id"),
+        "review_id": review_result.get("review_id"),
         "accepted": accepted,
         "rejected": rejected,
         "edited": edited,

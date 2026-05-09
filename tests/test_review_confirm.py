@@ -290,3 +290,78 @@ async def test_confirm_review_returns_backend_report_markdown(tmp_workspace, mon
     assert "report_markdown" in resp
     assert "PRD 评审报告 - demo" in resp["report_markdown"]
     assert "下游实现约定" in resp["report_markdown"]
+
+
+@pytest.mark.asyncio
+async def test_confirm_review_recovers_authoritative_result_from_job_store(tmp_workspace, monkeypatch):
+    """If a reconnect draft carries a stale handle, trust the server job result."""
+    import os as _os
+    from api.models import ConfirmRequest, ReviewResult
+    from api.routes.review import confirm_review
+
+    _os.environ["PECKER_SIGNATURE_SECRET"] = "unit-test-signature-secret-32-chars"
+    ws, _ = tmp_workspace
+    rr = ReviewResult.create(
+        reviewer="alice",
+        workspace=ws,
+        prd_name="demo",
+        mode="standard",
+        merged_items=[{
+            "id": "R-001",
+            "rule_id": "V-06",
+            "dimension": "structure",
+            "issue": "缺少空态处理",
+            "suggestion": "补充空态",
+            "severity": "must",
+        }],
+        workers=[],
+        usage={},
+    )
+    trusted_result = rr.model_dump()
+    trusted_result["items"][0]["issue"] = "服务端 job 里的权威问题描述"
+    trusted_result["items"][0]["problem"] = "服务端 job 里的权威问题描述"
+    stale_handle = json.loads(json.dumps(trusted_result, ensure_ascii=False))
+    stale_handle["items"][0]["issue"] = "browser-side stale copy"
+    stale_handle["items"][0]["problem"] = "browser-side stale copy"
+
+    class FakeJobStore:
+        def list_jobs(self, *, owner: str = "", admin: bool = False, limit: int = 50):
+            return [{
+                "job_id": "rjob_test",
+                "owner": "alice",
+                "status": "done",
+                "result": trusted_result,
+            }]
+
+    monkeypatch.setattr(
+        "api.review_jobs.review_job_store",
+        FakeJobStore(),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "api.routes.review.is_admin",
+        lambda user: False,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "api.routes.review.require_workspace_access", lambda *args, **kwargs: None,
+        raising=True,
+    )
+    monkeypatch.setattr(
+        "api.routes.review.get_workspace_dir", lambda name: name,
+        raising=True,
+    )
+
+    req = ConfirmRequest(
+        review_result=stale_handle,
+        decisions={"R-001": {"action": "reject", "reason_category": "model_noise"}},
+    )
+
+    resp = await confirm_review(req, user={"reviewer": "alice"})
+
+    assert resp["status"] == "confirmed"
+    assert resp["review_id"] == trusted_result["review_id"]
+    assert resp["rejected"] == 1
+    assert "服务端 job 里的权威问题描述" in resp["report_markdown"]
+    assert "缺少空态处理" not in resp["report_markdown"]
+    assert "browser-side stale copy" not in resp["report_markdown"]
