@@ -163,7 +163,11 @@ async def test_review_job_store_writes_sanitized_audit_log(tmp_path):
                 "dim_key": "quality",
                 "items_count": 1,
                 "error": "Request timed out.",
-                "telemetry": {"duration_ms": 1200, "prd_context_packet_chars": 8000},
+                "telemetry": {
+                    "duration_ms": 1200,
+                    "prd_context_packet_chars": 8000,
+                    "cost_usd": 0.037,
+                },
                 "raw_materials": ["must not leak"],
             },
         )
@@ -197,6 +201,7 @@ async def test_review_job_store_writes_sanitized_audit_log(tmp_path):
     assert rows[1]["items_count"] == 1
     assert rows[1]["duration_ms"] == 1200
     assert rows[1]["prd_context_packet_chars"] == 8000
+    assert rows[1]["cost_usd"] == 0.037
     assert rows[-1]["result_review_id"] == "rev_1"
     assert rows[-1]["result_items_count"] == 1
     serialized = json.dumps(rows, ensure_ascii=False)

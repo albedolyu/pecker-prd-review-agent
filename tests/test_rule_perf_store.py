@@ -49,6 +49,29 @@ def test_save_creates_output_dir(ws):
     assert (ws / "output" / "rule_performance_history.json").is_file()
 
 
+def test_save_retries_transient_permission_error_on_replace(ws, monkeypatch):
+    store = RulePerformanceHistoryStore(ws)
+    calls = {"replace": 0}
+    orig_replace = os.replace
+
+    def flaky_replace(src, dst):
+        calls["replace"] += 1
+        if calls["replace"] == 1:
+            raise PermissionError("simulated transient Windows lock")
+        return orig_replace(src, dst)
+
+    import rule_perf_store
+
+    monkeypatch.setattr(os, "replace", flaky_replace)
+    monkeypatch.setattr(rule_perf_store.time, "sleep", lambda _: None)
+
+    store.save({"V-01": {"stats": {"total": 1}}})
+
+    assert calls["replace"] == 2
+    assert store.load()["V-01"]["stats"]["total"] == 1
+    assert list((ws / "output").glob(".rule_perf_*.tmp")) == []
+
+
 def test_load_corrupted_returns_empty_dict(ws):
     """JSON 坏了应该 fail-safe 返回 {}, 不抛"""
     store = RulePerformanceHistoryStore(ws)

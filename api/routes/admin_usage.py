@@ -167,7 +167,7 @@ def _sanitize_draft(draft: Dict[str, Any]) -> Dict[str, Any]:
             action = str(decision.get("action") or "")
             if action in action_counts:
                 action_counts[action] += 1
-    phase = int(draft.get("phase") or 0)
+    phase = _safe_int(draft.get("phase"))
     return {
         "ts": draft.get("ts", ""),
         "reviewer": redact_text(str(draft.get("reviewer", ""))),

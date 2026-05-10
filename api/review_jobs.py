@@ -397,6 +397,7 @@ def _build_audit_record(job: ReviewJob, event: Dict[str, Any]) -> Dict[str, Any]
             "tokens_out",
             "input_tokens",
             "output_tokens",
+            "cost_usd",
             "prd_context_packet_chars",
         ):
             value = telemetry.get(key)

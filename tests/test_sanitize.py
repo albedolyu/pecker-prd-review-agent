@@ -146,6 +146,23 @@ def test_redact_sensitive_redacts_prefixed_api_key_fields():
     assert redacted["public_key"] == "safe-public-key-label"
 
 
+def test_redact_sensitive_redacts_camel_case_api_key_fields():
+    payload = {
+        "apiKey": "camel-api-key-value",
+        "openaiApiKey": "camel-openai-api-key-value",
+        "publicKey": "safe-public-key-label",
+    }
+
+    redacted = redact_sensitive(payload)
+    serialized = json.dumps(redacted, ensure_ascii=False)
+
+    assert "camel-api-key-value" not in serialized
+    assert "camel-openai-api-key-value" not in serialized
+    assert redacted["apiKey"] == "[REDACTED_SECRET]"
+    assert redacted["openaiApiKey"] == "[REDACTED_SECRET]"
+    assert redacted["publicKey"] == "safe-public-key-label"
+
+
 def test_redact_sensitive_redacts_extended_secret_named_fields():
     payload = {
         "client_secret": "client-secret-value",
@@ -271,6 +288,21 @@ def test_redact_text_handles_json_like_secret_header_fields():
     assert '"x-api-key": "[REDACTED_SECRET]"' in redacted
     assert "'proxy-authorization': '[REDACTED_SECRET]'" in redacted
     assert '"safe": "workspace-alpha"' in redacted
+
+
+def test_redact_text_handles_json_like_camel_case_api_key_fields():
+    value = (
+        'gateway payload {"apiKey": "json-api-key-value", '
+        '"openaiApiKey": "json-openai-api-key-value", "publicKey": "safe-public-key"}'
+    )
+
+    redacted = redact_text(value)
+
+    assert "json-api-key-value" not in redacted
+    assert "json-openai-api-key-value" not in redacted
+    assert '"apiKey": "[REDACTED_SECRET]"' in redacted
+    assert '"openaiApiKey": "[REDACTED_SECRET]"' in redacted
+    assert '"publicKey": "safe-public-key"' in redacted
 
 
 def test_redact_text_handles_json_like_multi_part_token_fields():

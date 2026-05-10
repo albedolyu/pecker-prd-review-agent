@@ -253,3 +253,31 @@ def test_admin_usage_active_drafts_excludes_expired_drafts(tmp_path):
     rows = _load_active_drafts(tmp_path)
 
     assert [row["reviewer"] for row in rows] == ["pm-fresh"]
+
+
+def test_admin_usage_active_drafts_tolerates_invalid_phase(tmp_path):
+    from api.routes.admin_usage import _load_active_drafts
+
+    draft_dir = tmp_path / ".pecker_drafts"
+    draft_dir.mkdir(parents=True, exist_ok=True)
+    (draft_dir / "bad_phase_draft.json").write_text(
+        json.dumps(
+            {
+                "ts": "2026-05-08T10:00:00",
+                "reviewer": "pm-bad",
+                "phase": "not-a-number",
+                "workspace": "workspace-alpha",
+                "prd_name": "bad phase.md",
+                "review_result": {"items": []},
+                "item_decisions": {},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    rows = _load_active_drafts(tmp_path)
+
+    assert rows[0]["reviewer"] == "pm-bad"
+    assert rows[0]["phase"] == 0
+    assert rows[0]["phase_label"] == "上传 PRD"

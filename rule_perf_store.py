@@ -35,6 +35,8 @@ PathLike = Union[str, Path]
 
 _CURRENT_SCHEMA_VERSION = 1
 _META_KEY = "__meta__"
+_REPLACE_MAX_RETRIES = 3
+_REPLACE_RETRY_DELAY_SECONDS = 0.05
 
 
 def _detect_schema_version(data: Dict[str, Any]) -> int:
@@ -66,6 +68,17 @@ def _migrate(data: Dict[str, Any], from_version: int) -> Dict[str, Any]:
         from_version = 1
     # ... future: if from_version == 1: data = _migrate_v1_to_v2(data)
     return data
+
+
+def _replace_with_retry(src: str, dst: Path) -> None:
+    for attempt in range(_REPLACE_MAX_RETRIES + 1):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if attempt >= _REPLACE_MAX_RETRIES:
+                raise
+            time.sleep(_REPLACE_RETRY_DELAY_SECONDS)
 
 
 class RulePerformanceHistoryStore:
@@ -109,7 +122,7 @@ class RulePerformanceHistoryStore:
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
-            os.replace(tmp, self.path)
+            _replace_with_retry(tmp, self.path)
         except Exception:
             if os.path.exists(tmp):
                 try:
