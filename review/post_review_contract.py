@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Mapping
 
+from api.sanitize import redact_text
 from review.implement_convention import annotate_review_items, build_report_notice
 
 
@@ -84,15 +85,20 @@ def build_confirm_report_markdown(
         generated_at = datetime.fromtimestamp(created_at).strftime("%Y-%m-%d %H:%M:%S")
     else:
         generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    prd_name = redact_text(str(review_result.get("prd_name", "unknown")))
+    reviewer = redact_text(str(review_result.get("reviewer", "")))
+    workspace = redact_text(str(review_result.get("workspace", "")))
+    mode = redact_text(str(review_result.get("mode", "")))
+    review_id = redact_text(str(review_result.get("review_id", "")))
 
     lines = [
-        f"# PRD 评审报告 - {review_result.get('prd_name', 'unknown')}",
+        f"# PRD 评审报告 - {prd_name}",
         "",
-        f"> **评审人**: {review_result.get('reviewer', '')}",
-        f"> **Workspace**: {review_result.get('workspace', '')}",
-        f"> **模式**: {review_result.get('mode', '')}",
+        f"> **评审人**: {reviewer}",
+        f"> **Workspace**: {workspace}",
+        f"> **模式**: {mode}",
         f"> **生成时间**: {generated_at}",
-        f"> **Review ID**: `{review_result.get('review_id', '')}`",
+        f"> **Review ID**: `{review_id}`",
         "",
         "## 评审概要",
         "",

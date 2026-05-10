@@ -362,10 +362,10 @@ def _scrub_event_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
 def _build_audit_record(job: ReviewJob, event: Dict[str, Any]) -> Dict[str, Any]:
     record: Dict[str, Any] = {
         "job_id": job.job_id,
-        "owner": job.owner,
-        "workspace": job.workspace,
-        "prd_name": job.prd_name,
-        "mode": job.mode,
+        "owner": redact_text(str(job.owner)),
+        "workspace": redact_text(str(job.workspace)),
+        "prd_name": redact_text(str(job.prd_name)),
+        "mode": redact_text(str(job.mode)),
         "status": job.status,
         "event": event.get("event"),
         "index": event.get("index"),

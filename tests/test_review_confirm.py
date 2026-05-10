@@ -286,6 +286,27 @@ def test_ground_truth_filename_redacts_secrets(tmp_workspace, tmp_path):
     assert "REDACTED_SECRET" in gt_files[0].name
 
 
+def test_confirm_report_markdown_redacts_secret_metadata():
+    """Confirm 返回的 Markdown 头部不能回显 PRD 名称/空间/评审人里的密钥。"""
+    from review.post_review_contract import build_confirm_report_markdown
+
+    fake_key = "sk-01234567890abcdefABCDEFghij"
+    report = build_confirm_report_markdown(
+        {
+            "prd_name": f"demo-{fake_key}",
+            "reviewer": f"alice-{fake_key}",
+            "workspace": f"workspace-alpha-{fake_key}",
+            "mode": "standard",
+            "review_id": "rev_test",
+            "items": [],
+        },
+        {},
+    )
+
+    assert fake_key not in report
+    assert report.count("[REDACTED_SECRET]") == 3
+
+
 @pytest.mark.asyncio
 async def test_confirm_review_returns_backend_report_markdown(tmp_workspace, monkeypatch):
     """Web confirm 应返回后端生成的报告 markdown,供 Phase4 复用同源报告。"""

@@ -90,8 +90,8 @@ async def test_admin_usage_endpoint_includes_reconnectable_jobs(monkeypatch, tmp
 
     job = store.create_job(
         owner="lvxinhang",
-        workspace="workspace-alpha",
-        prd_name="alpha.md",
+        workspace=f"workspace-alpha-{fake_key}",
+        prd_name=f"alpha-{fake_key}.md",
         mode="standard",
         runner=runner,
     )
@@ -173,7 +173,10 @@ async def test_admin_usage_endpoint_includes_reconnectable_jobs(monkeypatch, tmp
     assert data["active_jobs"][0]["job_id"] == job.job_id
     assert data["active_jobs"][0]["owner"] == "lvxinhang"
     assert data["active_jobs"][0]["last_event"] == "result"
-    assert "prd_content" not in json.dumps(data["active_jobs"], ensure_ascii=False)
+    serialized_jobs = json.dumps(data["active_jobs"], ensure_ascii=False)
+    assert fake_key not in serialized_jobs
+    assert "[REDACTED_SECRET]" in serialized_jobs
+    assert "prd_content" not in serialized_jobs
     assert data["recent_job_events"][0]["job_id"] == "rjob_old"
     assert data["recent_job_events"][0]["dim_key"] == "quality"
     assert data["recent_job_events"][0]["duration_ms"] == 1200

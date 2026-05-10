@@ -24,6 +24,7 @@ import pytest
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 if TESTS_DIR not in sys.path:
     sys.path.insert(0, TESTS_DIR)
+sys.modules["tests.test_model_router"] = sys.modules[__name__]
 
 
 # ============================================================

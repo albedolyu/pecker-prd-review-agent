@@ -153,6 +153,7 @@ async def test_review_job_store_writes_sanitized_audit_log(tmp_path):
 
     store = ReviewJobStore(max_events=5)
     audit_path = tmp_path / "logs" / "review_jobs.jsonl"
+    fake_key = "sk-01234567890abcdefABCDEFghij"
 
     async def runner(job):
         job.emit("workers_started", {"mode": "standard", "prd_content": "secret prd"})
@@ -172,9 +173,9 @@ async def test_review_job_store_writes_sanitized_audit_log(tmp_path):
         }
 
     job = store.create_job(
-        owner="pm-a",
-        workspace="workspace-alpha",
-        prd_name="alpha.md",
+        owner=f"pm-a-{fake_key}",
+        workspace=f"workspace-alpha-{fake_key}",
+        prd_name=f"alpha-{fake_key}.md",
         mode="standard",
         runner=runner,
         audit_path=audit_path,
@@ -199,6 +200,8 @@ async def test_review_job_store_writes_sanitized_audit_log(tmp_path):
     assert rows[-1]["result_review_id"] == "rev_1"
     assert rows[-1]["result_items_count"] == 1
     serialized = json.dumps(rows, ensure_ascii=False)
+    assert fake_key not in serialized
+    assert "[REDACTED_SECRET]" in serialized
     assert "secret prd" not in serialized
     assert "must not leak" not in serialized
     assert "PRD derived text" not in serialized
