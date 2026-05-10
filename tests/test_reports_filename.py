@@ -138,3 +138,49 @@ async def test_save_to_wiki_redacts_secrets_from_filename_and_metadata(monkeypat
 
     assert fake_key not in metadata_text
     assert "[REDACTED_SECRET]" in metadata_text
+
+
+@pytest.mark.asyncio
+async def test_download_report_rejects_non_markdown_files(monkeypatch, tmp_path):
+    """报告下载入口只应服务 Markdown 报告,不能顺手暴露 output 下的其他文件。"""
+    from fastapi import HTTPException
+    from api.routes import reports
+
+    ws_dir = tmp_path / "workspace-alpha"
+    output_dir = ws_dir / "output"
+    output_dir.mkdir(parents=True)
+    (output_dir / "debug.json").write_text('{"secret":"internal"}', encoding="utf-8")
+    monkeypatch.setattr(reports, "get_workspace_dir", lambda _workspace: ws_dir, raising=True)
+    monkeypatch.setattr(reports, "require_workspace_access", lambda *_args, **_kwargs: None, raising=True)
+
+    with pytest.raises(HTTPException) as exc:
+        await reports.download_report(
+            "workspace-alpha",
+            filename="debug.json",
+            user={"reviewer": "alice"},
+        )
+
+    assert exc.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_download_report_rejects_markdown_outside_report_prefix(monkeypatch, tmp_path):
+    """下载入口应和 list_reports 保持同一白名单,避免暴露 output 下的杂项 Markdown。"""
+    from fastapi import HTTPException
+    from api.routes import reports
+
+    ws_dir = tmp_path / "workspace-alpha"
+    output_dir = ws_dir / "output"
+    output_dir.mkdir(parents=True)
+    (output_dir / "operator-notes.md").write_text("internal notes", encoding="utf-8")
+    monkeypatch.setattr(reports, "get_workspace_dir", lambda _workspace: ws_dir, raising=True)
+    monkeypatch.setattr(reports, "require_workspace_access", lambda *_args, **_kwargs: None, raising=True)
+
+    with pytest.raises(HTTPException) as exc:
+        await reports.download_report(
+            "workspace-alpha",
+            filename="operator-notes.md",
+            user={"reviewer": "alice"},
+        )
+
+    assert exc.value.status_code == 400

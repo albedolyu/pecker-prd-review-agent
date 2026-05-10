@@ -107,3 +107,57 @@ def test_build_confirm_report_markdown_uses_backend_aliases_and_convention():
     assert "原始: 缺少验收标准" in report
     assert "已知取舍" in report
     assert "业务已接受该取舍" in report
+
+
+def test_build_confirm_report_markdown_redacts_decision_free_text():
+    from review.post_review_contract import build_confirm_report_markdown
+
+    fake_key = "sk-01234567890abcdefABCDEFghij"
+    result = _review_result([
+        {
+            "id": "R-001",
+            "issue": "缺少验收标准",
+            "suggestion": "补充验收标准",
+            "severity": "must",
+        },
+        {
+            "id": "R-002",
+            "issue": "边界不清",
+            "suggestion": "补充边界",
+            "severity": "should",
+        },
+    ])
+    decisions = {
+        "R-001": {"action": "edit", "edited_problem": f"验收标准待补 {fake_key}"},
+        "R-002": {
+            "action": "reject",
+            "reason_category": "model_noise",
+            "reason_note": f"误报, see api_key={fake_key}",
+        },
+    }
+
+    report = build_confirm_report_markdown(result, decisions)
+
+    assert fake_key not in report
+    assert report.count("[REDACTED_SECRET]") >= 2
+
+
+def test_build_confirm_report_markdown_redacts_item_free_text():
+    from review.post_review_contract import build_confirm_report_markdown
+
+    fake_key = "sk-01234567890abcdefABCDEFghij"
+    result = _review_result([
+        {
+            "id": "R-001",
+            "issue": f"缺少验收标准 api_key={fake_key}",
+            "suggestion": f"补充验收标准 Bearer {fake_key}",
+            "evidence_content": f"原文包含 cookie={fake_key}",
+            "location": f"3. 验收 {fake_key}",
+            "severity": "must",
+        },
+    ])
+
+    report = build_confirm_report_markdown(result, {"R-001": {"action": "accept"}})
+
+    assert fake_key not in report
+    assert report.count("[REDACTED_SECRET]") >= 4

@@ -115,9 +115,19 @@ def read_draft_file(project_root: Path, reviewer: str) -> Optional[Dict[str, Any
 
     try:
         with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            draft = json.load(f)
     except (json.JSONDecodeError, OSError):
         return None
+
+    ts = draft.get("ts", "") if isinstance(draft, dict) else ""
+    if ts:
+        try:
+            age = (datetime.now() - datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S")).total_seconds()
+            if age > _DRAFT_TTL_DAYS * 86400:
+                return None
+        except ValueError:
+            pass
+    return draft
 
 
 @router.get("/drafts/{reviewer}")

@@ -128,34 +128,34 @@ def build_confirm_report_markdown(
         severity = item.get("severity", "")
 
         lines.extend([
-            f"### {idx}. {item_id} [{severity}] {action_label}".strip(),
+            f"### {idx}. {redact_text(str(item_id))} [{redact_text(str(severity))}] {action_label}".strip(),
             "",
         ])
         if item.get("location"):
-            lines.append(f"- **位置**: {item['location']}")
+            lines.append(f"- **位置**: {redact_text(str(item['location']))}")
 
         problem = item.get("problem") or ""
         if action == "edit" and decision.get("edited_problem"):
-            lines.append(f"- **问题(改写后)**: {decision['edited_problem']}")
+            lines.append(f"- **问题(改写后)**: {redact_text(str(decision['edited_problem']))}")
             if problem:
-                lines.append(f"  - 原始: {problem}")
+                lines.append(f"  - 原始: {redact_text(str(problem))}")
         elif problem:
-            lines.append(f"- **问题**: {problem}")
+            lines.append(f"- **问题**: {redact_text(str(problem))}")
 
         if item.get("evidence"):
-            lines.append(f"- **依据**: {item['evidence']}")
+            lines.append(f"- **依据**: {redact_text(str(item['evidence']))}")
         if item.get("suggestion"):
-            lines.append(f"- **建议**: {item['suggestion']}")
+            lines.append(f"- **建议**: {redact_text(str(item['suggestion']))}")
 
         if action == "reject":
             category = decision.get("reason_category") or "model_noise"
             lines.append(f"- **拒绝原因**: {REJECT_REASON_LABELS.get(category, category)}")
             note = decision.get("reason_note") or decision.get("reason")
             if note:
-                lines.append(f"- **驳回备注**: {note}")
+                lines.append(f"- **驳回备注**: {redact_text(str(note))}")
 
         if item.get("implement_convention_version"):
-            lines.append(f"- **实现约定**: {item['implement_convention_version']}")
+            lines.append(f"- **实现约定**: {redact_text(str(item['implement_convention_version']))}")
         lines.append("")
 
     return "\n".join(lines)

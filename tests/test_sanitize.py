@@ -94,6 +94,22 @@ def test_redact_sensitive_redacts_cookie_named_fields():
     assert redacted["safe"] == "workspace-alpha"
 
 
+def test_redact_sensitive_redacts_camel_case_cookie_fields():
+    payload = {
+        "setCookie": "pecker_session=jwt-header.payload.signature",
+        "headers": {"cookieHeader": "pecker_session=jwt-header.payload.signature"},
+        "safe": "workspace-alpha",
+    }
+
+    redacted = redact_sensitive(payload)
+    serialized = json.dumps(redacted, ensure_ascii=False)
+
+    assert "jwt-header.payload.signature" not in serialized
+    assert redacted["setCookie"] == "[REDACTED_SECRET]"
+    assert redacted["headers"]["cookieHeader"] == "[REDACTED_SECRET]"
+    assert redacted["safe"] == "workspace-alpha"
+
+
 def test_redact_sensitive_redacts_common_secret_header_fields():
     payload = {
         "headers": {
@@ -197,6 +213,22 @@ def test_redact_text_handles_cookie_headers():
     assert "Set-Cookie: [REDACTED_SECRET]" in redacted
 
 
+def test_redact_text_handles_json_like_camel_case_cookie_fields():
+    value = (
+        'gateway payload {"setCookie": "pecker_session=json-cookie-secret", '
+        '"cookieHeader": "pecker_session=json-cookie-header-secret", '
+        '"safe": "workspace-alpha"}'
+    )
+
+    redacted = redact_text(value)
+
+    assert "json-cookie-secret" not in redacted
+    assert "json-cookie-header-secret" not in redacted
+    assert '"setCookie": "[REDACTED_SECRET]"' in redacted
+    assert '"cookieHeader": "[REDACTED_SECRET]"' in redacted
+    assert '"safe": "workspace-alpha"' in redacted
+
+
 def test_redact_text_handles_json_like_secret_fields():
     value = (
         'provider payload {"access_token": "json-access-token-value", '
@@ -224,6 +256,35 @@ def test_redact_text_handles_common_secret_header_lines():
     assert "proxy-user-secret" not in redacted
     assert "X-API-Key: [REDACTED_SECRET]" in redacted
     assert "Proxy-Authorization: Basic [REDACTED_SECRET]" in redacted
+
+
+def test_redact_text_handles_json_like_secret_header_fields():
+    value = (
+        'gateway payload {"x-api-key": "json-api-key-value", '
+        "'proxy-authorization': 'Basic json-proxy-secret', \"safe\": \"workspace-alpha\"}"
+    )
+
+    redacted = redact_text(value)
+
+    assert "json-api-key-value" not in redacted
+    assert "json-proxy-secret" not in redacted
+    assert '"x-api-key": "[REDACTED_SECRET]"' in redacted
+    assert "'proxy-authorization': '[REDACTED_SECRET]'" in redacted
+    assert '"safe": "workspace-alpha"' in redacted
+
+
+def test_redact_text_handles_json_like_multi_part_token_fields():
+    value = (
+        'gateway payload {"aws_session_token": "json-session-token-value", '
+        '"tokens_used": 18, "safe": "workspace-alpha"}'
+    )
+
+    redacted = redact_text(value)
+
+    assert "json-session-token-value" not in redacted
+    assert '"aws_session_token": "[REDACTED_SECRET]"' in redacted
+    assert '"tokens_used": 18' in redacted
+    assert '"safe": "workspace-alpha"' in redacted
 
 
 def test_redact_sensitive_handles_aws_secret_access_key():
@@ -288,3 +349,73 @@ def test_redact_sensitive_handles_jwt_fields():
     assert "inline.jwt.signature" not in serialized
     assert redacted["jwt"] == "[REDACTED_SECRET]"
     assert redacted["review_id"] == "rev_safe"
+
+
+def test_redact_sensitive_handles_camel_case_aws_secret_fields():
+    payload = {
+        "awsSecretAccessKey": "camel-aws-secret-access-key-value",
+        "awsAccessKeyId": "camel-aws-access-key-id-value",
+        "awsSessionToken": "camel-aws-session-token-value",
+        "tokensUsed": 12,
+    }
+
+    redacted = redact_sensitive(payload)
+    serialized = json.dumps(redacted, ensure_ascii=False)
+
+    assert "camel-aws-secret-access-key-value" not in serialized
+    assert "camel-aws-access-key-id-value" not in serialized
+    assert "camel-aws-session-token-value" not in serialized
+    assert redacted["awsSecretAccessKey"] == "[REDACTED_SECRET]"
+    assert redacted["awsAccessKeyId"] == "[REDACTED_SECRET]"
+    assert redacted["awsSessionToken"] == "[REDACTED_SECRET]"
+    assert redacted["tokensUsed"] == 12
+
+
+def test_redact_sensitive_handles_camel_case_bearer_token_fields():
+    payload = {
+        "bearerToken": "camel-bearer-token-value",
+        "sessionToken": "camel-session-token-value",
+        "tokensUsed": 12,
+    }
+
+    redacted = redact_sensitive(payload)
+    serialized = json.dumps(redacted, ensure_ascii=False)
+
+    assert "camel-bearer-token-value" not in serialized
+    assert "camel-session-token-value" not in serialized
+    assert redacted["bearerToken"] == "[REDACTED_SECRET]"
+    assert redacted["sessionToken"] == "[REDACTED_SECRET]"
+    assert redacted["tokensUsed"] == 12
+
+
+def test_redact_text_handles_json_like_camel_case_aws_secret_fields():
+    value = (
+        'gateway payload {"awsSecretAccessKey": "json-aws-secret-access-key", '
+        '"awsAccessKeyId": "json-aws-access-key-id", '
+        '"awsSessionToken": "json-aws-session-token", "tokensUsed": 12}'
+    )
+
+    redacted = redact_text(value)
+
+    assert "json-aws-secret-access-key" not in redacted
+    assert "json-aws-access-key-id" not in redacted
+    assert "json-aws-session-token" not in redacted
+    assert '"awsSecretAccessKey": "[REDACTED_SECRET]"' in redacted
+    assert '"awsAccessKeyId": "[REDACTED_SECRET]"' in redacted
+    assert '"awsSessionToken": "[REDACTED_SECRET]"' in redacted
+    assert '"tokensUsed": 12' in redacted
+
+
+def test_redact_text_handles_json_like_camel_case_bearer_token_fields():
+    value = (
+        'gateway payload {"bearerToken": "json-bearer-token", '
+        '"sessionToken": "json-session-token", "tokensUsed": 12}'
+    )
+
+    redacted = redact_text(value)
+
+    assert "json-bearer-token" not in redacted
+    assert "json-session-token" not in redacted
+    assert '"bearerToken": "[REDACTED_SECRET]"' in redacted
+    assert '"sessionToken": "[REDACTED_SECRET]"' in redacted
+    assert '"tokensUsed": 12' in redacted

@@ -502,6 +502,58 @@ def test_completed_job_draft_does_not_overwrite_same_name_in_another_workspace(t
     assert draft["review_result"] is None
 
 
+def test_completed_job_draft_overwrites_expired_other_prd_draft(tmp_path):
+    import json
+    from datetime import datetime, timedelta
+
+    from api.routes import review_jobs
+    from api.routes.review import ReviewRequest
+
+    draft_dir = tmp_path / ".pecker_drafts"
+    draft_dir.mkdir(parents=True)
+    (draft_dir / "pm-a_draft.json").write_text(
+        json.dumps(
+            {
+                "ts": (datetime.now() - timedelta(days=4)).strftime("%Y-%m-%dT%H:%M:%S"),
+                "reviewer": "pm-a",
+                "phase": 1,
+                "prd_name": "expired-beta.md",
+                "prd_content": "# Expired Beta",
+                "mode": "standard",
+                "raw_materials": [],
+                "user_notes": "",
+                "review_result": None,
+                "item_decisions": {},
+                "confirmed_report_markdown": "",
+                "workspace": "workspace-beta",
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    review_jobs._persist_completed_review_draft(
+        req=ReviewRequest(
+            prd_content="# Alpha",
+            workspace="workspace-alpha",
+            prd_name="alpha.md",
+            reviewer="pm-a",
+            mode="standard",
+        ),
+        reviewer="pm-a",
+        project_root=tmp_path,
+        review_result={"review_id": "rev_alpha", "items": []},
+    )
+
+    draft = json.loads(
+        (tmp_path / ".pecker_drafts" / "pm-a_draft.json").read_text(encoding="utf-8")
+    )
+
+    assert draft["prd_name"] == "alpha.md"
+    assert draft["workspace"] == "workspace-alpha"
+    assert draft["review_result"]["review_id"] == "rev_alpha"
+
+
 @pytest.mark.asyncio
 async def test_review_job_can_reuse_existing_sse_pipeline(monkeypatch):
     from api.review_jobs import ReviewJob

@@ -78,7 +78,13 @@ async def download_report(
 
     前端从 list_reports 拿 filename 后,直接拼 URL 下载。
     """
-    if "/" in filename or "\\" in filename or ".." in filename:
+    if (
+        "/" in filename
+        or "\\" in filename
+        or ".." in filename
+        or not filename.startswith("PRD_开发任务_")
+        or not filename.lower().endswith(".md")
+    ):
         raise HTTPException(status_code=400, detail="非法文件名")
     ws_dir = get_workspace_dir(workspace)
     require_workspace_access(ws_dir, user)

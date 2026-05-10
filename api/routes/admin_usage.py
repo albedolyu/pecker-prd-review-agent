@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -15,6 +16,8 @@ from api.sanitize import redact_sensitive, redact_text
 from api.usage_summary import build_usage_summary
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+_ACTIVE_DRAFT_TTL_DAYS = 3
 
 
 def _require_admin(user: dict = Depends(get_current_user)) -> dict:
@@ -113,6 +116,9 @@ def _sanitize_job_event(row: Dict[str, Any]) -> Dict[str, Any]:
         "result_items_count",
         "result_status",
         "duration_ms",
+        "input_tokens",
+        "output_tokens",
+        "cost_usd",
         "prd_context_packet_chars",
     }
     return redact_sensitive({key: value for key, value in row.items() if key in allowed})
@@ -136,6 +142,14 @@ def _load_active_drafts(project_root: Path, *, limit: int = 30) -> List[Dict[str
         except (OSError, json.JSONDecodeError):
             continue
         if isinstance(draft, dict):
+            ts = draft.get("ts", "")
+            if ts:
+                try:
+                    age = (datetime.now() - datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S")).total_seconds()
+                    if age > _ACTIVE_DRAFT_TTL_DAYS * 86400:
+                        continue
+                except ValueError:
+                    pass
             rows.append(_sanitize_draft(draft))
     rows.sort(key=lambda row: str(row.get("ts") or ""), reverse=True)
     return rows[: max(1, limit)]

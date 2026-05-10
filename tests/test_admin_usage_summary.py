@@ -116,6 +116,7 @@ async def test_admin_usage_endpoint_includes_reconnectable_jobs(monkeypatch, tmp
                 "input_tokens": 9000,
                 "output_tokens": 600,
                 "prd_context_packet_chars": 8000,
+                "cost_usd": 0.037,
                 "ts": 1,
                 "prd_content": "should not leak",
                 "payload": {"items": [{"problem": "derived text should not leak"}]},
@@ -180,11 +181,12 @@ async def test_admin_usage_endpoint_includes_reconnectable_jobs(monkeypatch, tmp
     assert data["recent_job_events"][0]["job_id"] == "rjob_old"
     assert data["recent_job_events"][0]["dim_key"] == "quality"
     assert data["recent_job_events"][0]["duration_ms"] == 1200
+    assert data["recent_job_events"][0]["input_tokens"] == 9000
+    assert data["recent_job_events"][0]["output_tokens"] == 600
     assert data["recent_job_events"][0]["prd_context_packet_chars"] == 8000
+    assert data["recent_job_events"][0]["cost_usd"] == 0.037
     assert "tokens_in" not in data["recent_job_events"][0]
     assert "tokens_out" not in data["recent_job_events"][0]
-    assert "input_tokens" not in data["recent_job_events"][0]
-    assert "output_tokens" not in data["recent_job_events"][0]
     serialized_events = json.dumps(data["recent_job_events"], ensure_ascii=False)
     assert fake_key not in serialized_events
     assert "[REDACTED_SECRET]" in serialized_events
@@ -207,3 +209,47 @@ async def test_admin_usage_endpoint_includes_reconnectable_jobs(monkeypatch, tmp
     assert "should not leak" not in serialized_drafts
     assert "derived text" not in serialized_drafts
     assert "internal detail" not in serialized_drafts
+
+
+def test_admin_usage_active_drafts_excludes_expired_drafts(tmp_path):
+    from datetime import timedelta
+
+    from api.routes.admin_usage import _load_active_drafts
+
+    draft_dir = tmp_path / ".pecker_drafts"
+    draft_dir.mkdir(parents=True, exist_ok=True)
+    now = datetime.now()
+    (draft_dir / "old_draft.json").write_text(
+        json.dumps(
+            {
+                "ts": (now - timedelta(days=4)).strftime("%Y-%m-%dT%H:%M:%S"),
+                "reviewer": "pm-old",
+                "phase": 3,
+                "workspace": "workspace-alpha",
+                "prd_name": "old.md",
+                "review_result": {"items": []},
+                "item_decisions": {},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (draft_dir / "fresh_draft.json").write_text(
+        json.dumps(
+            {
+                "ts": now.strftime("%Y-%m-%dT%H:%M:%S"),
+                "reviewer": "pm-fresh",
+                "phase": 3,
+                "workspace": "workspace-alpha",
+                "prd_name": "fresh.md",
+                "review_result": {"items": []},
+                "item_decisions": {},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    rows = _load_active_drafts(tmp_path)
+
+    assert [row["reviewer"] for row in rows] == ["pm-fresh"]
