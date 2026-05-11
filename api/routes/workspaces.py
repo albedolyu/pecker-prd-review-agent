@@ -8,7 +8,7 @@ from typing import List
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from api.deps import get_current_user, get_project_root
+from api.deps import get_current_user, get_external_workspace_roots, get_project_root
 from api.workspace_acl import can_access_workspace
 
 router = APIRouter(tags=["workspaces"])
@@ -35,33 +35,45 @@ async def list_workspaces(
     排序: 按字典序。前端拿到后自己决定默认选哪个(通常用 URL query param 或 zustand 持久化)。
     """
     results: List[WorkspaceInfo] = []
-    for name in sorted(os.listdir(project_root)):
-        full = project_root / name
-        if not name.startswith("workspace-") or not full.is_dir():
+    seen: set[str] = set()
+    external_roots = get_external_workspace_roots()
+    roots = [*external_roots, project_root]
+    for root in roots:
+        if not root.is_dir():
             continue
+        local_sample_only = bool(external_roots) and root == project_root
+        for name in sorted(os.listdir(root)):
+            full = root / name
+            if not name.startswith("workspace-") or not full.is_dir():
+                continue
+            if local_sample_only and name != "workspace-sample":
+                continue
+            if name in seen:
+                continue
 
-        # ACL: 过滤掉当前用户无权访问的 workspace
-        if not can_access_workspace(full, user):
-            continue
+            # ACL: 过滤掉当前用户无权访问的 workspace
+            if not can_access_workspace(full, user):
+                continue
 
-        prd_dir = full / "prd"
-        wiki_dir = full / "wiki"
+            prd_dir = full / "prd"
+            wiki_dir = full / "wiki"
 
-        wiki_count = 0
-        if wiki_dir.is_dir():
-            wiki_count = sum(1 for _ in wiki_dir.glob("*.md"))
+            wiki_count = 0
+            if wiki_dir.is_dir():
+                wiki_count = sum(1 for _ in wiki_dir.glob("*.md"))
 
-        prd_count = 0
-        if prd_dir.is_dir():
-            prd_count = sum(1 for _ in prd_dir.glob("*.md"))
+            prd_count = 0
+            if prd_dir.is_dir():
+                prd_count = sum(1 for _ in prd_dir.glob("*.md"))
 
-        results.append(WorkspaceInfo(
-            name=name,
-            display_name=name[len("workspace-"):],
-            path=str(full),
-            has_prd_dir=prd_dir.is_dir(),
-            has_wiki_dir=wiki_dir.is_dir(),
-            wiki_page_count=wiki_count,
-            prd_count=prd_count,
-        ))
+            seen.add(name)
+            results.append(WorkspaceInfo(
+                name=name,
+                display_name=name[len("workspace-"):],
+                path=str(full),
+                has_prd_dir=prd_dir.is_dir(),
+                has_wiki_dir=wiki_dir.is_dir(),
+                wiki_page_count=wiki_count,
+                prd_count=prd_count,
+            ))
     return results
