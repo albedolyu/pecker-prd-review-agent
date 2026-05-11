@@ -47,8 +47,19 @@ import {
   estimateReviewEtaHint,
   estimateReviewEtaLabel,
 } from "@/lib/review-eta";
+import {
+  buildFigmaRawMaterial,
+  buildImageReferenceRawMaterial,
+  buildImageRawMaterial,
+  extractFigmaLinks,
+  extractMarkdownImageReferences,
+  isSupportedImageFile,
+  mergeRawMaterials,
+  rawMaterialTitle,
+} from "@/lib/supplemental-materials";
 
 const MAX_PRD_BYTES = 2 * 1024 * 1024; // 2 MB
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
 
 export function Phase0Upload() {
   const queryClient = useQueryClient();
@@ -70,6 +81,7 @@ export function Phase0Upload() {
   const [dismissedDraft, setDismissedDraft] = useState(false);
   const [customWorkspaceMode, setCustomWorkspaceMode] = useState(false);
   const [previousWorkspace, setPreviousWorkspace] = useState("");
+  const [figmaLinkInput, setFigmaLinkInput] = useState("");
 
   // ========== workspace 列表 ==========
   const { data: workspaces, isLoading: wsLoading } = useQuery({
@@ -127,8 +139,65 @@ export function Phase0Upload() {
   };
 
   // ========== 文件处理 ==========
+  const addRawMaterials = useCallback(
+    (materials: string[]) => {
+      if (!materials.length) return;
+      setUserInput({ rawMaterials: mergeRawMaterials(rawMaterials, materials) });
+    },
+    [rawMaterials, setUserInput],
+  );
+
+  const addFigmaLinksFromText = useCallback(
+    (text: string, source: string) => {
+      const links = extractFigmaLinks(text);
+      if (!links.length) return;
+      addRawMaterials(links.map((link) => buildFigmaRawMaterial(link, source)));
+      toast.success(`已接入 ${links.length} 个 Figma 链接`);
+    },
+    [addRawMaterials],
+  );
+
+  const addImageRefsFromText = useCallback(
+    (text: string, source: string) => {
+      const refs = extractMarkdownImageReferences(text);
+      if (!refs.length) return;
+      addRawMaterials(refs.map((ref) => buildImageReferenceRawMaterial({ ...ref, source })));
+      toast.success(`已识别 ${refs.length} 个 Markdown 图片引用`);
+    },
+    [addRawMaterials],
+  );
+
+  const addMaterialsFromText = useCallback(
+    (text: string, source: string) => {
+      addFigmaLinksFromText(text, source);
+      addImageRefsFromText(text, source);
+    },
+    [addFigmaLinksFromText, addImageRefsFromText],
+  );
+
+  const handleAddFigmaLink = () => {
+    addFigmaLinksFromText(figmaLinkInput, "手动添加");
+    setFigmaLinkInput("");
+  };
+
   const handleFile = useCallback(
     async (file: File) => {
+      if (isSupportedImageFile(file)) {
+        if (file.size > MAX_IMAGE_BYTES) {
+          toast.error(`图片过大: ${(file.size / 1024 / 1024).toFixed(1)} MB,上限 5 MB`);
+          return;
+        }
+        addRawMaterials([
+          buildImageRawMaterial({
+            name: file.name,
+            mimeType: file.type,
+            sizeBytes: file.size,
+            source: "上传附件",
+          }),
+        ]);
+        toast.success(`已接入图片补充材料: ${file.name}`);
+        return;
+      }
       if (file.size > MAX_PRD_BYTES) {
         toast.error(`文件过大: ${(file.size / 1024 / 1024).toFixed(1)} MB,上限 2 MB`);
         return;
@@ -140,12 +209,13 @@ export function Phase0Upload() {
       try {
         const content = await file.text();
         setUserInput({ prdName: file.name, prdContent: content });
+        addMaterialsFromText(content, `${file.name} 中的链接`);
         toast.success(`已读取 ${file.name} (${content.length} 字)`);
       } catch {
         toast.error("文件读取失败");
       }
     },
-    [setUserInput],
+    [addMaterialsFromText, addRawMaterials, setUserInput],
   );
 
   const onPickFile = (e: ChangeEvent<HTMLInputElement>) => {
@@ -262,7 +332,7 @@ export function Phase0Upload() {
             <label className="cursor-pointer">
               <input
                 type="file"
-                accept=".md,.txt,.markdown"
+                accept=".md,.txt,.markdown,image/png,image/jpeg,image/webp,image/gif"
                 className="hidden"
                 onChange={onPickFile}
               />
@@ -295,8 +365,40 @@ export function Phase0Upload() {
                   setUserInput({ prdName: "粘贴内容.md" });
                 }
               }}
+              onBlur={(e) => addMaterialsFromText(e.target.value, "粘贴内容")}
               className="font-mono text-xs"
             />
+          </div>
+
+          <div className="space-y-1.5 rounded-md border bg-muted/20 p-3">
+            <Label htmlFor="figma-link" className="text-xs text-muted-foreground">
+              图片 / Figma 补充材料
+            </Label>
+            <div className="flex gap-2">
+              <Input
+                id="figma-link"
+                value={figmaLinkInput}
+                onChange={(e) => setFigmaLinkInput(e.target.value)}
+                placeholder="粘贴 Figma 链接,或把图片拖入上方上传区"
+                className="text-xs"
+              />
+              <Button type="button" variant="outline" onClick={handleAddFigmaLink}>
+                添加
+              </Button>
+            </div>
+            {rawMaterials.length > 0 && (
+              <div className="space-y-1 pt-1">
+                {rawMaterials.map((material, index) => (
+                  <div
+                    key={`${material.slice(0, 24)}-${index}`}
+                    className="truncate rounded border bg-background px-2 py-1 text-xs text-muted-foreground"
+                    title={rawMaterialTitle(material)}
+                  >
+                    {rawMaterialTitle(material)}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

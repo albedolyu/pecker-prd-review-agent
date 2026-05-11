@@ -33,6 +33,16 @@ import {
   estimateReviewEtaLabel,
 } from "@/lib/review-eta";
 import {
+  buildFigmaRawMaterial,
+  buildImageReferenceRawMaterial,
+  buildImageRawMaterial,
+  extractFigmaLinks,
+  extractMarkdownImageReferences,
+  isSupportedImageFile,
+  mergeRawMaterials,
+  rawMaterialTitle,
+} from "@/lib/supplemental-materials";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -41,6 +51,7 @@ import {
 } from "@/components/ui/select";
 
 const MAX_PRD_BYTES = 2 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 export function Phase0UploadV8() {
   const queryClient = useQueryClient();
@@ -61,6 +72,7 @@ export function Phase0UploadV8() {
   const [dismissedDraft, setDismissedDraft] = useState(false);
   const [customWorkspaceMode, setCustomWorkspaceMode] = useState(false);
   const [previousWorkspace, setPreviousWorkspace] = useState("");
+  const [figmaLinkInput, setFigmaLinkInput] = useState("");
 
   const { data: workspaces, isLoading: wsLoading } = useQuery({
     queryKey: ["workspaces"],
@@ -117,8 +129,67 @@ export function Phase0UploadV8() {
     setUserInput({ workspace: previousWorkspace });
   };
 
+  const addRawMaterials = useCallback(
+    (materials: string[]) => {
+      if (!materials.length) return;
+      setUserInput({ rawMaterials: mergeRawMaterials(rawMaterials, materials) });
+    },
+    [rawMaterials, setUserInput],
+  );
+
+  const addFigmaLinksFromText = useCallback(
+    (text: string, source: string) => {
+      const links = extractFigmaLinks(text);
+      if (!links.length) return;
+      addRawMaterials(links.map((link) => buildFigmaRawMaterial(link, source)));
+      toast.success(`已接入 ${links.length} 个 Figma 链接`);
+    },
+    [addRawMaterials],
+  );
+
+  const addImageRefsFromText = useCallback(
+    (text: string, source: string) => {
+      const refs = extractMarkdownImageReferences(text);
+      if (!refs.length) return;
+      addRawMaterials(refs.map((ref) => buildImageReferenceRawMaterial({ ...ref, source })));
+      toast.success(`已识别 ${refs.length} 个 Markdown 图片引用`);
+    },
+    [addRawMaterials],
+  );
+
+  const addMaterialsFromText = useCallback(
+    (text: string, source: string) => {
+      addFigmaLinksFromText(text, source);
+      addImageRefsFromText(text, source);
+    },
+    [addFigmaLinksFromText, addImageRefsFromText],
+  );
+
+  const handleAddFigmaLink = () => {
+    addFigmaLinksFromText(figmaLinkInput, "手动添加");
+    setFigmaLinkInput("");
+  };
+
   const handleFile = useCallback(
     async (file: File) => {
+      if (isSupportedImageFile(file)) {
+        if (file.size > MAX_IMAGE_BYTES) {
+          toast.error(
+            `图片过大: ${(file.size / 1024 / 1024).toFixed(1)} MB,上限 5 MB`,
+          );
+          return;
+        }
+        addRawMaterials([
+          buildImageRawMaterial({
+            name: file.name,
+            mimeType: file.type,
+            sizeBytes: file.size,
+            source: "上传附件",
+          }),
+        ]);
+        toast.success(`已接入图片补充材料: ${file.name}`);
+        return;
+      }
       if (file.size > MAX_PRD_BYTES) {
         toast.error(
           `文件过大: ${(file.size / 1024 / 1024).toFixed(1)} MB,上限 2 MB`,
@@ -136,12 +207,13 @@ export function Phase0UploadV8() {
       try {
         const content = await file.text();
         setUserInput({ prdName: file.name, prdContent: content });
+        addMaterialsFromText(content, `${file.name} 中的链接`);
         toast.success(`已读取 ${file.name} (${content.length} 字)`);
       } catch {
         toast.error("文件读取失败");
       }
     },
-    [setUserInput],
+    [addMaterialsFromText, addRawMaterials, setUserInput],
   );
 
   const onPickFile = (e: ChangeEvent<HTMLInputElement>) => {
@@ -479,7 +551,7 @@ export function Phase0UploadV8() {
               {prdName ? `已读 · ${prdName}` : "拖拽 PRD 到这里,或点击选择"}
             </div>
             <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-              支持 .md / .txt / .markdown
+              支持 .md / .txt / .markdown / 图片
               {prdName && (
                 <span style={{ marginLeft: 8, fontFamily: "var(--font-mono)" }}>
                   · {prdContent.length.toLocaleString()} 字
@@ -489,7 +561,7 @@ export function Phase0UploadV8() {
             <input
               id="prd-file-input-v8"
               type="file"
-              accept=".md,.txt,.markdown"
+              accept=".md,.txt,.markdown,image/png,image/jpeg,image/webp,image/gif"
               style={{ display: "none" }}
               onChange={onPickFile}
             />
@@ -504,6 +576,7 @@ export function Phase0UploadV8() {
                 setUserInput({ prdName: "粘贴内容.md" });
               }
             }}
+            onBlur={(e) => addMaterialsFromText(e.target.value, "粘贴内容")}
             style={{
               marginTop: 10,
               width: "100%",
@@ -519,6 +592,78 @@ export function Phase0UploadV8() {
               outline: "none",
             }}
           />
+          <div
+            style={{
+              marginTop: 10,
+              border: "1px solid var(--border-subtle)",
+              borderRadius: "var(--r-3)",
+              background: "var(--surface-sunken)",
+              padding: 10,
+            }}
+          >
+            <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>
+              图片 / Figma 补充材料
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                value={figmaLinkInput}
+                onChange={(e) => setFigmaLinkInput(e.target.value)}
+                placeholder="粘贴 Figma 链接,或把图片拖入上方上传区"
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  height: 32,
+                  border: "1px solid var(--border-default)",
+                  borderRadius: "var(--r-3)",
+                  background: "var(--surface-raised)",
+                  padding: "0 10px",
+                  fontFamily: "var(--font-sans)",
+                  fontSize: 12,
+                  color: "var(--text-default)",
+                  outline: "none",
+                }}
+              />
+              <button
+                type="button"
+                onClick={handleAddFigmaLink}
+                style={{
+                  height: 32,
+                  border: "1px solid var(--border-default)",
+                  borderRadius: "var(--r-3)",
+                  background: "var(--surface-raised)",
+                  color: "var(--text-default)",
+                  padding: "0 12px",
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+              >
+                添加
+              </button>
+            </div>
+            {rawMaterials.length > 0 && (
+              <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
+                {rawMaterials.map((material, index) => (
+                  <div
+                    key={`${material.slice(0, 24)}-${index}`}
+                    title={rawMaterialTitle(material)}
+                    style={{
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      border: "1px solid var(--border-subtle)",
+                      borderRadius: "var(--r-2)",
+                      background: "var(--surface-raised)",
+                      padding: "5px 8px",
+                      fontSize: 12,
+                      color: "var(--text-muted)",
+                    }}
+                  >
+                    {rawMaterialTitle(material)}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </Field>
 
         {/* 备注 */}

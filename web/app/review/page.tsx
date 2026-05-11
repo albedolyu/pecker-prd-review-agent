@@ -33,6 +33,7 @@ import { Phase4ReportV8 } from "@/components/phases/Phase4ReportV8";
 import { PhaseStepper } from "@/components/PhaseStepper";
 import { PHASES, PhaseNav, type PhaseId } from "@/components/nav/PhaseNav";
 import { ReviewDemoFlow } from "@/components/demo/ReviewDemoFlow";
+import { ReviewHelpAssistant } from "@/components/review/ReviewHelpAssistant";
 
 export default function ReviewPage() {
   return (
@@ -129,46 +130,49 @@ function ReviewPageInner() {
   // ═══════════ v7 legacy 回退分支(显式 ?v=7) ═══════════
   if (useLegacy) {
     return (
-      <div className="mx-auto max-w-[64rem] px-6 py-10 sm:px-10 sm:py-14 space-y-10">
-        {/* legacy 标识 · 提醒 PM 这是回退版 */}
-        <div
-          style={{
-            padding: "8px 14px",
-            borderRadius: "var(--r-3)",
-            border: "1px dashed var(--border-default)",
-            background: "var(--status-warn-bg)",
-            color: "var(--status-warn-fg)",
-            fontSize: 12,
-            fontFamily: "var(--font-sans)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-          }}
-        >
-          <span>
-            <strong style={{ fontWeight: 600 }}>备用页面</strong> · 这是旧版
-            评审页面的回退入口,默认页面请访问{" "}
-            <Link
-              href="/review"
-              style={{
-                color: "var(--text-link)",
-                textDecoration: "underline",
-              }}
-            >
-              /review
-            </Link>
-          </span>
+      <>
+        <div className="mx-auto max-w-[64rem] px-6 py-10 sm:px-10 sm:py-14 space-y-10">
+          {/* legacy 标识 · 提醒 PM 这是回退版 */}
+          <div
+            style={{
+              padding: "8px 14px",
+              borderRadius: "var(--r-3)",
+              border: "1px dashed var(--border-default)",
+              background: "var(--status-warn-bg)",
+              color: "var(--status-warn-fg)",
+              fontSize: 12,
+              fontFamily: "var(--font-sans)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+            }}
+          >
+            <span>
+              <strong style={{ fontWeight: 600 }}>备用页面</strong> · 这是旧版
+              评审页面的回退入口,默认页面请访问{" "}
+              <Link
+                href="/review"
+                style={{
+                  color: "var(--text-link)",
+                  textDecoration: "underline",
+                }}
+              >
+                /review
+              </Link>
+            </span>
+          </div>
+          <PhaseStepper current={phase} />
+          <div>
+            {phase === 0 && <Phase0Upload />}
+            {phase === 1 && <Phase1Precheck />}
+            {phase === 2 && <Phase2Running />}
+            {phase === 3 && <Phase3Confirm />}
+            {phase === 4 && <Phase4Report />}
+          </div>
         </div>
-        <PhaseStepper current={phase} />
-        <div>
-          {phase === 0 && <Phase0Upload />}
-          {phase === 1 && <Phase1Precheck />}
-          {phase === 2 && <Phase2Running />}
-          {phase === 3 && <Phase3Confirm />}
-          {phase === 4 && <Phase4Report />}
-        </div>
-      </div>
+        <ReviewHelpAssistant />
+      </>
     );
   }
 
@@ -200,6 +204,7 @@ function ReviewPageInner() {
         {phase === 3 && <Phase3ConfirmV8 />}
         {phase === 4 && <Phase4ReportV8 />}
       </div>
+      <ReviewHelpAssistant />
     </div>
   );
 }
