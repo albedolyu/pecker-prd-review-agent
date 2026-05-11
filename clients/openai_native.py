@@ -658,6 +658,15 @@ class OpenAINativeClient:
                     text_blocks.append({"type": "text", "text": text})
 
         output_text = getattr(response, "output_text", "") or ""
+        if selected_tool and not tool_calls and text_blocks:
+            text = "\n".join(str(block.get("text", "")) for block in text_blocks if block.get("text"))
+            try:
+                args = json.loads(text)
+                if isinstance(args, dict):
+                    tool_calls.append({"id": req_id, "name": selected_tool["name"], "input": args})
+                    text_blocks = []
+            except json.JSONDecodeError:
+                pass
         if output_text and not text_blocks and not tool_calls:
             if selected_tool:
                 try:

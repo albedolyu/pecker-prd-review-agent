@@ -437,6 +437,79 @@ def test_openai_native_client_uses_strict_responses_json_schema_for_structured_t
     assert set(schema_format["schema"]["required"]) == {"confidence", "additional_findings"}
 
 
+def test_openai_native_client_maps_responses_message_json_to_tool_call(monkeypatch):
+    """Some OpenAI-compatible gateways return strict JSON schema output as a message text block."""
+    from clients.openai_native import OpenAINativeClient
+
+    class MessageJsonResponses:
+        def __init__(self):
+            self.last_kwargs = None
+
+        def create(self, **kwargs):
+            self.last_kwargs = kwargs
+            usage = SimpleNamespace(input_tokens=21, output_tokens=13)
+            return SimpleNamespace(
+                output=[
+                    SimpleNamespace(
+                        type="message",
+                        content=[
+                            SimpleNamespace(
+                                type="output_text",
+                                text=(
+                                    '{"dimension":"结构层","items":['
+                                    '{"rule_id":"V-06","issue":"缺少章节"}'
+                                    '],"null_finding_reason":""}'
+                                ),
+                            )
+                        ],
+                    )
+                ],
+                output_text="",
+                usage=usage,
+                model=kwargs["model"],
+                status="completed",
+            )
+
+    fake_responses = MessageJsonResponses()
+    fake_client = types.SimpleNamespace(responses=fake_responses)
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_WIRE_API", "responses")
+    monkeypatch.delenv("OPENAI_REASONING_EFFORT", raising=False)
+    monkeypatch.setattr(
+        OpenAINativeClient,
+        "_build_client",
+        lambda self, api_key, base_url: fake_client,
+    )
+
+    client = OpenAINativeClient()
+    resp = client.create(
+        model="gpt-5.4",
+        max_tokens=256,
+        system="system",
+        messages=[{"role": "user", "content": "hello"}],
+        tools=[
+            {
+                "name": "submit_review_items",
+                "description": "submit",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "dimension": {"type": "string"},
+                        "items": {"type": "array"},
+                        "null_finding_reason": {"type": "string"},
+                    },
+                },
+            }
+        ],
+        tool_choice={"type": "any"},
+    )
+
+    assert resp.stop_reason == "tool_use"
+    assert resp.text_blocks == []
+    assert resp.tool_calls[0]["name"] == "submit_review_items"
+    assert resp.tool_calls[0]["input"]["items"][0]["rule_id"] == "V-06"
+
+
 def test_openai_native_client_allows_policy_reasoning_effort_override(monkeypatch):
     from clients.openai_native import OpenAINativeClient
 
