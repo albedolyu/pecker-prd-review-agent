@@ -175,17 +175,33 @@ def collect_signal_snapshot(project_root: Path, days: int = 30) -> dict[str, Any
     audit_rows = _load_jsonl_files((project_root / "logs").glob("user_actions_*.jsonl"))
     audit_rows = [row for row in audit_rows if _in_window(row.get("ts"), cutoff)]
     event_counts = Counter(str(row.get("event") or "") for row in audit_rows)
+    assistant_positive = sum(
+        1
+        for row in audit_rows
+        if row.get("event") == "review_assistant_feedback" and row.get("feedback") == "up"
+    )
+    assistant_negative = sum(
+        1
+        for row in audit_rows
+        if row.get("event") == "review_assistant_feedback" and row.get("feedback") == "down"
+    )
+    assistant_copies = event_counts.get("review_assistant_copied", 0)
 
     missing_rows = _load_jsonl_files([project_root / "logs" / "missing_feedback.jsonl"])
     missing_rows = [row for row in missing_rows if _in_window(row.get("timestamp"), cutoff)]
 
     eval_result_terms = _scan_eval_result_terms(project_root / "eval" / "results")
     signal_counts = {
-        "workflow_help": event_counts.get("review_started", 0) + event_counts.get("report_downloaded", 0),
+        "workflow_help": (
+            event_counts.get("review_started", 0)
+            + event_counts.get("report_downloaded", 0)
+            + assistant_positive
+            + assistant_copies
+        ),
         "failure_recovery": eval_result_terms.get("524", 0),
         "evidence_lookup": eval_result_terms.get("知识库", 0) + eval_result_terms.get("Figma", 0),
         "fact_layer_lookup": eval_result_terms.get("字段", 0) + eval_result_terms.get("事实层", 0),
-        "negative_boundary": len(missing_rows),
+        "negative_boundary": len(missing_rows) + assistant_negative,
     }
     return {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
@@ -198,6 +214,9 @@ def collect_signal_snapshot(project_root: Path, days: int = 30) -> dict[str, Any
         },
         "feedback": {
             "missing_reports": len(missing_rows),
+            "assistant_positive": assistant_positive,
+            "assistant_negative": assistant_negative,
+            "assistant_copies": assistant_copies,
         },
         "eval_result_terms": dict(eval_result_terms),
         "signal_counts": signal_counts,

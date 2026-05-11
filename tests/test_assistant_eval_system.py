@@ -136,6 +136,38 @@ def test_collect_signal_snapshot_reads_usage_feedback_and_eval_results(tmp_path)
                     },
                     ensure_ascii=False,
                 ),
+                json.dumps(
+                    {
+                        "ts": "2026-05-11T09:22:00",
+                        "event": "review_assistant_feedback",
+                        "reviewer": "pm-a",
+                        "workspace": "workspace-alpha",
+                        "prd_name": "大 PRD.md",
+                        "feedback": "up",
+                    },
+                    ensure_ascii=False,
+                ),
+                json.dumps(
+                    {
+                        "ts": "2026-05-11T09:23:00",
+                        "event": "review_assistant_feedback",
+                        "reviewer": "pm-a",
+                        "workspace": "workspace-alpha",
+                        "prd_name": "大 PRD.md",
+                        "feedback": "down",
+                    },
+                    ensure_ascii=False,
+                ),
+                json.dumps(
+                    {
+                        "ts": "2026-05-11T09:24:00",
+                        "event": "review_assistant_copied",
+                        "reviewer": "pm-a",
+                        "workspace": "workspace-alpha",
+                        "prd_name": "大 PRD.md",
+                    },
+                    ensure_ascii=False,
+                ),
             ]
         ),
         encoding="utf-8",
@@ -167,6 +199,9 @@ def test_collect_signal_snapshot_reads_usage_feedback_and_eval_results(tmp_path)
     assert snapshot["usage"]["review_started"] == 1
     assert snapshot["usage"]["report_downloaded"] == 1
     assert snapshot["feedback"]["missing_reports"] == 1
+    assert snapshot["feedback"]["assistant_positive"] == 1
+    assert snapshot["feedback"]["assistant_negative"] == 1
+    assert snapshot["feedback"]["assistant_copies"] == 1
     assert snapshot["eval_result_terms"]["524"] == 1
     assert snapshot["eval_result_terms"]["Figma"] == 1
     assert snapshot["recommended_family_weights"]["failure_recovery"] > 0

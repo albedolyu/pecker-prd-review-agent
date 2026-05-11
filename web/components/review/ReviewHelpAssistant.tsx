@@ -1,8 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import { HelpCircle, MessageCircle, Send, X } from "lucide-react";
+import { useRef, useState, type ReactNode } from "react";
+import {
+  Check,
+  Copy,
+  HelpCircle,
+  MessageCircle,
+  Send,
+  ThumbsDown,
+  ThumbsUp,
+  X,
+} from "lucide-react";
 
+import { auditApi } from "@/lib/api";
 import { answerReviewAssistantQuestionAsync } from "@/lib/review-assistant";
 import { summarizeRawMaterials } from "@/lib/supplemental-materials";
 import { useReviewStore } from "@/lib/store";
@@ -16,22 +26,29 @@ const QUICK_QUESTIONS = [
 ];
 
 type AssistantMessage = {
+  id: string;
   role: "assistant" | "user";
   text: string;
+  feedback?: "up" | "down";
+  copied?: boolean;
 };
 
 export function ReviewHelpAssistant() {
+  const messageSeq = useRef(0);
   const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState("");
   const [isAsking, setIsAsking] = useState(false);
   const [messages, setMessages] = useState<AssistantMessage[]>([
     {
+      id: "assistant-welcome",
       role: "assistant",
       text: "我可以帮你解释上传材料、预检、评审耗时、采纳/驳回/改写和报告导出。",
     },
   ]);
 
   const phase = useReviewStore((s) => s.phase);
+  const workspace = useReviewStore((s) => s.workspace);
+  const prdName = useReviewStore((s) => s.prdName);
   const rawMaterials = useReviewStore((s) => s.rawMaterials);
   const reviewResult = useReviewStore((s) => s.reviewResult);
   const materialSummary = summarizeRawMaterials(rawMaterials);
@@ -44,13 +61,63 @@ export function ReviewHelpAssistant() {
     .filter(Boolean)
     .join(" · ");
 
+  const nextMessageId = (role: AssistantMessage["role"]) => {
+    messageSeq.current += 1;
+    return `${role}-${Date.now()}-${messageSeq.current}`;
+  };
+
+  const logAssistantAction = (
+    event: "review_assistant_feedback" | "review_assistant_copied",
+    message: AssistantMessage,
+    extra: Record<string, unknown> = {},
+  ) => {
+    void auditApi.log({
+      event,
+      workspace,
+      prd_name: prdName,
+      extra: {
+        phase,
+        message_id: message.id,
+        answer_length: message.text.length,
+        ...extra,
+      },
+    }).catch(() => undefined);
+  };
+
+  const markFeedback = (message: AssistantMessage, feedback: "up" | "down") => {
+    setMessages((current) =>
+      current.map((item) => (item.id === message.id ? { ...item, feedback } : item)),
+    );
+    logAssistantAction("review_assistant_feedback", message, { feedback });
+  };
+
+  const copyAnswer = async (message: AssistantMessage) => {
+    try {
+      await writeAnswerToClipboard(message.text);
+      setMessages((current) =>
+        current.map((item) => (item.id === message.id ? { ...item, copied: true } : item)),
+      );
+      window.setTimeout(() => {
+        setMessages((current) =>
+          current.map((item) => (item.id === message.id ? { ...item, copied: false } : item)),
+        );
+      }, 1600);
+      logAssistantAction("review_assistant_copied", message);
+    } catch {
+      logAssistantAction("review_assistant_copied", message, { status: "failed" });
+    }
+  };
+
   const ask = async (value: string) => {
     const text = value.trim();
     if (!text || isAsking) return;
     setQuestion("");
     setOpen(true);
     setIsAsking(true);
-    setMessages((current) => [...current, { role: "user" as const, text }]);
+    setMessages((current) => [
+      ...current,
+      { id: nextMessageId("user"), role: "user" as const, text },
+    ]);
     try {
       const answer = await answerReviewAssistantQuestionAsync(text, {
         phase,
@@ -59,7 +126,7 @@ export function ReviewHelpAssistant() {
       });
       setMessages((current) => [
         ...current,
-        { role: "assistant" as const, text: answer },
+        { id: nextMessageId("assistant"), role: "assistant" as const, text: answer },
       ]);
     } finally {
       setIsAsking(false);
@@ -147,35 +214,69 @@ export function ReviewHelpAssistant() {
           <div aria-live="polite" style={{ maxHeight: 300, overflowY: "auto", padding: 12 }}>
             {messages.map((message, index) => (
               <div
-                key={`${message.role}-${index}`}
+                key={`${message.id}-${index}`}
                 style={{
                   display: "flex",
                   justifyContent: message.role === "user" ? "flex-end" : "flex-start",
                   marginBottom: 8,
                 }}
               >
-                <div
-                  style={{
-                    maxWidth: "86%",
-                    borderRadius: 8,
-                    padding: "8px 10px",
-                    fontSize: 12,
-                    lineHeight: 1.6,
-                    background:
-                      message.role === "user"
-                        ? "var(--accent-500)"
-                        : "var(--surface-sunken)",
-                    color:
-                      message.role === "user"
-                        ? "var(--accent-fg)"
-                        : "var(--text-default)",
-                    border:
-                      message.role === "user"
-                        ? "1px solid transparent"
-                        : "1px solid var(--border-subtle)",
-                  }}
-                >
-                  {message.text}
+                <div style={{ maxWidth: "86%" }}>
+                  <div
+                    style={{
+                      maxWidth: "100%",
+                      borderRadius: 8,
+                      padding: "8px 10px",
+                      fontSize: 12,
+                      lineHeight: 1.6,
+                      background:
+                        message.role === "user"
+                          ? "var(--accent-500)"
+                          : "var(--surface-sunken)",
+                      color:
+                        message.role === "user"
+                          ? "var(--accent-fg)"
+                          : "var(--text-default)",
+                      border:
+                        message.role === "user"
+                          ? "1px solid transparent"
+                          : "1px solid var(--border-subtle)",
+                    }}
+                  >
+                    {message.text}
+                  </div>
+                  {message.role === "assistant" && (
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 4,
+                        marginTop: 5,
+                        color: "var(--text-muted)",
+                      }}
+                    >
+                      <AssistantActionButton
+                        label="点赞这条回答"
+                        active={message.feedback === "up"}
+                        onClick={() => markFeedback(message, "up")}
+                      >
+                        <ThumbsUp size={13} />
+                      </AssistantActionButton>
+                      <AssistantActionButton
+                        label="踩这条回答"
+                        active={message.feedback === "down"}
+                        onClick={() => markFeedback(message, "down")}
+                      >
+                        <ThumbsDown size={13} />
+                      </AssistantActionButton>
+                      <AssistantActionButton
+                        label="复制这条回答"
+                        active={Boolean(message.copied)}
+                        onClick={() => void copyAnswer(message)}
+                      >
+                        {message.copied ? <Check size={13} /> : <Copy size={13} />}
+                      </AssistantActionButton>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -303,5 +404,58 @@ export function ReviewHelpAssistant() {
         {open ? <HelpCircle size={20} /> : <MessageCircle size={20} />}
       </button>
     </div>
+  );
+}
+
+async function writeAnswerToClipboard(text: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  document.body.removeChild(textarea);
+  if (!copied) {
+    throw new Error("copy failed");
+  }
+}
+
+function AssistantActionButton({
+  active,
+  children,
+  label,
+  onClick,
+}: {
+  active?: boolean;
+  children: ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      style={{
+        display: "grid",
+        width: 24,
+        height: 24,
+        placeItems: "center",
+        border: "1px solid var(--border-subtle)",
+        borderRadius: 6,
+        background: active ? "var(--accent-50)" : "transparent",
+        color: active ? "var(--accent-600)" : "var(--text-muted)",
+        cursor: "pointer",
+      }}
+    >
+      {children}
+    </button>
   );
 }

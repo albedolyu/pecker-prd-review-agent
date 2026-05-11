@@ -39,6 +39,22 @@ describe("supplemental material UI wiring", () => {
     expect(source).toContain('aria-live="polite"');
   });
 
+  it("adds lightweight assistant answer actions for feedback and copy signals", () => {
+    const source = readSource("components/review/ReviewHelpAssistant.tsx");
+
+    expect(source).toContain("ThumbsUp");
+    expect(source).toContain("ThumbsDown");
+    expect(source).toContain("Copy");
+    expect(source).toContain('label="点赞这条回答"');
+    expect(source).toContain('label="踩这条回答"');
+    expect(source).toContain('label="复制这条回答"');
+    expect(source).toContain("review_assistant_feedback");
+    expect(source).toContain("review_assistant_copied");
+    expect(source).toContain("navigator.clipboard.writeText");
+    expect(source).toContain('document.execCommand("copy")');
+    expect(source).toContain("auditApi.log");
+  });
+
   it("keeps the assistant clear of bottom action bars and summarizes material types", () => {
     const source = readSource("components/review/ReviewHelpAssistant.tsx");
 
