@@ -65,6 +65,7 @@ async def get_admin_usage(
     ]
     data["recent_job_events"] = _load_recent_job_events(project_root, limit=50)
     data["active_drafts"] = _load_active_drafts(project_root, limit=30)
+    data["rule_impact_reports"] = _load_rule_impact_reports(project_root, limit=4)
     return data
 
 
@@ -126,6 +127,31 @@ def _sanitize_job_event(row: Dict[str, Any]) -> Dict[str, Any]:
         "context_manager_failures",
     }
     return redact_sensitive({key: value for key, value in row.items() if key in allowed})
+
+
+def _load_rule_impact_reports(project_root: Path, *, limit: int = 4) -> List[Dict[str, Any]]:
+    report_dir = project_root / "eval_reports"
+    if not report_dir.is_dir():
+        return []
+    rows: List[Dict[str, Any]] = []
+    for path in sorted(report_dir.glob("rule_impact_*.md")):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        title = lines[0].lstrip("# ").strip() if lines else path.stem
+        preview = " ".join(line for line in lines[1:4] if not line.startswith("|"))
+        rows.append(
+            {
+                "filename": path.name,
+                "title": redact_text(title),
+                "preview": redact_text(preview)[:240],
+                "mtime": path.stat().st_mtime,
+            }
+        )
+    rows.sort(key=lambda row: float(row.get("mtime") or 0), reverse=True)
+    return rows[: max(1, limit)]
 
 
 def _safe_int(value: Any, default: int = 0) -> int:
