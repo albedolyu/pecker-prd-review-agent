@@ -16,6 +16,7 @@
     PECKER_SIGNATURE_SECRET=xxx         必须,ReviewResult 防篡改 HMAC 密钥
     PECKER_JWT_SECRET=xxx               必须,登录 cookie JWT 密钥
     WIKI_PATH=./shared-wiki             可选,wiki 目录
+    PECKER_FENGNIAO_WIKI_PATH / PECKER_FENGNIAO_KNOWLEDGE_PATH / PECKER_FENGNIAO_SOURCE_ROOTS 可选,小助手风鸟依据查询
     FEISHU_APP_ID / FEISHU_APP_SECRET / FEISHU_REPORT_CHAT_ID  可选
 """
 from __future__ import annotations
@@ -207,7 +208,7 @@ async def root():
 # 注册路由(每个子模块独立,便于分阶段实现)
 # ============================================================
 
-from api.routes import workspaces, drafts, audit, review, review_jobs, review_history, reports, feishu, auth, metrics, feedback, admin_usage
+from api.routes import workspaces, drafts, audit, review, review_jobs, review_history, reports, feishu, auth, metrics, feedback, admin_usage, fengniao_assistant
 app.include_router(workspaces.router, prefix="/api")
 app.include_router(drafts.router, prefix="/api")
 app.include_router(audit.router, prefix="/api")
@@ -220,3 +221,4 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(metrics.router, prefix="/api")
 app.include_router(feedback.router, prefix="/api")
 app.include_router(admin_usage.router, prefix="/api")
+app.include_router(fengniao_assistant.router, prefix="/api")

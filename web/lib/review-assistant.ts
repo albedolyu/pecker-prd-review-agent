@@ -1,11 +1,77 @@
 import { summarizeRawMaterials } from "@/lib/supplemental-materials";
 import type { ReviewPhase } from "@/lib/store";
-import type { ReviewResult } from "@/lib/api";
+import { reviewAssistantApi, type ReviewResult } from "@/lib/api";
 
 export interface ReviewAssistantContext {
   phase: ReviewPhase;
   rawMaterials: readonly string[];
   reviewResult?: ReviewResult | null;
+}
+
+const FENGNIAO_EVIDENCE_TERMS = [
+  "风鸟",
+  "fengniao",
+  "知识库",
+  "事实层",
+  "源码",
+  "原始",
+  "接口",
+  "字段",
+  "页面",
+  "模块",
+  "已有实现",
+];
+
+const FACT_LAYER_TERMS = [
+  "事实层",
+  "原始",
+  "源码",
+  "代码",
+  "接口",
+  "字段",
+  "实现",
+  "页面",
+  "数据库",
+  "api",
+  "source",
+];
+
+export function shouldQueryFengniaoEvidence(question: string): boolean {
+  const q = question.toLowerCase();
+  return includesAny(q, FENGNIAO_EVIDENCE_TERMS);
+}
+
+export function shouldIncludeFactLayer(question: string): boolean {
+  const q = question.toLowerCase();
+  return includesAny(q, FACT_LAYER_TERMS);
+}
+
+export async function answerReviewAssistantQuestionAsync(
+  question: string,
+  context: ReviewAssistantContext,
+): Promise<string> {
+  const text = question.trim();
+  if (!shouldQueryFengniaoEvidence(text)) {
+    return answerReviewAssistantQuestion(text, context);
+  }
+
+  try {
+    const response = await reviewAssistantApi.askFengniao({
+      question: text,
+      include_fact_layer: shouldIncludeFactLayer(text),
+      max_results: 5,
+    });
+    if (response.answer.trim()) {
+      return response.answer;
+    }
+  } catch {
+    // Keep the assistant usable even if the evidence endpoint is unavailable.
+  }
+
+  return [
+    answerReviewAssistantQuestion(text, context),
+    "风鸟知识库/事实层查询暂时不可用，先按当前页面信息处理；需要核对源码时可以稍后再问“查事实层/源码/接口字段”。",
+  ].join("\n\n");
 }
 
 export function answerReviewAssistantQuestion(

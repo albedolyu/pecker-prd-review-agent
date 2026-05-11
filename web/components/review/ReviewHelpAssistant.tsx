@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { HelpCircle, MessageCircle, Send, X } from "lucide-react";
 
-import { answerReviewAssistantQuestion } from "@/lib/review-assistant";
+import { answerReviewAssistantQuestionAsync } from "@/lib/review-assistant";
 import { summarizeRawMaterials } from "@/lib/supplemental-materials";
 import { useReviewStore } from "@/lib/store";
 
 const QUICK_QUESTIONS = [
   "图片和 Figma 读到了吗",
   "采纳驳回改写有什么区别",
+  "查风鸟事实层依据",
   "报告怎么导出",
   "卡住或超时怎么办",
 ];
@@ -22,6 +23,7 @@ type AssistantMessage = {
 export function ReviewHelpAssistant() {
   const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState("");
+  const [isAsking, setIsAsking] = useState(false);
   const [messages, setMessages] = useState<AssistantMessage[]>([
     {
       role: "assistant",
@@ -42,21 +44,26 @@ export function ReviewHelpAssistant() {
     .filter(Boolean)
     .join(" · ");
 
-  const ask = (value: string) => {
+  const ask = async (value: string) => {
     const text = value.trim();
-    if (!text) return;
-    const answer = answerReviewAssistantQuestion(text, {
-      phase,
-      rawMaterials,
-      reviewResult,
-    });
-    setMessages((current) => [
-      ...current,
-      { role: "user" as const, text },
-      { role: "assistant" as const, text: answer },
-    ]);
+    if (!text || isAsking) return;
     setQuestion("");
     setOpen(true);
+    setIsAsking(true);
+    setMessages((current) => [...current, { role: "user" as const, text }]);
+    try {
+      const answer = await answerReviewAssistantQuestionAsync(text, {
+        phase,
+        rawMaterials,
+        reviewResult,
+      });
+      setMessages((current) => [
+        ...current,
+        { role: "assistant" as const, text: answer },
+      ]);
+    } finally {
+      setIsAsking(false);
+    }
   };
 
   return (
@@ -201,16 +208,18 @@ export function ReviewHelpAssistant() {
                 <button
                   key={item}
                   type="button"
-                  onClick={() => ask(item)}
+                  disabled={isAsking}
+                  onClick={() => void ask(item)}
                   style={{
                     border: "1px solid var(--border-default)",
                     borderRadius: 6,
                     background: "var(--surface-raised)",
                     color: "var(--text-muted)",
-                    cursor: "pointer",
+                    cursor: isAsking ? "not-allowed" : "pointer",
                     fontSize: 11,
                     padding: "5px 8px",
                     lineHeight: 1.4,
+                    opacity: isAsking ? 0.65 : 1,
                   }}
                 >
                   {item}
@@ -222,7 +231,7 @@ export function ReviewHelpAssistant() {
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              ask(question);
+              void ask(question);
             }}
             style={{
               display: "flex",
@@ -235,14 +244,15 @@ export function ReviewHelpAssistant() {
             <input
               value={question}
               onChange={(event) => setQuestion(event.target.value)}
-              placeholder="问一个使用问题..."
+              disabled={isAsking}
+              placeholder={isAsking ? "正在查询..." : "问一个使用问题..."}
               style={{
                 flex: 1,
                 minWidth: 0,
                 height: 34,
                 border: "1px solid var(--border-default)",
                 borderRadius: 6,
-                background: "var(--surface-raised)",
+                background: isAsking ? "var(--surface-sunken)" : "var(--surface-raised)",
                 color: "var(--text-default)",
                 fontSize: 12,
                 padding: "0 9px",
@@ -252,6 +262,7 @@ export function ReviewHelpAssistant() {
             <button
               type="submit"
               aria-label="发送问题"
+              disabled={isAsking}
               style={{
                 width: 34,
                 height: 34,
@@ -259,10 +270,11 @@ export function ReviewHelpAssistant() {
                 borderRadius: 6,
                 background: "var(--accent-500)",
                 color: "var(--accent-fg)",
-                cursor: "pointer",
+                cursor: isAsking ? "not-allowed" : "pointer",
                 display: "grid",
                 placeItems: "center",
                 flex: "0 0 auto",
+                opacity: isAsking ? 0.7 : 1,
               }}
             >
               <Send size={15} />

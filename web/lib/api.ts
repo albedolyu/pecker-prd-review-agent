@@ -406,6 +406,40 @@ export interface ConfirmResponse {
 // prod: 不设,走同源,由反代 / Tunnel 按 path 分流
 const API_BASE = process.env.NEXT_PUBLIC_SSE_BASE ?? "";
 
+export interface ReviewAssistantFengniaoRequest {
+  question: string;
+  include_fact_layer?: boolean;
+  max_results?: number;
+}
+
+export interface ReviewAssistantEvidenceHit {
+  layer: "wiki" | "knowledge" | "fact" | string;
+  layer_label: string;
+  path: string;
+  line: number;
+  snippet: string;
+}
+
+export interface ReviewAssistantFengniaoResponse {
+  answer: string;
+  hits: ReviewAssistantEvidenceHit[];
+  searched_roots?: Array<Record<string, unknown>>;
+  include_fact_layer: boolean;
+}
+
+export const reviewAssistantApi = {
+  askFengniao: (req: ReviewAssistantFengniaoRequest) =>
+    apiFetch<ReviewAssistantFengniaoResponse>(
+      `${API_BASE}/api/review/assistant/fengniao`,
+      {
+        method: "POST",
+        body: req,
+        timeoutMs: 8_000,
+        timeoutMessage: "风鸟知识库暂时没有响应，请稍后再试",
+      },
+    ),
+} as const;
+
 export const reviewApi = {
   precheck: (req: PrecheckRequest) =>
     apiFetch<PrecheckResponse>(`${API_BASE}/api/review/precheck`, {
