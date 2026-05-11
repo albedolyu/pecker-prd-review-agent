@@ -246,6 +246,34 @@ finding_outcomes.db
 rule_performance_history.json
 ```
 
+团队 Beta 扩到多人后，建议把真实业务 `workspace-*` 从代码仓库目录迁到内网挂盘，只在主仓保留脱敏 `workspace-sample`：
+
+```bash
+mkdir -p /mnt/pecker-workspaces
+cd /opt/pecker
+python scripts/migrate_workspace_to_external.py \
+  --project-root /opt/pecker \
+  --target-root /mnt/pecker-workspaces \
+  --dry-run
+```
+
+确认 dry-run 清单无误后再执行：
+
+```bash
+python scripts/migrate_workspace_to_external.py \
+  --project-root /opt/pecker \
+  --target-root /mnt/pecker-workspaces \
+  --apply
+```
+
+服务端 `.env` 配置：
+
+```bash
+PECKER_WORKSPACE_ROOT=/mnt/pecker-workspaces
+```
+
+迁移后 `/api/workspaces` 会优先读取 `PECKER_WORKSPACE_ROOT`，同时保留主仓里的 `workspace-sample` 作为新人演示样本。
+
 备份要求：
 
 - 至少每日备份一次。

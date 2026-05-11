@@ -52,6 +52,14 @@ workspace*/.sessions/
 workspace*/output_archive_*/
 
 # 真实业务 PRD 工作区（不入公共 repo · workspace-sample 是脱敏 demo,仍可入库）
+workspace-*/
+!workspace-sample/
+!workspace-sample/prd/
+!workspace-sample/prd/**
+!workspace-sample/review-rules/
+!workspace-sample/review-rules/**
+!workspace-sample/wiki/
+!workspace-sample/wiki/**
 workspace-fengniao-mediation/
 workspace-points-payment/
 workspace-fengniao-privacy-20260508/

@@ -55,11 +55,19 @@ def get_project_root() -> Path:
     return _PROJECT_ROOT
 
 
-def get_workspace_dir(workspace_name: str) -> Path:
-    """从 workspace 名得到完整路径,校验目录存在且是 workspace-* 格式。
+def get_external_workspace_roots() -> list[Path]:
+    """Configured external workspace roots.
 
-    防止前端传 `../../etc/passwd` 之类的路径注入。
+    PECKER_WORKSPACE_ROOT may contain one path or a semicolon-separated list on
+    Windows deployments. Invalid empty segments are ignored.
     """
+    raw = os.environ.get("PECKER_WORKSPACE_ROOT", "").strip()
+    if not raw:
+        return []
+    return [Path(part).expanduser() for part in raw.split(";") if part.strip()]
+
+
+def _validate_workspace_name(workspace_name: str) -> None:
     if not workspace_name.startswith("workspace-"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -71,13 +79,22 @@ def get_workspace_dir(workspace_name: str) -> Path:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"非法 workspace 名: {workspace_name}(含非法字符)",
         )
-    ws_path = _PROJECT_ROOT / workspace_name
-    if not ws_path.is_dir():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"workspace 不存在: {workspace_name}",
-        )
-    return ws_path
+
+
+def get_workspace_dir(workspace_name: str) -> Path:
+    """从 workspace 名得到完整路径,校验目录存在且是 workspace-* 格式。
+
+    防止前端传 `../../etc/passwd` 之类的路径注入。
+    """
+    _validate_workspace_name(workspace_name)
+    for root in [*get_external_workspace_roots(), _PROJECT_ROOT]:
+        ws_path = root / workspace_name
+        if ws_path.is_dir():
+            return ws_path
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=f"workspace 不存在: {workspace_name}",
+    )
 
 
 # ============================================================
