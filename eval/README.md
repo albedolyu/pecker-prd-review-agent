@@ -51,6 +51,21 @@ python -m pytest tests/test_assistant_eval_system.py -q
 
 输出写入 `eval/results/assistant_eval_*.json` 和 `.md`。这些是本地运行产物,默认不入库。
 
+### 1.3 事实层黄金样本生成
+
+```bash
+python -m eval.fact_layer_golden --output eval/golden/fact_layer_ground_truth_samples.json
+python -m pytest tests/test_fact_layer_golden.py -q
+```
+
+`eval/golden/fact_layer_ground_truth_samples.json` 从现有人工标注/PM 确认材料生成:
+
+- `active`: 可进入事实层准确率统计。来源包括 PM 已标注的 planted bugs,以及 `eval/ground_truth/*.json` 中 `action=accept/edit`、`is_true_positive=true` 且带 `note` 的 PM 决策。
+- `candidate`: 只进入补标队列。来源是 `business_prd_gt` 里 manifest 明确写着待 PM 后续标注的 `inline_minimal` 样本。
+- 不纳入: 只有真假但没有 `issue/note` 的 PM 决策、`advisor_conflicts` 中 `is_placeholder=true` 的冲突调解样本。
+
+事实层样本统一要求 `include_fact_layer=true`,并保留 `expected_sources`、`standard_answer`、`must_include` 字段,用于后续计算 Recall@5、Precision@5、证据引用准确率和层级混淆率。
+
 ### 2. 端到端评测 (需要 Claude API)
 
 ```bash

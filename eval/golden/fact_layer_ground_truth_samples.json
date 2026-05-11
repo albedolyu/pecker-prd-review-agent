@@ -1,0 +1,2880 @@
+{
+  "name": "fact_layer_ground_truth_samples",
+  "version": "v1",
+  "description": "从现有人工标注/PM确认的评审标准答案中抽取事实层小助手黄金样本；active 可纳入准确率，candidate 仅用于补标队列。",
+  "source_policy": {
+    "active": [
+      "eval/test_cases/*_planted.json 中 manifest 标记 PM 已标注的 planted_bugs",
+      "eval/ground_truth/*.json 中 action=accept/edit 且 is_true_positive=true 且有 note 的 PM 决策"
+    ],
+    "candidate": [
+      "business_prd_gt manifest inline_minimal 中明确待 PM 后续标注的历史抽取样本"
+    ],
+    "excluded": [
+      "缺少 issue/note 的 PM 决策只说明真假，不足以形成可回答的事实层标准答案",
+      "advisor_conflicts 中 is_placeholder=true 的冲突调解样本暂不进入本文件"
+    ]
+  },
+  "metrics_contract": {
+    "route_correctness": "问题必须触发 include_fact_layer=true",
+    "recall_at_5": "前 5 条证据应命中 expected_sources 中的 source_id 或 path_contains",
+    "evidence_grounding": "回答必须引用 location/issue/keywords 中的标准答案要素",
+    "safety_boundary": "不得泄露 PRD 原文大段内容、密钥、cookie、token 或未脱敏路径"
+  },
+  "active_case_count": 40,
+  "candidate_case_count": 11,
+  "cases": [
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-劳动仲裁",
+      "question": "帮我查事实层标准答案：workspace-劳动仲裁 里「排序 / 从晚到早 / 开庭时间」这条应该怎么判？",
+      "source": {
+        "kind": "business_prd_gt",
+        "authority": "pm_labeled",
+        "activation_reason": "manifest 明确标记 PM 已标注，可进入事实层准确率评估",
+        "path": "eval/test_cases/劳动仲裁_planted.json",
+        "source_id": "BUG-001",
+        "prd_path": "workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md"
+      },
+      "standard_answer": {
+        "location": "3.7",
+        "issue": "开庭公告排序规则写'支持切换到按照开庭时间从晚到早排序'，与默认方向相同，实为笔误",
+        "severity": "must",
+        "type": "笔误",
+        "keywords": [
+          "排序",
+          "从晚到早",
+          "开庭时间",
+          "切换",
+          "方向"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval/test_cases/劳动仲裁_planted.json",
+          "source_id": "BUG-001",
+          "must_include_terms": [
+            "排序",
+            "从晚到早",
+            "开庭时间",
+            "切换",
+            "方向"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "BUG-001",
+          "3.7",
+          "排序",
+          "从晚到早",
+          "开庭时间"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-001"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-劳动仲裁",
+      "question": "帮我查事实层标准答案：workspace-劳动仲裁 里「仲裁机构 / 发布机构 / 筛选」这条应该怎么判？",
+      "source": {
+        "kind": "business_prd_gt",
+        "authority": "pm_labeled",
+        "activation_reason": "manifest 明确标记 PM 已标注，可进入事实层准确率评估",
+        "path": "eval/test_cases/劳动仲裁_planted.json",
+        "source_id": "BUG-002",
+        "prd_path": "workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md"
+      },
+      "standard_answer": {
+        "location": "4.2",
+        "issue": "§4.2 开庭公告筛选项写'仲裁机构'，但 §3.6 和 §4.3 都写'发布机构'，三处不一致",
+        "severity": "must",
+        "type": "不一致",
+        "keywords": [
+          "仲裁机构",
+          "发布机构",
+          "筛选",
+          "矛盾",
+          "不一致"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval/test_cases/劳动仲裁_planted.json",
+          "source_id": "BUG-002",
+          "must_include_terms": [
+            "仲裁机构",
+            "发布机构",
+            "筛选",
+            "矛盾",
+            "不一致"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "BUG-002",
+          "4.2",
+          "仲裁机构",
+          "发布机构",
+          "筛选"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-002"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-劳动仲裁",
+      "question": "帮我查事实层标准答案：workspace-劳动仲裁 里「或 / 优先级 / 空值」这条应该怎么判？",
+      "source": {
+        "kind": "business_prd_gt",
+        "authority": "pm_labeled",
+        "activation_reason": "manifest 明确标记 PM 已标注，可进入事实层准确率评估",
+        "path": "eval/test_cases/劳动仲裁_planted.json",
+        "source_id": "BUG-003",
+        "prd_path": "workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md"
+      },
+      "standard_answer": {
+        "location": "2.2",
+        "issue": "字段映射表多处写'A或B'（如 ent表.arbitration_org 或 主表.arbitration_org），无优先级和空值降级说明",
+        "severity": "must",
+        "type": "歧义",
+        "keywords": [
+          "或",
+          "优先级",
+          "空值",
+          "降级",
+          "字段映射",
+          "arbitration_org"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval/test_cases/劳动仲裁_planted.json",
+          "source_id": "BUG-003",
+          "must_include_terms": [
+            "或",
+            "优先级",
+            "空值",
+            "降级",
+            "字段映射"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "BUG-003",
+          "2.2",
+          "或",
+          "优先级",
+          "空值"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-003"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-劳动仲裁",
+      "question": "帮我查事实层标准答案：workspace-劳动仲裁 里「四态 / 加载中 / 请求失败」这条应该怎么判？",
+      "source": {
+        "kind": "business_prd_gt",
+        "authority": "pm_labeled",
+        "activation_reason": "manifest 明确标记 PM 已标注，可进入事实层准确率评估",
+        "path": "eval/test_cases/劳动仲裁_planted.json",
+        "source_id": "BUG-004",
+        "prd_path": "workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md"
+      },
+      "standard_answer": {
+        "location": "4",
+        "issue": "全文未定义 UI 四态（加载中/请求失败/筛选无结果/空数据）",
+        "severity": "must",
+        "type": "缺失",
+        "keywords": [
+          "四态",
+          "加载中",
+          "请求失败",
+          "空数据",
+          "UI状态"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval/test_cases/劳动仲裁_planted.json",
+          "source_id": "BUG-004",
+          "must_include_terms": [
+            "四态",
+            "加载中",
+            "请求失败",
+            "空数据",
+            "UI状态"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "BUG-004",
+          "4",
+          "四态",
+          "加载中",
+          "请求失败"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-004"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-劳动仲裁",
+      "question": "帮我查事实层标准答案：workspace-劳动仲裁 里「导出 / 上限 / 格式」这条应该怎么判？",
+      "source": {
+        "kind": "business_prd_gt",
+        "authority": "pm_labeled",
+        "activation_reason": "manifest 明确标记 PM 已标注，可进入事实层准确率评估",
+        "path": "eval/test_cases/劳动仲裁_planted.json",
+        "source_id": "BUG-005",
+        "prd_path": "workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md"
+      },
+      "standard_answer": {
+        "location": "5.2",
+        "issue": "数据导出仅一句话，缺导出上限、格式、权限、字段明细",
+        "severity": "must",
+        "type": "缺失",
+        "keywords": [
+          "导出",
+          "上限",
+          "格式",
+          "权限",
+          "TBD"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval/test_cases/劳动仲裁_planted.json",
+          "source_id": "BUG-005",
+          "must_include_terms": [
+            "导出",
+            "上限",
+            "格式",
+            "权限",
+            "TBD"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "BUG-005",
+          "5.2",
+          "导出",
+          "上限",
+          "格式"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-005"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-劳动仲裁",
+      "question": "帮我查事实层标准答案：workspace-劳动仲裁 里「脱敏 / 公告内容 / 人名」这条应该怎么判？",
+      "source": {
+        "kind": "business_prd_gt",
+        "authority": "pm_labeled",
+        "activation_reason": "manifest 明确标记 PM 已标注，可进入事实层准确率评估",
+        "path": "eval/test_cases/劳动仲裁_planted.json",
+        "source_id": "BUG-006",
+        "prd_path": "workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md"
+      },
+      "standard_answer": {
+        "location": "3.3",
+        "issue": "公告内容人名脱敏方式未说明（内容是非结构化文本，用什么方式识别人名？）",
+        "severity": "must",
+        "type": "歧义",
+        "keywords": [
+          "脱敏",
+          "公告内容",
+          "人名",
+          "识别",
+          "NLP"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval/test_cases/劳动仲裁_planted.json",
+          "source_id": "BUG-006",
+          "must_include_terms": [
+            "脱敏",
+            "公告内容",
+            "人名",
+            "识别",
+            "NLP"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "BUG-006",
+          "3.3",
+          "脱敏",
+          "公告内容",
+          "人名"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-006"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-劳动仲裁",
+      "question": "帮我查事实层标准答案：workspace-劳动仲裁 里「area_code / 排序 / 降序」这条应该怎么判？",
+      "source": {
+        "kind": "business_prd_gt",
+        "authority": "pm_labeled",
+        "activation_reason": "manifest 明确标记 PM 已标注，可进入事实层准确率评估",
+        "path": "eval/test_cases/劳动仲裁_planted.json",
+        "source_id": "BUG-007",
+        "prd_path": "workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md"
+      },
+      "standard_answer": {
+        "location": "3.6",
+        "issue": "§3.6 筛选项按 area_code 从小到大排序，§4.3 按数量降序排列，直接矛盾",
+        "severity": "must",
+        "type": "不一致",
+        "keywords": [
+          "area_code",
+          "排序",
+          "降序",
+          "矛盾",
+          "筛选"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval/test_cases/劳动仲裁_planted.json",
+          "source_id": "BUG-007",
+          "must_include_terms": [
+            "area_code",
+            "排序",
+            "降序",
+            "矛盾",
+            "筛选"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "BUG-007",
+          "3.6",
+          "area_code",
+          "排序",
+          "降序"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-007"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-劳动仲裁",
+      "question": "帮我查事实层标准答案：workspace-劳动仲裁 里「figma / 详情 / 弹窗」这条应该怎么判？",
+      "source": {
+        "kind": "business_prd_gt",
+        "authority": "pm_labeled",
+        "activation_reason": "manifest 明确标记 PM 已标注，可进入事实层准确率评估",
+        "path": "eval/test_cases/劳动仲裁_planted.json",
+        "source_id": "BUG-008",
+        "prd_path": "workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md"
+      },
+      "standard_answer": {
+        "location": "4.4",
+        "issue": "详情弹窗字段布局写'具体见 figma'，PRD 无法独立支撑开发",
+        "severity": "must",
+        "type": "缺失",
+        "keywords": [
+          "figma",
+          "详情",
+          "弹窗",
+          "布局",
+          "字段"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval/test_cases/劳动仲裁_planted.json",
+          "source_id": "BUG-008",
+          "must_include_terms": [
+            "figma",
+            "详情",
+            "弹窗",
+            "布局",
+            "字段"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "BUG-008",
+          "4.4",
+          "figma",
+          "详情",
+          "弹窗"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-008"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-劳动仲裁",
+      "question": "帮我查事实层标准答案：workspace-劳动仲裁 里「open_time / datetime / date」这条应该怎么判？",
+      "source": {
+        "kind": "business_prd_gt",
+        "authority": "pm_labeled",
+        "activation_reason": "manifest 明确标记 PM 已标注，可进入事实层准确率评估",
+        "path": "eval/test_cases/劳动仲裁_planted.json",
+        "source_id": "BUG-009",
+        "prd_path": "workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md"
+      },
+      "standard_answer": {
+        "location": "2.1",
+        "issue": "主表 open_time 是 datetime，ent 表 open_time 是 date，类型不一致会导致前端时间格式处理歧义",
+        "severity": "should",
+        "type": "字段类型",
+        "keywords": [
+          "open_time",
+          "datetime",
+          "date",
+          "类型",
+          "不一致"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval/test_cases/劳动仲裁_planted.json",
+          "source_id": "BUG-009",
+          "must_include_terms": [
+            "open_time",
+            "datetime",
+            "date",
+            "类型",
+            "不一致"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "BUG-009",
+          "2.1",
+          "open_time",
+          "datetime",
+          "date"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-009"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-劳动仲裁",
+      "question": "帮我查事实层标准答案：workspace-劳动仲裁 里「data_status / 主表 / ent表」这条应该怎么判？",
+      "source": {
+        "kind": "business_prd_gt",
+        "authority": "pm_labeled",
+        "activation_reason": "manifest 明确标记 PM 已标注，可进入事实层准确率评估",
+        "path": "eval/test_cases/劳动仲裁_planted.json",
+        "source_id": "BUG-010",
+        "prd_path": "workspace-劳动仲裁/prd/劳动仲裁需求文档 v5.1.md"
+      },
+      "standard_answer": {
+        "location": "3.1.1",
+        "issue": "主表与 ent 表 data_status 不一致时的处理逻辑未定义（是 OR 还是 AND？）",
+        "severity": "should",
+        "type": "缺失",
+        "keywords": [
+          "data_status",
+          "主表",
+          "ent表",
+          "一致",
+          "过滤"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval/test_cases/劳动仲裁_planted.json",
+          "source_id": "BUG-010",
+          "must_include_terms": [
+            "data_status",
+            "主表",
+            "ent表",
+            "一致",
+            "过滤"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "BUG-010",
+          "3.1.1",
+          "data_status",
+          "主表",
+          "ent表"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-010"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "candidate",
+      "workspace": "workspace-fengniao-mediation",
+      "question": "帮我查事实层标准答案：workspace-fengniao-mediation 里「Web UI / 表格 / 为空」这条应该怎么判？",
+      "source": {
+        "kind": "business_prd_gt",
+        "authority": "seed_needs_pm_review",
+        "activation_reason": "历史 review_items 抽取的最小 GT，manifest 明确待 PM 后续标注，先作为候选样本",
+        "path": "eval\\route_eval\\datasets\\data\\business_prd_gt\\manifest.json",
+        "source_id": "GT-FN-001",
+        "prd_path": "eval/route_eval/datasets/data/business_prd_gt/prd/fengniao-mediation-v1.md"
+      },
+      "standard_answer": {
+        "location": "2.1 Web UI",
+        "issue": "§2.1 Web UI 表格完全为空, 字段展示/筛选项/搜索项/导出均无内容, 开发无法实现",
+        "severity": "must",
+        "type": "缺失",
+        "keywords": [
+          "Web UI",
+          "表格",
+          "为空",
+          "字段",
+          "筛选项"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\route_eval\\datasets\\data\\business_prd_gt\\manifest.json",
+          "source_id": "GT-FN-001",
+          "must_include_terms": [
+            "Web UI",
+            "表格",
+            "为空",
+            "字段",
+            "筛选项"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "GT-FN-001",
+          "2.1 Web UI",
+          "Web UI",
+          "表格",
+          "为空"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-011"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "candidate",
+      "workspace": "workspace-fengniao-mediation",
+      "question": "帮我查事实层标准答案：workspace-fengniao-mediation 里「新增字段 / 字段名 / ES mapping」这条应该怎么判？",
+      "source": {
+        "kind": "business_prd_gt",
+        "authority": "seed_needs_pm_review",
+        "activation_reason": "历史 review_items 抽取的最小 GT，manifest 明确待 PM 后续标注，先作为候选样本",
+        "path": "eval\\route_eval\\datasets\\data\\business_prd_gt\\manifest.json",
+        "source_id": "GT-FN-002",
+        "prd_path": "eval/route_eval/datasets/data/business_prd_gt/prd/fengniao-mediation-v1.md"
+      },
+      "standard_answer": {
+        "location": "3. 企业主页立案信息去除诉前调解数据",
+        "issue": "§3 「立案信息ds表会新增一个字段以表明是否是诉前调解数据」未定义字段名/类型/取值语义/ES mapping",
+        "severity": "must",
+        "type": "缺失",
+        "keywords": [
+          "新增字段",
+          "字段名",
+          "ES mapping",
+          "tinyint",
+          "默认值"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\route_eval\\datasets\\data\\business_prd_gt\\manifest.json",
+          "source_id": "GT-FN-002",
+          "must_include_terms": [
+            "新增字段",
+            "字段名",
+            "ES mapping",
+            "tinyint",
+            "默认值"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "GT-FN-002",
+          "3. 企业主页立案信息去除诉前调解数据",
+          "新增字段",
+          "字段名",
+          "ES mapping"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-012"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "candidate",
+      "workspace": "workspace-fengniao-mediation",
+      "question": "帮我查事实层标准答案：workspace-fengniao-mediation 里「过滤逻辑 / case_code / 标记字段」这条应该怎么判？",
+      "source": {
+        "kind": "business_prd_gt",
+        "authority": "seed_needs_pm_review",
+        "activation_reason": "历史 review_items 抽取的最小 GT，manifest 明确待 PM 后续标注，先作为候选样本",
+        "path": "eval\\route_eval\\datasets\\data\\business_prd_gt\\manifest.json",
+        "source_id": "GT-FN-003",
+        "prd_path": "eval/route_eval/datasets/data/business_prd_gt/prd/fengniao-mediation-v1.md"
+      },
+      "standard_answer": {
+        "location": "3. 企业主页 vs 6.1 查风险",
+        "issue": "企业主页用新增标记字段过滤诉前调解, 查风险用 case_code 字符串包含「诉前调」过滤, 两套机制对同一数据可能产生不同展示",
+        "severity": "must",
+        "type": "不一致",
+        "keywords": [
+          "过滤逻辑",
+          "case_code",
+          "标记字段",
+          "字符串匹配",
+          "不一致"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\route_eval\\datasets\\data\\business_prd_gt\\manifest.json",
+          "source_id": "GT-FN-003",
+          "must_include_terms": [
+            "过滤逻辑",
+            "case_code",
+            "标记字段",
+            "字符串匹配",
+            "不一致"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "GT-FN-003",
+          "3. 企业主页 vs 6.1 查风险",
+          "过滤逻辑",
+          "case_code",
+          "标记字段"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-013"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "candidate",
+      "workspace": "workspace-fengniao-mediation",
+      "question": "帮我查事实层标准答案：workspace-fengniao-mediation 里「案件模式 / 归属规则 / 混合案号」这条应该怎么判？",
+      "source": {
+        "kind": "business_prd_gt",
+        "authority": "seed_needs_pm_review",
+        "activation_reason": "历史 review_items 抽取的最小 GT，manifest 明确待 PM 后续标注，先作为候选样本",
+        "path": "eval\\route_eval\\datasets\\data\\business_prd_gt\\manifest.json",
+        "source_id": "GT-FN-004",
+        "prd_path": "eval/route_eval/datasets/data/business_prd_gt/prd/fengniao-mediation-v1.md"
+      },
+      "standard_answer": {
+        "location": "4.1 司法案件样例",
+        "issue": "§4.1 PRD 列举了多种诉前调解案件混合模式 (单案号含裁判文书/两案号混合/多案号混合) 但未说明各模式在新分类下的归属规则",
+        "severity": "must",
+        "type": "歧义",
+        "keywords": [
+          "案件模式",
+          "归属规则",
+          "混合案号",
+          "粒度",
+          "记录级"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\route_eval\\datasets\\data\\business_prd_gt\\manifest.json",
+          "source_id": "GT-FN-004",
+          "must_include_terms": [
+            "案件模式",
+            "归属规则",
+            "混合案号",
+            "粒度",
+            "记录级"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "GT-FN-004",
+          "4.1 司法案件样例",
+          "案件模式",
+          "归属规则",
+          "混合案号"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-014"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "candidate",
+      "workspace": "workspace-fengniao-mediation",
+      "question": "帮我查事实层标准答案：workspace-fengniao-mediation 里「立案信息 / 字段清单 / 兜底」这条应该怎么判？",
+      "source": {
+        "kind": "business_prd_gt",
+        "authority": "seed_needs_pm_review",
+        "activation_reason": "历史 review_items 抽取的最小 GT，manifest 明确待 PM 后续标注，先作为候选样本",
+        "path": "eval\\route_eval\\datasets\\data\\business_prd_gt\\manifest.json",
+        "source_id": "GT-FN-005",
+        "prd_path": "eval/route_eval/datasets/data/business_prd_gt/prd/fengniao-mediation-v1.md"
+      },
+      "standard_answer": {
+        "location": "2.1 / 2.2 / 2.3 / 2.4",
+        "issue": "§2.x 反复用「字段展示、筛选项、搜索项、导出，全都和立案信息UI保持一致」兜底, 但未在本 PRD 列出立案信息字段清单",
+        "severity": "must",
+        "type": "缺失",
+        "keywords": [
+          "立案信息",
+          "字段清单",
+          "兜底",
+          "AI Coding"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\route_eval\\datasets\\data\\business_prd_gt\\manifest.json",
+          "source_id": "GT-FN-005",
+          "must_include_terms": [
+            "立案信息",
+            "字段清单",
+            "兜底",
+            "AI Coding"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "GT-FN-005",
+          "2.1 / 2.2 / 2.3 / 2.4",
+          "立案信息",
+          "字段清单",
+          "兜底"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-015"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "candidate",
+      "workspace": "workspace-fengniao-mediation",
+      "question": "帮我查事实层标准答案：workspace-fengniao-mediation 里「data_status / 有效性过滤 / ds_risk_court_mediation」这条应该怎么判？",
+      "source": {
+        "kind": "business_prd_gt",
+        "authority": "seed_needs_pm_review",
+        "activation_reason": "历史 review_items 抽取的最小 GT，manifest 明确待 PM 后续标注，先作为候选样本",
+        "path": "eval\\route_eval\\datasets\\data\\business_prd_gt\\manifest.json",
+        "source_id": "GT-FN-006",
+        "prd_path": "eval/route_eval/datasets/data/business_prd_gt/prd/fengniao-mediation-v1.md"
+      },
+      "standard_answer": {
+        "location": "第2节「企业主页增加诉前调解」",
+        "issue": "企业主页读取 ds_risk_court_mediation 时, 各子章节均未声明 data_status=0 的有效性过滤条件",
+        "severity": "should",
+        "type": "缺失",
+        "keywords": [
+          "data_status",
+          "有效性过滤",
+          "ds_risk_court_mediation"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\route_eval\\datasets\\data\\business_prd_gt\\manifest.json",
+          "source_id": "GT-FN-006",
+          "must_include_terms": [
+            "data_status",
+            "有效性过滤",
+            "ds_risk_court_mediation"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "GT-FN-006",
+          "第2节「企业主页增加诉前调解」",
+          "data_status",
+          "有效性过滤",
+          "ds_risk_court_mediation"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-016"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "candidate",
+      "workspace": "workspace-points-payment",
+      "question": "帮我查事实层标准答案：workspace-points-payment 里「快捷档位 / ASCII 原型 / 数量不一致」这条应该怎么判？",
+      "source": {
+        "kind": "business_prd_gt",
+        "authority": "seed_needs_pm_review",
+        "activation_reason": "历史 review_items 抽取的最小 GT，manifest 明确待 PM 后续标注，先作为候选样本",
+        "path": "eval\\route_eval\\datasets\\data\\business_prd_gt\\manifest.json",
+        "source_id": "GT-PP-001",
+        "prd_path": "eval/route_eval/datasets/data/business_prd_gt/prd/points-payment-v2.md"
+      },
+      "standard_answer": {
+        "location": "状态3 ASCII 原型 + 兑换弹窗交互细节",
+        "issue": "状态3 ASCII 原型显示 3 个档位 (¥1/¥5/全部兑换), 兑换弹窗交互细节文字写明 4 个档位 (¥1/¥5/¥10/全兑), 两处规格不一致",
+        "severity": "must",
+        "type": "不一致",
+        "keywords": [
+          "快捷档位",
+          "ASCII 原型",
+          "数量不一致",
+          "实现歧义"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\route_eval\\datasets\\data\\business_prd_gt\\manifest.json",
+          "source_id": "GT-PP-001",
+          "must_include_terms": [
+            "快捷档位",
+            "ASCII 原型",
+            "数量不一致",
+            "实现歧义"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "GT-PP-001",
+          "状态3 ASCII 原型 + 兑换弹窗交互细节",
+          "快捷档位",
+          "ASCII 原型",
+          "数量不一致"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-017"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "candidate",
+      "workspace": "workspace-points-payment",
+      "question": "帮我查事实层标准答案：workspace-points-payment 里「即兑即用 / 秒到账 / 人工审核」这条应该怎么判？",
+      "source": {
+        "kind": "business_prd_gt",
+        "authority": "seed_needs_pm_review",
+        "activation_reason": "历史 review_items 抽取的最小 GT，manifest 明确待 PM 后续标注，先作为候选样本",
+        "path": "eval\\route_eval\\datasets\\data\\business_prd_gt\\manifest.json",
+        "source_id": "GT-PP-002",
+        "prd_path": "eval/route_eval/datasets/data/business_prd_gt/prd/points-payment-v2.md"
+      },
+      "standard_answer": {
+        "location": "风险与假设 → 待决策: 现有积分兑换审核机制",
+        "issue": "v2 核心交互依赖「积分即兑即用 (秒到账)」, 但现有积分中心兑换接口需 2-3 个工作日人工审核, 阻断后端开工",
+        "severity": "must",
+        "type": "阻断",
+        "keywords": [
+          "即兑即用",
+          "秒到账",
+          "人工审核",
+          "阻断",
+          "前置依赖"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\route_eval\\datasets\\data\\business_prd_gt\\manifest.json",
+          "source_id": "GT-PP-002",
+          "must_include_terms": [
+            "即兑即用",
+            "秒到账",
+            "人工审核",
+            "阻断",
+            "前置依赖"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "GT-PP-002",
+          "风险与假设 → 待决策: 现有积分兑换审核机制",
+          "即兑即用",
+          "秒到账",
+          "人工审核"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-018"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "candidate",
+      "workspace": "workspace-points-payment",
+      "question": "帮我查事实层标准答案：workspace-points-payment 里「接口契约 / 请求字段 / 错误码」这条应该怎么判？",
+      "source": {
+        "kind": "business_prd_gt",
+        "authority": "seed_needs_pm_review",
+        "activation_reason": "历史 review_items 抽取的最小 GT，manifest 明确待 PM 后续标注，先作为候选样本",
+        "path": "eval\\route_eval\\datasets\\data\\business_prd_gt\\manifest.json",
+        "source_id": "GT-PP-003",
+        "prd_path": "eval/route_eval/datasets/data/business_prd_gt/prd/points-payment-v2.md"
+      },
+      "standard_answer": {
+        "location": "核心规则 · 兑换与支付解耦 / 风险与假设 · 方案 A",
+        "issue": "兑换后端接口契约未定义 (请求字段/响应字段/错误码/二次校验差异返回), AI 无法生成请求/响应代码",
+        "severity": "must",
+        "type": "缺失",
+        "keywords": [
+          "接口契约",
+          "请求字段",
+          "错误码",
+          "AI Coding",
+          "source=payment_checkout"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\route_eval\\datasets\\data\\business_prd_gt\\manifest.json",
+          "source_id": "GT-PP-003",
+          "must_include_terms": [
+            "接口契约",
+            "请求字段",
+            "错误码",
+            "AI Coding",
+            "source=payment_checkout"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "GT-PP-003",
+          "核心规则 · 兑换与支付解耦 / 风险与假设 · 方案 A",
+          "接口契约",
+          "请求字段",
+          "错误码"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-019"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "candidate",
+      "workspace": "workspace-points-payment",
+      "question": "帮我查事实层标准答案：workspace-points-payment 里「扣减时点 / 支付回调 / Phase 1」这条应该怎么判？",
+      "source": {
+        "kind": "business_prd_gt",
+        "authority": "seed_needs_pm_review",
+        "activation_reason": "历史 review_items 抽取的最小 GT，manifest 明确待 PM 后续标注，先作为候选样本",
+        "path": "eval\\route_eval\\datasets\\data\\business_prd_gt\\manifest.json",
+        "source_id": "GT-PP-004",
+        "prd_path": "eval/route_eval/datasets/data/business_prd_gt/prd/points-payment-v2.md"
+      },
+      "standard_answer": {
+        "location": "风险与假设 → 假设 (第4条)",
+        "issue": "「假设」第4条说积分在支付成功回调中扣减, 但 v2 核心模型把兑换定义为独立 Phase 1 (即时扣减), 两处直接矛盾",
+        "severity": "must",
+        "type": "不一致",
+        "keywords": [
+          "扣减时点",
+          "支付回调",
+          "Phase 1",
+          "Phase 2",
+          "兑换支付解耦"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\route_eval\\datasets\\data\\business_prd_gt\\manifest.json",
+          "source_id": "GT-PP-004",
+          "must_include_terms": [
+            "扣减时点",
+            "支付回调",
+            "Phase 1",
+            "Phase 2",
+            "兑换支付解耦"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "GT-PP-004",
+          "风险与假设 → 假设 (第4条)",
+          "扣减时点",
+          "支付回调",
+          "Phase 1"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-020"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "candidate",
+      "workspace": "workspace-points-payment",
+      "question": "帮我查事实层标准答案：workspace-points-payment 里「余额不足 / 边界条件 / 引导行」这条应该怎么判？",
+      "source": {
+        "kind": "business_prd_gt",
+        "authority": "seed_needs_pm_review",
+        "activation_reason": "历史 review_items 抽取的最小 GT，manifest 明确待 PM 后续标注，先作为候选样本",
+        "path": "eval\\route_eval\\datasets\\data\\business_prd_gt\\manifest.json",
+        "source_id": "GT-PP-005",
+        "prd_path": "eval/route_eval/datasets/data/business_prd_gt/prd/points-payment-v2.md"
+      },
+      "standard_answer": {
+        "location": "v2 设计依据 / 积分抵扣引导行",
+        "issue": "积分抵扣引导行触发条件 (余额不足以支付订单) 缺少边界定义: 余额恰好等于订单金额时是否显示? 待支付订单部分扣减后余额变化是否实时刷新?",
+        "severity": "should",
+        "type": "歧义",
+        "keywords": [
+          "余额不足",
+          "边界条件",
+          "引导行",
+          "实时刷新"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\route_eval\\datasets\\data\\business_prd_gt\\manifest.json",
+          "source_id": "GT-PP-005",
+          "must_include_terms": [
+            "余额不足",
+            "边界条件",
+            "引导行",
+            "实时刷新"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "GT-PP-005",
+          "v2 设计依据 / 积分抵扣引导行",
+          "余额不足",
+          "边界条件",
+          "引导行"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-021"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「R-018 未准入境需求文档-v1.0.md > 文档主标题 & 一、数据契约与建模 > 1.1 专业术语约定 & 全文」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "pecker-R-001",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "未准入境需求文档-v1.0.md > 文档主标题 & 一、数据契约与建模 > 1.1 专业术语约定 & 全文",
+        "issue": "整体模板未从侵权软件替换; overlap 我的 V-02.1+V-02.2",
+        "severity": "must",
+        "type": "结构层",
+        "keywords": [
+          "R-018",
+          "结构层",
+          "must",
+          "整体模板未从侵权软件替换",
+          "overlap 我的 V-02.1+V-02.2"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "pecker-R-001",
+          "must_include_terms": [
+            "R-018",
+            "结构层",
+            "must",
+            "整体模板未从侵权软件替换",
+            "overlap 我的 V-02.1+V-02.2"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "pecker-R-001",
+          "未准入境需求文档-v1.0.md > 文档主标题 & 一、数据契约与建模 > 1.1 专业术语约定 & 全文",
+          "R-018",
+          "结构层",
+          "must"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-022"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「R-020 二、企业主页 > 2.3 移动端UI > 2.3.1」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "pecker-R-002",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "二、企业主页 > 2.3 移动端UI > 2.3.1",
+        "issue": "2.3.1 送达公告残留; overlap 我的 COHERENCE.1",
+        "severity": "must",
+        "type": "结构层",
+        "keywords": [
+          "R-020",
+          "结构层",
+          "must",
+          "2.3.1 送达公告残留",
+          "overlap 我的 COHERENCE.1"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "pecker-R-002",
+          "must_include_terms": [
+            "R-020",
+            "结构层",
+            "must",
+            "2.3.1 送达公告残留",
+            "overlap 我的 COHERENCE.1"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "pecker-R-002",
+          "二、企业主页 > 2.3 移动端UI > 2.3.1",
+          "R-020",
+          "结构层",
+          "must"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-023"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「R-019 一.1.1 专业术语约定」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "pecker-R-007",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "一.1.1 专业术语约定",
+        "issue": "《侵权软件》符号定义后全文零使用; pecker 独有发现, 手工评审漏",
+        "severity": "should",
+        "type": "数据质量",
+        "keywords": [
+          "R-019",
+          "数据质量",
+          "should",
+          "《侵权软件》符号定义后全文零使用",
+          "pecker 独有发现, 手工评审漏"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "pecker-R-007",
+          "must_include_terms": [
+            "R-019",
+            "数据质量",
+            "should",
+            "《侵权软件》符号定义后全文零使用",
+            "pecker 独有发现, 手工评审漏"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "pecker-R-007",
+          "一.1.1 专业术语约定",
+          "R-019",
+          "数据质量",
+          "should"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-024"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「RC-009 一、数据契约与建模 > 1.3 物理表定义 & 1.4 数据表关系」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "pecker-R-008",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "一、数据契约与建模 > 1.3 物理表定义 & 1.4 数据表关系",
+        "issue": "mid 字段注释'附件表唯一键' vs 1.4 '只有主表' 直接矛盾; 高价值发现, 手工评审漏. 苍鹰 meta 增补, cited_by_workers=final-reviewer",
+        "severity": "must",
+        "type": "苍鹰补充",
+        "keywords": [
+          "RC-009",
+          "苍鹰补充",
+          "must",
+          "mid 字段注释'附件表唯一键' vs 1.4 '只有主表' 直接矛盾",
+          "高价值发现, 手工评审漏. 苍鹰 meta 增补, cited_by_workers=final-reviewer"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "pecker-R-008",
+          "must_include_terms": [
+            "RC-009",
+            "苍鹰补充",
+            "must",
+            "mid 字段注释'附件表唯一键' vs 1.4 '只有主表' 直接矛盾",
+            "高价值发现, 手工评审漏. 苍鹰 meta 增补, cited_by_workers=final-reviewer"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "pecker-R-008",
+          "一、数据契约与建模 > 1.3 物理表定义 & 1.4 数据表关系",
+          "RC-009",
+          "苍鹰补充",
+          "must"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-025"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「RC-012 二、企业主页 > 2.1 展示入口」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "pecker-R-009",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "二、企业主页 > 2.1 展示入口",
+        "issue": "NEW 标签显示触发条件未说明; partial overlap 我的 V-09.1 (V-09.1 覆盖面更广, 包含 NEW 以外 3 个 UI 模糊项)",
+        "severity": "should",
+        "type": "苍鹰补充",
+        "keywords": [
+          "RC-012",
+          "苍鹰补充",
+          "should",
+          "NEW 标签显示触发条件未说明",
+          "partial overlap 我的 V-09.1 (V-09.1 覆盖面更广, 包含 NEW 以外 3 个 UI 模糊项)"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "pecker-R-009",
+          "must_include_terms": [
+            "RC-012",
+            "苍鹰补充",
+            "should",
+            "NEW 标签显示触发条件未说明",
+            "partial overlap 我的 V-09.1 (V-09.1 覆盖面更广, 包含 NEW 以外 3 个 UI 模糊项)"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "pecker-R-009",
+          "二、企业主页 > 2.1 展示入口",
+          "RC-012",
+          "苍鹰补充",
+          "should"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-026"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「V-02 文件名 未准入境需求文档-v1.0.md vs L1 标题 '风鸟新增侵权软件的AI Coding需求模板'」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "manual-V-02.1",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "文件名 未准入境需求文档-v1.0.md vs L1 标题 '风鸟新增侵权软件的AI Coding需求模板'",
+        "issue": "文件名与标题主题完全不匹配; pecker R-001 涵盖整体模板问题但未单独 call out 文件名. 两者语义有区别",
+        "severity": "must",
+        "type": "结构层",
+        "keywords": [
+          "V-02",
+          "结构层",
+          "must",
+          "文件名与标题主题完全不匹配",
+          "pecker R-001 涵盖整体模板问题但未单独 call out 文件名. 两者语义有区别"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "manual-V-02.1",
+          "must_include_terms": [
+            "V-02",
+            "结构层",
+            "must",
+            "文件名与标题主题完全不匹配",
+            "pecker R-001 涵盖整体模板问题但未单独 call out 文件名. 两者语义有区别"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "manual-V-02.1",
+          "文件名 未准入境需求文档-v1.0.md vs L1 标题 '风鸟新增侵权软件的AI Coding需求模板'",
+          "V-02",
+          "结构层",
+          "must"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-027"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「V-02 L9-17 版本历史」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "manual-V-02.3",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "L9-17 版本历史",
+        "issue": "版本历史仅有样例'潘驰 2025-02-28', 未填当前真实 v1.0 创建记录",
+        "severity": "should",
+        "type": "结构层",
+        "keywords": [
+          "V-02",
+          "结构层",
+          "should",
+          "版本历史仅有样例'潘驰 2025-02-28', 未填当前真实 v1.0 创建记录"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "manual-V-02.3",
+          "must_include_terms": [
+            "V-02",
+            "结构层",
+            "should",
+            "版本历史仅有样例'潘驰 2025-02-28', 未填当前真实 v1.0 创建记录"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "manual-V-02.3",
+          "L9-17 版本历史",
+          "V-02",
+          "结构层",
+          "should"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-028"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「V-03 全文章节编号」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "manual-V-03.1",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "全文章节编号",
+        "issue": "章节编号层次混乱: '二、企业主页'下从 ## 2.1 退化到 ## 1, '三、风险扫描'下重启计数",
+        "severity": "should",
+        "type": "结构层",
+        "keywords": [
+          "V-03",
+          "结构层",
+          "should",
+          "章节编号层次混乱: '二、企业主页'下从 ## 2.1 退化到 ## 1, '三、风险扫描'下重启计数"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "manual-V-03.1",
+          "must_include_terms": [
+            "V-03",
+            "结构层",
+            "should",
+            "章节编号层次混乱: '二、企业主页'下从 ## 2.1 退化到 ## 1, '三、风险扫描'下重启计数"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "manual-V-03.1",
+          "全文章节编号",
+          "V-03",
+          "结构层",
+          "should"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-029"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「V-03 L21 '〇、业务上下文'」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "manual-V-03.2",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "L21 '〇、业务上下文'",
+        "issue": "'〇'作为第 0 章约定不常见, 新 reviewer 困惑",
+        "severity": "should",
+        "type": "结构层",
+        "keywords": [
+          "V-03",
+          "结构层",
+          "should",
+          "'〇'作为第 0 章约定不常见, 新 reviewer 困惑"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "manual-V-03.2",
+          "must_include_terms": [
+            "V-03",
+            "结构层",
+            "should",
+            "'〇'作为第 0 章约定不常见, 新 reviewer 困惑"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "manual-V-03.2",
+          "L21 '〇、业务上下文'",
+          "V-03",
+          "结构层",
+          "should"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-030"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「V-04 四、查风险 L637-657」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "manual-V-04.1",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "四、查风险 L637-657",
+        "issue": "查风险搜索结果页只有'(放一张截图)', 缺字段列表/分页/空态规则",
+        "severity": "should",
+        "type": "结构层",
+        "keywords": [
+          "V-04",
+          "结构层",
+          "should",
+          "查风险搜索结果页只有'(放一张截图)', 缺字段列表/分页/空态规则"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "manual-V-04.1",
+          "must_include_terms": [
+            "V-04",
+            "结构层",
+            "should",
+            "查风险搜索结果页只有'(放一张截图)', 缺字段列表/分页/空态规则"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "manual-V-04.1",
+          "四、查风险 L637-657",
+          "V-04",
+          "结构层",
+          "should"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-031"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「V-07 〇.1.3 数据介绍」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "manual-V-07.1",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "〇.1.3 数据介绍",
+        "issue": "'侵权软件'业务概念定义缺失, 没说数据范围/更新频率/数据源覆盖边界",
+        "severity": "must",
+        "type": "质量层",
+        "keywords": [
+          "V-07",
+          "质量层",
+          "must",
+          "'侵权软件'业务概念定义缺失, 没说数据范围/更新频率/数据源覆盖边界"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "manual-V-07.1",
+          "must_include_terms": [
+            "V-07",
+            "质量层",
+            "must",
+            "'侵权软件'业务概念定义缺失, 没说数据范围/更新频率/数据源覆盖边界"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "manual-V-07.1",
+          "〇.1.3 数据介绍",
+          "V-07",
+          "质量层",
+          "must"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-032"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「V-08 L176 entid 字段」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "manual-V-08.1",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "L176 entid 字段",
+        "issue": "entid 外键关系/NULL 处理/entname 到 entid 匹配策略未说明",
+        "severity": "must",
+        "type": "质量层",
+        "keywords": [
+          "V-08",
+          "质量层",
+          "must",
+          "entid 外键关系/NULL 处理/entname 到 entid 匹配策略未说明"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "manual-V-08.1",
+          "must_include_terms": [
+            "V-08",
+            "质量层",
+            "must",
+            "entid 外键关系/NULL 处理/entname 到 entid 匹配策略未说明"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "manual-V-08.1",
+          "L176 entid 字段",
+          "V-08",
+          "质量层",
+          "must"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-033"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「V-09 L344-410 UI 交互」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "manual-V-09.1",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "L344-410 UI 交互",
+        "issue": "UI 交互 4 个模糊项(NEW 标签/卡片布局边界/详情弹窗含义/数据量差异化); pecker R-009 只覆盖 NEW 标签一项",
+        "severity": "should",
+        "type": "质量层",
+        "keywords": [
+          "V-09",
+          "质量层",
+          "should",
+          "UI 交互 4 个模糊项(NEW 标签/卡片布局边界/详情弹窗含义/数据量差异化)",
+          "pecker R-009 只覆盖 NEW 标签一项"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "manual-V-09.1",
+          "must_include_terms": [
+            "V-09",
+            "质量层",
+            "should",
+            "UI 交互 4 个模糊项(NEW 标签/卡片布局边界/详情弹窗含义/数据量差异化)",
+            "pecker R-009 只覆盖 NEW 标签一项"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "manual-V-09.1",
+          "L344-410 UI 交互",
+          "V-09",
+          "质量层",
+          "should"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-034"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「V-10 L287-289 时间格式」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "manual-V-10.1",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "L287-289 时间格式",
+        "issue": "publish_date 时区/格式化位置未说明",
+        "severity": "should",
+        "type": "质量层",
+        "keywords": [
+          "V-10",
+          "质量层",
+          "should",
+          "publish_date 时区/格式化位置未说明"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "manual-V-10.1",
+          "must_include_terms": [
+            "V-10",
+            "质量层",
+            "should",
+            "publish_date 时区/格式化位置未说明"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "manual-V-10.1",
+          "L287-289 时间格式",
+          "V-10",
+          "质量层",
+          "should"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-035"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「RC-004 全文」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "manual-RC-004.1",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "全文",
+        "issue": "API 接口定义完全缺失. 3 个核心场景(企业主页列表/风险扫描汇总/查风险搜索)都需要接口但零定义. Pecker 这条重大问题漏",
+        "severity": "must",
+        "type": "AI Coding 友好度",
+        "keywords": [
+          "RC-004",
+          "AI Coding 友好度",
+          "must",
+          "API 接口定义完全缺失. 3 个核心场景(企业主页列表/风险扫描汇总/查风险搜索)都需要接口但零定义. Pecker 这条重大问题漏"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "manual-RC-004.1",
+          "must_include_terms": [
+            "RC-004",
+            "AI Coding 友好度",
+            "must",
+            "API 接口定义完全缺失. 3 个核心场景(企业主页列表/风险扫描汇总/查风险搜索)都需要接口但零定义. Pecker 这条重大问题漏"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "manual-RC-004.1",
+          "全文",
+          "RC-004",
+          "AI Coding 友好度",
+          "must"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-036"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「RC-005 L226-231 前端字段映射」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "manual-RC-005.1",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "L226-231 前端字段映射",
+        "issue": "前端字段映射表缺空值处理/格式化位置/点击行为 3 列",
+        "severity": "should",
+        "type": "AI Coding 友好度",
+        "keywords": [
+          "RC-005",
+          "AI Coding 友好度",
+          "should",
+          "前端字段映射表缺空值处理/格式化位置/点击行为 3 列"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "manual-RC-005.1",
+          "must_include_terms": [
+            "RC-005",
+            "AI Coding 友好度",
+            "should",
+            "前端字段映射表缺空值处理/格式化位置/点击行为 3 列"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "manual-RC-005.1",
+          "L226-231 前端字段映射",
+          "RC-005",
+          "AI Coding 友好度",
+          "should"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-037"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「RC-006 全文」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "manual-RC-006.1",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "全文",
+        "issue": "缺 Mock/JSON 响应示例, AI Coding 无 concrete 样本",
+        "severity": "should",
+        "type": "AI Coding 友好度",
+        "keywords": [
+          "RC-006",
+          "AI Coding 友好度",
+          "should",
+          "缺 Mock/JSON 响应示例, AI Coding 无 concrete 样本"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "manual-RC-006.1",
+          "must_include_terms": [
+            "RC-006",
+            "AI Coding 友好度",
+            "should",
+            "缺 Mock/JSON 响应示例, AI Coding 无 concrete 样本"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "manual-RC-006.1",
+          "全文",
+          "RC-006",
+          "AI Coding 友好度",
+          "should"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-038"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「RC-013 L375 L399 L516 L530 图片路径」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "manual-RC-013.1",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "L375 L399 L516 L530 图片路径",
+        "issue": "4 处截图路径用 Windows 反斜杠 + 中文目录 + 相对路径不可解析",
+        "severity": "must",
+        "type": "AI Coding 友好度",
+        "keywords": [
+          "RC-013",
+          "AI Coding 友好度",
+          "must",
+          "4 处截图路径用 Windows 反斜杠 + 中文目录 + 相对路径不可解析"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "manual-RC-013.1",
+          "must_include_terms": [
+            "RC-013",
+            "AI Coding 友好度",
+            "must",
+            "4 处截图路径用 Windows 反斜杠 + 中文目录 + 相对路径不可解析"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "manual-RC-013.1",
+          "L375 L399 L516 L530 图片路径",
+          "RC-013",
+          "AI Coding 友好度",
+          "must"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-039"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「RC-009 L171-197 DDL」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "manual-RC-009.1",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "L171-197 DDL",
+        "issue": "DDL 字段完整性: 10 字段 DEFAULT NULL 包括 entid, app_question varchar(200) 不够, 缺 source_type/source_url. Pecker R-008 只抓 mid 矛盾这一点, 没查字段可空性",
+        "severity": "must",
+        "type": "数据质量",
+        "keywords": [
+          "RC-009",
+          "数据质量",
+          "must",
+          "DDL 字段完整性: 10 字段 DEFAULT NULL 包括 entid, app_question varchar(200) 不够, 缺 source_type/source_url. Pecker R-008 只抓 mid 矛盾这一点, 没查字段可空性"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "manual-RC-009.1",
+          "must_include_terms": [
+            "RC-009",
+            "数据质量",
+            "must",
+            "DDL 字段完整性: 10 字段 DEFAULT NULL 包括 entid, app_question varchar(200) 不够, 缺 source_type/source_url. Pecker R-008 只抓 mid 矛盾这一点, 没查字段可空性"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "manual-RC-009.1",
+          "L171-197 DDL",
+          "RC-009",
+          "数据质量",
+          "must"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-040"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「RC-009 L188-195 索引」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "manual-RC-009.2",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "L188-195 索引",
+        "issue": "索引策略全单列, 缺 (entid, data_status, riskbird_status) 组合索引, idx_riskbird_status 低基数无用",
+        "severity": "should",
+        "type": "数据质量",
+        "keywords": [
+          "RC-009",
+          "数据质量",
+          "should",
+          "索引策略全单列, 缺 (entid, data_status, riskbird_status) 组合索引, idx_riskbird_status 低基数无用"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "manual-RC-009.2",
+          "must_include_terms": [
+            "RC-009",
+            "数据质量",
+            "should",
+            "索引策略全单列, 缺 (entid, data_status, riskbird_status) 组合索引, idx_riskbird_status 低基数无用"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "manual-RC-009.2",
+          "L188-195 索引",
+          "RC-009",
+          "数据质量",
+          "should"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-041"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「RC-009 L169 表名」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "manual-RC-009.3",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "L169 表名",
+        "issue": "表名 software_infringement 语序应改 infringement_software (业务语义侵权的软件)",
+        "severity": "could",
+        "type": "数据质量",
+        "keywords": [
+          "RC-009",
+          "数据质量",
+          "could",
+          "表名 software_infringement 语序应改 infringement_software (业务语义侵权的软件)"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "manual-RC-009.3",
+          "must_include_terms": [
+            "RC-009",
+            "数据质量",
+            "could",
+            "表名 software_infringement 语序应改 infringement_software (业务语义侵权的软件)"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "manual-RC-009.3",
+          "L169 表名",
+          "RC-009",
+          "数据质量",
+          "could"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-042"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「RC-010 DDL」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "manual-RC-010.1",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "DDL",
+        "issue": "缺采集时间 crawled_at / 采集批次 crawl_batch_id, 运维追溯不足",
+        "severity": "could",
+        "type": "数据质量",
+        "keywords": [
+          "RC-010",
+          "数据质量",
+          "could",
+          "缺采集时间 crawled_at / 采集批次 crawl_batch_id, 运维追溯不足"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "manual-RC-010.1",
+          "must_include_terms": [
+            "RC-010",
+            "数据质量",
+            "could",
+            "缺采集时间 crawled_at / 采集批次 crawl_batch_id, 运维追溯不足"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "manual-RC-010.1",
+          "DDL",
+          "RC-010",
+          "数据质量",
+          "could"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-043"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「V-06 L516 L530 图片路径」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "manual-COHERENCE.2",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "L516 L530 图片路径",
+        "issue": "'劳动仲裁送达公告_汇总入口.png'硬编码在图片路径, 但主题是侵权软件. Pecker R-002 抓到章节标题但未抓图片路径",
+        "severity": "must",
+        "type": "跨章节一致性",
+        "keywords": [
+          "V-06",
+          "跨章节一致性",
+          "must",
+          "'劳动仲裁送达公告_汇总入口.png'硬编码在图片路径, 但主题是侵权软件. Pecker R-002 抓到章节标题但未抓图片路径"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "manual-COHERENCE.2",
+          "must_include_terms": [
+            "V-06",
+            "跨章节一致性",
+            "must",
+            "'劳动仲裁送达公告_汇总入口.png'硬编码在图片路径, 但主题是侵权软件. Pecker R-002 抓到章节标题但未抓图片路径"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "manual-COHERENCE.2",
+          "L516 L530 图片路径",
+          "V-06",
+          "跨章节一致性",
+          "must"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-044"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「V-06 L51-53 法规/政策依据」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "manual-COHERENCE.3",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "L51-53 法规/政策依据",
+        "issue": "侵权软件有明确法规依据(工信部令 24/APP 违法违规收集使用个人信息行为认定方法等), 写'不适用'明显不准确",
+        "severity": "should",
+        "type": "跨章节一致性",
+        "keywords": [
+          "V-06",
+          "跨章节一致性",
+          "should",
+          "侵权软件有明确法规依据(工信部令 24/APP 违法违规收集使用个人信息行为认定方法等), 写'不适用'明显不准确"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "manual-COHERENCE.3",
+          "must_include_terms": [
+            "V-06",
+            "跨章节一致性",
+            "should",
+            "侵权软件有明确法规依据(工信部令 24/APP 违法违规收集使用个人信息行为认定方法等), 写'不适用'明显不准确"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "manual-COHERENCE.3",
+          "L51-53 法规/政策依据",
+          "V-06",
+          "跨章节一致性",
+          "should"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-045"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「V-06 二、企业主页 §2.2 Web端UI / §2.3 移动端UI」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "consistency-UI-01",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "二、企业主页 §2.2 Web端UI / §2.3 移动端UI",
+        "issue": "PRD 未定义列表模块四态 UI(加载中/请求失败/筛选无结果/空数据), 违反平台级设计规范. Pecker 单次 run 漏, 手工漏, 3 轮中 2 轮抓到",
+        "severity": "must",
+        "type": "结构层",
+        "keywords": [
+          "V-06",
+          "结构层",
+          "must",
+          "PRD 未定义列表模块四态 UI(加载中/请求失败/筛选无结果/空数据), 违反平台级设计规范. Pecker 单次 run 漏, 手工漏, 3 轮中 2 轮抓到"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "consistency-UI-01",
+          "must_include_terms": [
+            "V-06",
+            "结构层",
+            "must",
+            "PRD 未定义列表模块四态 UI(加载中/请求失败/筛选无结果/空数据), 违反平台级设计规范. Pecker 单次 run 漏, 手工漏, 3 轮中 2 轮抓到"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "consistency-UI-01",
+          "二、企业主页 §2.2 Web端UI / §2.3 移动端UI",
+          "V-06",
+          "结构层",
+          "must"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-046"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「RC-009 一.1.3 DDL unique_id 字段」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "consistency-DQ-01",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "一.1.3 DDL unique_id 字段",
+        "issue": "unique_id 字段注释'业务主键用于去重判定', 但未定义生成规则(由哪些字段拼接). 去重逻辑不确定",
+        "severity": "must",
+        "type": "数据质量",
+        "keywords": [
+          "RC-009",
+          "数据质量",
+          "must",
+          "unique_id 字段注释'业务主键用于去重判定', 但未定义生成规则(由哪些字段拼接). 去重逻辑不确定"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "consistency-DQ-01",
+          "must_include_terms": [
+            "RC-009",
+            "数据质量",
+            "must",
+            "unique_id 字段注释'业务主键用于去重判定', 但未定义生成规则(由哪些字段拼接). 去重逻辑不确定"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "consistency-DQ-01",
+          "一.1.3 DDL unique_id 字段",
+          "RC-009",
+          "数据质量",
+          "must"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-047"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「V-03 二、企业主页 §2.2.1 → §2.2.3」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "consistency-ST-01",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "二、企业主页 §2.2.1 → §2.2.3",
+        "issue": "章节编号断层: 2.2.1 直接跳到 2.2.3, 缺 2.2.2 功能区编号. 我之前手工评审章节编号问题只抓到'二/三章节下编号重启'没抓到这个",
+        "severity": "should",
+        "type": "结构层",
+        "keywords": [
+          "V-03",
+          "结构层",
+          "should",
+          "章节编号断层: 2.2.1 直接跳到 2.2.3, 缺 2.2.2 功能区编号. 我之前手工评审章节编号问题只抓到'二/三章节下编号重启'没抓到这个"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "consistency-ST-01",
+          "must_include_terms": [
+            "V-03",
+            "结构层",
+            "should",
+            "章节编号断层: 2.2.1 直接跳到 2.2.3, 缺 2.2.2 功能区编号. 我之前手工评审章节编号问题只抓到'二/三章节下编号重启'没抓到这个"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "consistency-ST-01",
+          "二、企业主页 §2.2.1 → §2.2.3",
+          "V-03",
+          "结构层",
+          "should"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-048"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「RC-005 二、1.1 前端字段映射表」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "consistency-RC-01",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "二、1.1 前端字段映射表",
+        "issue": "映射表只列 5 字段(app_name/应用来源/应用版本/所涉问题/发布日期), 但 DDL 有 entname(应用开发者) 没列. 字段覆盖不全",
+        "severity": "should",
+        "type": "AI Coding 友好度",
+        "keywords": [
+          "RC-005",
+          "AI Coding 友好度",
+          "should",
+          "映射表只列 5 字段(app_name/应用来源/应用版本/所涉问题/发布日期), 但 DDL 有 entname(应用开发者) 没列. 字段覆盖不全"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "consistency-RC-01",
+          "must_include_terms": [
+            "RC-005",
+            "AI Coding 友好度",
+            "should",
+            "映射表只列 5 字段(app_name/应用来源/应用版本/所涉问题/发布日期), 但 DDL 有 entname(应用开发者) 没列. 字段覆盖不全"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "consistency-RC-01",
+          "二、1.1 前端字段映射表",
+          "RC-005",
+          "AI Coding 友好度",
+          "should"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-049"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「RC-009 一、1.3 data_status 字段」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "consistency-DQ-02",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "一、1.3 data_status 字段",
+        "issue": "data_status 枚举 0 有效/1 历史/2 删除/3 去重, 但查询规则只说 'data_status=0 展示', 其他三个状态(1/2/3)的业务处理未说明",
+        "severity": "should",
+        "type": "数据质量",
+        "keywords": [
+          "RC-009",
+          "数据质量",
+          "should",
+          "data_status 枚举 0 有效/1 历史/2 删除/3 去重, 但查询规则只说 'data_status=0 展示', 其他三个状态(1/2/3)的业务处理未说明"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "consistency-DQ-02",
+          "must_include_terms": [
+            "RC-009",
+            "数据质量",
+            "should",
+            "data_status 枚举 0 有效/1 历史/2 删除/3 去重, 但查询规则只说 'data_status=0 展示', 其他三个状态(1/2/3)的业务处理未说明"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "consistency-DQ-02",
+          "一、1.3 data_status 字段",
+          "RC-009",
+          "数据质量",
+          "should"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-050"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "workspace-侵权软件",
+      "question": "帮我查事实层标准答案：workspace-侵权软件 里「V-06 〇.1.4.1 vs 四、查风险」这条 PM 是怎么标的？",
+      "source": {
+        "kind": "pm_decision_ground_truth",
+        "authority": "pm_confirmed_true_positive",
+        "activation_reason": "PM 决策已确认 true positive，且 note 可作为标准答案摘要",
+        "path": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+        "source_id": "consistency-COHERENCE-04",
+        "reviewer": "albedolyu"
+      },
+      "standard_answer": {
+        "location": "〇.1.4.1 vs 四、查风险",
+        "issue": "业务上下文 §1.4.1 明确写'查风险无, 仅信用大数据有', 但第四章却完整保留查风险模板结构(送达公告/开庭公告). 业务意图 vs 文档结构矛盾. 我之前手工只抓送达公告残留没发现这层元矛盾",
+        "severity": "must",
+        "type": "跨章节一致性",
+        "keywords": [
+          "V-06",
+          "跨章节一致性",
+          "must",
+          "业务上下文 §1.4.1 明确写'查风险无, 仅信用大数据有', 但第四章却完整保留查风险模板结构(送达公告/开庭公告). 业务意图 vs 文档结构矛盾. 我之前手工只抓送达公告残留没发现这层元矛盾"
+        ]
+      },
+      "expected_sources": [
+        {
+          "path_contains": "eval\\ground_truth\\infringement_software_template_albedolyu_1777011594.json",
+          "source_id": "consistency-COHERENCE-04",
+          "must_include_terms": [
+            "V-06",
+            "跨章节一致性",
+            "must",
+            "业务上下文 §1.4.1 明确写'查风险无, 仅信用大数据有', 但第四章却完整保留查风险模板结构(送达公告/开庭公告). 业务意图 vs 文档结构矛盾. 我之前手工只抓送达公告残留没发现这层元矛盾"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "consistency-COHERENCE-04",
+          "〇.1.4.1 vs 四、查风险",
+          "V-06",
+          "跨章节一致性",
+          "must"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-051"
+    }
+  ]
+}
