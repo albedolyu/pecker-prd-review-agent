@@ -70,6 +70,31 @@ class TestRejectDeltaForReason:
         assert reject_delta_for_reason("") == -0.3
 
 
+def test_reject_delta_for_decision_uses_correctness_before_legacy_reason():
+    from models import reject_delta_for_decision
+
+    decision = {
+        "action": "reject",
+        "reason_category": "known_tradeoff",
+        "correctness_reason": "false_positive",
+        "business_decision": "risk_accepted",
+    }
+
+    assert reject_delta_for_decision(decision) == -0.5
+
+
+def test_business_decision_without_correctness_reason_is_neutral():
+    from models import reject_delta_for_decision
+
+    decision = {
+        "action": "reject",
+        "reason_category": "known_tradeoff",
+        "business_decision": "risk_accepted",
+    }
+
+    assert reject_delta_for_decision(decision) == 0.0
+
+
 # ============================================================
 # PMDecision dataclass 从 dict 构造 + 兼容老 payload
 # ============================================================
@@ -211,6 +236,69 @@ class TestUpdateRulePerfFromDecisions:
         # accept 不写 reject_by_reason
         assert "reject_by_reason" not in data["RC-X"]["stats"]
         assert data["RC-X"]["stats"]["confirmed"] == 1
+
+    def test_business_decision_does_not_pollute_rule_weight(self, tmp_path, monkeypatch):
+        """Business-only rejection is valuable feedback, not rule-quality feedback."""
+        ws_name = "test-ws"
+        ws_dir = tmp_path / ws_name
+        ws_dir.mkdir()
+        monkeypatch.setattr("api.routes.review.get_project_root", lambda: tmp_path)
+
+        from api.routes.review import _update_rule_perf_from_decisions
+
+        items = [{"id": "R-001", "rule_id": "RC-BIZ", "dimension": "quality"}]
+        decisions = {
+            "R-001": {
+                "action": "reject",
+                "reason_category": "known_tradeoff",
+                "business_decision": "risk_accepted",
+            },
+        }
+
+        _update_rule_perf_from_decisions(items, decisions, ws_name)
+
+        from rule_perf_store import RulePerformanceHistoryStore
+        store = RulePerformanceHistoryStore(ws_dir)
+        data = store.load()
+        entry = data["RC-BIZ"]
+
+        assert entry["impact_score"] == 0.5
+        assert entry["rejection_rate"] == 0.0
+        assert entry["is_noisy"] is False
+        assert entry["stats"]["rejected"] == 1
+        assert "reject_by_reason" not in entry["stats"]
+        assert entry["stats"]["valuable_but_skipped"] == {"risk_accepted": 1}
+
+    def test_correctness_reason_drives_rule_weight_when_business_field_exists(self, tmp_path, monkeypatch):
+        """If PM marks correctness, that signal drives EMA even if a business field is also sent."""
+        ws_name = "test-ws"
+        ws_dir = tmp_path / ws_name
+        ws_dir.mkdir()
+        monkeypatch.setattr("api.routes.review.get_project_root", lambda: tmp_path)
+
+        from api.routes.review import _update_rule_perf_from_decisions
+
+        items = [{"id": "R-001", "rule_id": "RC-CORR", "dimension": "quality"}]
+        decisions = {
+            "R-001": {
+                "action": "reject",
+                "reason_category": "known_tradeoff",
+                "correctness_reason": "false_positive",
+                "business_decision": "not_this_iteration",
+            },
+        }
+
+        _update_rule_perf_from_decisions(items, decisions, ws_name)
+
+        from rule_perf_store import RulePerformanceHistoryStore
+        store = RulePerformanceHistoryStore(ws_dir)
+        data = store.load()
+        entry = data["RC-CORR"]
+
+        assert entry["impact_score"] < 0.5
+        assert entry["rejection_rate"] == 1.0
+        assert entry["stats"]["reject_by_reason"] == {"false_positive": 1}
+        assert entry["stats"]["valuable_but_skipped"] == {"not_this_iteration": 1}
 
 
 # ============================================================

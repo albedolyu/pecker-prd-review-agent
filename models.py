@@ -41,6 +41,20 @@ class RejectReason(str, Enum):
     MODEL_NOISE = "model_noise"           # 模型噪音, 无业务意义
 
 
+class CorrectnessReason(str, Enum):
+    """Rule-quality rejection reasons that are allowed to update EMA."""
+    FALSE_POSITIVE = "false_positive"
+    UNSUPPORTED_EVIDENCE = "unsupported_evidence"
+    RULE_TOO_STRICT = "rule_too_strict"
+
+
+class BusinessDecision(str, Enum):
+    """Business decisions that should not punish a valid rule."""
+    NOT_THIS_ITERATION = "not_this_iteration"
+    RISK_ACCEPTED = "risk_accepted"
+    HANDLED_ELSEWHERE = "handled_elsewhere"
+
+
 # EMA impact_score 的 reject delta — 按 reason 分档, 只惩罚"规则问题"类
 # 规则精度问题 (false_positive/rule_too_strict) 强惩罚
 # 模型/scope 问题 (model_noise/impl_detail) 中等
@@ -56,10 +70,34 @@ REJECT_DELTA_BY_REASON = {
     RejectReason.GOOD_ISSUE.value: 0.3,
 }
 
+CORRECTNESS_DELTA_BY_REASON = {
+    CorrectnessReason.FALSE_POSITIVE.value: -0.5,
+    CorrectnessReason.UNSUPPORTED_EVIDENCE.value: -0.1,
+    CorrectnessReason.RULE_TOO_STRICT.value: -0.5,
+}
+
 
 def reject_delta_for_reason(reason_category: str) -> float:
     """按 reason 分档返回 reject delta。未知 reason 走 -0.3 保守默认 (model_noise 等价)。"""
     return REJECT_DELTA_BY_REASON.get(reason_category, -0.3)
+
+
+def rule_quality_reason_for_decision(decision: dict) -> str:
+    correctness_reason = str((decision or {}).get("correctness_reason") or "").strip()
+    if correctness_reason:
+        return correctness_reason
+    if (decision or {}).get("business_decision"):
+        return ""
+    return str((decision or {}).get("reason_category") or "model_noise")
+
+
+def reject_delta_for_decision(decision: dict) -> float:
+    quality_reason = rule_quality_reason_for_decision(decision)
+    if not quality_reason:
+        return 0.0
+    if str((decision or {}).get("correctness_reason") or "").strip():
+        return CORRECTNESS_DELTA_BY_REASON.get(quality_reason, -0.3)
+    return reject_delta_for_reason(quality_reason)
 
 
 @dataclass
@@ -70,6 +108,8 @@ class PMDecision:
     reason_category: str = ""                         # RejectReason value, 仅 reject 时有效
     reason_note: str = ""                             # 可选自由文本补充
     edited_content: dict = field(default_factory=dict)   # action=edit 时的修改后内容
+    correctness_reason: str = ""                      # CorrectnessReason value, updates EMA
+    business_decision: str = ""                       # BusinessDecision value, neutral for EMA
 
     @classmethod
     def from_dict(cls, item_id: str, d: dict) -> PMDecision:
@@ -78,6 +118,8 @@ class PMDecision:
             item_id=item_id,
             action=d.get("action", ""),
             reason_category=d.get("reason_category", ""),
+            correctness_reason=d.get("correctness_reason", ""),
+            business_decision=d.get("business_decision", ""),
             reason_note=d.get("reason_note", d.get("reason", "")),
             edited_content=d.get("edited_content", {}),
         )

@@ -120,4 +120,16 @@ describe("review draft persistence", () => {
     expect(source).toContain("void saveDraftNow(nextDecisions)");
     expect(source).toContain("void saveDraftNow(decisions)");
   });
+
+  it("phase 3 exposes 2D rejection controls", () => {
+    const source = fs.readFileSync(
+      path.join(process.cwd(), "components/phases/Phase3ConfirmV8.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain("CORRECTNESS_REASONS");
+    expect(source).toContain("BUSINESS_DECISIONS");
+    expect(source).toContain("correctness_reason");
+    expect(source).toContain("business_decision");
+  });
 });

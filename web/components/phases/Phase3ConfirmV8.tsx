@@ -29,6 +29,8 @@ import {
   feedbackApi,
   ApiError,
   type ConfirmResponse,
+  type BusinessDecision,
+  type CorrectnessReason,
   type ItemDecision,
   type RejectReason,
   type ReviewItem,
@@ -84,6 +86,49 @@ const REJECT_CATEGORIES: ReadonlyArray<{
 ];
 
 const DEFAULT_REJECT_CATEGORY: RejectReason = "model_noise";
+
+const CORRECTNESS_REASONS: ReadonlyArray<{
+  value: CorrectnessReason;
+  label: string;
+  hint: string;
+}> = [
+  { value: "false_positive", label: "误报", hint: "PRD 确实没有这个问题" },
+  { value: "unsupported_evidence", label: "依据不足", hint: "当前资料不足以支持这条判断" },
+  { value: "rule_too_strict", label: "规则过严", hint: "规则适用范围太宽,误伤了本次场景" },
+];
+
+const BUSINESS_DECISIONS: ReadonlyArray<{
+  value: BusinessDecision;
+  label: string;
+  hint: string;
+}> = [
+  { value: "not_this_iteration", label: "本期不修", hint: "AI 判断成立,但本次迭代暂不处理" },
+  { value: "risk_accepted", label: "风险接受", hint: "AI 判断成立,业务侧确认承担风险" },
+  { value: "handled_elsewhere", label: "已有安排", hint: "AI 判断成立,已在其他任务或文档处理" },
+];
+
+const DEFAULT_BUSINESS_DECISION: BusinessDecision = "not_this_iteration";
+
+const CORRECTNESS_REASON_TO_LEGACY: Record<CorrectnessReason, RejectReason> = {
+  false_positive: "false_positive",
+  unsupported_evidence: "wiki_missing",
+  rule_too_strict: "rule_too_strict",
+};
+
+const BUSINESS_DECISION_TO_LEGACY: Record<BusinessDecision, RejectReason> = {
+  not_this_iteration: "known_tradeoff",
+  risk_accepted: "known_tradeoff",
+  handled_elsewhere: "known_tradeoff",
+};
+
+function legacyRejectReason(
+  correctnessReason?: CorrectnessReason,
+  businessDecision?: BusinessDecision,
+): RejectReason {
+  if (correctnessReason) return CORRECTNESS_REASON_TO_LEGACY[correctnessReason];
+  if (businessDecision) return BUSINESS_DECISION_TO_LEGACY[businessDecision];
+  return REJECT_CATEGORIES.find((cat) => cat.value === DEFAULT_REJECT_CATEGORY)?.value ?? "model_noise";
+}
 
 type GateLogEntry = {
   type?: string;
@@ -374,18 +419,18 @@ export function Phase3ConfirmV8() {
 
   const handleReject = useCallback(
     (itemId: string) => {
-      // P0 step 2: reject 进入态默认带 reason_category=model_noise (兜底, 与后端一致),
-      // 让 PM 必须显式从 dropdown 选 7 选 1, 否则报告里 reason_category 留空也会被
-      // ConfirmRequest validator 接受 (default model_noise) 但 EMA 信号失真 — 所以
-      // dropdown 是 PM 的强 nudge, 不是 schema 强制.
       const existing = decisions[itemId];
-      const reuseCat =
-        existing?.action === "reject" && existing.reason_category
-          ? existing.reason_category
-          : DEFAULT_REJECT_CATEGORY;
+      const correctnessReason =
+        existing?.action === "reject" ? existing.correctness_reason : undefined;
+      const businessDecision =
+        existing?.action === "reject" && existing.business_decision
+          ? existing.business_decision
+          : DEFAULT_BUSINESS_DECISION;
       const nextDecision: ItemDecision = {
         action: "reject",
-        reason_category: reuseCat,
+        reason_category: legacyRejectReason(correctnessReason, businessDecision),
+        correctness_reason: correctnessReason,
+        business_decision: businessDecision,
         reason: existing?.action === "reject" ? existing.reason : undefined,
       };
       const nextDecisions = { ...decisions, [itemId]: nextDecision };
@@ -537,20 +582,48 @@ export function Phase3ConfirmV8() {
       }
       onRejectReasonChange={(v) => {
         const existing = decisions[item.id];
+        const correctnessReason =
+          existing?.action === "reject" ? existing.correctness_reason : undefined;
+        const businessDecision =
+          existing?.action === "reject" ? existing.business_decision : undefined;
         setDecision(item.id, {
           action: "reject",
-          reason_category:
-            existing?.action === "reject" && existing.reason_category
-              ? existing.reason_category
-              : DEFAULT_REJECT_CATEGORY,
+          reason_category: legacyRejectReason(correctnessReason, businessDecision),
+          correctness_reason: correctnessReason,
+          business_decision: businessDecision,
           reason: v,
         });
       }}
-      onRejectCategoryChange={(cat) => {
+      onRejectCorrectnessChange={(reason) => {
         const existing = decisions[item.id];
+        const businessDecision = reason
+          ? undefined
+          : existing?.action === "reject" && existing.business_decision
+            ? existing.business_decision
+            : DEFAULT_BUSINESS_DECISION;
         const nextDecision: ItemDecision = {
           action: "reject",
-          reason_category: cat,
+          reason_category: legacyRejectReason(reason || undefined, businessDecision),
+          correctness_reason: reason || undefined,
+          business_decision: businessDecision,
+          reason: existing?.action === "reject" ? existing.reason : undefined,
+        };
+        const nextDecisions = { ...decisions, [item.id]: nextDecision };
+        setDecision(item.id, nextDecision);
+        void saveDraftNow(nextDecisions);
+      }}
+      onRejectBusinessDecisionChange={(businessDecision) => {
+        const existing = decisions[item.id];
+        const correctnessReason =
+          existing?.action === "reject" ? existing.correctness_reason : undefined;
+        const nextDecision: ItemDecision = {
+          action: "reject",
+          reason_category: legacyRejectReason(
+            correctnessReason,
+            businessDecision || undefined,
+          ),
+          correctness_reason: correctnessReason,
+          business_decision: businessDecision || undefined,
           reason: existing?.action === "reject" ? existing.reason : undefined,
         };
         const nextDecisions = { ...decisions, [item.id]: nextDecision };
@@ -1186,7 +1259,8 @@ interface ItemCardV8Props {
   onEdit: () => void;
   onEditChange: (v: string) => void;
   onRejectReasonChange: (v: string) => void;
-  onRejectCategoryChange: (cat: RejectReason) => void;
+  onRejectCorrectnessChange: (reason: CorrectnessReason | "") => void;
+  onRejectBusinessDecisionChange: (decision: BusinessDecision | "") => void;
   onEditDone: () => void;
 }
 
@@ -1201,7 +1275,8 @@ function ItemCardV8({
   onEdit,
   onEditChange,
   onRejectReasonChange,
-  onRejectCategoryChange,
+  onRejectCorrectnessChange,
+  onRejectBusinessDecisionChange,
   onEditDone,
 }: ItemCardV8Props) {
   const roleKey = normalizeDimensionKey(item.dimension);
@@ -1527,7 +1602,7 @@ function ItemCardV8({
         </div>
       )}
 
-      {/* reject 原因 — 7 类下拉 (P0 step 2 必填) + 可选自由文本备注 */}
+      {/* reject 原因 — correctness/business 二维拆分 + 可选自由文本备注 */}
       {action === "reject" && (
         <div
           style={{
@@ -1541,7 +1616,7 @@ function ItemCardV8({
             border: "1px dashed var(--border-default)",
           }}
         >
-          {/* 顶栏: 7 类 dropdown + 当前选择提示 */}
+          {/* 顶栏: 判断准确性 + 业务取舍 */}
           <div
             style={{
               display: "flex",
@@ -1559,23 +1634,57 @@ function ItemCardV8({
                 textTransform: "uppercase",
               }}
             >
-              驳回原因
+              判断问题
             </span>
             <select
-              value={decision?.reason_category ?? DEFAULT_REJECT_CATEGORY}
+              value={decision?.correctness_reason ?? ""}
               onChange={(e) =>
-                onRejectCategoryChange(e.target.value as RejectReason)
+                onRejectCorrectnessChange(e.target.value as CorrectnessReason | "")
               }
               style={rejectCategorySelectStyle}
               title={
-                REJECT_CATEGORIES.find(
-                  (c) =>
-                    c.value ===
-                    (decision?.reason_category ?? DEFAULT_REJECT_CATEGORY),
-                )?.hint ?? ""
+                decision?.correctness_reason
+                  ? CORRECTNESS_REASONS.find(
+                      (c) => c.value === decision.correctness_reason,
+                    )?.hint ?? ""
+                  : "AI 判断成立时留空,只记录业务取舍"
               }
             >
-              {REJECT_CATEGORIES.map((cat) => (
+              <option value="">AI 判断成立</option>
+              {CORRECTNESS_REASONS.map((cat) => (
+                <option key={cat.value} value={cat.value}>
+                  {cat.label}
+                </option>
+              ))}
+            </select>
+
+            <span
+              style={{
+                fontSize: 11,
+                fontFamily: "var(--font-mono)",
+                color: "var(--text-faint)",
+                letterSpacing: "0.04em",
+                textTransform: "uppercase",
+              }}
+            >
+              业务处理
+            </span>
+            <select
+              value={decision?.business_decision ?? ""}
+              onChange={(e) =>
+                onRejectBusinessDecisionChange(e.target.value as BusinessDecision | "")
+              }
+              style={rejectCategorySelectStyle}
+              title={
+                decision?.business_decision
+                  ? BUSINESS_DECISIONS.find(
+                      (c) => c.value === decision.business_decision,
+                    )?.hint ?? ""
+                  : "AI 判断错误时可留空"
+              }
+            >
+              <option value="">不记录业务取舍</option>
+              {BUSINESS_DECISIONS.map((cat) => (
                 <option key={cat.value} value={cat.value}>
                   {cat.label}
                 </option>

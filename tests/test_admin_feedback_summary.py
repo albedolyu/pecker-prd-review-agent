@@ -28,6 +28,8 @@ def test_feedback_summary_reads_pm_decisions_without_prd_body(tmp_path):
                     "severity": "must",
                     "action": "reject",
                     "reason_category": "false_positive",
+                    "correctness_reason": "false_positive",
+                    "business_decision": "risk_accepted",
                     "reason_note": "这里其实已经说明",
                     "problem": "验收标准看起来不完整",
                     "suggestion": "补充边界条件",
@@ -69,6 +71,10 @@ def test_feedback_summary_reads_pm_decisions_without_prd_body(tmp_path):
     assert summary["by_reviewer"][0]["rejected"] == 1
     assert summary["records"][0]["action"] == "accept"
     assert summary["records"][1]["reason_category"] == "false_positive"
+    assert summary["records"][1]["correctness_reason"] == "false_positive"
+    assert summary["records"][1]["business_decision"] == "risk_accepted"
+    assert summary["correctness_reasons"] == {"false_positive": 1}
+    assert summary["business_decisions"] == {"risk_accepted": 1}
     assert summary["records"][1]["problem"] == "验收标准看起来不完整"
     assert "prd_content" not in json.dumps(summary, ensure_ascii=False)
 
@@ -138,6 +144,7 @@ def test_feedback_summary_reads_in_progress_draft_decisions(tmp_path):
                 "R-2": {
                     "action": "reject",
                     "reason_category": "impl_detail",
+                    "business_decision": "not_this_iteration",
                     "reason": "这条太偏实现",
                 },
             },
@@ -154,6 +161,8 @@ def test_feedback_summary_reads_in_progress_draft_decisions(tmp_path):
     assert summary["draft_items"] == 2
     assert summary["records"][0]["source"] == "draft"
     assert summary["records"][0]["reason_category"] == "impl_detail"
+    assert summary["records"][0]["business_decision"] == "not_this_iteration"
+    assert summary["business_decisions"] == {"not_this_iteration": 1}
     assert "prd_content" not in json.dumps(summary, ensure_ascii=False)
 
 

@@ -177,6 +177,8 @@ def _record_from_item(
         "severity": _safe_text(item.get("severity")),
         "action": action if action in _VALID_ACTIONS else "unknown",
         "reason_category": _safe_text(item.get("reason_category")),
+        "correctness_reason": _safe_text(item.get("correctness_reason")),
+        "business_decision": _safe_text(item.get("business_decision")),
         "reason_note": _short_text(item.get("reason_note"), 120),
         "problem": _short_text(item.get("problem"), 180),
         "suggestion": _short_text(item.get("suggestion"), 180),
@@ -289,6 +291,8 @@ def build_feedback_summary(
                 **item,
                 "action": decision.get("action"),
                 "reason_category": decision.get("reason_category"),
+                "correctness_reason": decision.get("correctness_reason"),
+                "business_decision": decision.get("business_decision"),
                 "reason_note": decision.get("reason"),
                 "problem": decision.get("edited_problem") or item.get("problem"),
             }
@@ -316,6 +320,16 @@ def build_feedback_summary(
         row["reason_category"] or "未填写"
         for row in records
         if row["action"] == "reject"
+    )
+    correctness_counts = Counter(
+        row["correctness_reason"]
+        for row in records
+        if row["action"] == "reject" and row.get("correctness_reason")
+    )
+    business_counts = Counter(
+        row["business_decision"]
+        for row in records
+        if row["action"] == "reject" and row.get("business_decision")
     )
     dimension_counts = Counter(row["dimension"] or "未标注" for row in records)
 
@@ -405,6 +419,8 @@ def build_feedback_summary(
             reverse=True,
         ),
         "reason_categories": dict(category_counts.most_common()),
+        "correctness_reasons": dict(correctness_counts.most_common()),
+        "business_decisions": dict(business_counts.most_common()),
         "dimensions": dict(dimension_counts.most_common()),
         "records": public_records,
         "missing_records": [
