@@ -5,7 +5,7 @@ Confidence Score 校准工具 — 缺失 ⑦ 闭环
 - 每个 evidence_type (A/B/C) 在 cuckoo verify 的真实通过率
 - 每个 evidence_type 的真实 PM 接受率 (status=confirmed/accepted)
 
-输出建议的 EVIDENCE_CONFIDENCE_BASE 常量,让 cuckoo_parser.compute_confidence
+输出建议的 EVIDENCE_CONFIDENCE_BASE 常量,让 review.confidence.compute_confidence
 从「先验常量」变成「后验实测」。
 
 运行方式:
@@ -15,7 +15,7 @@ Confidence Score 校准工具 — 缺失 ⑦ 闭环
     # 跑指定 workspace
     python calibrate_confidence.py --workspace workspace-对外投资
 
-    # 写回 cuckoo_parser.py (默认只打印)
+    # 写回 review/confidence.py (默认只打印)
     python calibrate_confidence.py --apply
 
 输出:
@@ -108,7 +108,7 @@ def calibrate(workspaces, sample_size_min=5):
         # 不在 console 输出 raw samples
         del stats["samples"]
 
-    # 当前 cuckoo_parser 的常量
+    # 当前 review.confidence 的常量
     current_base = {"A": 0.9, "B": 0.8, "C": 0.5, "(空)": 0.4}
 
     # 建议值: 用 verify_rate 作为后验下限,如果 PM accept_rate 有数据则取两者均值
@@ -175,7 +175,7 @@ def print_report(result):
     print("## 建议代码改动")
     print()
     print("```python")
-    print("# cuckoo_parser.py:18-25")
+    print("# review/confidence.py")
     print("EVIDENCE_CONFIDENCE_BASE = {")
     for ev_type in ("A", "B", "C"):
         sug = result["suggested_base"].get(ev_type, 0.5)
@@ -187,13 +187,13 @@ def print_report(result):
 
 
 def apply_to_parser(suggested):
-    """把 suggested base 写回 cuckoo_parser.py"""
-    parser_file = "cuckoo_parser.py"
-    if not os.path.isfile(parser_file):
-        print(f"[error] {parser_file} 不存在,无法写回")
+    """把 suggested base 写回 review/confidence.py"""
+    confidence_file = os.path.join("review", "confidence.py")
+    if not os.path.isfile(confidence_file):
+        print(f"[error] {confidence_file} 不存在,无法写回")
         return False
 
-    with open(parser_file, encoding="utf-8") as f:
+    with open(confidence_file, encoding="utf-8") as f:
         content = f.read()
 
     # 查找 EVIDENCE_CONFIDENCE_BASE 字典
@@ -204,7 +204,7 @@ def apply_to_parser(suggested):
     )
     m = pattern.search(content)
     if not m:
-        print(f"[error] 在 {parser_file} 找不到 EVIDENCE_CONFIDENCE_BASE 定义")
+        print(f"[error] 在 {confidence_file} 找不到 EVIDENCE_CONFIDENCE_BASE 定义")
         return False
 
     new_dict = '\n'
@@ -215,10 +215,10 @@ def apply_to_parser(suggested):
 
     new_content = content.replace(m.group(0), f"{m.group(1)}{new_dict}{m.group(3)}")
 
-    with open(parser_file, "w", encoding="utf-8") as f:
+    with open(confidence_file, "w", encoding="utf-8") as f:
         f.write(new_content)
 
-    print(f"[apply] 已写回 {parser_file}")
+    print(f"[apply] 已写回 {confidence_file}")
     return True
 
 
@@ -227,7 +227,7 @@ def main():
         description="Confidence Score 校准工具 (关闭 ⑦ 反馈闭环缺失)"
     )
     parser.add_argument("--workspace", default=None, help="只跑指定 workspace,默认全部")
-    parser.add_argument("--apply", action="store_true", help="直接写回 cuckoo_parser.py")
+    parser.add_argument("--apply", action="store_true", help="直接写回 review/confidence.py")
     parser.add_argument("--output", default="calibration_report.json", help="输出 JSON 路径")
     parser.add_argument("--sample-min", type=int, default=5, help="样本数下限")
     args = parser.parse_args()

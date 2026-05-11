@@ -24,7 +24,7 @@ SEVERITY_MUST = "must"
 SEVERITY_SHOULD = "should"
 SEVERITY_COULD = "could"
 
-# evidence_type 三档 (cuckoo_parser.EVIDENCE_CONFIDENCE_BASE 对应)
+# evidence_type 三档 (review.confidence.EVIDENCE_CONFIDENCE_BASE 对应)
 EVIDENCE_A = "A"  # wiki 引用
 EVIDENCE_B = "B"  # 规则编号
 EVIDENCE_C = "C"  # 经验/竞品/外部
@@ -52,7 +52,7 @@ class InternalFinding:
     suggestion: str = ""                  # 改写建议 (≤60 字, "改成 X" 句式)
     severity: str = SEVERITY_SHOULD       # must / should / could
 
-    # 依据三件套 (cuckoo_parser + verify_evidence 用)
+    # 依据三件套 (legacy parser + verify_evidence 用)
     evidence_type: str = ""               # A / B / C / "" (未标)
     evidence_content: str = ""            # 依据正文 — 含 [[页面]] 或 RC-XXX 引用
     evidence_chain: List[Any] = field(default_factory=list)  # 链式引用 (claim_provenance 用)

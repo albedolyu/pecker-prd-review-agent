@@ -446,7 +446,7 @@ def _extract_items_from_response(response):
     # 统一编号（过滤非 dict 元素）
     all_items = [item for item in all_items if isinstance(item, dict)]
     # B4: 给 Worker 产出的 item 打上 confidence_score,让 merge/伯劳能消费
-    from cuckoo_parser import compute_confidence
+    from review.confidence import compute_confidence
     for i, item in enumerate(all_items, 1):
         if "id" not in item:
             item["id"] = f"R-{i:03d}"
@@ -502,7 +502,7 @@ def _extract_text(response):
 def _parse_items_from_text(text):
     """兜底：从纯文本中提取 JSON 格式的改进项（模型没调 tool 时）"""
     import re as _re
-    from cuckoo_parser import compute_confidence  # B4
+    from review.confidence import compute_confidence  # B4
     # 尝试提取 JSON 数组
     m = _re.search(r'\[[\s\S]*?\]', text)
     if m:

@@ -16,6 +16,12 @@ import os
 import re
 import warnings
 
+from review.confidence import (
+    EVIDENCE_CONFIDENCE_BASE,
+    GOSHAWK_SUPPLEMENT_DECAY,
+    compute_confidence,
+)
+
 
 # 仅在直接调用 parse_review_report 时 emit 一次, import 不打扰
 # (importer 太多, 启动期 emit 一遍会刷屏)
@@ -33,39 +39,6 @@ def _emit_parse_deprecation():
         DeprecationWarning,
         stacklevel=3,
     )
-
-
-# B4: 依据类型到置信度的映射
-#
-# A = wiki 引用 / 原文直引(最可靠)
-# B = 规则编号(RC-*/V-*)引用(较可靠但依赖规则本身质量)
-# C = 经验/竞品/推断(最低可靠度,杜鹃最容易质疑)
-EVIDENCE_CONFIDENCE_BASE = {
-    "A": 0.9,
-    "B": 0.8,
-    "C": 0.5,
-    "":  0.4,  # 未标注依据类型的保守扣分
-}
-
-# 苍鹰补充漏报项的置信度衰减系数
-# 理由:补充项没经过 Worker 主评审,置信度要打折
-GOSHAWK_SUPPLEMENT_DECAY = 0.8
-
-
-def compute_confidence(evidence_type, is_supplement=False):
-    """B4: 计算 item 的 confidence_score
-
-    Args:
-        evidence_type: "A" / "B" / "C" / "" (未知)
-        is_supplement: 是否苍鹰补充的漏报项(会乘 0.8 衰减)
-
-    Returns:
-        float in [0.0, 1.0]
-    """
-    base = EVIDENCE_CONFIDENCE_BASE.get((evidence_type or "").upper(), 0.4)
-    if is_supplement:
-        base *= GOSHAWK_SUPPLEMENT_DECAY
-    return round(base, 2)
 
 
 def parse_review_report(report_path):
