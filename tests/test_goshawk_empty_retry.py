@@ -41,6 +41,10 @@ def _resp(blocks, stop="end_turn", input_tok=100, output_tok=50):
     )
 
 
+def _resp_without_usage(blocks, stop="end_turn"):
+    return SimpleNamespace(content=blocks, stop_reason=stop)
+
+
 # ============================================================
 # _is_empty_advisor_submission
 # ============================================================
@@ -178,3 +182,18 @@ class TestAdvisorReviewVerdict:
         assert result["verdict"] == "EMPTY_APPROVAL"
         assert result["confidence"] == 0.0
         assert result["empty_retry_used"] is True
+
+    def test_successful_review_tolerates_missing_usage_metadata(self, monkeypatch):
+        """结构化终审已成功时,缺失 usage 元数据不应把结果变成异常."""
+        _setup_advisor_env(monkeypatch)
+        from goshawk_advisor import advisor_review
+
+        client = MagicMock()
+        client.create.return_value = _resp_without_usage(
+            [_tool_use(fps=[{"id": "R-001"}], confidence=0.85)]
+        )
+
+        result = advisor_review(client, "PRD body", [{"id": "R-001"}])
+
+        assert result["verdict"] == "REVIEWED"
+        assert result["usage"] == {"input_tokens": 0, "output_tokens": 0}

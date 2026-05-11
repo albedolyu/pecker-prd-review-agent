@@ -23,6 +23,10 @@ import sys
 from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
+try:
+    from scripts.goshawk_failure_triage import classify_failure_type as _classify_goshawk_failure_type
+except ImportError:  # pragma: no cover - direct script execution from scripts/
+    from goshawk_failure_triage import classify_failure_type as _classify_goshawk_failure_type
 
 # 让脚本可独立调用
 ROOT = Path(__file__).resolve().parent.parent
@@ -256,6 +260,7 @@ def _analyze_sessions(session_files: list, include_stress: bool = False) -> dict
     goshawk_verdicts = Counter()
     goshawk_empty_retry_used = 0
     goshawk_instrumented = 0  # 带 verdict 字段的 final_reviewer_done 计数
+    goshawk_failure_types = Counter()
     stress_sessions_excluded = 0
 
     for sf in session_files:
@@ -284,6 +289,9 @@ def _analyze_sessions(session_files: list, include_stress: bool = False) -> dict
         for e in events:
             if e.get("type") == "final_reviewer_done":
                 final_reviewer_total += 1
+                failure_type = _classify_goshawk_failure_type(e)
+                if failure_type != "success":
+                    goshawk_failure_types[failure_type] += 1
                 if e.get("error"):
                     final_reviewer_failed += 1
                     error_fingerprints[_error_fingerprint(e["error"])] += 1
@@ -393,6 +401,7 @@ def _analyze_sessions(session_files: list, include_stress: bool = False) -> dict
             "verdict_distribution": dict(goshawk_verdicts),
             "empty_retry_used_count": goshawk_empty_retry_used,
         },
+        "goshawk_failure_types": dict(goshawk_failure_types),
     }
 
 
@@ -577,6 +586,18 @@ def format_report(git_info, test_info, code_info, session_info) -> str:
             for v, cnt in sorted(dist.items(), key=lambda x: -x[1]):
                 lines.append(f"| {v} | {cnt} | {verdict_meaning.get(v, '?')} |")
 
+        failure_types = session_info.get("goshawk_failure_types", {})
+        if failure_types:
+            lines += [
+                "",
+                "### 苍鹰失败类型分布",
+                "",
+                "| type | 计数 |",
+                "|------|------|",
+            ]
+            for failure_type, count in sorted(failure_types.items(), key=lambda item: (-item[1], item[0])):
+                lines.append(f"| {failure_type} | {count} |")
+
         # Round 2: 空提交重试 telemetry 消费
         retry = session_info.get("empty_retry", {})
         if retry.get("instrumented_workers", 0) > 0:
@@ -616,6 +637,12 @@ def format_report(git_info, test_info, code_info, session_info) -> str:
         lines.append(f"- [PASS] 有效一致性 {cons:.1%} ≥ 60%")
     else:
         lines.append(f"- [FAIL] 有效一致性 {cons:.1%} < 60% (目标: 60%+)")
+    if session_info.get("sessions", 0) > 0:
+        goshawk_failure_rate = session_info.get("final_reviewer_failure_rate", 0)
+        if goshawk_failure_rate <= 0.15:
+            lines.append(f"- [PASS] 苍鹰失败率 {goshawk_failure_rate:.1%} ≤ 15%")
+        else:
+            lines.append(f"- [FAIL] 苍鹰失败率 {goshawk_failure_rate:.1%} > 15%")
 
     lines += [
         "",
