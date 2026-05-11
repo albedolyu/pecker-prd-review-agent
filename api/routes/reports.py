@@ -132,13 +132,14 @@ async def save_to_wiki(
         f"---\n\n"
     )
 
+    tmp = ""
     try:
         # 原子写
         import tempfile
         fd, tmp = tempfile.mkstemp(prefix=".report_", suffix=".tmp", dir=str(wiki_dir))
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(frontmatter)
-            f.write(req.report_markdown)
+            f.write(redact_text(req.report_markdown))
         os.replace(tmp, report_path)
 
         # 追加 log.md
@@ -156,10 +157,15 @@ async def save_to_wiki(
             log_path.write_text("# 操作日志\n" + log_entry, encoding="utf-8")
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"保存失败: {str(e)[:200]}")
+        if tmp:
+            try:
+                Path(tmp).unlink(missing_ok=True)
+            except Exception:
+                pass
+        raise HTTPException(status_code=500, detail=f"保存失败: {redact_text(str(e))[:200]}")
 
     return {
         "status": "ok",
         "filename": filename,
-        "path": str(report_path.relative_to(ws_dir.parent)),
+        "path": redact_text(str(report_path.relative_to(ws_dir.parent))),
     }

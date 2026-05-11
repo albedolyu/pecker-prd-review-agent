@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 
 import pytest
 
@@ -51,6 +52,43 @@ async def test_start_review_job_returns_queryable_snapshot(monkeypatch, tmp_path
     assert snapshot["status"] == "done"
     assert snapshot["result"]["review_id"] == "rev_job_1"
     assert snapshot["events"][0]["event"] == "workers_started"
+
+
+@pytest.mark.asyncio
+async def test_start_review_job_response_redacts_metadata_secrets(monkeypatch, tmp_path):
+    from api.routes import review_jobs
+    from api.routes.review import ReviewRequest
+
+    workspace = tmp_path / "workspace-alpha"
+    workspace.mkdir()
+    fake_key = "sk-01234567890abcdefABCDEFghij"
+
+    async def fake_runner(**_kwargs):
+        return {"review_id": "rev_secret", "items": []}
+
+    monkeypatch.setattr(review_jobs, "_run_review_job_pipeline", fake_runner)
+    monkeypatch.setattr(review_jobs, "get_workspace_dir", lambda _name: workspace)
+    monkeypatch.setattr(review_jobs, "require_workspace_access", lambda _ws, _user: None)
+    monkeypatch.setattr(review_jobs, "check_budget", lambda *_args, **_kwargs: {"ok": True})
+
+    started = await review_jobs.start_review_job(
+        req=ReviewRequest(
+            prd_content="# Demo",
+            workspace=f"workspace-alpha-{fake_key}",
+            prd_name=f"alpha-{fake_key}.md",
+            reviewer="pm-a",
+            mode="quick",
+        ),
+        user={"reviewer": "pm-a", "readonly": False},
+        project_root=tmp_path,
+    )
+
+    serialized = json.dumps(started, ensure_ascii=False)
+
+    assert fake_key not in serialized
+    assert started["workspace"] == "workspace-alpha-[REDACTED_SECRET]"
+    assert started["prd_name"] == "alpha-[REDACTED_SECRET].md"
+    assert started["mode"] == "quick"
 
 
 @pytest.mark.asyncio

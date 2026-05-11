@@ -8,6 +8,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
+from api.sanitize import redact_text
+
 
 _VALID_ACTIONS = {"accept", "reject", "edit"}
 
@@ -51,10 +53,14 @@ def _iso_from_timestamp(timestamp: int) -> str:
 def _short_text(value: Any, limit: int = 160) -> str:
     if value is None:
         return ""
-    text = re.sub(r"\s+", " ", str(value)).strip()
+    text = re.sub(r"\s+", " ", redact_text(str(value))).strip()
     if len(text) <= limit:
         return text
     return text[:limit].rstrip() + "..."
+
+
+def _safe_text(value: Any) -> str:
+    return redact_text(str(value or ""))
 
 
 def _iter_ground_truth_files(project_root: Path) -> Iterable[Path]:
@@ -137,12 +143,12 @@ def _iter_missing_records(project_root: Path) -> Iterable[Dict[str, Any]]:
                 "ts": _iso_from_timestamp(timestamp),
                 "sort_index": index,
                 "feedback_id": str(row.get("feedback_id") or ""),
-                "reviewer": str(row.get("reviewer") or "unknown"),
-                "workspace": str(row.get("workspace") or ""),
-                "prd_name": str(row.get("prd_name") or ""),
+                "reviewer": _safe_text(row.get("reviewer") or "unknown"),
+                "workspace": _safe_text(row.get("workspace")),
+                "prd_name": _safe_text(row.get("prd_name")),
                 "problem": _short_text(row.get("problem"), 180),
                 "location": _short_text(row.get("location"), 120),
-                "responsible_bird_id": row.get("responsible_bird_id"),
+                "responsible_bird_id": _safe_text(row.get("responsible_bird_id")),
                 "source": "missing_report",
             }
         )
@@ -161,16 +167,16 @@ def _record_from_item(
         "timestamp": timestamp,
         "ts": _iso_from_timestamp(timestamp),
         "sort_index": index,
-        "reviewer": str(payload.get("reviewer") or "unknown"),
-        "workspace": str(payload.get("workspace") or ""),
-        "prd_name": str(payload.get("prd_name") or ""),
-        "item_id": str(item.get("id") or ""),
-        "rule_id": str(item.get("rule_id") or ""),
-        "dimension": str(item.get("dimension") or ""),
+        "reviewer": _safe_text(payload.get("reviewer") or "unknown"),
+        "workspace": _safe_text(payload.get("workspace")),
+        "prd_name": _safe_text(payload.get("prd_name")),
+        "item_id": _safe_text(item.get("id")),
+        "rule_id": _safe_text(item.get("rule_id")),
+        "dimension": _safe_text(item.get("dimension")),
         "location": _short_text(item.get("location"), 120),
-        "severity": str(item.get("severity") or ""),
+        "severity": _safe_text(item.get("severity")),
         "action": action if action in _VALID_ACTIONS else "unknown",
-        "reason_category": str(item.get("reason_category") or ""),
+        "reason_category": _safe_text(item.get("reason_category")),
         "reason_note": _short_text(item.get("reason_note"), 120),
         "problem": _short_text(item.get("problem"), 180),
         "suggestion": _short_text(item.get("suggestion"), 180),

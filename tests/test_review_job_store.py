@@ -40,6 +40,71 @@ async def test_review_job_store_records_events_and_result():
 
 
 @pytest.mark.asyncio
+async def test_review_job_store_snapshot_redacts_metadata_secrets():
+    from api.review_jobs import ReviewJobStore
+
+    store = ReviewJobStore()
+    fake_key = "sk-01234567890abcdefABCDEFghij"
+
+    async def runner(_job):
+        return {"review_id": "rev_1", "items": []}
+
+    job = store.create_job(
+        owner=f"pm-a-{fake_key}",
+        workspace=f"workspace-alpha-{fake_key}",
+        prd_name=f"alpha-{fake_key}.md",
+        mode=f"standard-{fake_key}",
+        runner=runner,
+    )
+    await job.wait()
+
+    snapshot = store.get_job(job.job_id, owner=f"pm-a-{fake_key}")
+    serialized = json.dumps(snapshot, ensure_ascii=False)
+
+    assert fake_key not in serialized
+    assert snapshot["owner"] == "pm-a-[REDACTED_SECRET]"
+    assert snapshot["workspace"] == "workspace-alpha-[REDACTED_SECRET]"
+    assert snapshot["prd_name"] == "alpha-[REDACTED_SECRET].md"
+    assert snapshot["mode"] == "standard-[REDACTED_SECRET]"
+
+
+@pytest.mark.asyncio
+async def test_review_job_store_snapshot_redacts_result_secrets():
+    from api.review_jobs import ReviewJobStore
+
+    store = ReviewJobStore()
+    fake_key = "sk-01234567890abcdefABCDEFghij"
+
+    async def runner(_job):
+        return {
+            "review_id": "rev_1",
+            "items": [],
+            "telemetry": {
+                "duration_ms": 100,
+                "provider_api_key": fake_key,
+                "error": f"provider failed token={fake_key}",
+            },
+        }
+
+    job = store.create_job(
+        owner="pm-a",
+        workspace="workspace-alpha",
+        prd_name="alpha.md",
+        mode="standard",
+        runner=runner,
+    )
+    await job.wait()
+
+    snapshot = store.get_job(job.job_id, owner="pm-a")
+    serialized = json.dumps(snapshot["result"], ensure_ascii=False)
+
+    assert fake_key not in serialized
+    assert snapshot["result"]["telemetry"]["duration_ms"] == 100
+    assert snapshot["result"]["telemetry"]["provider_api_key"] == "[REDACTED_SECRET]"
+    assert "token=[REDACTED_SECRET]" in snapshot["result"]["telemetry"]["error"]
+
+
+@pytest.mark.asyncio
 async def test_review_job_store_reuses_running_job_for_same_reviewer_and_prd():
     from api.review_jobs import ReviewJobStore
 
@@ -272,6 +337,26 @@ async def test_review_job_store_redacts_secrets_from_errors_and_audit(tmp_path):
     assert fake_key not in serialized_audit
     assert "[REDACTED_SECRET]" in serialized_snapshot
     assert "[REDACTED_SECRET]" in serialized_audit
+
+
+def test_review_job_snapshot_redacts_preexisting_error_secret():
+    from api.review_jobs import ReviewJob
+
+    fake_key = "sk-01234567890abcdefABCDEFghij"
+    job = ReviewJob(
+        job_id="rjob_test",
+        owner="pm-a",
+        workspace="workspace-alpha",
+        prd_name="alpha.md",
+        mode="standard",
+    )
+    job.status = "error"
+    job.error = f"provider failed with api_key={fake_key}"
+
+    snapshot = job.snapshot()
+
+    assert fake_key not in snapshot["error"]
+    assert "api_key=[REDACTED_SECRET]" in snapshot["error"]
 
 
 @pytest.mark.asyncio

@@ -286,6 +286,45 @@ def test_ground_truth_filename_redacts_secrets(tmp_workspace, tmp_path):
     assert "REDACTED_SECRET" in gt_files[0].name
 
 
+def test_ground_truth_payload_redacts_secret_metadata_and_item_text(tmp_workspace, tmp_path):
+    """ground truth 文件内容不能暴露 PM 误填进元数据/问题摘要的密钥。"""
+    (tmp_path / "eval" / "ground_truth").mkdir(parents=True, exist_ok=True)
+    fake_key = "sk-01234567890abcdefABCDEFghij"
+    items = [
+        {
+            "id": "R-001",
+            "rule_id": "V-05",
+            "dimension": "structure",
+            "location": "§3",
+            "severity": "must",
+            "problem": f"供应商错误 Bearer {fake_key}",
+            "suggestion": f"删除 api_key={fake_key}",
+        }
+    ]
+
+    _save_eval_ground_truth(
+        items,
+        {
+            "R-001": {
+                "action": "reject",
+                "reason_category": "model_noise",
+                "reason_note": f"误报 token={fake_key}",
+            }
+        },
+        workspace=f"workspace-alpha-{fake_key}",
+        reviewer=f"alice-{fake_key}",
+        prd_name=f"demo-{fake_key}",
+        review_id=f"rev-{fake_key}",
+    )
+
+    gt_files = list((tmp_path / "eval" / "ground_truth").glob("*.json"))
+    payload = json.loads(gt_files[0].read_text(encoding="utf-8"))
+    serialized = json.dumps(payload, ensure_ascii=False)
+
+    assert fake_key not in serialized
+    assert "[REDACTED_SECRET]" in serialized
+
+
 def test_confirm_report_markdown_redacts_secret_metadata():
     """Confirm 返回的 Markdown 头部不能回显 PRD 名称/空间/评审人里的密钥。"""
     from review.post_review_contract import build_confirm_report_markdown

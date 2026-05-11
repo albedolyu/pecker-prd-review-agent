@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -76,6 +76,50 @@ def test_usage_summary_aggregates_review_sessions_and_actions(tmp_path):
     assert "prd_content" not in serialized
 
 
+def test_usage_summary_redacts_stability_grouping_keys(tmp_path):
+    fake_key = "sk-01234567890abcdefABCDEFghij"
+    _write_jsonl(
+        tmp_path / "workspace-alpha" / "output" / "sessions" / "run-001.jsonl",
+        [
+            {
+                "type": "review_started",
+                "ts": "2026-05-08T09:00:00",
+                "reviewer": f"lvxinhang {fake_key}",
+                "mode": f"standard api_key={fake_key}",
+                "prd_name": "alpha.md",
+            },
+            {
+                "type": "review_completed",
+                "ts": "2026-05-08T09:08:00",
+                "items_count": 6,
+                "duration_ms": 480000,
+            },
+        ],
+    )
+
+    summary = build_usage_summary(tmp_path, days=30, now=datetime(2026, 5, 8, 12, 0, 0))
+
+    serialized = json.dumps(summary["stability"], ensure_ascii=False)
+    assert fake_key not in serialized
+    assert "[REDACTED_SECRET]" in serialized
+
+
+def test_usage_summary_redacts_budget_snapshot_errors(monkeypatch, tmp_path):
+    import api.usage_summary as usage_summary
+
+    fake_key = "sk-01234567890abcdefABCDEFghij"
+
+    def fail_budget_snapshot(project_root):
+        raise RuntimeError(f"budget read failed api_key={fake_key}")
+
+    monkeypatch.setattr(usage_summary, "budget_status_snapshot", fail_budget_snapshot)
+
+    summary = build_usage_summary(tmp_path, days=30, now=datetime(2026, 5, 8, 12, 0, 0))
+
+    assert fake_key not in summary["budget"]["error"]
+    assert "api_key=[REDACTED_SECRET]" in summary["budget"]["error"]
+
+
 @pytest.mark.asyncio
 async def test_admin_usage_endpoint_includes_reconnectable_jobs(monkeypatch, tmp_path):
     from api.review_jobs import ReviewJobStore
@@ -127,7 +171,7 @@ async def test_admin_usage_endpoint_includes_reconnectable_jobs(monkeypatch, tmp
     (tmp_path / ".pecker_drafts" / "pm-a_draft.json").write_text(
         json.dumps(
             {
-                "ts": "2026-05-08T10:00:00",
+                "ts": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
                 "reviewer": "pm-a",
                 "phase": 3,
                 "workspace": "workspace-alpha",
@@ -212,8 +256,6 @@ async def test_admin_usage_endpoint_includes_reconnectable_jobs(monkeypatch, tmp
 
 
 def test_admin_usage_active_drafts_excludes_expired_drafts(tmp_path):
-    from datetime import timedelta
-
     from api.routes.admin_usage import _load_active_drafts
 
     draft_dir = tmp_path / ".pecker_drafts"
@@ -263,7 +305,7 @@ def test_admin_usage_active_drafts_tolerates_invalid_phase(tmp_path):
     (draft_dir / "bad_phase_draft.json").write_text(
         json.dumps(
             {
-                "ts": "2026-05-08T10:00:00",
+                "ts": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
                 "reviewer": "pm-bad",
                 "phase": "not-a-number",
                 "workspace": "workspace-alpha",
@@ -281,3 +323,34 @@ def test_admin_usage_active_drafts_tolerates_invalid_phase(tmp_path):
     assert rows[0]["reviewer"] == "pm-bad"
     assert rows[0]["phase"] == 0
     assert rows[0]["phase_label"] == "上传 PRD"
+
+
+def test_admin_usage_active_drafts_redacts_orchestrator(tmp_path):
+    from api.routes.admin_usage import _load_active_drafts
+
+    fake_key = "sk-01234567890abcdefABCDEFghij"
+    draft_dir = tmp_path / ".pecker_drafts"
+    draft_dir.mkdir(parents=True, exist_ok=True)
+    (draft_dir / "secret_orchestrator_draft.json").write_text(
+        json.dumps(
+            {
+                "ts": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+                "reviewer": "pm-a",
+                "phase": 3,
+                "workspace": "workspace-alpha",
+                "prd_name": "alpha.md",
+                "review_result": {
+                    "items": [],
+                    "telemetry": {"orchestrator": f"langgraph Bearer {fake_key}"},
+                },
+                "item_decisions": {},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    rows = _load_active_drafts(tmp_path)
+
+    assert fake_key not in rows[0]["orchestrator"]
+    assert "Bearer [REDACTED_SECRET]" in rows[0]["orchestrator"]

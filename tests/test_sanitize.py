@@ -451,3 +451,180 @@ def test_redact_text_handles_json_like_camel_case_bearer_token_fields():
     assert '"bearerToken": "[REDACTED_SECRET]"' in redacted
     assert '"sessionToken": "[REDACTED_SECRET]"' in redacted
     assert '"tokensUsed": 12' in redacted
+
+
+def test_redact_text_handles_url_basic_auth_credentials():
+    value = "upstream fetch failed for https://worker:secret-password@example.test/review"
+
+    redacted = redact_text(value)
+
+    assert "worker:secret-password" not in redacted
+    assert "https://[REDACTED_SECRET]@example.test/review" in redacted
+
+
+def test_redact_text_handles_github_personal_access_tokens():
+    value = "sync failed with token ghp_0123456789abcdef0123456789abcdef0123"
+
+    redacted = redact_text(value)
+
+    assert "ghp_0123456789abcdef0123456789abcdef0123" not in redacted
+    assert "[REDACTED_SECRET]" in redacted
+
+
+def test_redact_text_handles_short_bearer_tokens():
+    value = "gateway failed with Authorization: Bearer short-token"
+
+    redacted = redact_text(value)
+
+    assert "short-token" not in redacted
+    assert "Authorization: Bearer [REDACTED_SECRET]" in redacted
+
+
+def test_redact_sensitive_handles_oauth_code_verifier_fields():
+    payload = {
+        "code_verifier": "oauth-code-verifier-secret",
+        "error": "oauth callback failed with code_verifier=inline-oauth-verifier",
+        "code_challenge": "public-code-challenge",
+    }
+
+    redacted = redact_sensitive(payload)
+    serialized = json.dumps(redacted, ensure_ascii=False)
+
+    assert "oauth-code-verifier-secret" not in serialized
+    assert "inline-oauth-verifier" not in serialized
+    assert redacted["code_verifier"] == "[REDACTED_SECRET]"
+    assert redacted["code_challenge"] == "public-code-challenge"
+
+
+def test_redact_text_handles_json_like_oauth_code_verifier_fields():
+    value = (
+        'oauth payload {"code_verifier": "json-code-verifier", '
+        '"codeVerifier": "json-camel-verifier", "code_challenge": "public-challenge"}'
+    )
+
+    redacted = redact_text(value)
+
+    assert "json-code-verifier" not in redacted
+    assert "json-camel-verifier" not in redacted
+    assert '"code_verifier": "[REDACTED_SECRET]"' in redacted
+    assert '"codeVerifier": "[REDACTED_SECRET]"' in redacted
+    assert '"code_challenge": "public-challenge"' in redacted
+
+
+def test_redact_text_handles_oauth_callback_code_query_param():
+    value = "oauth callback https://auth.example/callback?code=auth-code-secret&state=workspace-alpha"
+
+    redacted = redact_text(value)
+
+    assert "auth-code-secret" not in redacted
+    assert "code=[REDACTED_SECRET]" in redacted
+    assert "&state=workspace-alpha" in redacted
+
+
+def test_redact_text_preserves_query_params_after_client_secret():
+    value = (
+        "oauth callback https://auth.example/token?"
+        "client_secret=oauth-client-secret&state=workspace-alpha"
+    )
+
+    redacted = redact_text(value)
+
+    assert "oauth-client-secret" not in redacted
+    assert "client_secret=[REDACTED_SECRET]" in redacted
+    assert "&state=workspace-alpha" in redacted
+
+
+def test_redact_text_handles_aws_presigned_url_credential_query_param():
+    value = (
+        "artifact export failed for https://s3.example/report?"
+        "X-Amz-Credential=AKIAIOSFODNN7EXAMPLE/20260511/us-east-1/s3/aws4_request"
+        "&X-Amz-Date=20260511T000000Z"
+    )
+
+    redacted = redact_text(value)
+
+    assert "AKIAIOSFODNN7EXAMPLE" not in redacted
+    assert "X-Amz-Credential=[REDACTED_SECRET]" in redacted
+    assert "&X-Amz-Date=20260511T000000Z" in redacted
+
+
+def test_redact_text_handles_aws_presigned_url_signature_query_param():
+    value = (
+        "artifact export failed for https://s3.example/report?"
+        "X-Amz-Signature=0123456789abcdef0123456789abcdef"
+        "&X-Amz-Expires=300"
+    )
+
+    redacted = redact_text(value)
+
+    assert "0123456789abcdef0123456789abcdef" not in redacted
+    assert "X-Amz-Signature=[REDACTED_SECRET]" in redacted
+    assert "&X-Amz-Expires=300" in redacted
+
+
+def test_redact_text_handles_aws_presigned_url_security_token_query_param():
+    value = (
+        "artifact export failed for https://s3.example/report?"
+        "X-Amz-Security-Token=temporary-session-token"
+        "&X-Amz-Expires=300"
+    )
+
+    redacted = redact_text(value)
+
+    assert "temporary-session-token" not in redacted
+    assert "X-Amz-Security-Token=[REDACTED_SECRET]" in redacted
+    assert "&X-Amz-Expires=300" in redacted
+
+
+def test_redact_text_handles_short_signed_url_sig_query_param():
+    value = "report export failed for https://blob.example/report?sig=sas-signature-secret&se=2026-05-11"
+
+    redacted = redact_text(value)
+
+    assert "sas-signature-secret" not in redacted
+    assert "sig=[REDACTED_SECRET]" in redacted
+    assert "&se=2026-05-11" in redacted
+
+
+def test_redact_sensitive_handles_signature_handle_fields():
+    payload = {
+        "signature": "structured-signature-secret",
+        "sig": "structured-short-signature-secret",
+        "status": "ready",
+    }
+
+    redacted = redact_sensitive(payload)
+    serialized = json.dumps(redacted, ensure_ascii=False)
+
+    assert "structured-signature-secret" not in serialized
+    assert "structured-short-signature-secret" not in serialized
+    assert redacted["signature"] == "[REDACTED_SECRET]"
+    assert redacted["sig"] == "[REDACTED_SECRET]"
+    assert redacted["status"] == "ready"
+
+
+def test_redact_sensitive_handles_shared_access_signature_fields():
+    payload = {
+        "SharedAccessSignature": "structured-shared-access-signature-secret",
+        "status": "ready",
+    }
+
+    redacted = redact_sensitive(payload)
+    serialized = json.dumps(redacted, ensure_ascii=False)
+
+    assert "structured-shared-access-signature-secret" not in serialized
+    assert redacted["SharedAccessSignature"] == "[REDACTED_SECRET]"
+    assert redacted["status"] == "ready"
+
+
+def test_redact_text_handles_shared_access_signature_query_param():
+    value = (
+        "report export failed for https://blob.example/report?"
+        "SharedAccessSignature=shared-access-signature-secret&se=2026-05-11"
+    )
+
+    redacted = redact_text(value)
+
+    assert "shared-access-signature-secret" not in redacted
+    assert "SharedAccessSignature=[REDACTED_SECRET]" in redacted
+    assert "&se=2026-05-11" in redacted

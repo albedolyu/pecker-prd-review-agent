@@ -184,7 +184,7 @@ def _sanitize_draft(draft: Dict[str, Any]) -> Dict[str, Any]:
         "edited": action_counts["edit"],
         "has_confirmed_report": bool(draft.get("confirmed_report_markdown")),
         "duration_ms": _safe_int(telemetry.get("total_duration_ms")),
-        "orchestrator": str(telemetry.get("orchestrator") or ""),
+        "orchestrator": redact_text(str(telemetry.get("orchestrator") or "")),
         "failed_workers": _safe_int(resilience.get("failed_workers")),
         "recovered_workers": _safe_int(resilience.get("recovered_workers")),
         "context_packet_workers": _safe_int(resilience.get("context_packet_workers")),

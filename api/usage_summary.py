@@ -113,6 +113,15 @@ def _sanitize_audit(row: Dict[str, Any]) -> Dict[str, Any]:
     return redact_sensitive({key: row.get(key) for key in _AUDIT_ALLOWLIST if key in row})
 
 
+def _sanitize_stability(metrics: Dict[str, Any]) -> Dict[str, Any]:
+    sanitized = dict(metrics)
+    for key in ("by_reviewer", "by_workspace", "by_mode", "tool_breakdown"):
+        value = sanitized.get(key)
+        if isinstance(value, dict):
+            sanitized[key] = {redact_text(str(group)): redact_sensitive(counts) for group, counts in value.items()}
+    return sanitized
+
+
 def _latest_ts(a: str, b: str) -> str:
     a_ts = _parse_ts(a)
     b_ts = _parse_ts(b)
@@ -181,7 +190,7 @@ def build_usage_summary(
     else:
         runs = _filter_by_days(runs, days)
 
-    stability = compute_metrics(runs)
+    stability = _sanitize_stability(compute_metrics(runs))
 
     audit_rows: List[Dict[str, Any]] = []
     for path in _iter_audit_files(project_root):
@@ -245,7 +254,7 @@ def build_usage_summary(
     try:
         budget = budget_status_snapshot(project_root)
     except Exception as exc:  # pragma: no cover - dashboard should degrade gracefully
-        budget = {"enabled": False, "error": f"{type(exc).__name__}: {exc}"}
+        budget = {"enabled": False, "error": redact_text(f"{type(exc).__name__}: {exc}")}
 
     return {
         "window_days": days,

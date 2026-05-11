@@ -22,6 +22,7 @@ from api.review_jobs import ReviewJob
 from api.review_jobs import RecordingReviewProgressEmitter, review_job_store
 from api.routes.drafts import DraftPayload, read_draft_file, write_draft_file
 from api.routes.review import ReviewRequest, classify_worker_failures
+from api.sanitize import redact_text
 from api.workspace_acl import is_admin, require_workspace_access
 
 router = APIRouter(tags=["review-jobs"])
@@ -330,9 +331,9 @@ async def start_review_job(
     return {
         "job_id": job.job_id,
         "status": job.status,
-        "workspace": job.workspace,
-        "prd_name": job.prd_name,
-        "mode": job.mode,
+        "workspace": redact_text(str(job.workspace)),
+        "prd_name": redact_text(str(job.prd_name)),
+        "mode": redact_text(str(job.mode)),
         "reused": reused,
     }
 

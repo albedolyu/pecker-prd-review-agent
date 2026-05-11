@@ -155,3 +155,69 @@ def test_feedback_summary_reads_in_progress_draft_decisions(tmp_path):
     assert summary["records"][0]["source"] == "draft"
     assert summary["records"][0]["reason_category"] == "impl_detail"
     assert "prd_content" not in json.dumps(summary, ensure_ascii=False)
+
+
+def test_feedback_summary_redacts_public_record_text(tmp_path):
+    fake_key = "sk-01234567890abcdefABCDEFghij"
+    _write_ground_truth(
+        tmp_path / "eval" / "ground_truth" / "alpha_alice_1778205600.json",
+        {
+            "workspace": f"workspace api_key={fake_key}",
+            "reviewer": "alice",
+            "prd_name": f"demo {fake_key}.md",
+            "timestamp": 1778205600,
+            "items": [
+                {
+                    "id": "R-001",
+                    "action": "reject",
+                    "reason_category": f"unknown api_key={fake_key}",
+                    "reason_note": f"operator note {fake_key}",
+                    "problem": f"problem includes {fake_key}",
+                    "suggestion": f"suggestion includes Bearer {fake_key}",
+                }
+            ],
+        },
+    )
+
+    summary = build_feedback_summary(
+        tmp_path,
+        days=7,
+        now=datetime.fromtimestamp(1778292000),
+    )
+
+    serialized = json.dumps(summary, ensure_ascii=False)
+    assert fake_key not in serialized
+    assert "[REDACTED_SECRET]" in serialized
+
+
+def test_feedback_summary_redacts_missing_record_owner_fields(tmp_path):
+    fake_key = "sk-01234567890abcdefABCDEFghij"
+    missing_path = tmp_path / "logs" / "missing_feedback.jsonl"
+    missing_path.parent.mkdir(parents=True, exist_ok=True)
+    missing_path.write_text(
+        json.dumps(
+            {
+                "timestamp": "2026-05-08T10:00:00",
+                "feedback_id": "fb-1",
+                "reviewer": "alice",
+                "workspace": "workspace-alpha",
+                "prd_name": "demo.md",
+                "problem": "missing feedback",
+                "location": "section 3",
+                "responsible_bird_id": f"bird api_key={fake_key}",
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    summary = build_feedback_summary(
+        tmp_path,
+        days=7,
+        now=datetime.fromisoformat("2026-05-08T12:00:00"),
+    )
+
+    serialized = json.dumps(summary["missing_records"], ensure_ascii=False)
+    assert fake_key not in serialized
+    assert "api_key=[REDACTED_SECRET]" in serialized

@@ -68,6 +68,24 @@ def test_summarize_decisions_counts_pending_and_actions():
     }
 
 
+def test_summarize_decisions_normalizes_action_case_and_whitespace():
+    from review.post_review_contract import summarize_decisions
+
+    items = [{"id": "R-001"}, {"id": "R-002"}, {"id": "R-003"}]
+    decisions = {
+        "R-001": {"action": " Accept "},
+        "R-002": {"action": "REJECT"},
+        "R-003": {"action": " edit\t"},
+    }
+
+    summary = summarize_decisions(items, decisions)
+
+    assert summary["accepted"] == 1
+    assert summary["rejected"] == 1
+    assert summary["edited"] == 1
+    assert summary["pending"] == 0
+
+
 def test_build_confirm_report_markdown_uses_backend_aliases_and_convention():
     from review.post_review_contract import build_confirm_report_markdown
 
@@ -109,6 +127,23 @@ def test_build_confirm_report_markdown_uses_backend_aliases_and_convention():
     assert "业务已接受该取舍" in report
 
 
+def test_build_confirm_report_markdown_normalizes_action_labels():
+    from review.post_review_contract import build_confirm_report_markdown
+
+    result = _review_result([
+        {
+            "id": "R-001",
+            "issue": "confirm action label should be stable",
+            "severity": "must",
+        }
+    ])
+
+    report = build_confirm_report_markdown(result, {"R-001": {"action": " Accept "}})
+
+    assert "Accept" not in report
+    assert "已接受" in report
+
+
 def test_build_confirm_report_markdown_redacts_decision_free_text():
     from review.post_review_contract import build_confirm_report_markdown
 
@@ -140,6 +175,32 @@ def test_build_confirm_report_markdown_redacts_decision_free_text():
 
     assert fake_key not in report
     assert report.count("[REDACTED_SECRET]") >= 2
+
+
+def test_build_confirm_report_markdown_redacts_unknown_reason_category():
+    from review.post_review_contract import build_confirm_report_markdown
+
+    fake_key = "sk-01234567890abcdefABCDEFghij"
+    result = _review_result([
+        {
+            "id": "R-001",
+            "issue": "reject category should not leak secrets",
+            "severity": "must",
+        },
+    ])
+
+    report = build_confirm_report_markdown(
+        result,
+        {
+            "R-001": {
+                "action": "reject",
+                "reason_category": f"unknown api_key={fake_key}",
+            }
+        },
+    )
+
+    assert fake_key not in report
+    assert "api_key=[REDACTED_SECRET]" in report
 
 
 def test_build_confirm_report_markdown_redacts_item_free_text():

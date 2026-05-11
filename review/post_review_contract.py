@@ -58,7 +58,7 @@ def summarize_decisions(
     item_ids = [str(item.get("id", "")) for item in items if item.get("id")]
     counts = {"accepted": 0, "rejected": 0, "edited": 0}
     for item_id in item_ids:
-        action = (decisions.get(item_id) or {}).get("action")
+        action = str((decisions.get(item_id) or {}).get("action") or "").strip().lower()
         if action == "accept":
             counts["accepted"] += 1
         elif action == "reject":
@@ -118,7 +118,7 @@ def build_confirm_report_markdown(
     for idx, item in enumerate(items, 1):
         item_id = item.get("id", f"R-{idx:03d}")
         decision = decisions.get(item_id) or {}
-        action = decision.get("action", "pending")
+        action = str(decision.get("action", "pending") or "pending").strip().lower()
         action_label = {
             "accept": "已接受",
             "reject": "已拒绝",
@@ -149,7 +149,8 @@ def build_confirm_report_markdown(
 
         if action == "reject":
             category = decision.get("reason_category") or "model_noise"
-            lines.append(f"- **拒绝原因**: {REJECT_REASON_LABELS.get(category, category)}")
+            reason_label = REJECT_REASON_LABELS.get(category, category)
+            lines.append(f"- **拒绝原因**: {redact_text(str(reason_label))}")
             note = decision.get("reason_note") or decision.get("reason")
             if note:
                 lines.append(f"- **驳回备注**: {redact_text(str(note))}")

@@ -141,6 +141,128 @@ async def test_save_to_wiki_redacts_secrets_from_filename_and_metadata(monkeypat
 
 
 @pytest.mark.asyncio
+async def test_save_to_wiki_redacts_secrets_from_report_body(monkeypatch, tmp_path):
+    """保存到 wiki 的报告正文也要脱敏,避免 PM 误把 API key 写进报告。"""
+    from api.routes import reports
+
+    fake_key = "sk-01234567890abcdefABCDEFghij"
+    ws_dir = tmp_path / "workspace-alpha"
+    monkeypatch.setattr(reports, "get_workspace_dir", lambda _workspace: ws_dir, raising=True)
+    monkeypatch.setattr(reports, "require_workspace_access", lambda *_args, **_kwargs: None, raising=True)
+
+    req = reports.SaveReviewRequest(
+        prd_name="demo",
+        report_markdown=f"## 正文\n供应商错误: Authorization: Bearer {fake_key}",
+        items_count=1,
+    )
+
+    resp = await reports.save_to_wiki(
+        "workspace-alpha",
+        req,
+        user={"reviewer": "alice"},
+    )
+
+    saved = (ws_dir / "wiki" / resp["filename"]).read_text(encoding="utf-8")
+
+    assert fake_key not in saved
+    assert "Authorization: Bearer [REDACTED_SECRET]" in saved
+
+
+@pytest.mark.asyncio
+async def test_save_to_wiki_redacts_secret_from_response_path(monkeypatch, tmp_path):
+    """响应 path 也不能暴露 workspace 目录里误带的密钥。"""
+    from api.routes import reports
+
+    fake_key = "sk-01234567890abcdefABCDEFghij"
+    ws_dir = tmp_path / f"workspace-{fake_key}"
+    monkeypatch.setattr(reports, "get_workspace_dir", lambda _workspace: ws_dir, raising=True)
+    monkeypatch.setattr(reports, "require_workspace_access", lambda *_args, **_kwargs: None, raising=True)
+
+    req = reports.SaveReviewRequest(
+        prd_name="demo",
+        report_markdown="## 正文\n报告内容",
+        items_count=1,
+    )
+
+    resp = await reports.save_to_wiki(
+        "workspace-alpha",
+        req,
+        user={"reviewer": "alice"},
+    )
+
+    assert fake_key not in resp["path"]
+    assert "[REDACTED_SECRET]" in resp["path"]
+
+
+@pytest.mark.asyncio
+async def test_save_to_wiki_redacts_secret_from_error_detail(monkeypatch, tmp_path):
+    """保存失败的 500 detail 也要脱敏,避免底层路径/异常带出密钥。"""
+    from fastapi import HTTPException
+    from api.routes import reports
+
+    fake_key = "sk-01234567890abcdefABCDEFghij"
+    ws_dir = tmp_path / "workspace-alpha"
+    monkeypatch.setattr(reports, "get_workspace_dir", lambda _workspace: ws_dir, raising=True)
+    monkeypatch.setattr(reports, "require_workspace_access", lambda *_args, **_kwargs: None, raising=True)
+    monkeypatch.setattr(
+        reports.os,
+        "replace",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError(f"disk full {fake_key}")),
+        raising=True,
+    )
+
+    req = reports.SaveReviewRequest(
+        prd_name="demo",
+        report_markdown="## 正文\n报告内容",
+        items_count=1,
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await reports.save_to_wiki(
+            "workspace-alpha",
+            req,
+            user={"reviewer": "alice"},
+        )
+
+    assert exc.value.status_code == 500
+    assert fake_key not in exc.value.detail
+    assert "[REDACTED_SECRET]" in exc.value.detail
+
+
+@pytest.mark.asyncio
+async def test_save_to_wiki_cleans_temp_file_when_replace_fails(monkeypatch, tmp_path):
+    """os.replace 澶辫触鏃朵笉搴旀妸 .report_*.tmp 閬楃暀鍦?wiki 鐩綍銆?"""
+    from fastapi import HTTPException
+    from api.routes import reports
+
+    ws_dir = tmp_path / "workspace-alpha"
+    monkeypatch.setattr(reports, "get_workspace_dir", lambda _workspace: ws_dir, raising=True)
+    monkeypatch.setattr(reports, "require_workspace_access", lambda *_args, **_kwargs: None, raising=True)
+    monkeypatch.setattr(
+        reports.os,
+        "replace",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("replace failed")),
+        raising=True,
+    )
+
+    req = reports.SaveReviewRequest(
+        prd_name="demo",
+        report_markdown="## 姝ｆ枃\n鎶ュ憡鍐呭",
+        items_count=1,
+    )
+
+    with pytest.raises(HTTPException):
+        await reports.save_to_wiki(
+            "workspace-alpha",
+            req,
+            user={"reviewer": "alice"},
+        )
+
+    leftovers = list((ws_dir / "wiki").glob(".report_*.tmp"))
+    assert leftovers == []
+
+
+@pytest.mark.asyncio
 async def test_download_report_rejects_non_markdown_files(monkeypatch, tmp_path):
     """报告下载入口只应服务 Markdown 报告,不能顺手暴露 output 下的其他文件。"""
     from fastapi import HTTPException

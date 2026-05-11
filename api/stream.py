@@ -120,7 +120,7 @@ class ReviewProgressEmitter:
             payload["items_count"] = len(result.get("items", []))
         # 3b: 透传 worker telemetry (duration_ms, tokens, cost, degraded 等)
         if result.get("telemetry"):
-            payload["telemetry"] = result["telemetry"]
+            payload["telemetry"] = redact_sensitive(result["telemetry"])
         try:
             self.queue.put_nowait(payload)
         except asyncio.QueueFull:

@@ -930,10 +930,12 @@ def _save_eval_ground_truth(
             "action": action,
             # 2026-04-24 T2: 7 分类 reason, 让 calibration_runner 按 reason 切分布
             "reason_category": decision.get("reason_category", ""),
-            "reason_note": (decision.get("reason_note", "") or decision.get("reason", ""))[:200],
+            "reason_note": redact_text(
+                (decision.get("reason_note", "") or decision.get("reason", ""))[:200]
+            ),
             # admin feedback 看板只展示短摘要,不保存/展示 PRD 正文或原始材料。
-            "problem": (item.get("problem", "") or "")[:300],
-            "suggestion": (item.get("suggestion", "") or "")[:300],
+            "problem": redact_text((item.get("problem", "") or "")[:300]),
+            "suggestion": redact_text((item.get("suggestion", "") or "")[:300]),
             "is_true_positive": action in ("accept", "edit"),
         })
 
@@ -953,10 +955,10 @@ def _save_eval_ground_truth(
     os.makedirs(gt_dir, exist_ok=True)
 
     gt_payload = {
-        "workspace": workspace,
-        "reviewer": reviewer,
-        "prd_name": prd_name,
-        "review_id": review_id,
+        "workspace": redact_text(str(workspace)),
+        "reviewer": redact_text(str(reviewer)),
+        "prd_name": redact_text(str(prd_name)),
+        "review_id": redact_text(str(review_id)),
         "timestamp": timestamp,
         "items": gt_items,
     }

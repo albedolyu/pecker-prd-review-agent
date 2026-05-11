@@ -134,15 +134,15 @@ class ReviewJob:
         return {
             "job_id": self.job_id,
             "status": self.status,
-            "owner": self.owner,
-            "workspace": self.workspace,
-            "prd_name": self.prd_name,
-            "mode": self.mode,
+            "owner": redact_text(str(self.owner)),
+            "workspace": redact_text(str(self.workspace)),
+            "prd_name": redact_text(str(self.prd_name)),
+            "mode": redact_text(str(self.mode)),
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "events": [dict(event) for event in self._events],
-            "result": self.result,
-            "error": self.error,
+            "result": redact_sensitive(self.result),
+            "error": redact_text(str(self.error)),
         }
 
 

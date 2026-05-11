@@ -50,6 +50,31 @@ def test_stream_redacts_secrets_from_public_errors():
     assert "[REDACTED_SECRET]" in serialized
 
 
+def test_stream_redacts_worker_telemetry_before_public_emit():
+    fake_key = "sk-01234567890abcdefABCDEFghij"
+    emitter = ReviewProgressEmitter()
+
+    emitter.emit_worker_done(
+        "quality",
+        {
+            "items": [],
+            "telemetry": {
+                "duration_ms": 1200,
+                "provider_api_key": fake_key,
+                "error": f"upstream token={fake_key}",
+            },
+        },
+    )
+
+    payload = emitter.queue.get_nowait()
+    serialized = json.dumps(payload, ensure_ascii=False)
+
+    assert fake_key not in serialized
+    assert payload["telemetry"]["duration_ms"] == 1200
+    assert payload["telemetry"]["provider_api_key"] == "[REDACTED_SECRET]"
+    assert "token=[REDACTED_SECRET]" in payload["telemetry"]["error"]
+
+
 async def _collect(gen, max_chunks=50):
     """消费 async generator,最多 max_chunks 个,避免 hang。"""
     out = []
