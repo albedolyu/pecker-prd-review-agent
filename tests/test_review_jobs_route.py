@@ -241,6 +241,8 @@ async def test_default_review_job_runner_returns_signed_review_result(monkeypatc
     monkeypatch.setenv("PECKER_REVIEW_JOB_PIPELINE", "lightweight")
 
     async def fake_parallel_review(*_args, **kwargs):
+        assert kwargs["thread_id"] == "review-job:rjob_default"
+        assert kwargs["checkpointer"].checkpoint_path.parent.name == ".pecker_checkpoints"
         on_worker_done = kwargs["on_worker_done"]
         on_worker_done(
             "structure",

@@ -69,6 +69,40 @@ async def test_parallel_review_can_rollback_to_legacy_orchestrator(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_parallel_review_passes_langgraph_checkpoint_config(monkeypatch):
+    import review.orchestration as orchestration
+
+    checkpointer = object()
+    captured = {}
+
+    async def fake_langgraph_review(*_args, **kwargs):
+        captured.update(kwargs)
+        return {
+            "workers": [],
+            "merged_items": [],
+            "total_usage": {"input_tokens": 0, "output_tokens": 0},
+            "orchestrator": "langgraph",
+        }
+
+    monkeypatch.delenv("PECKER_REVIEW_ORCHESTRATOR", raising=False)
+    monkeypatch.setattr(orchestration, "langgraph_parallel_review", fake_langgraph_review, raising=False)
+
+    result = await orchestration.parallel_review(
+        client=None,
+        prd_content="prd",
+        wiki_pages={},
+        model_tiers={"sonnet": "test-model"},
+        workspace="workspace",
+        checkpointer=checkpointer,
+        thread_id="review-job:rjob_123",
+    )
+
+    assert result["orchestrator"] == "langgraph"
+    assert captured["checkpointer"] is checkpointer
+    assert captured["thread_id"] == "review-job:rjob_123"
+
+
+@pytest.mark.asyncio
 async def test_langgraph_parallel_review_preserves_worker_callbacks_and_trace(monkeypatch):
     import review.langgraph_orchestration as langgraph_orchestration
     import review.orchestration as orchestration

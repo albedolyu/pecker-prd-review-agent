@@ -26,6 +26,7 @@ from api.routes.drafts import DraftPayload, read_draft_file, write_draft_file
 from api.routes.review import ReviewRequest, _copy_request_with_raw_materials, classify_worker_failures
 from api.sanitize import redact_text
 from api.workspace_acl import is_admin, require_workspace_access
+from review.langgraph_checkpoint import build_review_job_checkpointer
 
 router = APIRouter(tags=["review-jobs"])
 
@@ -70,6 +71,9 @@ async def _run_review_job_pipeline(
 
     async with review_semaphore:
         emitter.emit("workers_started", data={"mode": req.mode})
+        thread_id = _langgraph_thread_id(emitter.job)
+        checkpointer = build_review_job_checkpointer(project_root)
+        emitter.emit("langgraph_checkpoint_ready", data={"thread_id": thread_id})
         def _on_worker_done(dim, result):
             emitter.emit_worker_done(dim, result)
 
@@ -80,6 +84,8 @@ async def _run_review_job_pipeline(
             MODEL_TIERS,
             on_worker_done=_on_worker_done,
             workspace=ws_abs_path,
+            checkpointer=checkpointer,
+            thread_id=thread_id,
         )
 
         workers = result.get("workers", [])
@@ -164,6 +170,16 @@ async def _run_review_job_pipeline(
         review_result=review_result_payload,
     )
     return review_result_payload
+
+
+def _langgraph_thread_id(job: ReviewJob) -> str:
+    return f"review-job:{job.job_id}"
+
+
+def _restore_review_jobs_from_audit(project_root: Path) -> None:
+    if not isinstance(project_root, Path):
+        return
+    review_job_store.restore_from_audit_log(project_root / "logs" / "review_jobs.jsonl")
 
 
 def _persist_completed_review_draft(
@@ -363,7 +379,9 @@ def _review_request_fingerprint(req: ReviewRequest) -> str:
 async def get_review_job(
     job_id: str,
     user: dict = Depends(get_current_user),
+    project_root: Path = Depends(get_project_root),
 ) -> Dict[str, Any]:
+    _restore_review_jobs_from_audit(project_root)
     return review_job_store.get_job(
         job_id,
         owner=user.get("reviewer", ""),
@@ -377,7 +395,9 @@ async def wait_review_job_event(
     after_index: int = Query(-1, description="Last event index already seen"),
     timeout: float = Query(25.0, ge=0.1, le=30.0),
     user: dict = Depends(get_current_user),
+    project_root: Path = Depends(get_project_root),
 ) -> Dict[str, Any]:
+    _restore_review_jobs_from_audit(project_root)
     job = review_job_store.get_job_ref(
         job_id,
         owner=user.get("reviewer", ""),
@@ -391,7 +411,9 @@ async def wait_review_job_event(
 async def cancel_review_job(
     job_id: str,
     user: dict = Depends(get_current_user),
+    project_root: Path = Depends(get_project_root),
 ) -> Dict[str, Any]:
+    _restore_review_jobs_from_audit(project_root)
     snapshot = review_job_store.cancel_job(
         job_id,
         owner=user.get("reviewer", ""),
