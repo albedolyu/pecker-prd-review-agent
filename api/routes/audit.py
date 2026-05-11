@@ -21,8 +21,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from api.deps import get_current_user, get_project_root
+from api.sanitize import redact_sensitive, redact_text
 
 router = APIRouter(tags=["audit"])
+
+_RESERVED_AUDIT_FIELDS = {"ts", "event", "reviewer", "workspace", "prd_name"}
 
 
 class AuditEvent(BaseModel):
@@ -46,21 +49,26 @@ async def log_audit(
         day_tag = time.strftime("%Y%m%d")
         log_path = log_dir / f"user_actions_{day_tag}.jsonl"
 
-        entry = {
+        extra = {
+            key: value
+            for key, value in ev.extra.items()
+            if key not in _RESERVED_AUDIT_FIELDS
+        }
+        entry = redact_sensitive({
             "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "event": ev.event,
             "reviewer": user.get("reviewer", "unknown"),
             "workspace": ev.workspace,
             "prd_name": ev.prd_name,
-            **ev.extra,
-        }
+            **extra,
+        })
 
         # append 单行 < 4KB 是原子的,无需文件锁
         with open(log_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except Exception as e:
         # 审计日志失败绝不阻塞前端
-        return {"status": "logged_locally", "error": str(e)[:100]}
+        return {"status": "logged_locally", "error": redact_text(str(e))[:100]}
 
     return {"status": "ok"}
 
