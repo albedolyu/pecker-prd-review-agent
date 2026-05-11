@@ -120,6 +120,10 @@ def _sanitize_job_event(row: Dict[str, Any]) -> Dict[str, Any]:
         "output_tokens",
         "cost_usd",
         "prd_context_packet_chars",
+        "context_manager_calls",
+        "context_manager_tokens_saved",
+        "context_manager_nudges",
+        "context_manager_failures",
     }
     return redact_sensitive({key: value for key, value in row.items() if key in allowed})
 

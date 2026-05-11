@@ -161,6 +161,10 @@ async def test_admin_usage_endpoint_includes_reconnectable_jobs(monkeypatch, tmp
                 "output_tokens": 600,
                 "prd_context_packet_chars": 8000,
                 "cost_usd": 0.037,
+                "context_manager_calls": 3,
+                "context_manager_tokens_saved": 2048,
+                "context_manager_nudges": 1,
+                "context_manager_failures": 1,
                 "ts": 1,
                 "prd_content": "should not leak",
                 "payload": {"items": [{"problem": "derived text should not leak"}]},
@@ -244,6 +248,10 @@ async def test_admin_usage_endpoint_includes_reconnectable_jobs(monkeypatch, tmp
     assert data["recent_job_events"][0]["output_tokens"] == 600
     assert data["recent_job_events"][0]["prd_context_packet_chars"] == 8000
     assert data["recent_job_events"][0]["cost_usd"] == 0.037
+    assert data["recent_job_events"][0]["context_manager_calls"] == 3
+    assert data["recent_job_events"][0]["context_manager_tokens_saved"] == 2048
+    assert data["recent_job_events"][0]["context_manager_nudges"] == 1
+    assert data["recent_job_events"][0]["context_manager_failures"] == 1
     assert "tokens_in" not in data["recent_job_events"][0]
     assert "tokens_out" not in data["recent_job_events"][0]
     serialized_events = json.dumps(data["recent_job_events"], ensure_ascii=False)

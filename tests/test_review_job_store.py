@@ -239,6 +239,17 @@ async def test_review_job_store_writes_sanitized_audit_log(tmp_path):
         return {
             "review_id": "rev_1",
             "items": [{"problem": "PRD derived text must not be logged"}],
+            "telemetry": {
+                "context_manager": {
+                    "total_calls": 3,
+                    "total_tokens_saved": 2048,
+                    "paths": {
+                        "microcompact": {"nudges": 0, "failures": 0},
+                        "check_convergence": {"nudges": 1, "failures": 0},
+                        "autocompact": {"failures": 1},
+                    },
+                }
+            },
         }
 
     job = store.create_job(
@@ -269,6 +280,10 @@ async def test_review_job_store_writes_sanitized_audit_log(tmp_path):
     assert rows[1]["cost_usd"] == 0.037
     assert rows[-1]["result_review_id"] == "rev_1"
     assert rows[-1]["result_items_count"] == 1
+    assert rows[-1]["context_manager_calls"] == 3
+    assert rows[-1]["context_manager_tokens_saved"] == 2048
+    assert rows[-1]["context_manager_nudges"] == 1
+    assert rows[-1]["context_manager_failures"] == 1
     serialized = json.dumps(rows, ensure_ascii=False)
     assert fake_key not in serialized
     assert "[REDACTED_SECRET]" in serialized
