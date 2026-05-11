@@ -439,9 +439,14 @@ def advisor_review(client, prd_content, worker_results, wiki_pages=None, model=D
     if coord.was_hit:
         result["truncated_by_deadline"] = True
     # 保存 usage 供成本归因 (CC cost-tracker querySource 模式)
+    usage = getattr(response, "usage", {}) or {}
+    def _usage_value(key):
+        if hasattr(usage, "get"):
+            return usage.get(key, 0)
+        return getattr(usage, key, 0)
     result["usage"] = {
-        "input_tokens": response.usage.get("input_tokens", 0) if hasattr(response.usage, 'get') else getattr(response.usage, 'input_tokens', 0),
-        "output_tokens": response.usage.get("output_tokens", 0) if hasattr(response.usage, 'get') else getattr(response.usage, 'output_tokens', 0),
+        "input_tokens": _usage_value("input_tokens"),
+        "output_tokens": _usage_value("output_tokens"),
     }
 
     # Metrics 埋点: goshawk.completed
