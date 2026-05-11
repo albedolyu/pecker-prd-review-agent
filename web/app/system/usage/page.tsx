@@ -359,6 +359,99 @@ function AdminUsageContent() {
             )}
           </section>
 
+          {feedbackData?.rework_avoidance && (
+            <section style={{ ...cardStyle, marginBottom: 16 }}>
+              <SectionHead
+                title="返工避免样本"
+                hint="同事在报告页自愿反馈本次评审避免了哪类返工；用于周会判断工具是否真的帮上忙"
+              />
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+                  gap: 10,
+                  padding: 16,
+                  borderBottom: "1px solid var(--border-subtle)",
+                }}
+              >
+                <SmallStat
+                  label="提交样本"
+                  value={feedbackData.rework_avoidance.total_samples}
+                />
+                <SmallStat
+                  label="有效样本"
+                  value={feedbackData.rework_avoidance.productive_samples}
+                />
+                <SmallStat
+                  label="有效占比"
+                  value={`${Math.round(feedbackData.rework_avoidance.productive_rate * 100)}%`}
+                />
+              </div>
+              {Object.keys(feedbackData.rework_avoidance.category_counts).length > 0 && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 8,
+                    padding: "0 16px 16px",
+                    borderBottom: "1px solid var(--border-subtle)",
+                  }}
+                >
+                  {Object.entries(feedbackData.rework_avoidance.category_counts).map(
+                    ([category, count]) => (
+                      <span
+                        key={category}
+                        style={{
+                          border: "1px solid var(--border-subtle)",
+                          borderRadius: "var(--r-pill)",
+                          padding: "5px 10px",
+                          color: "var(--text-muted)",
+                          fontSize: 12,
+                          background: "var(--surface-base)",
+                        }}
+                      >
+                        {reworkCategoryLabel(category)} · {count}
+                      </span>
+                    ),
+                  )}
+                </div>
+              )}
+              {feedbackData.rework_avoidance.recent_notes.length ? (
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ ...tableStyle, minWidth: 860 }}>
+                    <thead>
+                      <tr>
+                        {["时间", "同事", "材料", "类型", "说明"].map((label) => (
+                          <th key={label} style={thStyle}>{label}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {feedbackData.rework_avoidance.recent_notes.map((note) => (
+                        <tr key={`${note.timestamp}-${note.reviewer}-${note.note}`}>
+                          <td style={tdStyle}>{formatTime(note.timestamp)}</td>
+                          <td style={tdStyle}>{note.reviewer || "未署名"}</td>
+                          <td style={tdStyle}>
+                            <div>{note.prd_name || "未记录材料名"}</div>
+                            <div style={{ color: "var(--text-faint)", marginTop: 3 }}>
+                              {note.workspace?.replace(/^workspace-/, "") || "未选资料库"}
+                            </div>
+                          </td>
+                          <td style={tdStyle}>
+                            {note.categories.map(reworkCategoryLabel).join(" / ")}
+                          </td>
+                          <td style={{ ...tdStyle, maxWidth: 340 }}>{note.note}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <InlineEmpty text="还没有同事留下具体说明。" />
+              )}
+            </section>
+          )}
+
           {(feedbackData?.missing_records?.length ?? 0) > 0 && (
             <section style={{ ...cardStyle, marginBottom: 16 }}>
               <SectionHead
@@ -1126,6 +1219,15 @@ function birdRoleLabel(id?: number | null) {
     4: "实现风险",
     5: "复核",
   }[Number(id)] ?? "未归类";
+}
+
+function reworkCategoryLabel(category?: string) {
+  return {
+    field_caliber: "字段口径返工",
+    experience_flow: "体验流程返工",
+    implementation_risk: "实现风险返工",
+    none: "暂未看到",
+  }[category ?? ""] ?? (category || "未归类");
 }
 
 const cardStyle: React.CSSProperties = {
