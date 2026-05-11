@@ -155,6 +155,8 @@ def _result_to_json(result: ArchiveSweepResult, docs_root: Path, dry_run: bool) 
 def _result_to_text(result: ArchiveSweepResult, docs_root: Path, dry_run: bool) -> str:
     lines = [f"docs archive sweep ({'dry-run' if dry_run else 'apply'})"]
     lines.append(f"move suggestions: {len(result.moves)}")
+    if not result.moves:
+        lines.append("No archive moves suggested.")
     for move in result.moves:
         source = move.source.relative_to(docs_root).as_posix()
         lines.append(f"- {source} -> {move.target.as_posix()} [{move.reason}]")
