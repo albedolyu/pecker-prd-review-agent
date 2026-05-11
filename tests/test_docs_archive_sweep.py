@@ -64,6 +64,30 @@ def test_archive_sweep_cli_outputs_json_dry_run(tmp_path):
     assert payload["moves"][0]["target"] == "archive/2026-04/timing_profile_2026_04_26.md"
 
 
+def test_archive_sweep_cli_text_reports_no_moves(tmp_path):
+    docs_root = tmp_path / "docs"
+    docs_root.mkdir()
+    (docs_root / "deployment.md").write_text("live", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "scripts" / "docs_archive_sweep.py"),
+            "--docs-root",
+            str(docs_root),
+            "--current-date",
+            "2026-05-11",
+            "--dry-run",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "No archive moves suggested." in result.stdout
+
+
 def test_docs_readme_declares_governance_sections():
     content = (PROJECT_ROOT / "docs" / "README.md").read_text(encoding="utf-8")
 
