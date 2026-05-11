@@ -1,76 +1,47 @@
-# docs/ — 工程文档目录
+# docs/ 文档入口
 
-本目录保存开发期间产出的深度分析、规划、诊断文档。和根目录的轻量文档（README、CHANGELOG、DEV.md、产品介绍等）区分开。
+这个目录只放工程、部署、试用、评测和历史复盘文档。当前有效文档放在本页索引里，过期的 dated 文档按月份归到 `docs/archive/YYYY-MM/`。
 
-## 最近变化 (2026-04-23)
+## 当前生效
 
-- 代码层面 7 层 agent 架构三项薄弱修复 + 记忆系统三项薄弱修复 + e2e 一键化（见 [../CHANGELOG.md](../CHANGELOG.md) 顶部 04-23 条目）
-- ARCHITECTURE.md 对应补了：Phase 1 的 injection scan、Feedback Loop 的 EMA + time decay、File Mapping 新模块、新增 Event Store Schema 小节
+| 文档 | 用途 |
+|---|---|
+| [internal_network_deployment_request.md](internal_network_deployment_request.md) | 运维部署、内网路径、数据保留和 workspace 挂载要求 |
+| [deployment.md](deployment.md) | 部署流程和预览环境说明 |
+| [dev-setup.md](dev-setup.md) | 本地开发环境和常见问题 |
+| [CI_SELF_HOSTED_RUNNER_SETUP.md](CI_SELF_HOSTED_RUNNER_SETUP.md) | 自托管 CI runner 配置 |
+| [FEISHU_WEBHOOK_SETUP.md](FEISHU_WEBHOOK_SETUP.md) | 飞书 webhook 接入 |
+| [pm-preview-guide.md](pm-preview-guide.md) | PM 试用入口和反馈流程 |
+| [HARNESS_RULES.md](HARNESS_RULES.md) | 评审 agent 和 harness 约束 |
+| [MIGRATION_v1_to_v2.md](MIGRATION_v1_to_v2.md) | v1 到 v2 的退役和迁移说明 |
 
-## 目录
+## 本月工作
 
-### 主干（常读）
+2026-05 的 sprint、自动化和 Beta 优化资料集中在：
 
-| 文档 | 类型 | 描述 |
-|---|---|---|
-| **[ACTION_PLAN.md](ACTION_PLAN.md)** | **主行动计划** | **13 轮审计汇总，按 P0/P1/P2 排序的全部待办 + 长期机制 + 执行顺序建议** ⭐ |
-| [HARNESS_RULES.md](HARNESS_RULES.md) | Harness 工程规则集 | 从 73 commits 沉淀的 Top 10 原则 + 36 条细则，指导后续 agent 架构演化 |
-| [../ARCHITECTURE.md](../ARCHITECTURE.md) | 系统架构 | 拓扑图 / Data Flow / Feedback Loop / Event Store Schema / File Mapping |
+- [optimization_plan_2026_05_11.md](optimization_plan_2026_05_11.md)
+- [auto_dev_2026_05_09_6h_continuous.md](auto_dev_2026_05_09_6h_continuous.md)
+- [auto_dev_2026_05_09_7h30_deep_optimization.md](auto_dev_2026_05_09_7h30_deep_optimization.md)
+- [meetings/2026-05-07-team-beta-sync/](meetings/2026-05-07-team-beta-sync/)
 
-### 稳定性（P0 诊断链）
+后续新 sprint 文档优先放到 `docs/sprints/YYYY-MM/`；若只是会议包，也可以继续放在 `docs/meetings/YYYY-MM-DD-*/`。
 
-| 文档 | 类型 | 描述 |
-|---|---|---|
-| [STABILITY_DIAGNOSIS.md](STABILITY_DIAGNOSIS.md) | 诊断 | 2026-04-16 定位的 3 个 P0 稳定性漏洞（全员失败不 abort + JSON 解析静默吞 + 审计链路断），含 event_store 数据、根因链、补丁方案 |
-| [STABILITY_REGRESSION_TESTS.md](STABILITY_REGRESSION_TESTS.md) | 测试规划 | 针对 STABILITY_DIAGNOSIS 的 6 个回归 test + CI 集成 + 验收 checklist + 长期监控脚本设计 |
-| [RULE_PERF_CLEANUP.md](RULE_PERF_CLEANUP.md) | 数据清洗 | workspace-对外投资 的 rule_performance_history 15 条规则诊断，7 条疑似污染的清洗脚本规格 + 防污染机制 |
-| [SPLIT_PLAN.md](SPLIT_PLAN.md) | 重构规划（✅ 2026-04-19 已实施） | `parallel_review.py`（1223 → 78 行 facade）按职责拆 6 模块完成：`review/{dimensions,prompting,worker,orchestration,evidence_verify,aggregation}.py`，对外 import 零改动 |
+## 历史归档
 
-### 规则演进 · 实测留档
+- `docs/archive/`: 已闭环诊断、历史迭代产出和上月 dated 文档。
+- `docs/research/`: 已沉淀到代码或决策里的研究笔记。
 
-| 文档 | 类型 | 描述 |
-|---|---|---|
-| [RC-009_NEW_RULE_EFFECT.md](RC-009_NEW_RULE_EFFECT.md) | 规则升级 A/B 实测 | RC-009 从"字段映射一致性"扩到"物理表定义完整性"，风鸟诉前调解 PRD 实测命中 +70% / 0% 假阳性 |
+归档规则：
 
-### 交付 / 部署 / PM
+- 文件名包含日期且日期早于当前月份，建议移动到 `docs/archive/YYYY-MM/`。
+- 文件名不含日期但 30 天无 commit 修改，只输出 warn，人工确认后再移动。
+- 脚本只做建议，不移动文件：`python scripts/docs_archive_sweep.py --dry-run`。
 
-| 文档 | 类型 | 描述 |
-|---|---|---|
-| [ui-v8-delivery.md](ui-v8-delivery.md) | 前端交付 | Web UI v8 设计交付（对应根目录 `design-handoff-v8.md`） |
-| [dev-setup.md](dev-setup.md) | 开发环境指南 | make 启动 + 5 大常见坑（next proxy socket hang up / Windows Playwright spawn / 登录 401 / SSE 断连 / Claude CLI 未登录）+ 全链路 curl 验证 |
-| [../DEPLOYMENT_CHECKLIST.md](../DEPLOYMENT_CHECKLIST.md) | 团队 Beta 上线清单 | OpenAI API key / 并发 / 预算 / 降级 / secret / on-call / 备份 |
-| [deployment.md](deployment.md) | 旧版部署指南 | v8 预览期 Docker Compose / GHCR / Vercel 路径,已由团队上线清单接管 |
-| [cloudflare-tunnel-setup.md](cloudflare-tunnel-setup.md) | Tunnel 配置 | `pecker-preview.*` 同源路径分流，PM 内测用 |
-| [pm-preview-guide.md](pm-preview-guide.md) | PM 内测指南 | 给非工程 PM 的登录 / 跑 review / 反馈流程 |
-| [feishu_integration.md](feishu_integration.md) | 飞书机器人接入 | 创建机器人 → URL 配置 → verify token → smoke test 全流程 |
-| [v1_vs_v2_feedback_strategy.md](v1_vs_v2_feedback_strategy.md) | 反馈系统策略 | 信鸽 v1 (commit 隐式) vs v2 (PM 显式) 共存策略 + v1 退役 trigger |
-| [../scripts/CI_self_hosted_setup.md](../scripts/CI_self_hosted_setup.md) | Self-hosted runner 操作手册 | 真实 worker P/R 回归 CI gate 部署 (Win + Linux) + fallback 模式 |
-
-### Quickstart (新机器接入啄木鸟开发)
+## 治理命令
 
 ```bash
-# 1. 装 pre-push hook (本地 P/R 回归兜底)
-python scripts/install_git_hooks.py
-
-# 2. 想跑 self-hosted runner CI? (可选)
-bash scripts/setup_runner_linux.sh    # 或 Windows: powershell -File scripts\setup_runner_windows.ps1
-
-# 3. 没装 runner 时, 提 PR 前手动跑一份报告
-python scripts/manual_pre_pr_check.py --output pr_check_report.md
-# 把内容贴到 PR description 作为 review 证据
+python scripts/docs_archive_sweep.py --dry-run --format text
+python scripts/docs_archive_sweep.py --dry-run --format json
 ```
 
-### 归档
-
-| 文档 | 类型 | 描述 |
-|---|---|---|
-| [archive/](archive/) | 已闭环诊断 | `ITERATION_REPORT_2026_04_16.md`、`SHADOW_*` 等 04-16 单日迭代产出，P0 修复已入主干 |
-| [research/](research/) | 研究归档 | Claude Code v2.1.107 源码逆向的 3 轮研究报告（已落地到代码） |
-
-## 工作流约定
-
-- **主代码改动前先读对应诊断/规划**：改 `review/` 子包（worker/prompting/orchestration）前读 `ARCHITECTURE.md` File Mapping 定位；改 worker 错误处理前读 `STABILITY_DIAGNOSIS.md`
-- **诊断文档不能让它"烂"**：定位的根因修掉后，诊断文档要补 "✅ 已修复 commit XXX"，否则下次又会被误读成仍存在的问题
-- **归档到 research/ 或 archive/ 的触发条件**：研究笔记对应的代码改动入库后，顺手移到 `research/`（源码研究）或 `archive/`（单日诊断），并在对应 `README.md` 登记
-- **诊断文档的生命周期**：发现 → 写诊断 → 修复 → 标注已修复 → 保留 1-2 版本后移入 archive/
-- **docs 漂移预警**：每次有 `feat:` / `refactor:` commit 改到架构层（agent / 事件 / 记忆）都要回查 ARCHITECTURE / CHANGELOG / ACTION_PLAN 三件套是否需要同步
+每次新增大型诊断或复盘文档后，先判断它属于“当前生效”“本月工作”还是“历史归档”。不确定时先留在本月工作，等下月用 dry-run 清单统一处理。
