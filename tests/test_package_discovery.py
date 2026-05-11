@@ -66,6 +66,22 @@ class TestPackagesAreImportable:
         import scripts  # noqa: F401
         from scripts.stability_metrics import compute_metrics  # noqa: F401
 
+    def test_birds_facade_importable(self):
+        import birds  # noqa: F401
+        from birds.cuckoo import calculate_scores, compute_confidence, parse_review_report
+        from birds.goshawk import apply_advisor_result
+        from birds.kakapo import scan_wiki_health
+        from birds.pigeon import _match_signal_to_item
+        from birds.shrike import shrike_review
+
+        assert callable(apply_advisor_result)
+        assert callable(scan_wiki_health)
+        assert callable(shrike_review)
+        assert callable(parse_review_report)
+        assert callable(calculate_scores)
+        assert callable(compute_confidence)
+        assert callable(_match_signal_to_item)
+
 
 class TestPyprojectDeclaration:
     """第一层 — pyproject.toml 键的存在性 + 覆盖面断言。防手滑回滚。"""
@@ -81,7 +97,7 @@ class TestPyprojectDeclaration:
     def test_packages_key_contains_core_packages(self):
         """防回滚: packages 里必须有全部已知的子包。"""
         packages = self._load_pyproject()["tool"]["setuptools"]["packages"]
-        for required in ["api", "api.routes", "review", "clients", "config", "scripts"]:
+        for required in ["api", "api.routes", "review", "clients", "config", "scripts", "birds"]:
             assert required in packages, f"{required} 漏声明, pip install 会 404"
 
     def test_py_modules_covers_critical_shared(self):
@@ -119,6 +135,7 @@ _INSTALL_TARGET_MODULES = [
     "config",                            # 子包本身
     "config.base",                       # 子包内模块
     "scripts.stability_metrics",         # scripts 子包 + 内部纯标准库
+    "birds",                             # 鸟类 facade package 本身必须随 wheel 安装
 ]
 
 
