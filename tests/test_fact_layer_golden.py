@@ -17,6 +17,63 @@ def test_fact_layer_golden_builds_active_cases_from_human_labelled_sources():
     assert all(case["expected_sources"][0]["path_contains"] for case in active)
 
 
+def test_fact_layer_golden_builds_active_cases_from_source_verified_facts(tmp_path):
+    from eval.fact_layer_golden import build_fact_layer_golden
+
+    wiki = tmp_path / "wiki"
+    backend = tmp_path / "backend"
+    frontend = tmp_path / "frontend"
+    (wiki / "api").mkdir(parents=True)
+    (backend / "src").mkdir(parents=True)
+    (frontend / "pages" / "multiCndSearch" / "services").mkdir(parents=True)
+
+    (wiki / "api" / "移动端API.md").write_text(
+        "`/query/risk/search` 请求参数（`SearchRiskReq`）：`keyword`、"
+        "`level1AreaCode`、`level2AreaCode`、`level3AreaCode`、`year`、`risk_type`。\n",
+        encoding="utf-8",
+    )
+    (wiki / "log.md").write_text(
+        "同步 `/query/risk/search`、`SearchRiskReq`、`level1AreaCode`、"
+        "`level2AreaCode`、`level3AreaCode`。\n",
+        encoding="utf-8",
+    )
+    (backend / "src" / "DataviewSkillsUserLog.java").write_text(
+        '@Table(name = "t_dataview_skills_user_log")\n'
+        '@Column(name = "trace_id")\n'
+        "private String traceId;\n"
+        '@Column(name = "response_time")\n'
+        "private Integer responseTime;\n",
+        encoding="utf-8",
+    )
+    (frontend / "pages" / "multiCndSearch" / "services" / "multiCndSearch.api.js").write_text(
+        "function buildLegacySearchParams() {\n"
+        "  return { queryType: 'senior', queryLimitType: 2, "
+        "aoData: JSON.stringify([{ name: 'cSearch_conditionData', value: '{}' }]) };\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    payload = build_fact_layer_golden(
+        fact_roots=[
+            {"label": "wiki", "path": wiki},
+            {"label": "backend", "path": backend},
+            {"label": "frontend", "path": frontend},
+        ]
+    )
+    source_cases = [
+        case for case in payload["cases"] if case["source"]["kind"] == "source_verified_fact"
+    ]
+
+    assert len(source_cases) >= 3
+    assert all(case["activation"] == "active" for case in source_cases)
+    assert all(case["source"]["authority"] == "source_verified" for case in source_cases)
+    assert any("SearchRiskReq" in case["standard_answer"]["snippet"] for case in source_cases)
+    assert any("t_dataview_skills_user_log" in case["standard_answer"]["snippet"] for case in source_cases)
+    assert any("cSearch_conditionData" in case["standard_answer"]["snippet"] for case in source_cases)
+    risk_case = next(case for case in source_cases if case["source"]["source_id"] == "SRC-FN-001")
+    assert risk_case["source"]["path"] == "api/移动端API.md"
+
+
 def test_fact_layer_golden_keeps_inline_minimal_cases_as_candidates():
     from eval.fact_layer_golden import build_fact_layer_golden
 
@@ -71,4 +128,5 @@ def test_checked_in_fact_layer_golden_matches_generator_counts():
     assert checked_in["version"] == generated["version"]
     assert checked_in["active_case_count"] == generated["active_case_count"]
     assert checked_in["candidate_case_count"] == generated["candidate_case_count"]
+    assert checked_in["source_verified_case_count"] == generated["source_verified_case_count"]
     assert len(checked_in["cases"]) == len(generated["cases"])

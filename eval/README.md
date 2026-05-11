@@ -58,13 +58,13 @@ python -m eval.fact_layer_golden --output eval/golden/fact_layer_ground_truth_sa
 python -m pytest tests/test_fact_layer_golden.py -q
 ```
 
-`eval/golden/fact_layer_ground_truth_samples.json` 从现有人工标注/PM 确认材料生成:
+`eval/golden/fact_layer_ground_truth_samples.json` 从现有人工标注/PM 确认材料和当前事实层资料生成:
 
-- `active`: 可进入事实层准确率统计。来源包括 PM 已标注的 planted bugs,以及 `eval/ground_truth/*.json` 中 `action=accept/edit`、`is_true_positive=true` 且带 `note` 的 PM 决策。
+- `active`: 可进入事实层准确率统计。来源包括 PM 已标注的 planted bugs,`eval/ground_truth/*.json` 中 `action=accept/edit`、`is_true_positive=true` 且带 `note` 的 PM 决策,以及风鸟 Wiki/后端源码/前端源码中可定位到路径、行号和关键词的 `source_verified` 样本。
 - `candidate`: 只进入补标队列。来源是 `business_prd_gt` 里 manifest 明确写着待 PM 后续标注的 `inline_minimal` 样本。
 - 不纳入: 只有真假但没有 `issue/note` 的 PM 决策、`advisor_conflicts` 中 `is_placeholder=true` 的冲突调解样本。
 
-事实层样本统一要求 `include_fact_layer=true`,并保留 `expected_sources`、`standard_answer`、`must_include` 字段,用于后续计算 Recall@5、Precision@5、证据引用准确率和层级混淆率。
+默认事实来源是本机风鸟 Wiki、RiskBirdApi 后端源码、riskbird-mobile-vue3 前端源码。也可以用 `PECKER_FACT_SOURCE_ROOTS="wiki=C:\path\wiki;backend=C:\path\api"` 指定替代来源。事实层样本统一要求 `include_fact_layer=true`,并保留 `expected_sources`、`standard_answer`、`must_include` 字段,用于后续计算 Recall@5、Precision@5、证据引用准确率和层级混淆率。
 
 ### 2. 端到端评测 (需要 Claude API)
 

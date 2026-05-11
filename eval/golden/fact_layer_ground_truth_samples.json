@@ -5,7 +5,8 @@
   "source_policy": {
     "active": [
       "eval/test_cases/*_planted.json 中 manifest 标记 PM 已标注的 planted_bugs",
-      "eval/ground_truth/*.json 中 action=accept/edit 且 is_true_positive=true 且有 note 的 PM 决策"
+      "eval/ground_truth/*.json 中 action=accept/edit 且 is_true_positive=true 且有 note 的 PM 决策",
+      "当前数据库/代码库/接口文档事实文件中可直接定位路径和关键词的 source_verified 样本"
     ],
     "candidate": [
       "business_prd_gt manifest inline_minimal 中明确待 PM 后续标注的历史抽取样本"
@@ -21,8 +22,9 @@
     "evidence_grounding": "回答必须引用 location/issue/keywords 中的标准答案要素",
     "safety_boundary": "不得泄露 PRD 原文大段内容、密钥、cookie、token 或未脱敏路径"
   },
-  "active_case_count": 40,
+  "active_case_count": 47,
   "candidate_case_count": 11,
+  "source_verified_case_count": 7,
   "cases": [
     {
       "family": "fact_layer_lookup",
@@ -2875,6 +2877,399 @@
         ]
       },
       "id": "FLGT-051"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "fengniao_wiki",
+      "question": "帮我查事实层：风险搜索接口现在到底支持哪些三级地区字段？",
+      "source": {
+        "kind": "source_verified_fact",
+        "authority": "source_verified",
+        "activation_reason": "当前事实文件可直接定位路径、行号和关键词，可进入事实层检索准确率评估",
+        "path": "api/移动端API.md",
+        "source_id": "SRC-FN-001",
+        "root_label": "fengniao_wiki",
+        "line": 65
+      },
+      "standard_answer": {
+        "location": "api/移动端API.md:65",
+        "issue": "/query/risk/search 的 SearchRiskReq 支持 level1AreaCode、level2AreaCode、level3AreaCode，旧 region 由后端解析。",
+        "severity": "fact",
+        "type": "source_verified",
+        "keywords": [
+          "/query/risk/search",
+          "SearchRiskReq",
+          "level1AreaCode",
+          "level2AreaCode",
+          "level3AreaCode"
+        ],
+        "snippet": "| `/query/risk/search` | POST | 风险模糊搜索，支持关键词 + 三级地区/年份/风险类型筛选，结果限 5000 条 | 是 | | `/query/risk/search` 请求参数（`SearchRiskReq`）：`keyword`、`level1AreaCode`（省）、`level2AreaCode`（市）、`level3AreaCode`（区，优先级最高）、`year`、`risk_type`、`pageNo`、`range`。旧字段 `region` 由后端从三级地区码中自动解析，前端无需直接传。"
+      },
+      "expected_sources": [
+        {
+          "path_contains": "api/移动端API.md",
+          "source_id": "SRC-FN-001",
+          "must_include_terms": [
+            "/query/risk/search",
+            "SearchRiskReq",
+            "level1AreaCode",
+            "level2AreaCode",
+            "level3AreaCode"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "SRC-FN-001",
+          "api/移动端API.md:65",
+          "/query/risk/search",
+          "SearchRiskReq",
+          "level1AreaCode"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-052"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "fengniao_backend",
+      "question": "帮我查事实层：开放 API 调用日志表和 trace 字段在源码里叫什么？",
+      "source": {
+        "kind": "source_verified_fact",
+        "authority": "source_verified",
+        "activation_reason": "当前事实文件可直接定位路径、行号和关键词，可进入事实层检索准确率评估",
+        "path": "riskbird-core/src/main/java/com/xinshucredit/riskbird/domain/riskbirdorder/DataviewSkillsUserLog.java",
+        "source_id": "SRC-FN-002",
+        "root_label": "fengniao_backend",
+        "line": 17
+      },
+      "standard_answer": {
+        "location": "riskbird-core/src/main/java/com/xinshucredit/riskbird/domain/riskbirdorder/DataviewSkillsUserLog.java:17",
+        "issue": "开放 API 调用日志实体映射到 t_dataview_skills_user_log，包含 trace_id、response_time 等审计字段。",
+        "severity": "fact",
+        "type": "source_verified",
+        "keywords": [
+          "t_dataview_skills_user_log",
+          "trace_id",
+          "response_time"
+        ],
+        "snippet": "@Table(name = \"t_dataview_skills_user_log\") | @Column(name = \"response_time\") | @Column(name = \"trace_id\")"
+      },
+      "expected_sources": [
+        {
+          "path_contains": "riskbird-core/src/main/java/com/xinshucredit/riskbird/domain/riskbirdorder/DataviewSkillsUserLog.java",
+          "source_id": "SRC-FN-002",
+          "must_include_terms": [
+            "t_dataview_skills_user_log",
+            "trace_id",
+            "response_time"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "SRC-FN-002",
+          "riskbird-core/src/main/java/com/xinshucredit/riskbird/domain/riskbirdorder/DataviewSkillsUserLog.java:17",
+          "t_dataview_skills_user_log",
+          "trace_id",
+          "response_time"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-053"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "fengniao_frontend",
+      "question": "帮我查事实层：高级筛选前端提交给老接口的关键参数是什么？",
+      "source": {
+        "kind": "source_verified_fact",
+        "authority": "source_verified",
+        "activation_reason": "当前事实文件可直接定位路径、行号和关键词，可进入事实层检索准确率评估",
+        "path": "pages/multiCndSearch/services/multiCndSearch.api.js",
+        "source_id": "SRC-FN-003",
+        "root_label": "fengniao_frontend",
+        "line": 73
+      },
+      "standard_answer": {
+        "location": "pages/multiCndSearch/services/multiCndSearch.api.js:73",
+        "issue": "高级筛选前端 buildLegacySearchParams 使用 queryType=senior，并把 cSearch_conditionData 放入 aoData。",
+        "severity": "fact",
+        "type": "source_verified",
+        "keywords": [
+          "buildLegacySearchParams",
+          "queryType",
+          "senior",
+          "cSearch_conditionData"
+        ],
+        "snippet": "function buildLegacySearchParams({ queryPayload, pageNo = 1, pageSize = 10 }) { | { name: 'cSearch_conditionData', value: JSON.stringify(buildSearchCondition(queryPayload || {})) }, | queryType: 'senior',"
+      },
+      "expected_sources": [
+        {
+          "path_contains": "pages/multiCndSearch/services/multiCndSearch.api.js",
+          "source_id": "SRC-FN-003",
+          "must_include_terms": [
+            "buildLegacySearchParams",
+            "queryType",
+            "senior",
+            "cSearch_conditionData"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "SRC-FN-003",
+          "pages/multiCndSearch/services/multiCndSearch.api.js:73",
+          "buildLegacySearchParams",
+          "queryType",
+          "senior"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-054"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "fengniao_backend",
+      "question": "帮我查事实层：爬虫热门企业判断用的缓存 key 和数据库表是什么？",
+      "source": {
+        "kind": "source_verified_fact",
+        "authority": "source_verified",
+        "activation_reason": "当前事实文件可直接定位路径、行号和关键词，可进入事实层检索准确率评估",
+        "path": "doc/技术方案/搜索引擎爬虫自动登录技术方案.md",
+        "source_id": "SRC-FN-004",
+        "root_label": "fengniao_backend",
+        "line": 83
+      },
+      "standard_answer": {
+        "location": "doc/技术方案/搜索引擎爬虫自动登录技术方案.md:83",
+        "issue": "热门企业判断涉及 PopularEntCache、Redis Hash fn:popular:ent:{entId % 100} 和 t_ent_popular/ent_popular 表。",
+        "severity": "fact",
+        "type": "source_verified",
+        "keywords": [
+          "PopularEntCache",
+          "fn:popular:ent",
+          "ent_popular"
+        ],
+        "snippet": "#### 2.2.5 PopularEntCache（企业热门度缓存） | - **Redis缓存（Hash结构）**：key = `fn:popular:ent:{entId % 100}`，field = entId，value = 0/1 | - **数据库表（ent_popular）**：存储热门企业列表"
+      },
+      "expected_sources": [
+        {
+          "path_contains": "doc/技术方案/搜索引擎爬虫自动登录技术方案.md",
+          "source_id": "SRC-FN-004",
+          "must_include_terms": [
+            "PopularEntCache",
+            "fn:popular:ent",
+            "ent_popular"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "SRC-FN-004",
+          "doc/技术方案/搜索引擎爬虫自动登录技术方案.md:83",
+          "PopularEntCache",
+          "fn:popular:ent",
+          "ent_popular"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-055"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "fengniao_backend",
+      "question": "帮我查事实层：报告导出任务未完成数量的 SQL 是怎么过滤 state 的？",
+      "source": {
+        "kind": "source_verified_fact",
+        "authority": "source_verified",
+        "activation_reason": "当前事实文件可直接定位路径、行号和关键词，可进入事实层检索准确率评估",
+        "path": "riskbird-core/src/main/java/com/xinshucredit/riskbird/dao/riskbirdm/QibabaReportExportTaskRepository.java",
+        "source_id": "SRC-FN-005",
+        "root_label": "fengniao_backend",
+        "line": 16
+      },
+      "standard_answer": {
+        "location": "riskbird-core/src/main/java/com/xinshucredit/riskbird/dao/riskbirdm/QibabaReportExportTaskRepository.java:16",
+        "issue": "QibabaReportExportTaskRepository 查询 t_qibaba_report_export_task 时用 state <>2 统计未完成导出数量。",
+        "severity": "fact",
+        "type": "source_verified",
+        "keywords": [
+          "t_qibaba_report_export_task",
+          "state <>2",
+          "getUnFinishedCount"
+        ],
+        "snippet": "@Query(nativeQuery = true,value = \"SELECT sum(export_count) FROM t_qibaba_report_export_task where id_report_history = ?1 and state <>2\") | Long getUnFinishedCount(Long qibabaReportHistoryId);"
+      },
+      "expected_sources": [
+        {
+          "path_contains": "riskbird-core/src/main/java/com/xinshucredit/riskbird/dao/riskbirdm/QibabaReportExportTaskRepository.java",
+          "source_id": "SRC-FN-005",
+          "must_include_terms": [
+            "t_qibaba_report_export_task",
+            "state <>2",
+            "getUnFinishedCount"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "SRC-FN-005",
+          "riskbird-core/src/main/java/com/xinshucredit/riskbird/dao/riskbirdm/QibabaReportExportTaskRepository.java:16",
+          "t_qibaba_report_export_task",
+          "state <>2",
+          "getUnFinishedCount"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-056"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "fengniao_backend",
+      "question": "帮我查事实层：企业报告里股东信息模块对应哪些导出编码？",
+      "source": {
+        "kind": "source_verified_fact",
+        "authority": "source_verified",
+        "activation_reason": "当前事实文件可直接定位路径、行号和关键词，可进入事实层检索准确率评估",
+        "path": "riskbird-core/src/main/java/com/xinshucredit/riskbird/utils/exportNew/ExportData.java",
+        "source_id": "SRC-FN-006",
+        "root_label": "fengniao_backend",
+        "line": 49
+      },
+      "standard_answer": {
+        "location": "riskbird-core/src/main/java/com/xinshucredit/riskbird/utils/exportNew/ExportData.java:49",
+        "issue": "ExportData 中股东相关模块包括 shareHolder、shareHolderYearReport、shareHolderHistory。",
+        "severity": "fact",
+        "type": "source_verified",
+        "keywords": [
+          "shareHolder",
+          "shareHolderYearReport",
+          "shareHolderHistory",
+          "股东信息"
+        ],
+        "snippet": "* - 股东信息 B2 shareHolder | * - 股东信息-最新年报 B2-2 shareHolderYearReport | * - 历史股东 B2-1 shareHolderHistory"
+      },
+      "expected_sources": [
+        {
+          "path_contains": "riskbird-core/src/main/java/com/xinshucredit/riskbird/utils/exportNew/ExportData.java",
+          "source_id": "SRC-FN-006",
+          "must_include_terms": [
+            "shareHolder",
+            "shareHolderYearReport",
+            "shareHolderHistory",
+            "股东信息"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "SRC-FN-006",
+          "riskbird-core/src/main/java/com/xinshucredit/riskbird/utils/exportNew/ExportData.java:49",
+          "shareHolder",
+          "shareHolderYearReport",
+          "shareHolderHistory"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-057"
+    },
+    {
+      "family": "fact_layer_lookup",
+      "activation": "active",
+      "workspace": "fengniao_wiki",
+      "question": "帮我查事实层：联盟商品相关的三张数据库表分别叫什么？",
+      "source": {
+        "kind": "source_verified_fact",
+        "authority": "source_verified",
+        "activation_reason": "当前事实文件可直接定位路径、行号和关键词，可进入事实层检索准确率评估",
+        "path": "entities/数据库模型.md",
+        "source_id": "SRC-FN-007",
+        "root_label": "fengniao_wiki",
+        "line": 77
+      },
+      "standard_answer": {
+        "location": "entities/数据库模型.md:77",
+        "issue": "联盟商品相关表包括 t_fn_union_goods、t_fn_union_goods_fetch_batch、t_fn_union_goods_fetch_rule。",
+        "severity": "fact",
+        "type": "source_verified",
+        "keywords": [
+          "t_fn_union_goods",
+          "t_fn_union_goods_fetch_batch",
+          "t_fn_union_goods_fetch_rule"
+        ],
+        "snippet": "| `UnionGoods` | `t_fn_union_goods` | 联盟商品广告，京东/淘宝商品，移动端展示 Top 6，管理端 CRUD + Excel 导入 + 京东自动选品（sourceMode=2） | | | `UnionGoodsFetchBatch` | `t_fn_union_goods_fetch_batch` | 京东自动选品抓取批次记录，记录每次 jd/refresh 的请求统计和状态 | | | `UnionGoodsFetchRule` | `t_fn_union_goods_fetch_rule` | 京东抓取规则，按 groupCode(A-H) 配置 owner/排序/价格区间/分页范围 |"
+      },
+      "expected_sources": [
+        {
+          "path_contains": "entities/数据库模型.md",
+          "source_id": "SRC-FN-007",
+          "must_include_terms": [
+            "t_fn_union_goods",
+            "t_fn_union_goods_fetch_batch",
+            "t_fn_union_goods_fetch_rule"
+          ]
+        }
+      ],
+      "expect": {
+        "backend_call": true,
+        "include_fact_layer": true,
+        "must_include": [
+          "SRC-FN-007",
+          "entities/数据库模型.md:77",
+          "t_fn_union_goods",
+          "t_fn_union_goods_fetch_batch",
+          "t_fn_union_goods_fetch_rule"
+        ],
+        "must_not_include": [
+          "我猜",
+          "可能是",
+          "无法确定但可以假设"
+        ]
+      },
+      "id": "FLGT-058"
     }
   ]
 }
