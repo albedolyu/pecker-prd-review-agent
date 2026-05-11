@@ -33,6 +33,14 @@ export function ReviewHelpAssistant() {
   const rawMaterials = useReviewStore((s) => s.rawMaterials);
   const reviewResult = useReviewStore((s) => s.reviewResult);
   const materialSummary = summarizeRawMaterials(rawMaterials);
+  const bottomOffset = phase >= 3 ? 88 : 20;
+  const materialSummaryText = [
+    `材料 ${materialSummary.total} 条`,
+    materialSummary.images > 0 ? `图片 ${materialSummary.images}` : "",
+    materialSummary.figmaLinks > 0 ? `Figma ${materialSummary.figmaLinks}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   const ask = (value: string) => {
     const text = value.trim();
@@ -56,7 +64,7 @@ export function ReviewHelpAssistant() {
       style={{
         position: "fixed",
         right: 20,
-        bottom: 20,
+        bottom: bottomOffset,
         zIndex: 60,
         fontFamily: "var(--font-sans)",
       }}
@@ -72,7 +80,7 @@ export function ReviewHelpAssistant() {
             border: "1px solid var(--border-default)",
             borderRadius: 8,
             background: "var(--surface-raised)",
-            boxShadow: "0 18px 50px rgba(15, 23, 42, 0.18)",
+            boxShadow: "0 18px 46px rgba(15, 23, 42, 0.16)",
             overflow: "hidden",
           }}
         >
@@ -87,11 +95,26 @@ export function ReviewHelpAssistant() {
             }}
           >
             <div>
-              <div style={{ fontSize: 13, fontWeight: 650, color: "var(--text-strong)" }}>
-                啄木鸟问答助手
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span
+                  style={{
+                    display: "grid",
+                    width: 24,
+                    height: 24,
+                    placeItems: "center",
+                    borderRadius: 6,
+                    background: "var(--accent-50)",
+                    color: "var(--accent-600)",
+                  }}
+                >
+                  <MessageCircle size={14} />
+                </span>
+                <span style={{ fontSize: 13, fontWeight: 650, color: "var(--text-strong)" }}>
+                  啄木鸟问答助手
+                </span>
               </div>
-              <div style={{ marginTop: 2, fontSize: 11, color: "var(--text-muted)" }}>
-                阶段 {phase} · 材料 {materialSummary.total} 条
+              <div style={{ marginTop: 4, fontSize: 11, color: "var(--text-muted)" }}>
+                阶段 {phase} · {materialSummaryText}
               </div>
             </div>
             <button
@@ -99,11 +122,15 @@ export function ReviewHelpAssistant() {
               aria-label="关闭问答助手"
               onClick={() => setOpen(false)}
               style={{
-                border: 0,
+                width: 28,
+                height: 28,
+                border: "1px solid transparent",
+                borderRadius: 6,
                 background: "transparent",
                 color: "var(--text-muted)",
                 cursor: "pointer",
-                padding: 4,
+                display: "grid",
+                placeItems: "center",
               }}
             >
               <X size={16} />
@@ -135,6 +162,10 @@ export function ReviewHelpAssistant() {
                       message.role === "user"
                         ? "var(--accent-fg)"
                         : "var(--text-default)",
+                    border:
+                      message.role === "user"
+                        ? "1px solid transparent"
+                        : "1px solid var(--border-subtle)",
                   }}
                 >
                   {message.text}
@@ -145,30 +176,47 @@ export function ReviewHelpAssistant() {
 
           <div
             style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 6,
-              padding: "0 12px 10px",
+              borderTop: "1px solid var(--border-subtle)",
+              padding: "10px 12px",
             }}
           >
-            {QUICK_QUESTIONS.map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => ask(item)}
-                style={{
-                  border: "1px solid var(--border-default)",
-                  borderRadius: 6,
-                  background: "transparent",
-                  color: "var(--text-muted)",
-                  cursor: "pointer",
-                  fontSize: 11,
-                  padding: "4px 7px",
-                }}
-              >
-                {item}
-              </button>
-            ))}
+            <div
+              style={{
+                marginBottom: 7,
+                fontSize: 11,
+                fontWeight: 600,
+                color: "var(--text-muted)",
+              }}
+            >
+              常见问题
+            </div>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 6,
+              }}
+            >
+              {QUICK_QUESTIONS.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => ask(item)}
+                  style={{
+                    border: "1px solid var(--border-default)",
+                    borderRadius: 6,
+                    background: "var(--surface-raised)",
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
+                    fontSize: 11,
+                    padding: "5px 8px",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
           </div>
 
           <form
@@ -181,6 +229,7 @@ export function ReviewHelpAssistant() {
               gap: 8,
               padding: 12,
               borderTop: "1px solid var(--border-subtle)",
+              background: "var(--surface-sunken)",
             }}
           >
             <input
@@ -190,6 +239,7 @@ export function ReviewHelpAssistant() {
               style={{
                 flex: 1,
                 minWidth: 0,
+                height: 34,
                 border: "1px solid var(--border-default)",
                 borderRadius: 6,
                 background: "var(--surface-raised)",
@@ -212,6 +262,7 @@ export function ReviewHelpAssistant() {
                 cursor: "pointer",
                 display: "grid",
                 placeItems: "center",
+                flex: "0 0 auto",
               }}
             >
               <Send size={15} />
@@ -227,14 +278,14 @@ export function ReviewHelpAssistant() {
         style={{
           width: 48,
           height: 48,
-          border: "1px solid var(--border-default)",
+          border: "1px solid var(--accent-600)",
           borderRadius: 8,
           background: "var(--accent-500)",
           color: "var(--accent-fg)",
           cursor: "pointer",
           display: "grid",
           placeItems: "center",
-          boxShadow: "0 12px 36px rgba(15, 23, 42, 0.2)",
+          boxShadow: "0 12px 32px rgba(15, 23, 42, 0.18)",
         }}
       >
         {open ? <HelpCircle size={20} /> : <MessageCircle size={20} />}

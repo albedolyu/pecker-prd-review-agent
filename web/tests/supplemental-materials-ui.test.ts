@@ -38,4 +38,14 @@ describe("supplemental material UI wiring", () => {
     expect(source).toContain('role="dialog"');
     expect(source).toContain('aria-live="polite"');
   });
+
+  it("keeps the assistant clear of bottom action bars and summarizes material types", () => {
+    const source = readSource("components/review/ReviewHelpAssistant.tsx");
+
+    expect(source).toContain("const bottomOffset = phase >= 3 ? 88 : 20");
+    expect(source).toContain("bottom: bottomOffset");
+    expect(source).toContain("materialSummaryText");
+    expect(source).toContain('`图片 ${materialSummary.images}`');
+    expect(source).toContain('`Figma ${materialSummary.figmaLinks}`');
+  });
 });
