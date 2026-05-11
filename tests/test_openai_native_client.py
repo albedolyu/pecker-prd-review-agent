@@ -5,6 +5,8 @@ import types
 import sys
 from types import SimpleNamespace
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
@@ -508,6 +510,75 @@ def test_openai_native_client_maps_responses_message_json_to_tool_call(monkeypat
     assert resp.text_blocks == []
     assert resp.tool_calls[0]["name"] == "submit_review_items"
     assert resp.tool_calls[0]["input"]["items"][0]["rule_id"] == "V-06"
+
+
+@pytest.mark.parametrize("fence_language", ["json", "JSON", "Json", " json"])
+def test_openai_native_client_maps_fenced_responses_json_to_tool_call(monkeypatch, fence_language):
+    """Some gateways wrap structured JSON text in a Markdown code fence."""
+    from clients.openai_native import OpenAINativeClient
+
+    class FencedMessageJsonResponses:
+        def create(self, **kwargs):
+            usage = SimpleNamespace(input_tokens=21, output_tokens=13)
+            return SimpleNamespace(
+                output=[
+                    SimpleNamespace(
+                        type="message",
+                        content=[
+                            SimpleNamespace(
+                                type="output_text",
+                                text=(
+                                    f"```{fence_language}\n"
+                                    '{"dimension":"structure","items":['
+                                    '{"rule_id":"V-06","issue":"missing section"}'
+                                    "]}\n"
+                                    "```"
+                                ),
+                            )
+                        ],
+                    )
+                ],
+                output_text="",
+                usage=usage,
+                model=kwargs["model"],
+                status="completed",
+            )
+
+    fake_client = types.SimpleNamespace(responses=FencedMessageJsonResponses())
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_WIRE_API", "responses")
+    monkeypatch.delenv("OPENAI_REASONING_EFFORT", raising=False)
+    monkeypatch.setattr(
+        OpenAINativeClient,
+        "_build_client",
+        lambda self, api_key, base_url: fake_client,
+    )
+
+    client = OpenAINativeClient()
+    resp = client.create(
+        model="gpt-5.4",
+        max_tokens=256,
+        system="system",
+        messages=[{"role": "user", "content": "hello"}],
+        tools=[
+            {
+                "name": "submit_review_items",
+                "description": "submit",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "dimension": {"type": "string"},
+                        "items": {"type": "array"},
+                    },
+                },
+            }
+        ],
+        tool_choice={"type": "any"},
+    )
+
+    assert resp.stop_reason == "tool_use"
+    assert resp.text_blocks == []
+    assert resp.tool_calls[0]["input"]["items"][0]["issue"] == "missing section"
 
 
 def test_openai_native_client_allows_policy_reasoning_effort_override(monkeypatch):

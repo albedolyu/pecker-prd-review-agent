@@ -627,6 +627,12 @@ class OpenAINativeClient:
         return "\n".join(p for p in text_parts if p)
 
     @staticmethod
+    def _json_candidate_text(text: str) -> str:
+        candidate = (text or "").strip()
+        match = re.fullmatch(r"```\s*(?:json)?\s*(.*?)\s*```", candidate, flags=re.DOTALL | re.IGNORECASE)
+        return match.group(1).strip() if match else candidate
+
+    @staticmethod
     def _to_unified_response_from_responses(
         response: Any,
         model: str,
@@ -661,7 +667,7 @@ class OpenAINativeClient:
         if selected_tool and not tool_calls and text_blocks:
             text = "\n".join(str(block.get("text", "")) for block in text_blocks if block.get("text"))
             try:
-                args = json.loads(text)
+                args = json.loads(OpenAINativeClient._json_candidate_text(text))
                 if isinstance(args, dict):
                     tool_calls.append({"id": req_id, "name": selected_tool["name"], "input": args})
                     text_blocks = []
@@ -670,7 +676,7 @@ class OpenAINativeClient:
         if output_text and not text_blocks and not tool_calls:
             if selected_tool:
                 try:
-                    args = json.loads(output_text)
+                    args = json.loads(OpenAINativeClient._json_candidate_text(output_text))
                     tool_calls.append({"id": req_id, "name": selected_tool["name"], "input": args})
                 except json.JSONDecodeError:
                     text_blocks.append({"type": "text", "text": output_text})
@@ -711,7 +717,7 @@ class OpenAINativeClient:
         if content:
             if selected_tool and not tool_calls:
                 try:
-                    args = json.loads(content)
+                    args = json.loads(OpenAINativeClient._json_candidate_text(content))
                     tool_calls.append({"id": req_id, "name": selected_tool["name"], "input": args})
                 except json.JSONDecodeError:
                     text_blocks.append({"type": "text", "text": content})
