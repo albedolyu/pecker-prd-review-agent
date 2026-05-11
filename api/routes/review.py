@@ -842,7 +842,9 @@ def _update_rule_perf_from_decisions(
         has_rule_id += 1
         action = decision.get("action", "")
         # 2026-04-24 T2: reject 7 分类, 缺失默认 model_noise (兼容老 payload 不阻塞)
-        reason_category = decision.get("reason_category", "model_noise")
+        from models import rule_quality_reason_for_decision
+        business_decision = str(decision.get("business_decision") or "").strip()
+        reason_category = rule_quality_reason_for_decision(decision)
 
         # 初始化规则条目
         if rule_id not in history_data:
@@ -865,8 +867,12 @@ def _update_rule_perf_from_decisions(
             # 2026-04-24 T2: 按 reason 分桶, 让 scripts/rule_lifecycle 能区分
             # "50% reject 但 90% 是 rule_too_strict → 改写规则"
             # vs "90% 是 false_positive → 规则降级"
-            reject_by_reason = entry["stats"].setdefault("reject_by_reason", {})
-            reject_by_reason[reason_category] = reject_by_reason.get(reason_category, 0) + 1
+            if business_decision:
+                valuable_but_skipped = entry["stats"].setdefault("valuable_but_skipped", {})
+                valuable_but_skipped[business_decision] = valuable_but_skipped.get(business_decision, 0) + 1
+            if reason_category:
+                reject_by_reason = entry["stats"].setdefault("reject_by_reason", {})
+                reject_by_reason[reason_category] = reject_by_reason.get(reason_category, 0) + 1
         elif action == "edit":
             entry["stats"]["confirmed"] += 1  # 编辑 = 认可问题
 
@@ -877,25 +883,30 @@ def _update_rule_perf_from_decisions(
         from rule_perf_decay import ema_with_time_decay
         old_score = entry.get("impact_score", 0.5)
         last_ts = entry.get("last_update_ts")  # None 或 unix epoch
+        should_update_impact = True
         if action == "accept":
             delta = 1.0
         elif action == "edit":
             delta = 0.7
         elif action == "reject":
             # 2026-04-24 T2: 按 reason 分档, 不让 wiki_missing 把好规则打成 noisy
-            from models import reject_delta_for_reason
-            delta = reject_delta_for_reason(reason_category)
+            from models import reject_delta_for_decision
+            if not reason_category:
+                should_update_impact = False
+            delta = reject_delta_for_decision(decision)
         else:
             delta = 0.0
         import time as _time
-        now_ts = _time.time()
-        new_score = ema_with_time_decay(old_score, last_ts, delta, now_ts=now_ts)
-        entry["impact_score"] = round(new_score, 3)
-        entry["last_update_ts"] = int(now_ts)
+        if should_update_impact:
+            now_ts = _time.time()
+            new_score = ema_with_time_decay(old_score, last_ts, delta, now_ts=now_ts)
+            entry["impact_score"] = round(new_score, 3)
+            entry["last_update_ts"] = int(now_ts)
 
         # 更新驳回率和噪声标记
         total = entry["stats"]["total"]
-        rejected_count = entry["stats"]["rejected"]
+        reject_by_reason = entry["stats"].get("reject_by_reason", {})
+        rejected_count = sum(reject_by_reason.values()) if isinstance(reject_by_reason, dict) else entry["stats"]["rejected"]
         entry["rejection_rate"] = round(rejected_count / total, 3) if total > 0 else 0.0
         entry["is_noisy"] = entry["rejection_rate"] > 0.4
 
@@ -935,6 +946,8 @@ def _save_eval_ground_truth(
         if not item:
             continue
         action = decision.get("action", "")
+        correctness_reason = str(decision.get("correctness_reason") or "").strip()
+        business_decision = str(decision.get("business_decision") or "").strip()
         gt_items.append({
             "id": item_id,
             "rule_id": item.get("rule_id", ""),
@@ -944,13 +957,15 @@ def _save_eval_ground_truth(
             "action": action,
             # 2026-04-24 T2: 7 分类 reason, 让 calibration_runner 按 reason 切分布
             "reason_category": decision.get("reason_category", ""),
+            "correctness_reason": correctness_reason,
+            "business_decision": business_decision,
             "reason_note": redact_text(
                 (decision.get("reason_note", "") or decision.get("reason", ""))[:200]
             ),
             # admin feedback 看板只展示短摘要,不保存/展示 PRD 正文或原始材料。
             "problem": redact_text((item.get("problem", "") or "")[:300]),
             "suggestion": redact_text((item.get("suggestion", "") or "")[:300]),
-            "is_true_positive": action in ("accept", "edit"),
+            "is_true_positive": action in ("accept", "edit") or (bool(business_decision) and not correctness_reason),
         })
 
     if not gt_items:

@@ -25,6 +25,8 @@ import {
   type RoleKey,
 } from "./roles";
 import type {
+  BusinessDecision,
+  CorrectnessReason,
   ItemDecision,
   RejectReason,
   ReviewItem,
@@ -44,6 +46,18 @@ const REJECT_CATEGORY_LABELS: Record<RejectReason, string> = {
   rule_too_strict: "规则太严",
   impl_detail: "实现细节, 不该 PRD 管",
   model_noise: "判断不准",
+};
+
+const CORRECTNESS_REASON_LABELS: Record<CorrectnessReason, string> = {
+  false_positive: "误报",
+  unsupported_evidence: "依据不足",
+  rule_too_strict: "规则过严",
+};
+
+const BUSINESS_DECISION_LABELS: Record<BusinessDecision, string> = {
+  not_this_iteration: "本期不修",
+  risk_accepted: "风险接受",
+  handled_elsewhere: "已有安排",
 };
 
 export interface ReportStats {
@@ -217,10 +231,16 @@ export function generateReportMarkdown(
         lines.push(`- **建议动作**: ${pmExplanation.suggested_next_step}`);
       }
       if (action === "reject") {
-        // P0 step 2 (2026-04-28): 报告里区分 7 类 reason_category + 自由文本备注
-        // 老版本只有 reason 自由文本, 现在带 category label 让读报告的人知道驳因归类
+        const correctnessReason = d?.correctness_reason;
+        const businessDecision = d?.business_decision;
+        if (correctnessReason) {
+          lines.push(`- **判断问题**: ${CORRECTNESS_REASON_LABELS[correctnessReason] ?? correctnessReason}`);
+        }
+        if (businessDecision) {
+          lines.push(`- **业务处理**: ${BUSINESS_DECISION_LABELS[businessDecision] ?? businessDecision}`);
+        }
         const cat = d?.reason_category;
-        if (cat) {
+        if (cat && !correctnessReason && !businessDecision) {
           lines.push(`- **驳回原因**: ${REJECT_CATEGORY_LABELS[cat] ?? cat}`);
         }
         if (d?.reason) {

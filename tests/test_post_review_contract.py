@@ -144,6 +144,32 @@ def test_build_confirm_report_markdown_normalizes_action_labels():
     assert "已接受" in report
 
 
+def test_build_confirm_report_markdown_splits_2d_rejection_fields():
+    from review.post_review_contract import build_confirm_report_markdown
+
+    result = _review_result([
+        {
+            "id": "R-001",
+            "issue": "验收口径缺少异常态",
+            "severity": "must",
+        }
+    ])
+    decisions = {
+        "R-001": {
+            "action": "reject",
+            "reason_category": "known_tradeoff",
+            "correctness_reason": "unsupported_evidence",
+            "business_decision": "risk_accepted",
+        }
+    }
+
+    report = build_confirm_report_markdown(result, decisions)
+
+    assert "**判断问题**: 依据不足" in report
+    assert "**业务处理**: 风险接受" in report
+    assert "**拒绝原因**" not in report
+
+
 def test_build_confirm_report_markdown_redacts_decision_free_text():
     from review.post_review_contract import build_confirm_report_markdown
 

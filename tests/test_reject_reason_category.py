@@ -221,6 +221,47 @@ def test_confirm_request_allows_missing_reason_category():
 #    REJECT_CATEGORIES 的 value 列表
 # ============================================================
 
+def test_confirm_request_accepts_2d_rejection_fields():
+    from api.models import ConfirmRequest
+
+    req = ConfirmRequest(
+        review_result={"items": [], "signature": "fake"},
+        decisions={
+            "R-001": {
+                "action": "reject",
+                "correctness_reason": "false_positive",
+                "business_decision": "risk_accepted",
+                "reason": "PM accepts this risk for the current release",
+            }
+        },
+    )
+
+    decision = req.decisions["R-001"]
+    assert decision["correctness_reason"] == "false_positive"
+    assert decision["business_decision"] == "risk_accepted"
+
+
+def test_confirm_request_rejects_unknown_2d_rejection_fields():
+    from pydantic import ValidationError
+    from api.models import ConfirmRequest
+
+    with pytest.raises(ValidationError) as exc_info:
+        ConfirmRequest(
+            review_result={"items": [], "signature": "fake"},
+            decisions={
+                "R-001": {
+                    "action": "reject",
+                    "correctness_reason": "kind_of_wrong",
+                    "business_decision": "maybe_later",
+                }
+            },
+        )
+
+    msg = str(exc_info.value)
+    assert "correctness_reason" in msg
+    assert "business_decision" in msg
+
+
 def test_reject_categories_synced_with_frontend(tmp_path):
     """前后端 reject 7 类 enum 必须一致. 防只改一边导致前端选了某 reason 后端 422.
 

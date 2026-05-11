@@ -170,6 +170,12 @@ _VALID_REJECT_REASONS = frozenset({
     "good_issue", "false_positive", "known_tradeoff", "wiki_missing",
     "rule_too_strict", "impl_detail", "model_noise",
 })
+_VALID_CORRECTNESS_REASONS = frozenset({
+    "false_positive", "unsupported_evidence", "rule_too_strict",
+})
+_VALID_BUSINESS_DECISIONS = frozenset({
+    "not_this_iteration", "risk_accepted", "handled_elsewhere",
+})
 
 
 class ConfirmRequest(BaseModel):
@@ -180,6 +186,8 @@ class ConfirmRequest(BaseModel):
     decisions 形态约定 (后端 _update_rule_perf_from_decisions / _save_eval_ground_truth 消费):
     - action: "accept" | "reject" | "edit" (必填)
     - reason_category: RejectReason 7 种字面之一 (仅 reject 时有效, 缺失走 model_noise 默认)
+    - correctness_reason: 规则正确性原因, 仅这一层影响 EMA
+    - business_decision: 业务取舍原因, 只进入 valuable_but_skipped, 不惩罚规则
     - reason_note / reason: 自由文本 (可选, 兼容老 payload 'reason' 字段)
     - edited_content: action=edit 时的修改内容 (可选)
     """
@@ -204,9 +212,18 @@ class ConfirmRequest(BaseModel):
             rc = decision.get("reason_category")
             if rc and rc not in _VALID_REJECT_REASONS:
                 bad.append(f"{item_id}: reason_category={rc!r}")
+            correctness_reason = decision.get("correctness_reason")
+            if correctness_reason and correctness_reason not in _VALID_CORRECTNESS_REASONS:
+                bad.append(f"{item_id}: correctness_reason={correctness_reason!r}")
+            business_decision = decision.get("business_decision")
+            if business_decision and business_decision not in _VALID_BUSINESS_DECISIONS:
+                bad.append(f"{item_id}: business_decision={business_decision!r}")
         if bad:
             raise ValueError(
-                f"reason_category 必须是 RejectReason 7 种之一 ({', '.join(sorted(_VALID_REJECT_REASONS))}), "
+                f"reason_category/correctness_reason/business_decision 字段不合法; "
+                f"reason_category 必须是 ({', '.join(sorted(_VALID_REJECT_REASONS))}); "
+                f"correctness_reason 必须是 ({', '.join(sorted(_VALID_CORRECTNESS_REASONS))}); "
+                f"business_decision 必须是 ({', '.join(sorted(_VALID_BUSINESS_DECISIONS))}); "
                 f"实际收到: {bad}"
             )
         return v

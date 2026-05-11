@@ -23,6 +23,18 @@ REJECT_REASON_LABELS = {
     "model_noise": "模型噪音",
 }
 
+CORRECTNESS_REASON_LABELS = {
+    "false_positive": "误报",
+    "unsupported_evidence": "依据不足",
+    "rule_too_strict": "规则过严",
+}
+
+BUSINESS_DECISION_LABELS = {
+    "not_this_iteration": "本期不修",
+    "risk_accepted": "风险接受",
+    "handled_elsewhere": "已有安排",
+}
+
 
 def normalize_review_items(items: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """保留 Python 原字段,补齐 Web/报告消费的 canonical aliases。"""
@@ -148,9 +160,18 @@ def build_confirm_report_markdown(
             lines.append(f"- **建议**: {redact_text(str(item['suggestion']))}")
 
         if action == "reject":
-            category = decision.get("reason_category") or "model_noise"
-            reason_label = REJECT_REASON_LABELS.get(category, category)
-            lines.append(f"- **拒绝原因**: {redact_text(str(reason_label))}")
+            correctness_reason = decision.get("correctness_reason") or ""
+            business_decision = decision.get("business_decision") or ""
+            if correctness_reason:
+                reason_label = CORRECTNESS_REASON_LABELS.get(correctness_reason, correctness_reason)
+                lines.append(f"- **判断问题**: {redact_text(str(reason_label))}")
+            if business_decision:
+                decision_label = BUSINESS_DECISION_LABELS.get(business_decision, business_decision)
+                lines.append(f"- **业务处理**: {redact_text(str(decision_label))}")
+            if not correctness_reason and not business_decision:
+                category = decision.get("reason_category") or "model_noise"
+                reason_label = REJECT_REASON_LABELS.get(category, category)
+                lines.append(f"- **拒绝原因**: {redact_text(str(reason_label))}")
             note = decision.get("reason_note") or decision.get("reason")
             if note:
                 lines.append(f"- **驳回备注**: {redact_text(str(note))}")

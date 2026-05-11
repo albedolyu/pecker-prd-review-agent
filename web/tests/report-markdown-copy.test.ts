@@ -93,6 +93,23 @@ describe("report markdown copy", () => {
     expect(markdown).not.toContain("原始评审问题");
   });
 
+  it("prints 2D rejection reasons instead of the legacy bucket when present", () => {
+    const decisions: Record<string, ItemDecision> = {
+      "R-002": {
+        action: "reject",
+        reason_category: "known_tradeoff",
+        correctness_reason: "unsupported_evidence",
+        business_decision: "risk_accepted",
+      },
+    };
+
+    const markdown = generateReportMarkdown(result, decisions);
+
+    expect(markdown).toContain("**判断问题**: 依据不足");
+    expect(markdown).toContain("**业务处理**: 风险接受");
+    expect(markdown).not.toContain("**驳回原因**");
+  });
+
   it("keeps maintenance JSON behind an explicit option", () => {
     const markdown = generateReportMarkdown(result, {}, { includeMaintenanceDetails: true });
 

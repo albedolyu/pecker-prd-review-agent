@@ -68,6 +68,8 @@ function AdminUsageContent() {
   const activeJobs = data?.active_jobs ?? [];
   const activeDrafts = data?.active_drafts ?? [];
   const recentJobEvents = data?.recent_job_events ?? [];
+  const feedbackCorrectnessRows = Object.entries(feedbackData?.correctness_reasons ?? {});
+  const feedbackBusinessRows = Object.entries(feedbackData?.business_decisions ?? {});
 
   const completionRate = useMemo(() => {
     if (!summary?.total_reviews) return "0%";
@@ -332,6 +334,28 @@ function AdminUsageContent() {
                   />
                 </div>
               )}
+            {(feedbackCorrectnessRows.length > 0 || feedbackBusinessRows.length > 0) && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                  gap: 12,
+                  padding: "0 16px 16px",
+                  borderBottom: "1px solid var(--border-subtle)",
+                }}
+              >
+                <ReasonBreakdown
+                  title="AI 判断问题"
+                  rows={feedbackCorrectnessRows}
+                  labelOf={correctnessReasonLabel}
+                />
+                <ReasonBreakdown
+                  title="业务取舍"
+                  rows={feedbackBusinessRows}
+                  labelOf={businessDecisionLabel}
+                />
+              </div>
+            )}
             {feedbackApiError ? (
               <InlineEmpty text={feedbackApiError.detail ?? "逐条反馈读取失败。"} />
             ) : feedbackData?.records.length ? (
@@ -651,6 +675,69 @@ function FeedbackBreakdown({
   );
 }
 
+function ReasonBreakdown({
+  title,
+  rows,
+  labelOf,
+}: {
+  title: string;
+  rows: Array<[string, number]>;
+  labelOf: (value: string) => string;
+}) {
+  return (
+    <div
+      style={{
+        border: "1px solid var(--border-subtle)",
+        borderRadius: "var(--r-3)",
+        background: "var(--surface-raised)",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          padding: "9px 11px",
+          borderBottom: "1px solid var(--border-subtle)",
+          color: "var(--text-strong)",
+          fontSize: 12,
+          fontWeight: 650,
+        }}
+      >
+        {title}
+      </div>
+      {rows.length ? (
+        rows.slice(0, 5).map(([value, count]) => (
+          <div
+            key={`${title}-${value}`}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr auto",
+              gap: 10,
+              padding: "9px 11px",
+              borderTop: "1px solid var(--border-subtle)",
+              fontSize: 12,
+            }}
+          >
+            <div style={{ color: "var(--text-default)", fontWeight: 600 }}>
+              {labelOf(value)}
+            </div>
+            <div
+              style={{
+                color: "var(--text-strong)",
+                fontWeight: 650,
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              {count}
+            </div>
+          </div>
+        ))
+      ) : (
+        <InlineEmpty text="暂无数据。" />
+      )}
+    </div>
+  );
+}
+
 function SectionHead({ title, hint }: { title: string; hint: string }) {
   return (
     <header
@@ -671,6 +758,7 @@ function SectionHead({ title, hint }: { title: string; hint: string }) {
 
 function FeedbackRow({ record }: { record: FeedbackRecord }) {
   const tone = decisionTone(record.action);
+  const reasonLines = feedbackReasonLines(record);
   return (
     <tr>
       <td style={tdStyle}>{formatTime(record.ts)}</td>
@@ -691,7 +779,9 @@ function FeedbackRow({ record }: { record: FeedbackRecord }) {
         </span>
       </td>
       <td style={tdStyle}>
-        <div>{rejectReasonLabel(record.reason_category)}</div>
+        {reasonLines.map((line) => (
+          <div key={line}>{line}</div>
+        ))}
         {record.reason_note && (
           <div style={{ color: "var(--text-faint)", marginTop: 3 }}>
             {record.reason_note}
@@ -1106,6 +1196,33 @@ function rejectReasonLabel(reason?: string) {
     impl_detail: "实现细节",
     model_noise: "判断不准",
   }[reason ?? ""] ?? (reason ? reason : "未填写");
+}
+
+function correctnessReasonLabel(reason?: string) {
+  return {
+    false_positive: "AI 误报",
+    unsupported_evidence: "依据不足",
+    rule_too_strict: "规则过严",
+  }[reason ?? ""] ?? (reason ? reason : "未填写");
+}
+
+function businessDecisionLabel(decision?: string) {
+  return {
+    not_this_iteration: "本期不修",
+    risk_accepted: "风险接受",
+    handled_elsewhere: "已有其他安排",
+  }[decision ?? ""] ?? (decision ? decision : "未填写");
+}
+
+function feedbackReasonLines(record: FeedbackRecord) {
+  const lines: string[] = [];
+  if (record.correctness_reason) {
+    lines.push(`判断问题：${correctnessReasonLabel(record.correctness_reason)}`);
+  }
+  if (record.business_decision) {
+    lines.push(`业务处理：${businessDecisionLabel(record.business_decision)}`);
+  }
+  return lines.length ? lines : [rejectReasonLabel(record.reason_category)];
 }
 
 function dimensionLabel(dimension?: string) {

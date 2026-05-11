@@ -363,18 +363,33 @@ export type RejectReason =
   | "impl_detail"       // 实现细节, 不该 PRD 管
   | "model_noise";      // 模型噪音, 无业务意义
 
+export type CorrectnessReason =
+  | "false_positive"
+  | "unsupported_evidence"
+  | "rule_too_strict";
+
+export type BusinessDecision =
+  | "not_this_iteration"
+  | "risk_accepted"
+  | "handled_elsewhere";
+
 /**
  * 用户在 Phase 3 对每个 item 做的决定。
  * action: 接受 / 拒绝 / 编辑;edited_problem 仅在 action=edit 时有意义。
  *
- * reject 必须带 reason_category(7 类下拉), reason 为可选自由文本备注:
- *   - reason_category 缺失 → 后端走 "model_noise" 兜底, 但 EMA 反馈闭环吃错信号
- *   - reason_category 不在 7 种之一 → 后端 422
+ * reject 支持二维原因:
+ *   - correctness_reason: AI 判断错在哪里, 会影响规则 EMA
+ *   - business_decision: AI 说得对但本次业务不处理, 只进入 valuable_but_skipped
+ * reason_category 保留为 legacy adapter, 用于老草稿/旧报告兼容。
  */
 export interface ItemDecision {
   action: "accept" | "reject" | "edit";
   /** 仅 reject 时有意义, 7 类下拉之一 */
   reason_category?: RejectReason;
+  /** 仅 reject 时有意义: AI 判断错在哪里, 会影响规则 EMA */
+  correctness_reason?: CorrectnessReason;
+  /** 仅 reject 时有意义: 业务为什么暂不处理, 不影响规则 EMA */
+  business_decision?: BusinessDecision;
   /** 可选自由文本备注(对应后端 reason_note), 老字段名保留兼容报告生成 */
   reason?: string;
   edited_problem?: string;
@@ -765,6 +780,8 @@ export interface FeedbackRecord {
   severity: string;
   action: "accept" | "reject" | "edit" | "unknown";
   reason_category: string;
+  correctness_reason: string;
+  business_decision: string;
   reason_note: string;
   problem: string;
   suggestion: string;
@@ -804,6 +821,8 @@ export interface AdminFeedbackResponse {
   by_reviewer: FeedbackBucket[];
   by_workspace: FeedbackBucket[];
   reason_categories: Record<string, number>;
+  correctness_reasons: Record<string, number>;
+  business_decisions: Record<string, number>;
   dimensions: Record<string, number>;
   records: FeedbackRecord[];
   missing_records?: MissingFeedbackRecord[];
