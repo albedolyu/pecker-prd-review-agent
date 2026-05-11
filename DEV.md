@@ -59,9 +59,9 @@ make install   # 一次完成: pip 装 deps + 前端 pnpm install + git pre-push
 
 ---
 
-## 三条命令起 dev stack
+## 两条命令起 dev stack
 
-在仓库根目录开三个终端:
+在仓库根目录开两个终端:
 
 ```bash
 # 终端 1 — FastAPI 后端(必需)
@@ -70,10 +70,6 @@ uvicorn api.main:app --reload --port 8000
 # 终端 2 — Next.js 前端(新版,团队推荐)
 cd web && pnpm dev
 # 浏览器打开 http://localhost:3000
-
-# 终端 3 — Streamlit 旧版(迁移期 fallback,可选)
-streamlit run legacy/app.py --server.port 8501
-# 浏览器打开 http://localhost:8501
 ```
 
 ---
