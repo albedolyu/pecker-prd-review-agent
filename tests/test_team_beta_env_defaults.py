@@ -22,6 +22,12 @@ def test_team_beta_defaults_keep_prd_context_packet_enabled():
     assert "PECKER_PRD_CONTEXT_AUTO_CHARS=12000" in env
 
 
+def test_async_goshawk_patch_flag_is_explicitly_opt_in():
+    env = _env_example()
+
+    assert "PECKER_ENABLE_ASYNC_GOSHAWK_PATCHES=0" in env
+
+
 def test_team_beta_openai_timeout_covers_deep_review_workers():
     env = _env_example()
     values = {

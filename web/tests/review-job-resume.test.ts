@@ -159,4 +159,16 @@ describe("review job resume helpers", () => {
     expect(source).toContain("本次不会重复生成");
     expect(source).not.toContain("job reused");
   });
+
+  it("keeps the stream running after preliminary worker draft results", () => {
+    const source = readFileSync(join(process.cwd(), "lib/useReviewStream.ts"), "utf8");
+
+    const preliminaryBranch = source.match(
+      /if \(ev\.event === "preliminary_result"\) \{[\s\S]*?\} else if \(ev\.event === "goshawk_patch"\)/,
+    )?.[0];
+
+    expect(preliminaryBranch).toBeDefined();
+    expect(preliminaryBranch).toContain("setResult(ev.payload)");
+    expect(preliminaryBranch).not.toContain('setState("done")');
+  });
 });

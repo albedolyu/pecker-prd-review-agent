@@ -41,6 +41,69 @@ log = get_logger("review_api")
 router = APIRouter(tags=["review"])
 
 
+def _truthy_env(name: str, default: str = "0") -> bool:
+    return os.environ.get(name, default).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _async_goshawk_patches_enabled() -> bool:
+    return _truthy_env("PECKER_ENABLE_ASYNC_GOSHAWK_PATCHES")
+
+
+def _worker_only_cost_breakdown(result: Dict[str, Any]) -> Dict[str, float]:
+    cost_breakdown: Dict[str, float] = {}
+    total_cost = 0.0
+    for worker in result.get("workers", []):
+        dim = worker.get("dimension", "unknown")
+        cost = float(worker.get("cost_usd", 0.0) or 0.0)
+        cost_breakdown[dim] = round(cost, 6)
+        total_cost += cost
+    cost_breakdown["total"] = round(total_cost, 6)
+    return cost_breakdown
+
+
+def _worker_telemetry_snapshot(
+    result: Dict[str, Any],
+    *,
+    total_duration_ms: int,
+    cost_breakdown: Dict[str, float],
+) -> Dict[str, Any]:
+    worker_telemetry: Dict[str, Any] = {}
+    for worker in result.get("workers", []):
+        dim = worker.get("dimension", "unknown")
+        if worker.get("telemetry"):
+            worker_telemetry[dim] = worker["telemetry"]
+    return {
+        "total_duration_ms": total_duration_ms,
+        "workers": worker_telemetry,
+        "total_cost_usd": cost_breakdown.get("total", 0),
+    }
+
+
+def _create_review_result_payload(
+    *,
+    req: "ReviewRequest",
+    user: Dict[str, Any],
+    result: Dict[str, Any],
+    merged_items: List[Dict[str, Any]],
+    cost_breakdown: Dict[str, float],
+    telemetry: Dict[str, Any],
+    goshawk_summary: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    handle = ReviewResult.create(
+        reviewer=user["reviewer"],
+        workspace=req.workspace,
+        prd_name=req.prd_name,
+        mode=req.mode,
+        merged_items=merged_items,
+        workers=result.get("workers", []),
+        usage=result.get("total_usage", {}),
+        goshawk_summary=goshawk_summary,
+        cost_breakdown=cost_breakdown,
+        telemetry=telemetry,
+    )
+    return handle.model_dump()
+
+
 def _item_ids(items: Any) -> List[str]:
     if not isinstance(items, list):
         return []
@@ -661,6 +724,46 @@ async def run_review(
                 emitter.emit("review_degraded", data=degraded_payload)
                 evt.append("review_degraded", degraded_payload)
 
+            result["merged_items"] = items
+            preliminary_review_id = ""
+            if _async_goshawk_patches_enabled() and req.mode == "standard" and items:
+                preliminary_cost = _worker_only_cost_breakdown(result)
+                preliminary_telemetry = _worker_telemetry_snapshot(
+                    result,
+                    total_duration_ms=int((_time.time() - _pipeline_start) * 1000),
+                    cost_breakdown=preliminary_cost,
+                )
+                preliminary_payload = _create_review_result_payload(
+                    req=req,
+                    user=user,
+                    result=result,
+                    merged_items=items,
+                    cost_breakdown=preliminary_cost,
+                    telemetry=preliminary_telemetry,
+                    goshawk_summary={
+                        "status": "pending",
+                        "mode": "async_patch",
+                        "source": "worker_draft",
+                    },
+                )
+                preliminary_review_id = str(preliminary_payload.get("review_id", ""))
+                emitter.emit(
+                    "preliminary_result",
+                    data={
+                        "stage": "worker_draft",
+                        "goshawk_status": "pending",
+                        "payload": preliminary_payload,
+                    },
+                )
+                evt.append(
+                    "preliminary_result",
+                    {
+                        "review_id": preliminary_review_id,
+                        "items_count": len(items),
+                        "goshawk_status": "pending",
+                    },
+                )
+
             # 3. 终审 (苍鹰) — 仅标准模式
             if req.mode == "standard" and items:
                 emitter.emit("final_reviewer_started")
@@ -759,6 +862,28 @@ async def run_review(
             cost_breakdown=cost_breakdown,
             telemetry=result.get("telemetry"),
         )
+        review_result_payload = review_result_handle.model_dump()
+
+        if preliminary_review_id:
+            goshawk_status = "completed" if result.get("goshawk") else "failed"
+            emitter.emit(
+                "goshawk_patch",
+                data={
+                    "stage": "goshawk_patch",
+                    "goshawk_status": goshawk_status,
+                    "preliminary_review_id": preliminary_review_id,
+                    "payload": review_result_payload,
+                },
+            )
+            evt.append(
+                "goshawk_patch",
+                {
+                    "review_id": review_result_handle.review_id,
+                    "preliminary_review_id": preliminary_review_id,
+                    "items_count": len(result.get("merged_items", [])),
+                    "goshawk_status": goshawk_status,
+                },
+            )
 
         # T3 2026-04-24: funnel_summary — PM decision (N4) 在 confirm_review 走另一条 path, 这里
         # 先发无 N4 的 summary, 只覆盖 N0-N3. confirm_review 里会再发 funnel_stage_after_pm_decision,
@@ -781,7 +906,7 @@ async def run_review(
             "budget": _budget_after,
         })
 
-        return review_result_handle.model_dump()
+        return review_result_payload
 
     async def event_source():
         async for chunk in sse_review_pipeline(
