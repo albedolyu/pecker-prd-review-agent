@@ -44,6 +44,7 @@ def test_openai_native_client_maps_function_tool_calls(monkeypatch):
     fake_client = _FakeOpenAI()
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setenv("OPENAI_WIRE_API", "chat_completions")
+    monkeypatch.setenv("PECKER_OPENAI_STRICT_STRUCTURED_OUTPUT", "0")
     monkeypatch.delenv("OPENAI_REASONING_EFFORT", raising=False)
     monkeypatch.delenv("OPENAI_DISABLE_RESPONSE_STORAGE", raising=False)
     monkeypatch.setattr(
@@ -75,6 +76,64 @@ def test_openai_native_client_maps_function_tool_calls(monkeypatch):
     assert resp.tool_calls[0]["input"]["dimension"] == "质量鸟"
     assert resp.usage["input_tokens"] == 12
     assert fake_client.chat.completions.last_kwargs["tool_choice"]["type"] == "function"
+
+
+def test_openai_native_client_uses_strict_chat_json_schema_for_structured_tool(monkeypatch):
+    from clients.openai_native import OpenAINativeClient
+
+    fake_client = _FakeOpenAI()
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_WIRE_API", "chat_completions")
+    monkeypatch.delenv("OPENAI_REASONING_EFFORT", raising=False)
+    monkeypatch.setattr(
+        OpenAINativeClient,
+        "_build_client",
+        lambda self, api_key, base_url: fake_client,
+    )
+
+    client = OpenAINativeClient()
+    resp = client.create(
+        model="gpt-5.4",
+        max_tokens=256,
+        system="system",
+        messages=[{"role": "user", "content": "hello"}],
+        tools=[
+            {
+                "name": "submit_review_items",
+                "description": "submit",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "dimension": {"type": "string"},
+                        "items": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "rule_id": {"type": "string"},
+                                    "issue": {"type": "string"},
+                                },
+                            },
+                        },
+                    },
+                },
+            }
+        ],
+        tool_choice={"type": "any"},
+    )
+
+    kwargs = fake_client.chat.completions.last_kwargs
+    assert resp.usage["strict_structured_output"] is True
+    assert "tools" not in kwargs
+    assert "tool_choice" not in kwargs
+    schema_format = kwargs["response_format"]["json_schema"]
+    assert schema_format["name"] == "submit_review_items"
+    assert schema_format["strict"] is True
+    assert schema_format["schema"]["additionalProperties"] is False
+    assert set(schema_format["schema"]["required"]) == {"dimension", "items"}
+    item_schema = schema_format["schema"]["properties"]["items"]["items"]
+    assert item_schema["additionalProperties"] is False
+    assert set(item_schema["required"]) == {"rule_id", "issue"}
 
 
 class _FakeResponses:
@@ -293,6 +352,7 @@ def test_openai_native_client_supports_responses_wire(monkeypatch):
     fake_client = _FakeResponsesOpenAI()
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setenv("OPENAI_WIRE_API", "responses")
+    monkeypatch.setenv("PECKER_OPENAI_STRICT_STRUCTURED_OUTPUT", "0")
     monkeypatch.setenv("OPENAI_REASONING_EFFORT", "xhigh")
     monkeypatch.setenv("OPENAI_DISABLE_RESPONSE_STORAGE", "true")
     monkeypatch.setattr(
@@ -328,6 +388,53 @@ def test_openai_native_client_supports_responses_wire(monkeypatch):
     assert fake_client.responses.last_kwargs["store"] is False
     assert fake_client.responses.last_kwargs["reasoning"] == {"effort": "xhigh"}
     assert fake_client.responses.last_kwargs["tool_choice"]["type"] == "function"
+
+
+def test_openai_native_client_uses_strict_responses_json_schema_for_structured_tool(monkeypatch):
+    from clients.openai_native import OpenAINativeClient
+
+    fake_client = _FakeResponsesOpenAI()
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_WIRE_API", "responses")
+    monkeypatch.delenv("OPENAI_REASONING_EFFORT", raising=False)
+    monkeypatch.setattr(
+        OpenAINativeClient,
+        "_build_client",
+        lambda self, api_key, base_url: fake_client,
+    )
+
+    client = OpenAINativeClient()
+    resp = client.create(
+        model="gpt-5.5",
+        max_tokens=256,
+        system="system",
+        messages=[{"role": "user", "content": "hello"}],
+        tools=[
+            {
+                "name": "submit_advisor_review",
+                "description": "submit",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "confidence": {"type": "number"},
+                        "additional_findings": {"type": "array"},
+                    },
+                },
+            }
+        ],
+        tool_choice={"type": "any"},
+    )
+
+    kwargs = fake_client.responses.last_kwargs
+    assert resp.usage["strict_structured_output"] is True
+    assert "tools" not in kwargs
+    assert "tool_choice" not in kwargs
+    schema_format = kwargs["text"]["format"]
+    assert schema_format["type"] == "json_schema"
+    assert schema_format["name"] == "submit_advisor_review"
+    assert schema_format["strict"] is True
+    assert schema_format["schema"]["additionalProperties"] is False
+    assert set(schema_format["schema"]["required"]) == {"confidence", "additional_findings"}
 
 
 def test_openai_native_client_allows_policy_reasoning_effort_override(monkeypatch):

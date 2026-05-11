@@ -234,6 +234,56 @@ class OpenAINativeClient:
         return {"type": "function", "function": {"name": name}}
 
     @staticmethod
+    def _strict_structured_output_enabled() -> bool:
+        value = (
+            os.environ.get("PECKER_OPENAI_STRICT_STRUCTURED_OUTPUT")
+            or os.environ.get("OPENAI_STRICT_STRUCTURED_OUTPUT")
+            or "1"
+        ).strip().lower()
+        return value not in {"0", "false", "no", "off"}
+
+    @staticmethod
+    def _normalize_json_schema(schema: Any) -> Any:
+        """OpenAI strict JSON schema: objects need closed props and full required lists."""
+        if not isinstance(schema, dict):
+            return schema
+        out = json.loads(json.dumps(schema))
+
+        def fix(node: Any) -> None:
+            if not isinstance(node, dict):
+                return
+            if node.get("type") == "object":
+                props = node.get("properties", {})
+                if isinstance(props, dict):
+                    node["additionalProperties"] = False
+                    node["required"] = list(props.keys())
+                    for value in props.values():
+                        fix(value)
+            elif node.get("type") == "array":
+                fix(node.get("items"))
+            for key in ("anyOf", "oneOf", "allOf"):
+                values = node.get(key)
+                if isinstance(values, list):
+                    for value in values:
+                        fix(value)
+
+        fix(out)
+        return out
+
+    @classmethod
+    def _json_schema_format(cls, selected_tool: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        if not selected_tool:
+            return None
+        return {
+            "type": "json_schema",
+            "name": selected_tool["name"],
+            "strict": True,
+            "schema": cls._normalize_json_schema(
+                selected_tool.get("input_schema", {"type": "object", "properties": {}})
+            ),
+        }
+
+    @staticmethod
     def _tools(tools: Optional[List[Dict[str, Any]]]) -> Optional[List[Dict[str, Any]]]:
         if not tools:
             return None
@@ -395,6 +445,11 @@ class OpenAINativeClient:
         max_retries = self._max_retries_for_policy(retry_policy)
         reasoning_effort = self._reasoning_effort_for_policy(retry_policy)
         selected_tool = self._selected_tool(tools, tool_choice)
+        strict_schema_format = (
+            self._json_schema_format(selected_tool)
+            if self._strict_structured_output_enabled()
+            else None
+        )
         req_id = _gen_req_id()
         last_exc: Optional[Exception] = None
         client, key_label = self._select_client()
@@ -412,12 +467,15 @@ class OpenAINativeClient:
                 params["reasoning"] = {"effort": reasoning_effort}
             if temperature is not None and not reasoning_effort:
                 params["temperature"] = temperature
-            converted_tools = self._response_tools(tools)
-            if converted_tools:
-                params["tools"] = converted_tools
-            converted_choice = self._response_tool_choice(tool_choice, selected_tool)
-            if converted_choice:
-                params["tool_choice"] = converted_choice
+            if strict_schema_format:
+                params["text"] = {"format": strict_schema_format}
+            else:
+                converted_tools = self._response_tools(tools)
+                if converted_tools:
+                    params["tools"] = converted_tools
+                converted_choice = self._response_tool_choice(tool_choice, selected_tool)
+                if converted_choice:
+                    params["tool_choice"] = converted_choice
 
             for attempt in range(max_retries + 1):
                 attempts_used = attempt + 1
@@ -444,12 +502,22 @@ class OpenAINativeClient:
             }
             if temperature is not None:
                 params["temperature"] = temperature
-            converted_tools = self._tools(tools)
-            if converted_tools:
-                params["tools"] = converted_tools
-            converted_choice = self._tool_choice(tool_choice, selected_tool)
-            if converted_choice:
-                params["tool_choice"] = converted_choice
+            if strict_schema_format:
+                params["response_format"] = {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": strict_schema_format["name"],
+                        "strict": strict_schema_format["strict"],
+                        "schema": strict_schema_format["schema"],
+                    },
+                }
+            else:
+                converted_tools = self._tools(tools)
+                if converted_tools:
+                    params["tools"] = converted_tools
+                converted_choice = self._tool_choice(tool_choice, selected_tool)
+                if converted_choice:
+                    params["tool_choice"] = converted_choice
 
             for attempt in range(max_retries + 1):
                 attempts_used = attempt + 1
@@ -476,6 +544,7 @@ class OpenAINativeClient:
             "key_id": key_label,
             "key_pool_size": len(self._api_keys),
             "reasoning_effort": reasoning_effort,
+            "strict_structured_output": bool(strict_schema_format),
         }
         try:
             setattr(unified, "_pecker_usage_extra", usage_extra)
@@ -502,6 +571,7 @@ class OpenAINativeClient:
                 "tokens_out": usage.get("output_tokens", 0),
                 "retry_policy": retry_policy,
                 "max_retries": max_retries,
+                "strict_structured_output": bool(strict_schema_format),
                 **usage_extra,
             },
         )
