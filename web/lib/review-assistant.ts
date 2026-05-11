@@ -8,42 +8,50 @@ export interface ReviewAssistantContext {
   reviewResult?: ReviewResult | null;
 }
 
-const FENGNIAO_EVIDENCE_TERMS = [
+const FENGNIAO_CONTEXT_TERMS = [
   "风鸟",
   "fengniao",
   "知识库",
+  "代码 wiki",
+  "code wiki",
+];
+
+const FACT_LAYER_STRONG_TERMS = [
   "事实层",
   "源码",
   "原始",
-  "接口",
-  "字段",
-  "页面",
-  "模块",
+  "代码",
+  "api",
+  "source",
   "已有实现",
 ];
 
-const FACT_LAYER_TERMS = [
-  "事实层",
-  "原始",
-  "源码",
-  "代码",
+const FACT_LAYER_CONTEXT_TERMS = [
   "接口",
   "字段",
-  "实现",
   "页面",
+  "实现",
   "数据库",
-  "api",
-  "source",
 ];
+
+const FACT_LAYER_ACTION_TERMS = [
+  "查",
+  "查询",
+  "核对",
+  "依据",
+  "确认",
+];
+
 
 export function shouldQueryFengniaoEvidence(question: string): boolean {
   const q = question.toLowerCase();
-  return includesAny(q, FENGNIAO_EVIDENCE_TERMS);
+  return includesAny(q, FENGNIAO_CONTEXT_TERMS) || shouldIncludeFactLayer(q);
 }
 
 export function shouldIncludeFactLayer(question: string): boolean {
   const q = question.toLowerCase();
-  return includesAny(q, FACT_LAYER_TERMS);
+  if (includesAny(q, FACT_LAYER_STRONG_TERMS)) return true;
+  return includesAny(q, FACT_LAYER_CONTEXT_TERMS) && includesAny(q, FACT_LAYER_ACTION_TERMS);
 }
 
 export async function answerReviewAssistantQuestionAsync(

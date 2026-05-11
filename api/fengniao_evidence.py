@@ -51,18 +51,27 @@ _SKIP_DIRS = {
 }
 _MAX_FILE_BYTES = 512 * 1024
 _MAX_FILES_PER_ROOT = 1200
-_FACT_LAYER_TERMS = (
+_FACT_LAYER_STRONG_TERMS = (
     "事实层",
     "原始",
     "源码",
     "代码",
+    "api",
+    "source",
+)
+_FACT_LAYER_CONTEXT_TERMS = (
     "接口",
     "字段",
     "实现",
     "页面",
     "数据库",
-    "api",
-    "source",
+)
+_FACT_LAYER_ACTION_TERMS = (
+    "查",
+    "查询",
+    "核对",
+    "依据",
+    "确认",
 )
 _CJK_STOP_TERMS = {
     "一下",
@@ -109,7 +118,11 @@ class _ScoredHit:
 def infer_include_fact_layer(question: str) -> bool:
     """Infer whether the user is asking for original fact/source evidence."""
     q = question.lower()
-    return any(term in q for term in _FACT_LAYER_TERMS)
+    if any(term in q for term in _FACT_LAYER_STRONG_TERMS):
+        return True
+    return any(term in q for term in _FACT_LAYER_CONTEXT_TERMS) and any(
+        term in q for term in _FACT_LAYER_ACTION_TERMS
+    )
 
 
 def search_fengniao_evidence(

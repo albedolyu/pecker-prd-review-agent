@@ -25,6 +25,16 @@ pytest tests/test_eval_gate.py -m eval -v
 
 用固定 fixture 验证 scorer 逻辑的稳定性 (recall/precision/overall_score 满足阈值)。
 
+### 1.1 右下角小助手 Golden Eval (纯计算,不跑 LLM)
+
+```bash
+npm.cmd --prefix web test -- tests/review-assistant-golden-eval.test.ts
+python -m pytest tests/test_review_assistant_golden_eval.py -q
+```
+
+用 `eval/golden/review_assistant_customer_needs.json` 验证小助手是否满足 PM 试用需求:
+上传材料说明、采纳/驳回/改写、报告导出、524 超时恢复、风鸟知识库查询、原始事实层查询,以及普通 PRD 问题不误触发查库。
+
 ### 2. 端到端评测 (需要 Claude API)
 
 ```bash
