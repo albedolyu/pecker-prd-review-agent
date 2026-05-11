@@ -41,6 +41,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from logger import get_logger
+from api.sanitize import redact_prd_content, redact_text
 
 log = get_logger("finding_outcomes")
 
@@ -129,13 +130,17 @@ def init_store(db_path: Optional[str] = None) -> None:
                 reason      TEXT,
                 workspace   TEXT,
                 prd_name    TEXT,
-                severity    TEXT
+                severity    TEXT,
+                evidence_content TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_outcomes_rule_id ON finding_outcomes(rule_id);
             CREATE INDEX IF NOT EXISTS idx_outcomes_timestamp ON finding_outcomes(timestamp);
             CREATE INDEX IF NOT EXISTS idx_outcomes_pm ON finding_outcomes(pm_name);
             CREATE INDEX IF NOT EXISTS idx_outcomes_finding_id ON finding_outcomes(finding_id);
         """)
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(finding_outcomes)").fetchall()}
+        if "evidence_content" not in columns:
+            conn.execute("ALTER TABLE finding_outcomes ADD COLUMN evidence_content TEXT")
         conn.commit()
 
 
@@ -157,6 +162,8 @@ def record_outcome(
     workspace: Optional[str] = None,
     prd_name: Optional[str] = None,
     severity: Optional[str] = None,
+    evidence_content: Optional[str] = None,
+    prd_body: Optional[str] = None,
     db_path: Optional[str] = None,
 ) -> int:
     """写一条 outcome. 返回新行 id.
@@ -172,17 +179,38 @@ def record_outcome(
     path = _resolve_db_path(db_path)
     init_store(path)
     ts = datetime.now().isoformat(timespec="seconds")
+    safe_evidence = _sanitize_evidence_content(evidence_content, prd_body or "")
     with _store_write_lock(path), _get_conn(path) as conn:
         cur = conn.execute(
             """INSERT INTO finding_outcomes
-               (finding_id, rule_id, outcome, pm_name, timestamp, reason, workspace, prd_name, severity)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (finding_id, rule_id, outcome, pm_name, ts, reason, workspace, prd_name, severity),
+               (finding_id, rule_id, outcome, pm_name, timestamp, reason, workspace, prd_name, severity, evidence_content)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                finding_id,
+                rule_id,
+                outcome,
+                pm_name,
+                ts,
+                reason,
+                workspace,
+                prd_name,
+                severity,
+                safe_evidence,
+            ),
         )
         conn.commit()
         new_id = cur.lastrowid or 0
     log.info(f"outcome 记录: finding={finding_id} rule={rule_id} outcome={outcome} pm={pm_name}")
     return new_id
+
+
+def _sanitize_evidence_content(value: Optional[str], prd_body: str = "") -> str:
+    if not value:
+        return ""
+    text = redact_text(str(value))
+    if prd_body:
+        text = str(redact_prd_content(text, prd_body))
+    return text[:500]
 
 
 # ============================================================

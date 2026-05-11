@@ -106,6 +106,7 @@ def _parse_session(path: Path) -> Optional[Dict[str, Any]]:
         "reviewer": meta.get("reviewer", "unknown"),
         "mode": meta.get("mode", "standard"),
         "prd_name": meta.get("prd_name", ""),
+        "prd_preview": meta.get("prd_preview", "") or str(meta.get("prd_content") or "")[:300],
         "status": status,
         "items_count": items_count,
         "cost_usd": cost_usd,

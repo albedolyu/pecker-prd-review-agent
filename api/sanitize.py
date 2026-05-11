@@ -93,14 +93,55 @@ def redact_prd_content(value: Any, prd_body: str) -> Any:
     return value
 
 
+def redact_prd_payload(value: Any) -> Any:
+    prd_body = find_prd_body(value)
+    return redact_prd_content(value, prd_body) if prd_body else value
+
+
+def find_prd_body(value: Any) -> str:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if _PRD_BODY_FIELD_RE.match(str(key)) and isinstance(item, str):
+                return item
+        for item in value.values():
+            found = find_prd_body(item)
+            if found:
+                return found
+    if isinstance(value, list):
+        for item in value:
+            found = find_prd_body(item)
+            if found:
+                return found
+    if isinstance(value, tuple):
+        for item in value:
+            found = find_prd_body(item)
+            if found:
+                return found
+    return ""
+
+
 def _redact_prd_text(text: str, prd_body: str, marker: str) -> str:
     if len(text) < _PRD_MIN_FRAGMENT_CHARS:
         return text
     if prd_body in text:
         return marker
     scan = prd_body[:_PRD_FRAGMENT_SCAN_CHARS]
+    if _contains_prd_fragment(text, scan):
+        return marker
+    compact_text = _normalize_space(text)
+    compact_scan = _normalize_space(scan)
+    if (compact_text != text or compact_scan != scan) and _contains_prd_fragment(compact_text, compact_scan):
+        return marker
+    return text
+
+
+def _contains_prd_fragment(text: str, scan: str) -> bool:
     limit = len(scan) - _PRD_MIN_FRAGMENT_CHARS + 1
     for start in range(max(0, limit)):
         if scan[start : start + _PRD_MIN_FRAGMENT_CHARS] in text:
-            return marker
-    return text
+            return True
+    return False
+
+
+def _normalize_space(value: str) -> str:
+    return " ".join(value.split())
