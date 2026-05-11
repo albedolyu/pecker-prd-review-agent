@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from api.deps import get_current_user
 from api.fengniao_evidence import infer_include_fact_layer, search_fengniao_evidence
@@ -16,6 +16,13 @@ class FengniaoAssistantRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=500)
     include_fact_layer: bool | None = None
     max_results: int = Field(default=5, ge=1, le=8)
+
+    @field_validator("question", mode="before")
+    @classmethod
+    def _strip_question(cls, value: str) -> str:
+        if isinstance(value, str):
+            return value.strip()
+        return value
 
 
 class FengniaoAssistantResponse(BaseModel):
@@ -30,13 +37,14 @@ async def ask_fengniao_assistant(
     req: FengniaoAssistantRequest,
     _user: dict = Depends(get_current_user),
 ) -> FengniaoAssistantResponse:
+    question = req.question.strip()
     include_fact_layer = (
-        infer_include_fact_layer(req.question)
+        infer_include_fact_layer(question)
         if req.include_fact_layer is None
         else req.include_fact_layer
     )
     result = search_fengniao_evidence(
-        req.question,
+        question,
         include_fact_layer=include_fact_layer,
         max_results=req.max_results,
     )

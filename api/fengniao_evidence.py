@@ -51,6 +51,7 @@ _SKIP_DIRS = {
 }
 _MAX_FILE_BYTES = 512 * 1024
 _MAX_FILES_PER_ROOT = 1200
+_MAX_RESULTS_LIMIT = 8
 _FACT_LAYER_STRONG_TERMS = (
     "事实层",
     "原始",
@@ -118,11 +119,25 @@ class _ScoredHit:
 def infer_include_fact_layer(question: str) -> bool:
     """Infer whether the user is asking for original fact/source evidence."""
     q = question.lower()
-    if any(term in q for term in _FACT_LAYER_STRONG_TERMS):
+    if _contains_any_term(q, _FACT_LAYER_STRONG_TERMS):
         return True
-    return any(term in q for term in _FACT_LAYER_CONTEXT_TERMS) and any(
-        term in q for term in _FACT_LAYER_ACTION_TERMS
+    return _contains_any_term(q, _FACT_LAYER_CONTEXT_TERMS) and _contains_any_term(
+        q, _FACT_LAYER_ACTION_TERMS
     )
+
+
+def _contains_any_term(value: str, terms: tuple[str, ...]) -> bool:
+    return any(_contains_term(value, term) for term in terms)
+
+
+def _contains_term(value: str, term: str) -> bool:
+    if re.fullmatch(r"[a-z0-9][a-z0-9\s_-]*", term, flags=re.IGNORECASE):
+        return re.search(
+            rf"(?:^|[^a-z0-9]){re.escape(term)}(?=$|[^a-z0-9])",
+            value,
+            flags=re.IGNORECASE,
+        ) is not None
+    return term in value
 
 
 def search_fengniao_evidence(
@@ -136,6 +151,7 @@ def search_fengniao_evidence(
     This is deliberately lexical and read-only. The assistant uses it as a
     lightweight evidence lookup, not as an autonomous reviewer.
     """
+    max_results = max(1, min(max_results, _MAX_RESULTS_LIMIT))
     terms = _extract_terms(question)
     roots = _configured_roots(include_fact_layer)
     hits: List[_ScoredHit] = []
@@ -161,7 +177,7 @@ def search_fengniao_evidence(
             {
                 "layer": root.layer,
                 "label": root.label,
-                "path": str(root.path),
+                "path": redact_text(str(root.path)),
                 "exists": root.path.is_dir(),
             }
             for root in roots
@@ -316,9 +332,10 @@ def _clean_snippet(value: str) -> str:
 
 def _relative_display_path(path: Path, root: Path) -> str:
     try:
-        return str(path.relative_to(root)).replace("\\", "/")
+        display_path = str(path.relative_to(root)).replace("\\", "/")
     except ValueError:
-        return path.name
+        display_path = path.name
+    return redact_text(display_path)
 
 
 def _build_answer(

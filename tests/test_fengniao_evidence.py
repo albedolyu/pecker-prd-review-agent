@@ -65,6 +65,63 @@ def test_search_fengniao_evidence_omits_fact_layer_until_requested(tmp_path, mon
     assert {hit["layer"] for hit in result["hits"]} == {"wiki"}
 
 
+def test_search_fengniao_evidence_redacts_configured_root_paths(tmp_path, monkeypatch):
+    from api.fengniao_evidence import search_fengniao_evidence
+
+    secret_root = tmp_path / "openai_api_key=secret-root-value" / "wiki"
+    secret_root.mkdir(parents=True)
+    (secret_root / "entry.md").write_text("company shareholder evidence\n", encoding="utf-8")
+
+    monkeypatch.setenv("PECKER_FENGNIAO_WIKI_PATH", str(secret_root))
+    monkeypatch.delenv("PECKER_FENGNIAO_KNOWLEDGE_PATH", raising=False)
+    monkeypatch.delenv("PECKER_FENGNIAO_SOURCE_ROOTS", raising=False)
+
+    result = search_fengniao_evidence("company shareholder evidence")
+
+    serialized_paths = " ".join(root["path"] for root in result["searched_roots"])
+    assert "secret-root-value" not in serialized_paths
+    assert "openai_api_key=[REDACTED_SECRET]" in serialized_paths
+
+
+def test_search_fengniao_evidence_redacts_hit_display_paths(tmp_path, monkeypatch):
+    from api.fengniao_evidence import search_fengniao_evidence
+
+    wiki = tmp_path / "wiki"
+    secret_dir = wiki / "api_key=secret-path-value"
+    secret_dir.mkdir(parents=True)
+    (secret_dir / "entry.md").write_text("company shareholder evidence\n", encoding="utf-8")
+
+    monkeypatch.setenv("PECKER_FENGNIAO_WIKI_PATH", str(wiki))
+    monkeypatch.delenv("PECKER_FENGNIAO_KNOWLEDGE_PATH", raising=False)
+    monkeypatch.delenv("PECKER_FENGNIAO_SOURCE_ROOTS", raising=False)
+
+    result = search_fengniao_evidence("company shareholder evidence")
+
+    serialized = result["answer"] + " " + " ".join(hit["path"] for hit in result["hits"])
+    assert "secret-path-value" not in serialized
+    assert "api_key=[REDACTED_SECRET]" in serialized
+
+
+def test_search_fengniao_evidence_caps_direct_max_results(tmp_path, monkeypatch):
+    from api.fengniao_evidence import search_fengniao_evidence
+
+    wiki = tmp_path / "wiki"
+    wiki.mkdir()
+    for index in range(12):
+        (wiki / f"entry-{index}.md").write_text(
+            "company shareholder evidence\n",
+            encoding="utf-8",
+        )
+
+    monkeypatch.setenv("PECKER_FENGNIAO_WIKI_PATH", str(wiki))
+    monkeypatch.delenv("PECKER_FENGNIAO_KNOWLEDGE_PATH", raising=False)
+    monkeypatch.delenv("PECKER_FENGNIAO_SOURCE_ROOTS", raising=False)
+
+    result = search_fengniao_evidence("company shareholder evidence", max_results=99)
+
+    assert len(result["hits"]) == 8
+
+
 def test_infer_include_fact_layer_from_question():
     from api.fengniao_evidence import infer_include_fact_layer
 

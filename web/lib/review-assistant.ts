@@ -120,5 +120,13 @@ export function answerReviewAssistantQuestion(
 }
 
 function includesAny(value: string, terms: readonly string[]): boolean {
-  return terms.some((term) => value.includes(term));
+  return terms.some((term) => includesTerm(value, term));
+}
+
+function includesTerm(value: string, term: string): boolean {
+  if (/^[a-z0-9][a-z0-9\s_-]*$/i.test(term)) {
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(?:^|[^a-z0-9])${escaped}(?=$|[^a-z0-9])`, "i").test(value);
+  }
+  return value.includes(term);
 }
