@@ -62,6 +62,14 @@ CHANGED=$(git diff --name-only $DIFF_RANGE 2>/dev/null || git diff --name-only H
 dbg "diff range: $DIFF_RANGE"
 dbg "changed files: $CHANGED"
 
+# ---------- 2. 推送目标防泄漏 ----------
+PYTHON="${PYTHON:-python}"
+REPO_ROOT=$(git rev-parse --show-toplevel)
+
+cd "$REPO_ROOT"
+
+$PYTHON scripts/check_push_target.py --remote "$REMOTE" --url "$URL"
+
 # 触发文件白名单 (与 rule_regression_real.yml 的 paths 对齐)
 # 关键路径: prompt / worker / dimensions / 规则定义 / model 路由 / agent 配置
 TRIGGER_PATTERN="(review/(prompting|worker|dimensions|learnings_store)\.py|review-rules/|review-dimensions\.yaml|workspace-sample/review-rules/|model_router\.py|model_routes\.yaml|agent_config\.py|scripts/rule_regression\.py)"
@@ -76,11 +84,7 @@ log "检测到 regression 触发改动, 跑真实 worker P/R..."
 log "  改动文件: $(echo "$HIT" | tr '\n' ' ')"
 [ "$SKIP_NLI" = "1" ] && log "  (默认跳 NLI 加速; 不想跳设 PECKER_PRE_PUSH_SKIP_NLI=0)"
 
-# ---------- 2. 跑 rule_regression ----------
-PYTHON="${PYTHON:-python}"
-REPO_ROOT=$(git rev-parse --show-toplevel)
-
-cd "$REPO_ROOT"
+# ---------- 3. 跑 rule_regression ----------
 
 SKIP_NLI_FLAG=""
 [ "$SKIP_NLI" = "1" ] && SKIP_NLI_FLAG="--skip-nli"

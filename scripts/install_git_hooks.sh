@@ -2,6 +2,7 @@
 # 啄木鸟 git pre-push hook 一键安装 (bash 友好版)
 #
 # 实际逻辑都在 install_git_hooks.py, 本脚本只是包装一层让 bash 用户能直接跑.
+# 安装的 pre-push 会包含公网 remote 防泄漏检查 + rule_regression。
 # 仍依赖 Python 3.10+, 因为 hook 自检 / diff 逻辑在 python 里更可靠.
 #
 # 用法:
