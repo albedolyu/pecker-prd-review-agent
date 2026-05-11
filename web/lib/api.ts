@@ -599,9 +599,33 @@ export interface MissingFeedbackResponse {
   feedback_id: string;
 }
 
+export type ReworkAvoidanceCategory =
+  | "field_caliber"
+  | "experience_flow"
+  | "implementation_risk"
+  | "none";
+
+export interface ReworkAvoidanceRequest {
+  categories: ReworkAvoidanceCategory[];
+  note?: string;
+  workspace?: string;
+  prd_name?: string;
+  pm_name?: string;
+}
+
+export interface ReworkAvoidanceResponse {
+  status: string;
+  feedback_id: number;
+}
+
 export const feedbackApi = {
   reportMissing: (payload: MissingFeedbackRequest) =>
     apiFetch<MissingFeedbackResponse>("/api/feedback/missing", {
+      method: "POST",
+      body: payload,
+    }),
+  reportReworkAvoidance: (payload: ReworkAvoidanceRequest) =>
+    apiFetch<ReworkAvoidanceResponse>("/api/feedback/rework-avoidance", {
       method: "POST",
       body: payload,
     }),
@@ -802,6 +826,31 @@ export interface MissingFeedbackRecord {
   source: "missing_report" | string;
 }
 
+export interface ReworkAvoidanceNote {
+  timestamp: string;
+  reviewer: string;
+  workspace: string;
+  prd_name: string;
+  categories: ReworkAvoidanceCategory[];
+  note: string;
+}
+
+export interface ReworkAvoidanceWeek {
+  week: string;
+  total_samples: number;
+  productive_samples: number;
+  productive_rate: number;
+}
+
+export interface ReworkAvoidanceSummary {
+  total_samples: number;
+  productive_samples: number;
+  productive_rate: number;
+  category_counts: Record<string, number>;
+  weekly: ReworkAvoidanceWeek[];
+  recent_notes: ReworkAvoidanceNote[];
+}
+
 export interface FeedbackBucket {
   reviewer?: string;
   workspace?: string;
@@ -826,6 +875,7 @@ export interface AdminFeedbackResponse {
   dimensions: Record<string, number>;
   records: FeedbackRecord[];
   missing_records?: MissingFeedbackRecord[];
+  rework_avoidance?: ReworkAvoidanceSummary;
 }
 
 export interface AdminFeedbackFilters {

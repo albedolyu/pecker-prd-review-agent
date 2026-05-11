@@ -72,6 +72,14 @@ class MissingFeedbackBody(BaseModel):
     pm_name: Optional[str] = Field(None, max_length=64)
 
 
+class ReworkAvoidanceBody(BaseModel):
+    categories: list[str] = Field(..., min_length=1, max_length=4)
+    note: str = Field("", max_length=100)
+    workspace: Optional[str] = Field(None, max_length=128)
+    prd_name: Optional[str] = Field(None, max_length=128)
+    pm_name: Optional[str] = Field(None, max_length=64)
+
+
 def _record(outcome: str, body: FeedbackBody, user: dict) -> dict:
     """统一写库逻辑. pm_name 优先 body, 没传时用当前用户."""
     pm = body.pm_name or user.get("reviewer", "anonymous")
@@ -174,6 +182,42 @@ def record_missing_feedback(
     return {"status": "ok", "feedback_id": feedback_id}
 
 
+def record_rework_avoidance_feedback(
+    body: ReworkAvoidanceBody,
+    *,
+    user: dict,
+    project_root: Path,
+) -> dict:
+    """Persist optional PM rework-avoidance feedback from Phase 4."""
+    from review.feedback_store import record_rework_avoidance
+
+    reviewer = body.pm_name or user.get("reviewer") or "anonymous"
+    db_path = project_root / "review" / "feedback.db"
+    feedback_id = record_rework_avoidance(
+        categories=body.categories,
+        note=body.note,
+        reviewer=reviewer,
+        workspace=body.workspace or "",
+        prd_name=body.prd_name or "",
+        db_path=db_path,
+    )
+    try:
+        _record_event(
+            "feedback.rework_avoidance",
+            workspace=body.workspace,
+            reviewer=reviewer,
+            status="ok",
+            details={
+                "feedback_id": feedback_id,
+                "prd_name": body.prd_name,
+                "categories": body.categories,
+            },
+        )
+    except Exception:
+        pass
+    return {"status": "ok", "feedback_id": feedback_id}
+
+
 def _maybe_emit_learning(body: FeedbackBody, pm: str) -> None:
     """累计 reject >= 3 自动生成 learning. 容错失败不影响主流程."""
     try:
@@ -236,6 +280,16 @@ def feedback_missing(
 ):
     """PM 补充模型漏掉的问题,供后台看板和规则优化使用。"""
     return record_missing_feedback(body, user=user, project_root=project_root)
+
+
+@router.post("/rework-avoidance")
+def feedback_rework_avoidance(
+    body: ReworkAvoidanceBody,
+    user: dict = Depends(get_current_user),
+    project_root: Path = Depends(get_project_root),
+):
+    """PM feedback about what rework the review helped avoid."""
+    return record_rework_avoidance_feedback(body, user=user, project_root=project_root)
 
 
 # ============================================================

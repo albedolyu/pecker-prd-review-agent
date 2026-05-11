@@ -21,6 +21,7 @@ import {
   ArrowLeft,
   RotateCcw,
   CheckCircle2,
+  ClipboardCheck,
   Loader2,
   Eye,
   EyeOff,
@@ -34,7 +35,9 @@ import {
   feishuApi,
   draftsApi,
   auditApi,
+  feedbackApi,
   ApiError,
+  type ReworkAvoidanceCategory,
 } from "@/lib/api";
 import { useReviewStore } from "@/lib/store";
 import { generateReportMarkdown, computeStats } from "@/lib/generateReport";
@@ -45,6 +48,16 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+
+const REWORK_OPTIONS: Array<{
+  value: ReworkAvoidanceCategory;
+  label: string;
+}> = [
+  { value: "field_caliber", label: "避免字段口径返工" },
+  { value: "experience_flow", label: "避免体验流程返工" },
+  { value: "implementation_risk", label: "避免实现风险返工" },
+  { value: "none", label: "暂未看到" },
+];
 
 export function Phase4Report() {
   const reviewResult = useReviewStore((s) => s.reviewResult);
@@ -59,6 +72,10 @@ export function Phase4Report() {
   const resetReview = useReviewStore((s) => s.resetReview);
 
   const [showPreview, setShowPreview] = useState(false);
+  const [reworkCategories, setReworkCategories] = useState<
+    ReworkAvoidanceCategory[]
+  >([]);
+  const [reworkNote, setReworkNote] = useState("");
 
   // 拉 /api/me 判断是否 readonly
   const { data: me } = useQuery({
@@ -171,6 +188,38 @@ export function Phase4Report() {
       }
     },
   });
+
+  // ========== 返工减少样本 ==========
+  const reworkMutation = useMutation({
+    mutationFn: () =>
+      feedbackApi.reportReworkAvoidance({
+        categories: reworkCategories.length ? reworkCategories : ["none"],
+        note: reworkNote.trim(),
+        workspace,
+        prd_name: prdName || "未命名",
+      }),
+    onSuccess: () => {
+      toast.success("感谢反馈，会用于下周规则校准");
+      setReworkCategories([]);
+      setReworkNote("");
+    },
+    onError: (e: ApiError) => {
+      toast.error(`反馈提交失败: ${e.detail ?? e.message}`);
+    },
+  });
+
+  const toggleReworkCategory = (value: ReworkAvoidanceCategory) => {
+    setReworkCategories((current) => {
+      if (value === "none") {
+        return current.includes("none") ? [] : ["none"];
+      }
+      const withoutNone = current.filter((item) => item !== "none");
+      if (withoutNone.includes(value)) {
+        return withoutNone.filter((item) => item !== value);
+      }
+      return [...withoutNone, value];
+    });
+  };
 
   // ========== 重新开始 ==========
   const handleRestart = async () => {
@@ -323,6 +372,65 @@ export function Phase4Report() {
             loading={feishuMutation.isPending}
             disabled={isReadonly || feishuMutation.isPending}
           />
+        </CardContent>
+      </Card>
+
+      {/* ========== 返工减少样本 ==========
+          轻量可选反馈,不阻塞报告下载。 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ClipboardCheck className="h-4 w-4" />
+            本次评审帮你避免了什么返工
+          </CardTitle>
+          <CardDescription>
+            可选填写,用于判断啄木鸟是否真正减少 PM 和研发之间的返工。
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid gap-2 sm:grid-cols-4">
+            {REWORK_OPTIONS.map((option) => {
+              const checked = reworkCategories.includes(option.value);
+              return (
+                <label
+                  key={option.value}
+                  className={[
+                    "flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors",
+                    checked
+                      ? "border-primary bg-primary/5 text-foreground"
+                      : "bg-card text-muted-foreground hover:border-primary/40",
+                  ].join(" ")}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleReworkCategory(option.value)}
+                    className="h-4 w-4"
+                  />
+                  <span>{option.label}</span>
+                </label>
+              );
+            })}
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <textarea
+              value={reworkNote}
+              onChange={(event) => setReworkNote(event.target.value.slice(0, 100))}
+              placeholder="具体是哪条建议？"
+              className="min-h-20 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
+            />
+            <Button
+              type="button"
+              className="self-start"
+              disabled={reworkMutation.isPending}
+              onClick={() => reworkMutation.mutate()}
+            >
+              {reworkMutation.isPending && (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              )}
+              提交反馈
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

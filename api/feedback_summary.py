@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 from api.sanitize import redact_prd_content, redact_text
+from review.feedback_store import get_rework_avoidance_summary
 
 
 _VALID_ACTIONS = {"accept", "reject", "edit"}
@@ -427,4 +428,10 @@ def build_feedback_summary(
             {key: value for key, value in row.items() if key != "sort_index"}
             for row in missing_records[:limit]
         ],
+        "rework_avoidance": get_rework_avoidance_summary(
+            db_path=project_root / "review" / "feedback.db",
+            days=days,
+            now=now,
+            limit=10,
+        ),
     }
