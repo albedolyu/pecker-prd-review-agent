@@ -88,7 +88,7 @@ def fix_review_items(items, workspace):
 
     # 避免循环 import
     from cuckoo_scorer import verify_evidence
-    from cuckoo_parser import compute_confidence
+    from review.confidence import compute_confidence
 
     # 1. 补齐 evidence_type — 走 SchemaRegistry 单点 SoT (workspace 决定合法 rule prefix)
     for item in items:

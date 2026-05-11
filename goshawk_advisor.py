@@ -1177,7 +1177,7 @@ def apply_advisor_result(review_items, advisor_result, wiki_pages=None, client=N
                 pass
 
     # B4: 苍鹰补充项的 confidence 需要衰减(is_supplement=True)
-    from cuckoo_parser import compute_confidence
+    from review.confidence import compute_confidence
     for i, finding in enumerate(advisor_result.get("additional_findings", [])[:MAX_ADDITIONAL_FINDINGS], start=1):
         new_id = f"R-{max_num + i:03d}"
         evi_type = finding.get("evidence_type", "A")
