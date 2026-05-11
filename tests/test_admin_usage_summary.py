@@ -190,6 +190,21 @@ async def test_admin_usage_endpoint_includes_reconnectable_jobs(monkeypatch, tmp
                             "context_packet_workers": 3,
                             "max_context_packet_chars": 8192,
                         },
+                        "context_manager": {
+                            "total_calls": 4,
+                            "total_tokens_saved": 1536,
+                            "paths": {
+                                "microcompact": {
+                                    "calls": 2,
+                                    "tokens_saved": 1024,
+                                    "mutations": 2,
+                                },
+                                "check_convergence": {
+                                    "calls": 2,
+                                    "nudges": 1,
+                                },
+                            },
+                        },
                         "workers": {
                             "quality": {
                                 "duration_ms": 800,
@@ -247,6 +262,9 @@ async def test_admin_usage_endpoint_includes_reconnectable_jobs(monkeypatch, tmp
     assert data["active_drafts"][0]["recovered_workers"] == 1
     assert data["active_drafts"][0]["context_packet_workers"] == 3
     assert data["active_drafts"][0]["max_context_packet_chars"] == 8192
+    assert data["active_drafts"][0]["context_manager_calls"] == 4
+    assert data["active_drafts"][0]["context_manager_tokens_saved"] == 1536
+    assert data["active_drafts"][0]["context_manager_nudges"] == 1
     serialized_drafts = json.dumps(data["active_drafts"], ensure_ascii=False)
     assert fake_key not in serialized_drafts
     assert "[REDACTED_SECRET]" in serialized_drafts
