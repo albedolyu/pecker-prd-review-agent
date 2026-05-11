@@ -242,6 +242,21 @@ export interface ResultEvent extends BaseEvent {
   readonly payload: ReviewResult;
 }
 
+export interface PreliminaryResultEvent extends BaseEvent {
+  readonly event: "preliminary_result";
+  readonly stage: "worker_draft";
+  readonly goshawk_status: "pending";
+  readonly payload: ReviewResult;
+}
+
+export interface GoshawkPatchEvent extends BaseEvent {
+  readonly event: "goshawk_patch";
+  readonly stage: "goshawk_patch";
+  readonly goshawk_status: "completed" | "failed";
+  readonly preliminary_review_id?: string;
+  readonly payload: ReviewResult;
+}
+
 export interface ErrorEvent extends BaseEvent {
   readonly event: "error";
   readonly message: string;
@@ -279,6 +294,8 @@ export type ReviewStreamEvent =
   | WorkerDoneEvent
   | FinalReviewerStartedEvent
   | FinalReviewerDoneEvent
+  | PreliminaryResultEvent
+  | GoshawkPatchEvent
   | ResultEvent
   | ErrorEvent
   | ReviewFailedEvent
@@ -483,7 +500,12 @@ export function useReviewStream(): UseReviewStreamResult {
       setProgress(ev.progress);
     }
 
-    if (ev.event === "result") {
+    if (ev.event === "preliminary_result") {
+      setResult(ev.payload);
+    } else if (ev.event === "goshawk_patch") {
+      setResult(ev.payload);
+      setState("done");
+    } else if (ev.event === "result") {
       setResult(ev.payload);
       setProgress(100);
       setState("done");

@@ -171,7 +171,10 @@ export function Phase2RunningV8() {
 
   // done 时:把 result 存 store + 切换到健康度页(不自动跳 Phase 3)
   useEffect(() => {
-    if (stream.state === "done" && stream.result) {
+    const hasPreliminaryResult = stream.events.some(
+      (e) => e.event === "preliminary_result",
+    );
+    if ((stream.state === "done" || hasPreliminaryResult) && stream.result) {
       setReviewResult(stream.result);
       if (savedReviewIdRef.current !== stream.result.review_id) {
         savedReviewIdRef.current = stream.result.review_id;
@@ -196,6 +199,7 @@ export function Phase2RunningV8() {
     }
   }, [
     stream.state,
+    stream.events,
     stream.result,
     setReviewResult,
     reviewer,
@@ -884,6 +888,25 @@ function buildConsoleLines(
           src: { name: "收口", bird: 5 },
           level: "ok",
           text: "意见合并完成",
+        });
+        break;
+      case "preliminary_result":
+        lines.push({
+          t,
+          src: { name: "进度" },
+          level: "ok",
+          text: `初稿已生成，可先确认 ${e.payload.items.length} 条意见；终审继续补充`,
+        });
+        break;
+      case "goshawk_patch":
+        lines.push({
+          t,
+          src: { name: "收口", bird: 5 },
+          level: e.goshawk_status === "completed" ? "ok" : "warn",
+          text:
+            e.goshawk_status === "completed"
+              ? `终审补丁已生成，当前共 ${e.payload.items.length} 条意见`
+              : "终审补丁未完成，保留初稿结果",
         });
         break;
       case "result":

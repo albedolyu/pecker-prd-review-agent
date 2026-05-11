@@ -30,6 +30,8 @@ log = get_logger("sse_stream")
 # ============================================================
 
 MILESTONES = {
+    "preliminary_result":     {"progress": 75,  "label": "初稿可查看"},
+    "goshawk_patch":          {"progress": 98,  "label": "终审补充已生成"},
     "uploaded":              {"progress": 0,   "label": "已接收"},
     "wiki_scanned":          {"progress": 10,  "label": "资料库读取完成"},
     "review_queued":         {"progress": 12,  "label": "等待空闲评审位"},
