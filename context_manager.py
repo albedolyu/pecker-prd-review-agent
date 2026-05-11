@@ -22,6 +22,79 @@ PINNED_TOOL_RESULTS = set()
 COMPACT_PLACEHOLDER = "[已处理，原始内容已清理]"
 
 
+def _empty_context_path_audit():
+    return {
+        "calls": 0,
+        "mutations": 0,
+        "tokens_saved": 0,
+        "nudges": 0,
+        "failures": 0,
+        "last_before_tokens": 0,
+        "last_after_tokens": 0,
+    }
+
+
+_CONTEXT_AUDIT = {
+    "total_calls": 0,
+    "total_tokens_saved": 0,
+    "paths": {
+        "microcompact": _empty_context_path_audit(),
+        "collapse_consecutive_reads": _empty_context_path_audit(),
+        "check_convergence": _empty_context_path_audit(),
+        "autocompact": _empty_context_path_audit(),
+    },
+}
+
+
+def reset_context_audit():
+    """Reset in-memory context-management usage counters."""
+    _CONTEXT_AUDIT["total_calls"] = 0
+    _CONTEXT_AUDIT["total_tokens_saved"] = 0
+    _CONTEXT_AUDIT["paths"] = {
+        "microcompact": _empty_context_path_audit(),
+        "collapse_consecutive_reads": _empty_context_path_audit(),
+        "check_convergence": _empty_context_path_audit(),
+        "autocompact": _empty_context_path_audit(),
+    }
+
+
+def get_context_audit_snapshot():
+    """Return a copy of context-management usage and savings counters."""
+    return {
+        "total_calls": _CONTEXT_AUDIT["total_calls"],
+        "total_tokens_saved": _CONTEXT_AUDIT["total_tokens_saved"],
+        "paths": {
+            path: dict(stats)
+            for path, stats in _CONTEXT_AUDIT["paths"].items()
+        },
+    }
+
+
+def _record_context_audit(
+    path,
+    *,
+    before_tokens=0,
+    after_tokens=0,
+    mutated=False,
+    nudge=False,
+    failed=False,
+):
+    stats = _CONTEXT_AUDIT["paths"].setdefault(path, _empty_context_path_audit())
+    tokens_saved = max(0, int(before_tokens or 0) - int(after_tokens or 0))
+    stats["calls"] += 1
+    stats["tokens_saved"] += tokens_saved
+    stats["last_before_tokens"] = int(before_tokens or 0)
+    stats["last_after_tokens"] = int(after_tokens or 0)
+    if mutated:
+        stats["mutations"] += 1
+    if nudge:
+        stats["nudges"] += 1
+    if failed:
+        stats["failures"] += 1
+    _CONTEXT_AUDIT["total_calls"] += 1
+    _CONTEXT_AUDIT["total_tokens_saved"] += tokens_saved
+
+
 def microcompact(messages, current_turn_index=None):
     """
     清理旧 tool_result 中的大内容，原地修改 messages
@@ -31,6 +104,9 @@ def microcompact(messages, current_turn_index=None):
     - 不删除消息结构，只替换 content 文本
     - PINNED_TOOL_RESULTS 中的 tool_use_id 跳过
     """
+    before_tokens = estimate_messages_tokens(messages)
+    mutated = False
+
     if current_turn_index is None:
         current_turn_index = _count_turns(messages)
 
@@ -71,6 +147,7 @@ def microcompact(messages, current_turn_index=None):
             raw_content = block.get("content", "")
             if isinstance(raw_content, str) and len(raw_content) > 500:
                 block["content"] = COMPACT_PLACEHOLDER
+                mutated = True
 
     # 同时处理纯文本格式的 tool results（OpenAI 兼容模式下 tool results 作为 user 消息）
     for msg_index, msg in enumerate(messages):
@@ -87,6 +164,14 @@ def microcompact(messages, current_turn_index=None):
         # 截断长内容
         if len(content) > 2000:
             msg["content"] = content[:500] + "\n\n[...旧工具结果已压缩...]"
+            mutated = True
+
+    _record_context_audit(
+        "microcompact",
+        before_tokens=before_tokens,
+        after_tokens=estimate_messages_tokens(messages),
+        mutated=mutated,
+    )
 
 
 def _count_turns(messages):
@@ -147,7 +232,13 @@ class AutocompactManager:
 
     def compact(self, client, messages, model_tiers):
         """用 Haiku 做摘要压缩（CC compact.ts:400-491 的简化版）"""
+        before_tokens = estimate_messages_tokens(messages)
         if len(messages) <= KEEP_RECENT_MESSAGES:
+            _record_context_audit(
+                "autocompact",
+                before_tokens=before_tokens,
+                after_tokens=before_tokens,
+            )
             return messages  # 消息太少，不压缩
 
         old_msgs = messages[:-KEEP_RECENT_MESSAGES]
@@ -179,14 +270,26 @@ class AutocompactManager:
             ] + recent_msgs
 
             new_tokens = estimate_messages_tokens(compressed)
-            saved = estimate_messages_tokens(messages) - new_tokens
+            saved = before_tokens - new_tokens
             self.total_tokens_saved += saved
             self.compact_failures = 0  # 重置熔断计数
+            _record_context_audit(
+                "autocompact",
+                before_tokens=before_tokens,
+                after_tokens=new_tokens,
+                mutated=True,
+            )
 
             return compressed
 
         except Exception as e:
             self.compact_failures += 1
+            _record_context_audit(
+                "autocompact",
+                before_tokens=before_tokens,
+                after_tokens=before_tokens,
+                failed=True,
+            )
             from logger import get_logger
             log = get_logger("compact")
             log.warning(f"Autocompact 失败 ({self.compact_failures}/{MAX_COMPACT_FAILURES}): {str(e)[:60]}")
@@ -425,7 +528,15 @@ def collapse_consecutive_reads(messages, min_consecutive=3):
     合并连续只读工具结果为摘要行，减少上下文占用
     只处理 4 条消息之前的旧内容（不动最近的）
     """
+    before_tokens = estimate_messages_tokens(messages)
+    mutated = False
+
     if len(messages) < 8:
+        _record_context_audit(
+            "collapse_consecutive_reads",
+            before_tokens=before_tokens,
+            after_tokens=before_tokens,
+        )
         return  # 消息太少，不处理
 
     # 找连续的只读 tool_use + tool_result 对
@@ -468,6 +579,7 @@ def collapse_consecutive_reads(messages, min_consecutive=3):
                             if isinstance(old_content, str) and len(old_content) > 200:
                                 block["content"] = f"[已折叠，原始 {len(old_content)} 字符]"
                                 collapsed_count += 1
+                                mutated = True
                                 # 从 assistant 消息中找工具名
                                 for ab in content:
                                     if isinstance(ab, dict) and ab.get("id") == block["tool_use_id"]:
@@ -479,6 +591,13 @@ def collapse_consecutive_reads(messages, min_consecutive=3):
                     log.info(f"折叠 {collapsed_count} 个连续只读工具结果: {', '.join(tool_names[:5])}")
 
         i += 1
+
+    _record_context_audit(
+        "collapse_consecutive_reads",
+        before_tokens=before_tokens,
+        after_tokens=estimate_messages_tokens(messages),
+        mutated=mutated,
+    )
 
 
 # ============================================================
@@ -500,10 +619,12 @@ def check_convergence(messages, threshold=3):
                 break
 
     if len(assistant_lengths) < threshold:
+        _record_context_audit("check_convergence")
         return None
 
     # 如果最近每轮都很短，说明在打转
     if all(length < 200 for length in assistant_lengths):
+        _record_context_audit("check_convergence", nudge=True)
         return {
             "role": "user",
             "content": (
@@ -513,6 +634,7 @@ def check_convergence(messages, threshold=3):
             ),
         }
 
+    _record_context_audit("check_convergence")
     return None
 
 

@@ -243,6 +243,16 @@ async def test_default_review_job_runner_returns_signed_review_result(monkeypatc
     async def fake_parallel_review(*_args, **kwargs):
         assert kwargs["thread_id"] == "review-job:rjob_default"
         assert kwargs["checkpointer"].checkpoint_path.parent.name == ".pecker_checkpoints"
+        from context_manager import microcompact
+
+        microcompact(
+            [
+                {"role": "user", "content": "工具执行结果：" + "A" * 3000},
+                {"role": "assistant", "content": "ok"},
+                {"role": "user", "content": "next"},
+                {"role": "assistant", "content": "ok2"},
+            ]
+        )
         on_worker_done = kwargs["on_worker_done"]
         on_worker_done(
             "structure",
@@ -312,6 +322,8 @@ async def test_default_review_job_runner_returns_signed_review_result(monkeypatc
     assert result["telemetry"]["workers"]["structure"]["recovered"] is True
     assert result["telemetry"]["orchestrator"] == "langgraph"
     assert result["telemetry"]["resilience"]["recovered_workers"] == 1
+    assert result["telemetry"]["context_manager"]["paths"]["microcompact"]["calls"] == 1
+    assert result["telemetry"]["context_manager"]["paths"]["microcompact"]["tokens_saved"] > 0
     assert [event["event"] for event in job.snapshot()["events"]][:4] == [
         "uploaded",
         "wiki_scanned",
@@ -422,7 +434,17 @@ async def test_stream_review_job_pipeline_persists_phase3_draft(monkeypatch, tmp
             )
 
     async def fake_run_review(req, request, user):
+        from context_manager import microcompact
+
         assert await request.is_disconnected() is False
+        microcompact(
+            [
+                {"role": "user", "content": "工具执行结果：" + "B" * 3000},
+                {"role": "assistant", "content": "ok"},
+                {"role": "user", "content": "next"},
+                {"role": "assistant", "content": "ok2"},
+            ]
+        )
         response = FakeResponse()
         response.body_iterator = response.body_iterator()
         return response
@@ -457,6 +479,8 @@ async def test_stream_review_job_pipeline_persists_phase3_draft(monkeypatch, tmp
     )
 
     assert result["review_id"] == "rev_stream"
+    assert result["telemetry"]["context_manager"]["paths"]["microcompact"]["calls"] == 1
+    assert result["telemetry"]["context_manager"]["paths"]["microcompact"]["tokens_saved"] > 0
     assert draft["phase"] == 3
     assert draft["review_result"]["review_id"] == "rev_stream"
     assert draft["prd_content"] == "# Stream PRD"

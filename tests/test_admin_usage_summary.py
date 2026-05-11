@@ -161,6 +161,10 @@ async def test_admin_usage_endpoint_includes_reconnectable_jobs(monkeypatch, tmp
                 "output_tokens": 600,
                 "prd_context_packet_chars": 8000,
                 "cost_usd": 0.037,
+                "context_manager_calls": 3,
+                "context_manager_tokens_saved": 2048,
+                "context_manager_nudges": 1,
+                "context_manager_failures": 1,
                 "ts": 1,
                 "prd_content": "should not leak",
                 "payload": {"items": [{"problem": "derived text should not leak"}]},
@@ -189,6 +193,21 @@ async def test_admin_usage_endpoint_includes_reconnectable_jobs(monkeypatch, tmp
                             "recovered_workers": 1,
                             "context_packet_workers": 3,
                             "max_context_packet_chars": 8192,
+                        },
+                        "context_manager": {
+                            "total_calls": 4,
+                            "total_tokens_saved": 1536,
+                            "paths": {
+                                "microcompact": {
+                                    "calls": 2,
+                                    "tokens_saved": 1024,
+                                    "mutations": 2,
+                                },
+                                "check_convergence": {
+                                    "calls": 2,
+                                    "nudges": 1,
+                                },
+                            },
                         },
                         "workers": {
                             "quality": {
@@ -229,6 +248,10 @@ async def test_admin_usage_endpoint_includes_reconnectable_jobs(monkeypatch, tmp
     assert data["recent_job_events"][0]["output_tokens"] == 600
     assert data["recent_job_events"][0]["prd_context_packet_chars"] == 8000
     assert data["recent_job_events"][0]["cost_usd"] == 0.037
+    assert data["recent_job_events"][0]["context_manager_calls"] == 3
+    assert data["recent_job_events"][0]["context_manager_tokens_saved"] == 2048
+    assert data["recent_job_events"][0]["context_manager_nudges"] == 1
+    assert data["recent_job_events"][0]["context_manager_failures"] == 1
     assert "tokens_in" not in data["recent_job_events"][0]
     assert "tokens_out" not in data["recent_job_events"][0]
     serialized_events = json.dumps(data["recent_job_events"], ensure_ascii=False)
@@ -247,6 +270,9 @@ async def test_admin_usage_endpoint_includes_reconnectable_jobs(monkeypatch, tmp
     assert data["active_drafts"][0]["recovered_workers"] == 1
     assert data["active_drafts"][0]["context_packet_workers"] == 3
     assert data["active_drafts"][0]["max_context_packet_chars"] == 8192
+    assert data["active_drafts"][0]["context_manager_calls"] == 4
+    assert data["active_drafts"][0]["context_manager_tokens_saved"] == 1536
+    assert data["active_drafts"][0]["context_manager_nudges"] == 1
     serialized_drafts = json.dumps(data["active_drafts"], ensure_ascii=False)
     assert fake_key not in serialized_drafts
     assert "[REDACTED_SECRET]" in serialized_drafts

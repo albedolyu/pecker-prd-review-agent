@@ -459,6 +459,40 @@ def _next_event_index(events: Deque[Dict[str, Any]]) -> int:
     return max_index + 1
 
 
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value or default)
+    except (TypeError, ValueError):
+        return default
+
+
+def _summarize_context_manager_audit(telemetry: Dict[str, Any]) -> Dict[str, int]:
+    context_manager = (
+        telemetry.get("context_manager")
+        if isinstance(telemetry.get("context_manager"), dict)
+        else {}
+    )
+    paths = (
+        context_manager.get("paths")
+        if isinstance(context_manager.get("paths"), dict)
+        else {}
+    )
+    nudges = 0
+    failures = 0
+    for path_stats in paths.values():
+        if isinstance(path_stats, dict):
+            nudges += _safe_int(path_stats.get("nudges"))
+            failures += _safe_int(path_stats.get("failures"))
+    return {
+        "context_manager_calls": _safe_int(context_manager.get("total_calls")),
+        "context_manager_tokens_saved": _safe_int(
+            context_manager.get("total_tokens_saved")
+        ),
+        "context_manager_nudges": nudges,
+        "context_manager_failures": failures,
+    }
+
+
 def _build_audit_record(job: ReviewJob, event: Dict[str, Any]) -> Dict[str, Any]:
     record: Dict[str, Any] = {
         "job_id": job.job_id,
@@ -515,6 +549,9 @@ def _build_audit_record(job: ReviewJob, event: Dict[str, Any]) -> Dict[str, Any]
         status_value = payload.get("status")
         if isinstance(status_value, str):
             record["result_status"] = status_value
+        payload_telemetry = payload.get("telemetry")
+        if isinstance(payload_telemetry, dict):
+            record.update(_summarize_context_manager_audit(payload_telemetry))
     return record
 
 

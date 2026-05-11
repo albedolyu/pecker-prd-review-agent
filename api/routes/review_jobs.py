@@ -41,8 +41,10 @@ async def _run_review_job_pipeline(
 ) -> Dict[str, Any]:
     """Run the core review flow without tying its lifetime to the browser SSE."""
     started_at = time.time()
+    context_audit_before = _context_audit_snapshot_for_job()
     if os.environ.get("PECKER_REVIEW_JOB_PIPELINE", "stream") == "stream":
         result = await _run_existing_review_stream_as_job(req=req, user=user, job=emitter.job)
+        _attach_context_audit(result, before=context_audit_before)
         if isinstance(result, dict) and result.get("status") != "failed":
             _persist_completed_review_draft(
                 req=req,
@@ -148,6 +150,7 @@ async def _run_review_job_pipeline(
         "total_cost_usd": cost_breakdown.get("total", 0),
         "orchestrator": result.get("orchestrator"),
         "resilience": result.get("resilience", {}),
+        "context_manager": _context_audit_delta_for_job(context_audit_before),
     }
 
     review_result_handle = ReviewResult.create(
@@ -180,6 +183,53 @@ def _restore_review_jobs_from_audit(project_root: Path) -> None:
     if not isinstance(project_root, Path):
         return
     review_job_store.restore_from_audit_log(project_root / "logs" / "review_jobs.jsonl")
+
+
+def _context_audit_snapshot_for_job() -> Dict[str, Any]:
+    try:
+        from context_manager import get_context_audit_snapshot
+
+        return get_context_audit_snapshot()
+    except Exception:
+        return {"total_calls": 0, "total_tokens_saved": 0, "paths": {}}
+
+
+def _context_audit_delta_for_job(before: Dict[str, Any]) -> Dict[str, Any]:
+    after = _context_audit_snapshot_for_job()
+    before_paths = before.get("paths") if isinstance(before.get("paths"), dict) else {}
+    after_paths = after.get("paths") if isinstance(after.get("paths"), dict) else {}
+    paths: Dict[str, Any] = {}
+    metric_keys = {
+        "calls",
+        "mutations",
+        "tokens_saved",
+        "nudges",
+        "failures",
+    }
+    for path in sorted(set(before_paths) | set(after_paths)):
+        before_stats = before_paths.get(path) if isinstance(before_paths.get(path), dict) else {}
+        after_stats = after_paths.get(path) if isinstance(after_paths.get(path), dict) else {}
+        path_delta: Dict[str, Any] = {}
+        for key in metric_keys:
+            path_delta[key] = int(after_stats.get(key) or 0) - int(before_stats.get(key) or 0)
+        path_delta["last_before_tokens"] = int(after_stats.get("last_before_tokens") or 0)
+        path_delta["last_after_tokens"] = int(after_stats.get("last_after_tokens") or 0)
+        paths[path] = path_delta
+    return {
+        "total_calls": int(after.get("total_calls") or 0) - int(before.get("total_calls") or 0),
+        "total_tokens_saved": int(after.get("total_tokens_saved") or 0) - int(before.get("total_tokens_saved") or 0),
+        "paths": paths,
+    }
+
+
+def _attach_context_audit(result: Dict[str, Any], *, before: Dict[str, Any]) -> None:
+    if not isinstance(result, dict):
+        return
+    telemetry = result.get("telemetry")
+    if not isinstance(telemetry, dict):
+        telemetry = {}
+        result["telemetry"] = telemetry
+    telemetry["context_manager"] = _context_audit_delta_for_job(before)
 
 
 def _persist_completed_review_draft(

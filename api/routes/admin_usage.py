@@ -120,6 +120,10 @@ def _sanitize_job_event(row: Dict[str, Any]) -> Dict[str, Any]:
         "output_tokens",
         "cost_usd",
         "prd_context_packet_chars",
+        "context_manager_calls",
+        "context_manager_tokens_saved",
+        "context_manager_nudges",
+        "context_manager_failures",
     }
     return redact_sensitive({key: value for key, value in row.items() if key in allowed})
 
@@ -160,6 +164,12 @@ def _sanitize_draft(draft: Dict[str, Any]) -> Dict[str, Any]:
     items = review_result.get("items") if isinstance(review_result, dict) else []
     telemetry = review_result.get("telemetry") if isinstance(review_result.get("telemetry"), dict) else {}
     resilience = telemetry.get("resilience") if isinstance(telemetry.get("resilience"), dict) else {}
+    context_manager = telemetry.get("context_manager") if isinstance(telemetry.get("context_manager"), dict) else {}
+    context_paths = context_manager.get("paths") if isinstance(context_manager.get("paths"), dict) else {}
+    context_manager_nudges = 0
+    for path_stats in context_paths.values():
+        if isinstance(path_stats, dict):
+            context_manager_nudges += _safe_int(path_stats.get("nudges"))
     decisions = draft.get("item_decisions") if isinstance(draft.get("item_decisions"), dict) else {}
     action_counts: Dict[str, int] = {"accept": 0, "reject": 0, "edit": 0}
     for decision in decisions.values():
@@ -189,6 +199,9 @@ def _sanitize_draft(draft: Dict[str, Any]) -> Dict[str, Any]:
         "recovered_workers": _safe_int(resilience.get("recovered_workers")),
         "context_packet_workers": _safe_int(resilience.get("context_packet_workers")),
         "max_context_packet_chars": _safe_int(resilience.get("max_context_packet_chars")),
+        "context_manager_calls": _safe_int(context_manager.get("total_calls")),
+        "context_manager_tokens_saved": _safe_int(context_manager.get("total_tokens_saved")),
+        "context_manager_nudges": context_manager_nudges,
     }
 
 
