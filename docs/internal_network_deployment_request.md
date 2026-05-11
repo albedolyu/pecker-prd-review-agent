@@ -339,6 +339,82 @@ PECKER_PRD_CONTEXT_PACKET_CHARS=12000
 - 出现严重问题时，可以 10 分钟内回滚。
 - 回滚不删除历史 workspace、反馈数据和事件日志。
 
+### 12. 数据过期清理
+
+内网 Beta 可以上传未脱敏 PRD，部署机需要有明确的过期清理机制。默认先每天跑 dry-run 报告，确认一周无误后再开启 apply。
+
+手动检查命令：
+
+```bash
+cd /opt/pecker
+python scripts/retention_report.py --project-root /opt/pecker --format text
+python scripts/retention_sweep.py --project-root /opt/pecker --dry-run --format text
+```
+
+确认规则无误后，执行清理：
+
+```bash
+cd /opt/pecker
+python scripts/retention_sweep.py --project-root /opt/pecker --apply --format text
+```
+
+默认策略：
+
+```text
+.pecker_drafts/*.json       超过 30 天移入 .trash/retention
+event_store.jsonl           超过 500MB gzip 归档并清空在线文件
+eval_reports/*.json         超过 90 天压缩到 eval_reports/archive
+logs/*.log                  超过 14 天压缩到 logs/archive
+review/finding_outcomes.db  超过 180 天反馈迁入 findings_archive 后 VACUUM
+.trash/retention            备份保留 7 天
+```
+
+可通过服务端 `.env` 调整：
+
+```bash
+PECKER_RETENTION_DRAFT_DAYS=30
+PECKER_RETENTION_EVAL_REPORT_DAYS=90
+PECKER_RETENTION_LOG_DAYS=14
+PECKER_RETENTION_FINDING_DAYS=180
+PECKER_RETENTION_EVENT_STORE_MAX_MB=500
+PECKER_RETENTION_TRASH_DAYS=7
+```
+
+systemd timer 示例：
+
+```ini
+# /etc/systemd/system/pecker-retention.service
+[Unit]
+Description=Pecker retention sweep
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/pecker
+EnvironmentFile=/opt/pecker/.env
+ExecStart=/usr/bin/python3 /opt/pecker/scripts/retention_sweep.py --project-root /opt/pecker --apply --format text
+```
+
+```ini
+# /etc/systemd/system/pecker-retention.timer
+[Unit]
+Description=Run Pecker retention sweep daily
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+启用命令：
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now pecker-retention.timer
+sudo systemctl list-timers pecker-retention.timer
+```
+
 ## 部署完成验收标准
 
 ### 基础可用
