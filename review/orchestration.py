@@ -523,7 +523,7 @@ async def _parallel_review_legacy(client, prd_content, wiki_pages, model_tiers, 
     }
 
 
-async def parallel_review(client, prd_content, wiki_pages, model_tiers, voting_rounds=1, wiki_path=None, diff_context=None, on_worker_done=None, workspace=None, on_tool_call=None) -> ParallelReviewResult:
+async def parallel_review(client, prd_content, wiki_pages, model_tiers, voting_rounds=1, wiki_path=None, diff_context=None, on_worker_done=None, workspace=None, on_tool_call=None, checkpointer=None, thread_id=None) -> ParallelReviewResult:
     """Run the review through the selected orchestration backend.
 
     Default is LangGraph so production gets checkpointable, inspectable flow.
@@ -551,6 +551,8 @@ async def parallel_review(client, prd_content, wiki_pages, model_tiers, voting_r
         on_worker_done=on_worker_done,
         workspace=workspace,
         on_tool_call=on_tool_call,
+        checkpointer=checkpointer,
+        thread_id=thread_id,
     )
 
 

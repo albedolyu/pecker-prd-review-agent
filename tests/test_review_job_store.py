@@ -302,6 +302,96 @@ async def test_review_job_store_keeps_failed_job_queryable():
     assert snapshot["events"][-1]["event"] == "error"
 
 
+def test_review_job_store_restores_done_job_from_audit_log(tmp_path):
+    import json
+
+    from api.review_jobs import ReviewJobStore
+
+    audit_path = tmp_path / "logs" / "review_jobs.jsonl"
+    audit_path.parent.mkdir(parents=True)
+    rows = [
+        {
+            "job_id": "rjob_restore",
+            "owner": "pm-a",
+            "workspace": "workspace-alpha",
+            "prd_name": "alpha.md",
+            "mode": "quick",
+            "status": "running",
+            "event": "workers_started",
+            "index": 0,
+            "ts": 10,
+            "progress": 15,
+        },
+        {
+            "job_id": "rjob_restore",
+            "owner": "pm-a",
+            "workspace": "workspace-alpha",
+            "prd_name": "alpha.md",
+            "mode": "quick",
+            "status": "done",
+            "event": "result",
+            "index": 1,
+            "ts": 20,
+            "result_review_id": "rev_restore",
+            "result_items_count": 2,
+        },
+    ]
+    audit_path.write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in rows),
+        encoding="utf-8",
+    )
+
+    store = ReviewJobStore()
+    restored = store.restore_from_audit_log(audit_path)
+    snapshot = store.get_job("rjob_restore", owner="pm-a")
+
+    assert restored == 1
+    assert snapshot["status"] == "done"
+    assert snapshot["result"] == {
+        "review_id": "rev_restore",
+        "items_count": 2,
+        "restored_from": "audit_log",
+    }
+    assert [event["event"] for event in snapshot["events"]] == ["workers_started", "result"]
+
+
+def test_review_job_store_marks_interrupted_audit_job_recoverable(tmp_path):
+    import json
+
+    from api.review_jobs import ReviewJobStore
+
+    audit_path = tmp_path / "logs" / "review_jobs.jsonl"
+    audit_path.parent.mkdir(parents=True)
+    audit_path.write_text(
+        json.dumps(
+            {
+                "job_id": "rjob_interrupted",
+                "owner": "pm-a",
+                "workspace": "workspace-alpha",
+                "prd_name": "alpha.md",
+                "mode": "standard",
+                "status": "running",
+                "event": "worker_done",
+                "index": 0,
+                "ts": 10,
+                "dim_key": "structure",
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    store = ReviewJobStore()
+    store.restore_from_audit_log(audit_path)
+    snapshot = store.get_job("rjob_interrupted", owner="pm-a")
+
+    assert snapshot["status"] == "error"
+    assert "服务重启" in snapshot["error"]
+    assert snapshot["recovery"]["restored_from"] == "audit_log"
+    assert snapshot["recovery"]["interrupted"] is True
+
+
 @pytest.mark.asyncio
 async def test_review_job_store_redacts_secrets_from_errors_and_audit(tmp_path):
     from api.review_jobs import ReviewJobStore

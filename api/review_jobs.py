@@ -41,6 +41,7 @@ class ReviewJob:
     status: str = "queued"
     result: Optional[Dict[str, Any]] = None
     error: str = ""
+    recovery: Dict[str, Any] = field(default_factory=dict)
     audit_path: Optional[Path] = None
     _events: Deque[Dict[str, Any]] = field(default_factory=deque)
     _event_index: int = 0
@@ -143,6 +144,7 @@ class ReviewJob:
             "events": [dict(event) for event in self._events],
             "result": redact_sensitive(self.result),
             "error": redact_text(str(self.error)),
+            "recovery": redact_sensitive(self.recovery),
         }
 
 
@@ -259,6 +261,69 @@ class ReviewJobStore:
         job.cancel()
         return job.snapshot()
 
+    def restore_from_audit_log(self, audit_path: Path) -> int:
+        if not audit_path.is_file():
+            return 0
+        by_job: Dict[str, List[Dict[str, Any]]] = {}
+        try:
+            for line in audit_path.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(row, dict) and isinstance(row.get("job_id"), str):
+                    by_job.setdefault(str(row["job_id"]), []).append(row)
+        except OSError:
+            return 0
+
+        restored = 0
+        for job_id, rows in by_job.items():
+            if job_id in self._jobs:
+                continue
+            rows.sort(key=lambda row: int(row.get("index") or 0))
+            first = rows[0]
+            last = rows[-1]
+            job = ReviewJob(
+                job_id=job_id,
+                owner=str(first.get("owner") or ""),
+                workspace=str(first.get("workspace") or ""),
+                prd_name=str(first.get("prd_name") or ""),
+                mode=str(first.get("mode") or ""),
+                max_events=self.max_events,
+                created_at=_now(),
+                updated_at=_now(),
+                audit_path=audit_path,
+            )
+            job._events = deque(
+                _event_from_audit_row(row)
+                for row in rows[-self.max_events :]
+                if isinstance(row.get("event"), str)
+            )
+            job._event_index = _next_event_index(job._events)
+            last_status = str(last.get("status") or "error")
+            if last_status in {"done", "error", "cancelled"}:
+                job.status = last_status
+            else:
+                job.status = "error"
+                job.error = "评审服务重启，后台任务已中断；请从草稿恢复或重新评审"
+                job.recovery = {"restored_from": "audit_log", "interrupted": True}
+
+            review_id = last.get("result_review_id")
+            if job.status == "done" and isinstance(review_id, str):
+                job.result = {
+                    "review_id": review_id,
+                    "items_count": int(last.get("result_items_count") or 0),
+                    "restored_from": "audit_log",
+                }
+                job.recovery = {"restored_from": "audit_log", "interrupted": False}
+            if job.status == "error" and not job.error:
+                job.error = redact_text(str(last.get("message") or last.get("error") or "review failed"))[:500]
+            self._jobs[job_id] = job
+            restored += 1
+        return restored
+
     def _prune_jobs(self) -> None:
         now = _now()
         terminal = {"done", "error", "cancelled"}
@@ -357,6 +422,31 @@ def _scrub_event_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         for key, value in payload.items()
         if key not in blocked
     }
+
+
+def _event_from_audit_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    blocked = {
+        "job_id",
+        "owner",
+        "workspace",
+        "prd_name",
+        "mode",
+        "status",
+        "result_review_id",
+        "result_items_count",
+        "result_status",
+    }
+    return redact_sensitive({key: value for key, value in row.items() if key not in blocked})
+
+
+def _next_event_index(events: Deque[Dict[str, Any]]) -> int:
+    max_index = -1
+    for event in events:
+        try:
+            max_index = max(max_index, int(event.get("index", -1)))
+        except (TypeError, ValueError):
+            continue
+    return max_index + 1
 
 
 def _build_audit_record(job: ReviewJob, event: Dict[str, Any]) -> Dict[str, Any]:

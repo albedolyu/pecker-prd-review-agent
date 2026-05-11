@@ -33,6 +33,7 @@ eval_reports/verify_nli_openai_*
 
 # Claude Code 本地产物（草稿 / worktrees / 本地权限配置）
 .pecker_drafts/
+.pecker_checkpoints/
 .claude/worktrees/
 .claude/settings.local.json
 .claude/scheduled_tasks.json
