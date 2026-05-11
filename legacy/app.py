@@ -33,6 +33,10 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(_PARENT_DIR, ".env"), override=True)
 os.environ.pop("ANTHROPIC_AUTH_TOKEN", None)
 
+LEGACY_RETIREMENT_DATE = "2026-06-01"
+LEGACY_NEXTJS_URL = os.environ.get("PECKER_NEXTJS_URL", "http://pecker.xxx.internal")
+LEGACY_ENABLE_ENV = "PECKER_ENABLE_LEGACY_STREAMLIT"
+
 
 # ============================================================
 # 页面配置 & 样式
@@ -44,6 +48,15 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
+st.error(
+    f"Streamlit 旧版已退役，不再维护，将于 {LEGACY_RETIREMENT_DATE} 删除。"
+    f"请改用 Next.js 版：{LEGACY_NEXTJS_URL}"
+)
+time.sleep(3)
+if os.environ.get(LEGACY_ENABLE_ENV) != "1":
+    st.info(f"Set {LEGACY_ENABLE_ENV}=1 only for emergency local fallback.")
+    st.stop()
 
 CUSTOM_CSS = """
 <style>

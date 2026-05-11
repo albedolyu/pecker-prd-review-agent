@@ -286,3 +286,21 @@ git push
 - **维护者**: PM (产品经理), 不是工程师 — 决策按 harness engineering 原则做
 - **issue / 反馈**: 提 PR 改本文, 或在团队群 @PM
 - **退役进度跟踪**: `docs/SPLIT_PLAN.md` 有最新时间表
+
+---
+
+## 9. Streamlit legacy 退役
+
+**状态**: Streamlit legacy 已退役，2026-06-01 删除。团队试用和运维部署统一走 Next.js + FastAPI 主线，入口参考 `legacy/README.md` 和 `docs/legacy_retirement_plan.md`。
+
+旧版能力覆盖关系：
+
+| Streamlit 旧版能力 | Next.js 主线状态 | 处理结论 |
+|---|---|---|
+| 上传 PRD | 已覆盖 | `/review` 上传阶段承接 |
+| 知识盲区预检 | 已覆盖 | Phase 2 预检和补充材料承接 |
+| 并行评审 | 已覆盖 | FastAPI SSE + worker 编排承接 |
+| 逐条确认 | 已覆盖 | Phase 4 采纳、驳回、改写流程承接 |
+| 导出报告 | 已覆盖 | Next.js 报告导出承接 |
+
+删除前不再给 Streamlit 加功能。若 PM 反馈 Next.js 主线缺能力，先补主线或记录到 `docs/legacy_retirement_plan.md`，不要扩展 `legacy/app.py`。
