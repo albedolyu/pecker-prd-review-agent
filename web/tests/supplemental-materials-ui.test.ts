@@ -31,4 +31,11 @@ describe("supplemental material UI wiring", () => {
     expect(page).toContain("ReviewHelpAssistant");
     expect(page).toContain("<ReviewHelpAssistant");
   });
+
+  it("marks the review assistant panel as a dialog with polite answer updates", () => {
+    const source = readSource("components/review/ReviewHelpAssistant.tsx");
+
+    expect(source).toContain('role="dialog"');
+    expect(source).toContain('aria-live="polite"');
+  });
 });

@@ -6,6 +6,7 @@ ready.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import hashlib
@@ -17,11 +18,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.budget_gate import check_budget, record_review_cost
 from api.deps import get_current_user, get_project_root, get_workspace_dir, review_semaphore
+from api.figma_context import enrich_figma_raw_materials
 from api.models import ReviewResult
 from api.review_jobs import ReviewJob
 from api.review_jobs import RecordingReviewProgressEmitter, review_job_store
 from api.routes.drafts import DraftPayload, read_draft_file, write_draft_file
-from api.routes.review import ReviewRequest, classify_worker_failures
+from api.routes.review import ReviewRequest, _copy_request_with_raw_materials, classify_worker_failures
 from api.sanitize import redact_text
 from api.workspace_acl import is_admin, require_workspace_access
 
@@ -50,6 +52,8 @@ async def _run_review_job_pipeline(
         return result
 
     from agent_config import MODEL_TIERS
+    enriched_raw_materials = await asyncio.to_thread(enrich_figma_raw_materials, req.raw_materials)
+    req = _copy_request_with_raw_materials(req, enriched_raw_materials)
 
     enhanced_prd = req.prd_content
     if req.raw_materials:

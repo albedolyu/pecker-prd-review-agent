@@ -63,6 +63,7 @@ export function ReviewHelpAssistant() {
     >
       {open && (
         <section
+          role="dialog"
           aria-label="啄木鸟问答助手"
           style={{
             width: 360,
@@ -109,7 +110,7 @@ export function ReviewHelpAssistant() {
             </button>
           </header>
 
-          <div style={{ maxHeight: 300, overflowY: "auto", padding: 12 }}>
+          <div aria-live="polite" style={{ maxHeight: 300, overflowY: "auto", padding: 12 }}>
             {messages.map((message, index) => (
               <div
                 key={`${message.role}-${index}`}

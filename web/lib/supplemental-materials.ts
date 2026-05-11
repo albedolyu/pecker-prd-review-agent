@@ -96,6 +96,7 @@ export function extractMarkdownImageReferences(text: string): MarkdownImageRefer
 export function buildImageReferenceRawMaterial(
   input: MarkdownImageReference & { source: string },
 ): string {
+  input.url = redactSensitiveUrlQueryParams(input.url);
   return [
     "[补充材料: 图片]",
     `来源: ${input.source}`,

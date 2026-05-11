@@ -84,6 +84,18 @@ describe("supplemental materials", () => {
     expect(material).toContain("图片说明: 开户流程");
   });
 
+  it("redacts signed markdown image reference URLs before adding review context", () => {
+    const material = buildImageReferenceRawMaterial({
+      alt: "flow",
+      url: "https://cdn.example/flow.png?sig=secret-signature&version=1",
+      source: "PRD text",
+    });
+
+    expect(material).toContain("sig=[REDACTED]");
+    expect(material).toContain("version=1");
+    expect(material).not.toContain("secret-signature");
+  });
+
   it("dedupes raw materials while preserving order", () => {
     expect(mergeRawMaterials(["A", "B"], ["B", "C"])).toEqual(["A", "B", "C"]);
   });

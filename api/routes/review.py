@@ -25,6 +25,7 @@ from api.deps import (
     review_semaphore,
 )
 from api.budget_gate import budget_status_snapshot, check_budget, record_review_cost
+from api.figma_context import enrich_figma_raw_materials
 from api.models import ConfirmRequest, ReviewResult, verify_review_result
 from api.sanitize import redact_text
 from api.stream import ReviewProgressEmitter, emit_and_log, sse_review_pipeline
@@ -287,6 +288,15 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
+def _copy_request_with_raw_materials(req: Any, raw_materials: List[str]) -> Any:
+    if list(req.raw_materials) == list(raw_materials):
+        return req
+    try:
+        return req.model_copy(update={"raw_materials": raw_materials})
+    except AttributeError:
+        return req.copy(update={"raw_materials": raw_materials})
+
+
 def _call_precheck_gaps(req: PrecheckRequest):
     context = f"PRD 内容:\n{req.prd_content[:3000]}"
     if req.raw_materials:
@@ -328,6 +338,8 @@ async def precheck(
     import time as _time
     ws_dir = get_workspace_dir(req.workspace)
     require_workspace_access(ws_dir, user)
+    enriched_raw_materials = await asyncio.to_thread(enrich_figma_raw_materials, req.raw_materials)
+    req = _copy_request_with_raw_materials(req, enriched_raw_materials)
     wiki_path = ws_dir / "wiki"
     if not wiki_path.is_dir():
         wiki_path = project_root / "shared-wiki"
@@ -451,6 +463,8 @@ async def run_review(
     """
     ws_dir = get_workspace_dir(req.workspace)  # 校验 workspace 合法
     require_workspace_access(ws_dir, user)
+    enriched_raw_materials = await asyncio.to_thread(enrich_figma_raw_materials, req.raw_materials)
+    req = _copy_request_with_raw_materials(req, enriched_raw_materials)
 
     # 预算卡: 超限直接 429 阻止新评审
     budget_status = check_budget(get_project_root(), reviewer=user["reviewer"])
