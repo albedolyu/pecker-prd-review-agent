@@ -171,4 +171,15 @@ describe("review job resume helpers", () => {
     expect(preliminaryBranch).toContain("setResult(ev.payload)");
     expect(preliminaryBranch).not.toContain('setState("done")');
   });
+
+  it("uses the shared event reducer for direct SSE fallback", () => {
+    const source = readFileSync(join(process.cwd(), "lib/useReviewStream.ts"), "utf8");
+
+    const directSseBranch = source.match(
+      /const apiBase = process\.env\.NEXT_PUBLIC_SSE_BASE[\s\S]*?setState\(\(cur\) => \(cur === "running" \? "done" : cur\)\);/,
+    )?.[0];
+
+    expect(directSseBranch).toBeDefined();
+    expect(directSseBranch).toContain("applyStreamEvent(ev)");
+  });
 });

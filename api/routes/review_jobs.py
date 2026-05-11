@@ -246,10 +246,26 @@ def _persist_completed_review_draft(
         existing = read_draft_file(project_root, reviewer)
         existing_prd_name = (existing or {}).get("prd_name") or ""
         existing_workspace = (existing or {}).get("workspace") or ""
+        existing_mode = (existing or {}).get("mode") or ""
         if existing_prd_name and existing_prd_name != req.prd_name:
             return
         if existing_workspace and existing_workspace != req.workspace:
             return
+        if existing_mode and existing_mode != req.mode:
+            return
+        if int((existing or {}).get("phase") or 0) >= 4:
+            return
+
+        existing_decisions = (
+            (existing or {}).get("item_decisions")
+            if isinstance((existing or {}).get("item_decisions"), dict)
+            else {}
+        )
+        existing_confirmed_report = (
+            (existing or {}).get("confirmed_report_markdown")
+            if isinstance((existing or {}).get("confirmed_report_markdown"), str)
+            else ""
+        )
 
         write_draft_file(
             project_root,
@@ -262,8 +278,8 @@ def _persist_completed_review_draft(
                 raw_materials=req.raw_materials,
                 user_notes=req.user_notes,
                 review_result=review_result,
-                item_decisions={},
-                confirmed_report_markdown="",
+                item_decisions=existing_decisions,
+                confirmed_report_markdown=existing_confirmed_report,
                 workspace=req.workspace,
             ),
         )

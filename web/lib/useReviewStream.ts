@@ -748,25 +748,7 @@ export function useReviewStream(): UseReviewStreamResult {
               event: parsed.event,
             } as ReviewStreamEvent;
 
-            setEvents((prev) => [...prev, ev]);
-
-            if (typeof ev.progress === "number") {
-              setProgress(ev.progress);
-            }
-
-            if (ev.event === "result") {
-              setResult(ev.payload);
-              setProgress(100);
-              setState("done");
-            } else if (ev.event === "error") {
-              setError(pmFacingReviewMessage(ev.message));
-              setState("error");
-            } else if (ev.event === "review_failed") {
-              // P0-1: 全员失败 abort,不让 UI 自动推进到 Phase 3
-              setError(pmFacingReviewMessage(ev.message));
-              setState("error");
-            }
-            // review_degraded 不改 state,只留在 events 里供 UI 读取展示
+            applyStreamEvent(ev);
           }
         }
 

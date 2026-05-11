@@ -46,7 +46,7 @@ def _truthy_env(name: str, default: str = "0") -> bool:
 
 
 def _async_goshawk_patches_enabled() -> bool:
-    return _truthy_env("PECKER_ENABLE_ASYNC_GOSHAWK_PATCHES")
+    return _truthy_env("PECKER_ENABLE_ASYNC_GOSHAWK_PATCHES", "1")
 
 
 def _worker_only_cost_breakdown(result: Dict[str, Any]) -> Dict[str, float]:

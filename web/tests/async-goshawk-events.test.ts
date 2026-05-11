@@ -4,6 +4,10 @@ import type {
   PreliminaryResultEvent,
   ReviewStreamEvent,
 } from "@/lib/useReviewStream";
+import {
+  isAsyncGoshawkPending,
+  shouldApplyGoshawkPatchDraft,
+} from "@/lib/async-goshawk";
 
 const RESULT = {
   review_id: "rev_async_1",
@@ -64,5 +68,94 @@ describe("async goshawk stream events", () => {
     expect(narrowed.goshawk_status).toBe("completed");
     expect(narrowed.preliminary_review_id).toBe("rev_async_1");
     expect(narrowed.payload.items).toHaveLength(1);
+  });
+
+  it("detects pending worker drafts and applies only matching final drafts", () => {
+    const pending = {
+      ...RESULT,
+      review_id: "rev_pre",
+      goshawk_summary: { status: "pending", mode: "async_patch" },
+    };
+    const final = {
+      ...RESULT,
+      review_id: "rev_final",
+      items: [{ id: "G-1", dimension: "risk", problem: "patched" }],
+      goshawk_summary: { verdict: "REVIEWED", confidence: 0.9 },
+    };
+
+    expect(isAsyncGoshawkPending(pending)).toBe(true);
+    expect(
+      shouldApplyGoshawkPatchDraft(pending, {
+        reviewer: "pm-a",
+        phase: 3,
+        prd_name: "async-goshawk.md",
+        prd_content: "",
+        mode: "standard",
+        raw_materials: [],
+        user_notes: "",
+        workspace: "workspace-alpha",
+        item_decisions: { "I-1": { action: "accept" } },
+        confirmed_report_markdown: "",
+        review_result: final,
+        ts: "2026-05-11T00:00:00",
+      }),
+    ).toBe(true);
+  });
+
+  it("does not apply another PRD draft as a goshawk patch", () => {
+    const pending = {
+      ...RESULT,
+      review_id: "rev_pre",
+      goshawk_summary: { status: "pending", mode: "async_patch" },
+    };
+
+    expect(
+      shouldApplyGoshawkPatchDraft(pending, {
+        reviewer: "pm-a",
+        phase: 3,
+        prd_name: "other.md",
+        prd_content: "",
+        mode: "standard",
+        raw_materials: [],
+        user_notes: "",
+        workspace: "workspace-alpha",
+        item_decisions: {},
+        confirmed_report_markdown: "",
+        review_result: { ...RESULT, review_id: "rev_other" },
+        ts: "2026-05-11T00:00:00",
+      }),
+    ).toBe(false);
+  });
+
+  it("does not apply a draft from another review mode as a goshawk patch", () => {
+    const pending = {
+      ...RESULT,
+      review_id: "rev_pre",
+      goshawk_summary: { status: "pending", mode: "async_patch" },
+    };
+    const final = {
+      ...RESULT,
+      review_id: "rev_final",
+      mode: "quick",
+      items: [{ id: "G-1", dimension: "risk", problem: "patched" }],
+      goshawk_summary: { verdict: "REVIEWED", confidence: 0.9 },
+    };
+
+    expect(
+      shouldApplyGoshawkPatchDraft(pending, {
+        reviewer: "pm-a",
+        phase: 3,
+        prd_name: "async-goshawk.md",
+        prd_content: "",
+        mode: "quick",
+        raw_materials: [],
+        user_notes: "",
+        workspace: "workspace-alpha",
+        item_decisions: {},
+        confirmed_report_markdown: "",
+        review_result: final,
+        ts: "2026-05-11T00:00:00",
+      }),
+    ).toBe(false);
   });
 });

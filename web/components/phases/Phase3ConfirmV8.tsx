@@ -27,6 +27,7 @@ import {
   reviewApi,
   auditApi,
   feedbackApi,
+  draftsApi,
   ApiError,
   type ConfirmResponse,
   type BusinessDecision,
@@ -35,6 +36,10 @@ import {
   type RejectReason,
   type ReviewItem,
 } from "@/lib/api";
+import {
+  isAsyncGoshawkPending,
+  shouldApplyGoshawkPatchDraft,
+} from "@/lib/async-goshawk";
 import { saveReviewDraftSnapshot } from "@/lib/draft-persistence";
 import { explainReviewItemForPm } from "@/lib/pm-friendly";
 import {
@@ -161,6 +166,7 @@ export function Phase3ConfirmV8() {
   const userNotes = useReviewStore((s) => s.userNotes);
   const decisions = useReviewStore((s) => s.decisions);
   const setDecision = useReviewStore((s) => s.setDecision);
+  const setReviewResult = useReviewStore((s) => s.setReviewResult);
   const setConfirmedReportMarkdown = useReviewStore(
     (s) => s.setConfirmedReportMarkdown,
   );
@@ -353,6 +359,37 @@ export function Phase3ConfirmV8() {
     return { total, decided, pending: total - decided, ...counts };
   }, [reviewResult, decisions]);
 
+  const goshawkPatchPending = isAsyncGoshawkPending(reviewResult);
+
+  useEffect(() => {
+    if (!goshawkPatchPending || !reviewResult || !reviewer) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const pollDraftPatch = async () => {
+      try {
+        const draft = await draftsApi.get(reviewer);
+        if (stopped) return;
+        if (shouldApplyGoshawkPatchDraft(reviewResult, draft)) {
+          setReviewResult(draft.review_result);
+          toast.success("终审补充已同步");
+          return;
+        }
+      } catch {
+        // Draft refresh is best-effort; the PM can keep reviewing the worker draft.
+      }
+      if (!stopped) {
+        timer = setTimeout(pollDraftPatch, 6000);
+      }
+    };
+
+    timer = setTimeout(pollDraftPatch, 2500);
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [goshawkPatchPending, reviewResult, reviewer, setReviewResult]);
+
   // ── confirm mutation(提交到后端 → Phase 4) ──
   const confirmMutation = useMutation({
     mutationFn: () => {
@@ -403,6 +440,8 @@ export function Phase3ConfirmV8() {
       }
     },
   });
+
+  const confirmDisabled = confirmMutation.isPending || goshawkPatchPending;
 
   // ── 快捷键动作 ──
 
@@ -1145,15 +1184,17 @@ export function Phase3ConfirmV8() {
             <button
               type="button"
               onClick={() => confirmMutation.mutate()}
-              disabled={confirmMutation.isPending}
+              disabled={confirmDisabled}
               style={
-                confirmMutation.isPending
+                confirmDisabled
                   ? btnPrimaryDisabledStyle
                   : btnPrimaryStyle
               }
             >
               {confirmMutation.isPending
                 ? "生成中…"
+                : goshawkPatchPending
+                  ? "终审补充中"
                 : `导出报告（${stats.decided}/${stats.total}）`}
             </button>
           </div>

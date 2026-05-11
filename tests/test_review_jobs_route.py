@@ -618,6 +618,140 @@ def test_completed_job_draft_overwrites_expired_other_prd_draft(tmp_path):
     assert draft["review_result"]["review_id"] == "rev_alpha"
 
 
+def test_completed_job_draft_preserves_existing_decisions_for_same_prd(tmp_path):
+    import json
+
+    from api.routes import review_jobs
+    from api.routes.drafts import DraftPayload, write_draft_file
+    from api.routes.review import ReviewRequest
+
+    write_draft_file(
+        tmp_path,
+        "pm-a",
+        DraftPayload(
+            phase=3,
+            prd_name="alpha.md",
+            prd_content="# Alpha",
+            workspace="workspace-alpha",
+            item_decisions={"I-1": {"action": "accept"}},
+            review_result={
+                "review_id": "rev_preliminary",
+                "items": [{"id": "I-1"}],
+                "goshawk_summary": {"status": "pending", "mode": "async_patch"},
+            },
+        ),
+    )
+
+    review_jobs._persist_completed_review_draft(
+        req=ReviewRequest(
+            prd_content="# Alpha",
+            workspace="workspace-alpha",
+            prd_name="alpha.md",
+            reviewer="pm-a",
+            mode="standard",
+        ),
+        reviewer="pm-a",
+        project_root=tmp_path,
+        review_result={
+            "review_id": "rev_final",
+            "items": [{"id": "I-1"}, {"id": "G-1"}],
+            "goshawk_summary": {"verdict": "REVIEWED"},
+        },
+    )
+
+    draft = json.loads(
+        (tmp_path / ".pecker_drafts" / "pm-a_draft.json").read_text(encoding="utf-8")
+    )
+
+    assert draft["phase"] == 3
+    assert draft["review_result"]["review_id"] == "rev_final"
+    assert draft["item_decisions"] == {"I-1": {"action": "accept"}}
+
+
+def test_completed_job_draft_does_not_overwrite_confirmed_report(tmp_path):
+    import json
+
+    from api.routes import review_jobs
+    from api.routes.drafts import DraftPayload, write_draft_file
+    from api.routes.review import ReviewRequest
+
+    write_draft_file(
+        tmp_path,
+        "pm-a",
+        DraftPayload(
+            phase=4,
+            prd_name="alpha.md",
+            prd_content="# Alpha",
+            workspace="workspace-alpha",
+            item_decisions={"I-1": {"action": "accept"}},
+            confirmed_report_markdown="# Final report",
+            review_result={"review_id": "rev_confirmed", "items": [{"id": "I-1"}]},
+        ),
+    )
+
+    review_jobs._persist_completed_review_draft(
+        req=ReviewRequest(
+            prd_content="# Alpha",
+            workspace="workspace-alpha",
+            prd_name="alpha.md",
+            reviewer="pm-a",
+            mode="standard",
+        ),
+        reviewer="pm-a",
+        project_root=tmp_path,
+        review_result={"review_id": "rev_late_patch", "items": [{"id": "G-1"}]},
+    )
+
+    draft = json.loads(
+        (tmp_path / ".pecker_drafts" / "pm-a_draft.json").read_text(encoding="utf-8")
+    )
+
+    assert draft["phase"] == 4
+    assert draft["review_result"]["review_id"] == "rev_confirmed"
+    assert draft["confirmed_report_markdown"] == "# Final report"
+
+
+def test_completed_job_draft_does_not_overwrite_different_mode_draft(tmp_path):
+    import json
+
+    from api.routes import review_jobs
+    from api.routes.drafts import DraftPayload, write_draft_file
+    from api.routes.review import ReviewRequest
+
+    write_draft_file(
+        tmp_path,
+        "pm-a",
+        DraftPayload(
+            phase=3,
+            prd_name="alpha.md",
+            prd_content="# Alpha quick",
+            mode="quick",
+            workspace="workspace-alpha",
+            review_result={"review_id": "rev_quick", "items": [{"id": "Q-1"}]},
+        ),
+    )
+
+    review_jobs._persist_completed_review_draft(
+        req=ReviewRequest(
+            prd_content="# Alpha",
+            workspace="workspace-alpha",
+            prd_name="alpha.md",
+            reviewer="pm-a",
+            mode="standard",
+        ),
+        reviewer="pm-a",
+        project_root=tmp_path,
+        review_result={"review_id": "rev_standard", "items": [{"id": "S-1"}]},
+    )
+
+    draft = json.loads(
+        (tmp_path / ".pecker_drafts" / "pm-a_draft.json").read_text(encoding="utf-8")
+    )
+
+    assert draft["mode"] == "quick"
+    assert draft["review_result"]["review_id"] == "rev_quick"
+
+
 @pytest.mark.asyncio
 async def test_review_job_can_reuse_existing_sse_pipeline(monkeypatch):
     from api.review_jobs import ReviewJob
