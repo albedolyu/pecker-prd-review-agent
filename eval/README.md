@@ -35,6 +35,22 @@ python -m pytest tests/test_review_assistant_golden_eval.py -q
 用 `eval/golden/review_assistant_customer_needs.json` 验证小助手是否满足 PM 试用需求:
 上传材料说明、采纳/驳回/改写、报告导出、524 超时恢复、风鸟知识库查询、原始事实层查询,以及普通 PRD 问题不误触发查库。
 
+### 1.2 小助手完整评测体系 (参考 Claw-Eval-Live)
+
+```bash
+python -m eval.assistant_eval_system --project-root . --days 30
+python -m pytest tests/test_assistant_eval_system.py -q
+```
+
+体系分四层:
+
+- 信号层: 读取 `logs/user_actions_*.jsonl`、`logs/missing_feedback.jsonl`、`eval/results/*` 和 golden cases,统计真实使用/反馈信号。
+- 任务族: `workflow_help`、`failure_recovery`、`evidence_lookup`、`fact_layer_lookup`、`negative_boundary`。
+- 评分层: `route_correctness` 25%、`answer_utility` 35%、`evidence_grounding` 25%、`safety_boundary` 15%。
+- 稳定性层: 预留 `Pass^k` 评测,同一问题多次运行时要求路由稳定且每轮达标。
+
+输出写入 `eval/results/assistant_eval_*.json` 和 `.md`。这些是本地运行产物,默认不入库。
+
 ### 2. 端到端评测 (需要 Claude API)
 
 ```bash

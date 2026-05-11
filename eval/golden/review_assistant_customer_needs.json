@@ -6,6 +6,8 @@
   "frontend_cases": [
     {
       "id": "RA-FE-001",
+      "family": "workflow_help",
+      "source": "curated_pm_workflow",
       "need": "PM 刚上传材料后，想确认图片和 Figma 链接是不是已经进入本次评审。",
       "question": "我刚传的图和 Figma，等会儿评审真的会看吗？",
       "context": {
@@ -23,6 +25,8 @@
     },
     {
       "id": "RA-FE-002",
+      "family": "workflow_help",
+      "source": "curated_pm_workflow",
       "need": "PM 面对一条建议时，想知道应该点采纳、驳回还是改写。",
       "question": "这条建议方向好像对，但说得不准，是点改写还是驳回？",
       "context": { "phase": 3, "raw_materials": [] },
@@ -33,6 +37,8 @@
     },
     {
       "id": "RA-FE-003",
+      "family": "workflow_help",
+      "source": "panchi_feedback",
       "need": "潘驰反馈最后一步进不去时，PM 想知道导出按钮为什么不可用。",
       "question": "导出按钮还是灰的，是不是还有哪一步没点完？",
       "context": { "phase": 3, "raw_materials": [] },
@@ -43,6 +49,8 @@
     },
     {
       "id": "RA-FE-004",
+      "family": "failure_recovery",
+      "source": "usage_feedback_524",
       "need": "大 PRD 或网关 524 时，PM 想知道要不要重跑，以及怎么恢复进度。",
       "question": "页面刚才 524 了，我刷新会不会把这次评审弄丢？",
       "context": { "phase": 2, "raw_materials": [] },
@@ -53,6 +61,8 @@
     },
     {
       "id": "RA-FE-005",
+      "family": "workflow_help",
+      "source": "curated_pm_workflow",
       "need": "PM 在确认页想快速知道这一页的建议是否都需要逐条处理。",
       "question": "现在这几条都要我一个个确认吗？",
       "context": {
@@ -67,6 +77,8 @@
     },
     {
       "id": "RA-FE-006",
+      "family": "evidence_lookup",
+      "source": "fengniao_knowledge_need",
       "need": "PM 写风鸟 PRD 时，想查历史知识库里企业详情的既有口径。",
       "question": "风鸟以前企业详情这块是怎么约定的，帮我翻一下知识库",
       "context": { "phase": 3, "raw_materials": [] },
@@ -81,6 +93,8 @@
     },
     {
       "id": "RA-FE-007",
+      "family": "fact_layer_lookup",
+      "source": "fengniao_fact_layer_need",
       "need": "PM 不确定 PRD 里的字段名是否准确，明确要求查原始事实层/源码依据。",
       "question": "这个字段我不确定叫法，帮我查下风鸟源码里的原始依据",
       "context": { "phase": 3, "raw_materials": [] },
@@ -95,6 +109,8 @@
     },
     {
       "id": "RA-FE-008",
+      "family": "negative_boundary",
+      "source": "negative_boundary_regression",
       "need": "普通 PRD 写作问题不应因为出现“字段”两个字就误触发风鸟知识库查询。",
       "question": "字段验收这块怎么写会更稳一点？",
       "context": { "phase": 0, "raw_materials": [] },
@@ -108,6 +124,8 @@
   "backend_evidence_cases": [
     {
       "id": "RA-BE-001",
+      "family": "evidence_lookup",
+      "source": "fengniao_knowledge_need",
       "need": "用户只说查历史口径时，后端应返回 Wiki 和知识库层证据，但不自动混入源码事实层。",
       "question": "风鸟企业详情里的股权结构以前怎么讲的？",
       "include_fact_layer": false,
@@ -136,6 +154,8 @@
     },
     {
       "id": "RA-BE-002",
+      "family": "fact_layer_lookup",
+      "source": "fengniao_fact_layer_need",
       "need": "用户明确要核对源码依据时，事实层查询必须返回源码镜像证据，并在回答中提示 fact 数量。",
       "question": "帮我核对一下股权结构字段，最好能看到原始源码依据",
       "include_fact_layer": true,
