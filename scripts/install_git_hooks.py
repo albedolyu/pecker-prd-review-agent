@@ -2,6 +2,7 @@
 """啄木鸟 git hooks 一键安装器.
 
 把 scripts/pre-push.sample 复制到 .git/hooks/pre-push (或 .githooks/pre-push 二选一).
+pre-push 会先跑公网 remote 防泄漏检查,再按触发文件跑 rule_regression.
 
 用法:
   python scripts/install_git_hooks.py                     # 默认装到 .git/hooks/

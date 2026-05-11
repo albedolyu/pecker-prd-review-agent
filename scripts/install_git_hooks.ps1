@@ -1,6 +1,7 @@
 # 啄木鸟 git pre-push hook 一键安装 (Windows PowerShell)
 #
 # 实际逻辑在 install_git_hooks.py, 本脚本只是 PowerShell 友好包装.
+# 安装的 pre-push 会包含公网 remote 防泄漏检查 + rule_regression。
 # 仍依赖 Python 3.10+.
 #
 # 用法:
