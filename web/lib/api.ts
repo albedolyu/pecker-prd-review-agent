@@ -672,8 +672,16 @@ export interface AdminUsageResponse {
   active_jobs?: ActiveReviewJob[];
   active_drafts?: ActiveReviewDraft[];
   recent_job_events?: AdminReviewJobEvent[];
+  rule_impact_reports?: RuleImpactReport[];
   stability: Record<string, unknown>;
   budget: Record<string, unknown>;
+}
+
+export interface RuleImpactReport {
+  filename: string;
+  title: string;
+  preview: string;
+  mtime: number;
 }
 
 export interface ActiveReviewJob {

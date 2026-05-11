@@ -68,6 +68,7 @@ function AdminUsageContent() {
   const activeJobs = data?.active_jobs ?? [];
   const activeDrafts = data?.active_drafts ?? [];
   const recentJobEvents = data?.recent_job_events ?? [];
+  const ruleImpactReports = data?.rule_impact_reports ?? [];
 
   const completionRate = useMemo(() => {
     if (!summary?.total_reviews) return "0%";
@@ -240,6 +241,50 @@ function AdminUsageContent() {
                     key={`${draft.reviewer}-${draft.ts}-${index}`}
                     draft={draft}
                   />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {ruleImpactReports.length > 0 && (
+            <section style={{ ...cardStyle, marginBottom: 16 }}>
+              <SectionHead
+                title="规则调权效果"
+                hint="最近 4 周规则 impact_score 对照报告；用于判断 PM 驳回回流后质量是否真的改善"
+              />
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                {ruleImpactReports.map((report) => (
+                  <div
+                    key={report.filename}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr auto",
+                      gap: 16,
+                      padding: "11px 16px",
+                      borderTop: "1px solid var(--border-subtle)",
+                      fontSize: 12,
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ color: "var(--text-default)", fontWeight: 650 }}>
+                        {report.title || report.filename}
+                      </div>
+                      <div
+                        style={{
+                          color: "var(--text-muted)",
+                          marginTop: 4,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {report.preview || report.filename}
+                      </div>
+                    </div>
+                    <div style={{ color: "var(--text-faint)", whiteSpace: "nowrap" }}>
+                      {formatEpochTime(report.mtime)}
+                    </div>
+                  </div>
                 ))}
               </div>
             </section>
