@@ -16,6 +16,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+from api.sanitize import redact_prd_payload, redact_sensitive
 from logger import get_logger
 
 log = get_logger("event_store")
@@ -30,10 +31,11 @@ class EventStore:
 
     def append(self, event_type: str, data: dict = None):
         """追加一条事件到 JSONL 文件。"""
+        safe_data = _sanitize_event_payload(data or {})
         event = {
             "ts": datetime.now().isoformat(),
             "type": event_type,
-            **(data or {}),
+            **safe_data,
         }
         try:
             with open(self.path, "a", encoding="utf-8") as f:
@@ -85,3 +87,9 @@ class EventStore:
             f"summary_len={len(summary)}"
         )
         return messages
+
+
+def _sanitize_event_payload(data: dict) -> dict:
+    # contract: NoPRDBody
+    payload = redact_prd_payload(data)
+    return redact_sensitive(payload)

@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from api.deps import get_current_user, get_project_root
-from api.sanitize import redact_text
+from api.sanitize import redact_sensitive, redact_text
 from api.workspace_acl import is_admin
 
 router = APIRouter(tags=["drafts"])
@@ -130,6 +130,14 @@ def read_draft_file(project_root: Path, reviewer: str) -> Optional[Dict[str, Any
     return draft
 
 
+def _sanitize_draft_for_response(draft: Dict[str, Any], user: dict) -> Dict[str, Any]:
+    if is_admin(user):
+        return redact_sensitive(draft)
+    # contract: NoPRDBody
+    blocked = {"supplemental_materials_raw", "prd_body"}
+    return redact_sensitive({key: value for key, value in draft.items() if key not in blocked})
+
+
 @router.get("/drafts/{reviewer}")
 async def get_draft(
     reviewer: str,
@@ -162,7 +170,7 @@ async def get_draft(
         except ValueError:
             pass
 
-    return draft
+    return _sanitize_draft_for_response(draft, user)
 
 
 @router.put("/drafts/{reviewer}")

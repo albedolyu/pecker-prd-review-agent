@@ -31,6 +31,11 @@ _SECRET_PATTERNS = (
 _SECRET_FIELD_RE = re.compile(
     r"(?i)^(?:api[_-]?key|[a-z0-9]+[_-]api[_-]?key|[a-z0-9]+ApiKey|(?:[a-z0-9]+[_-])?access[_-]key[_-]id|awsAccessKeyId|private[_-]?key|[a-z0-9]+[_-]secret[_-]access[_-]key|awsSecretAccessKey|jwt|(?:access|refresh|id)?[_-]?token|[a-z0-9]+(?:[_-][a-z0-9]+)*[_-]token|[a-z0-9]+Token|awsSessionToken|code[_-]?verifier|shared[_-]?access[_-]?signature|(?:x[_-])?amz[_-]?(?:credential|signature)|sig|signature|credentials?|(?:client[_-]?)?secret(?:[_-]?key)?|password|authorization|proxy[_-]?authorization|cookie|set-cookie|setCookie|cookieHeader)$"
 )
+_PRD_BODY_FIELD_RE = re.compile(
+    r"(?i)^(?:prd[_-]?(?:content|body|text)|supplemental[_-]?materials[_-]?raw)$"
+)
+_PRD_MIN_FRAGMENT_CHARS = 120
+_PRD_FRAGMENT_SCAN_CHARS = 4096
 
 
 def redact_text(value: str) -> str:
@@ -54,3 +59,89 @@ def redact_sensitive(value: Any) -> Any:
     if isinstance(value, tuple):
         return tuple(redact_sensitive(item) for item in value)
     return value
+
+
+def redact_prd_content(value: Any, prd_body: str) -> Any:
+    """Remove PRD body fragments from PM-visible or operator-visible payloads.
+
+    This is deliberately stricter than secret redaction but avoids short-word
+    matching: only exact PRD body fields or long contiguous PRD fragments are
+    replaced. That keeps common product words such as "用户" from being erased.
+    """
+    body = prd_body or ""
+    if len(body) < _PRD_MIN_FRAGMENT_CHARS:
+        return value
+    marker = f"<prd-redacted len={len(body)}>"
+    if isinstance(value, str):
+        return _redact_prd_text(value, body, marker)
+    if isinstance(value, dict):
+        redacted: dict[Any, Any] = {}
+        for key, item in value.items():
+            if (
+                _PRD_BODY_FIELD_RE.match(str(key))
+                and isinstance(item, str)
+                and len(item) >= _PRD_MIN_FRAGMENT_CHARS
+            ):
+                redacted[key] = marker
+            else:
+                redacted[key] = redact_prd_content(item, body)
+        return redacted
+    if isinstance(value, list):
+        return [redact_prd_content(item, body) for item in value]
+    if isinstance(value, tuple):
+        return tuple(redact_prd_content(item, body) for item in value)
+    return value
+
+
+def redact_prd_payload(value: Any) -> Any:
+    prd_body = find_prd_body(value)
+    return redact_prd_content(value, prd_body) if prd_body else value
+
+
+def find_prd_body(value: Any) -> str:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if _PRD_BODY_FIELD_RE.match(str(key)) and isinstance(item, str):
+                return item
+        for item in value.values():
+            found = find_prd_body(item)
+            if found:
+                return found
+    if isinstance(value, list):
+        for item in value:
+            found = find_prd_body(item)
+            if found:
+                return found
+    if isinstance(value, tuple):
+        for item in value:
+            found = find_prd_body(item)
+            if found:
+                return found
+    return ""
+
+
+def _redact_prd_text(text: str, prd_body: str, marker: str) -> str:
+    if len(text) < _PRD_MIN_FRAGMENT_CHARS:
+        return text
+    if prd_body in text:
+        return marker
+    scan = prd_body[:_PRD_FRAGMENT_SCAN_CHARS]
+    if _contains_prd_fragment(text, scan):
+        return marker
+    compact_text = _normalize_space(text)
+    compact_scan = _normalize_space(scan)
+    if (compact_text != text or compact_scan != scan) and _contains_prd_fragment(compact_text, compact_scan):
+        return marker
+    return text
+
+
+def _contains_prd_fragment(text: str, scan: str) -> bool:
+    limit = len(scan) - _PRD_MIN_FRAGMENT_CHARS + 1
+    for start in range(max(0, limit)):
+        if scan[start : start + _PRD_MIN_FRAGMENT_CHARS] in text:
+            return True
+    return False
+
+
+def _normalize_space(value: str) -> str:
+    return " ".join(value.split())

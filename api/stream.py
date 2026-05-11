@@ -19,7 +19,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
 
-from api.sanitize import redact_sensitive, redact_text
+from api.sanitize import redact_prd_payload, redact_sensitive, redact_text
 from logger import get_logger
 
 log = get_logger("sse_stream")
@@ -85,11 +85,13 @@ class ReviewProgressEmitter:
         if self._closed:
             return
         milestone = MILESTONES.get(event, {"progress": None, "label": event})
+        # contract: NoPRDBody
+        safe_data = redact_sensitive(redact_prd_payload(data or {}))
         payload = {
             "event": event,
             "progress": milestone.get("progress"),
             "label": milestone.get("label"),
-            **redact_sensitive(data or {}),
+            **safe_data,
         }
         try:
             self.queue.put_nowait(payload)

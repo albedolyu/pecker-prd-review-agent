@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 from api.budget_gate import budget_status_snapshot
-from api.sanitize import redact_sensitive, redact_text
+from api.sanitize import redact_prd_content, redact_sensitive, redact_text
 from scripts.stability_metrics import (
     _filter_by_days,
     _iter_session_files,
@@ -59,6 +59,19 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         return float(value or default)
     except (TypeError, ValueError):
         return default
+
+
+def _short_prd_preview(value: Any, limit: int = 80) -> str:
+    text = str(value or "")
+    if not text:
+        return ""
+    redacted = str(redact_prd_content(text, text))
+    compact = " ".join(redacted.split())
+    if redacted != text:
+        compact = f"{compact}..."
+    elif len(compact) > limit:
+        compact = compact[: max(0, limit - 3)].rstrip() + "..."
+    return compact[:limit]
 
 
 def _load_jsonl(path: Path) -> List[Dict[str, Any]]:
@@ -276,6 +289,7 @@ def build_usage_summary(
             {
                 "reviewer": redact_text(str(run.get("reviewer") or "")),
                 "prd_name": redact_text(str(run.get("prd_name") or "")),
+                "prd_preview": _short_prd_preview(run.get("prd_preview")),
                 "workspace": redact_text(str(run.get("workspace") or "")),
                 "status": run.get("status"),
                 "ts_start": run.get("ts_start"),

@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
-from api.sanitize import redact_text
+from api.sanitize import redact_prd_content, redact_text
 
 
 _VALID_ACTIONS = {"accept", "reject", "edit"}
@@ -163,7 +163,7 @@ def _record_from_item(
     index: int,
 ) -> Dict[str, Any]:
     action = str(item.get("action") or "").strip()
-    return {
+    record = {
         "timestamp": timestamp,
         "ts": _iso_from_timestamp(timestamp),
         "sort_index": index,
@@ -184,6 +184,9 @@ def _record_from_item(
         "source_file": path.name,
         "source": str(payload.get("_feedback_source") or "confirmed"),
     }
+    # contract: NoPRDBody
+    prd_body = str(payload.get("prd_content") or payload.get("prd_body") or "")
+    return redact_prd_content(record, prd_body) if prd_body else record
 
 
 def _pct(numerator: int, denominator: int) -> float:

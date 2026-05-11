@@ -16,7 +16,7 @@ from typing import Any, Awaitable, Callable, Deque, Dict, List, Optional
 
 from fastapi import HTTPException, status
 
-from api.sanitize import redact_sensitive, redact_text
+from api.sanitize import redact_prd_payload, redact_sensitive, redact_text
 from api.stream import MILESTONES, WORKER_PROGRESS_STEP, ReviewProgressEmitter
 
 
@@ -140,8 +140,8 @@ class ReviewJob:
             "mode": redact_text(str(self.mode)),
             "created_at": self.created_at,
             "updated_at": self.updated_at,
-            "events": [dict(event) for event in self._events],
-            "result": redact_sensitive(self.result),
+            "events": [dict(redact_prd_payload(event)) for event in self._events],
+            "result": redact_sensitive(redact_prd_payload(self.result)),
             "error": redact_text(str(self.error)),
         }
 
@@ -351,10 +351,20 @@ class RecordingReviewProgressEmitter(ReviewProgressEmitter):
 
 
 def _scrub_event_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
-    blocked = {"prd_content", "raw_materials", "wiki_pages", "user_notes"}
+    # contract: NoPRDBody
+    redacted = redact_prd_payload(payload)
+    blocked = {
+        "prd_content",
+        "prd_body",
+        "prd_text",
+        "supplemental_materials_raw",
+        "raw_materials",
+        "wiki_pages",
+        "user_notes",
+    }
     return {
         key: redact_sensitive(value)
-        for key, value in payload.items()
+        for key, value in redacted.items()
         if key not in blocked
     }
 
