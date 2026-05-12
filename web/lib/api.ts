@@ -245,6 +245,7 @@ export interface ReviewItem {
   readonly problem?: string;
   readonly evidence?: string;
   readonly suggestion?: string;
+  readonly proposed_patch?: string;
   readonly confidence?: number;
   /** worker / meta_added / meta_dedup_kept */
   readonly provenance?: ItemProvenance;
@@ -712,6 +713,7 @@ export interface AdminUsageResponse {
   active_drafts?: ActiveReviewDraft[];
   recent_job_events?: AdminReviewJobEvent[];
   rule_impact_reports?: RuleImpactReport[];
+  empty_retry?: EmptyRetrySummary;
   stability: Record<string, unknown>;
   budget: Record<string, unknown>;
 }
@@ -721,6 +723,15 @@ export interface RuleImpactReport {
   title: string;
   preview: string;
   mtime: number;
+}
+
+export interface EmptyRetrySummary {
+  instrumented_workers: number;
+  triggered: number;
+  rescued: number;
+  kept_empty: number;
+  confirmed_empty: number;
+  forced_confirmed_empty_retry: number;
 }
 
 export interface ActiveReviewJob {
@@ -859,6 +870,29 @@ export interface ReworkAvoidanceSummary {
   recent_notes: ReworkAvoidanceNote[];
 }
 
+export interface RuleRecommendationSample {
+  ts: string;
+  reviewer: string;
+  workspace: string;
+  prd_name: string;
+  location: string;
+  problem: string;
+  action?: "accept" | "reject" | "edit" | "unknown" | string;
+  reason_category?: string;
+  reason_note?: string;
+}
+
+export interface RuleRecommendation {
+  recommendation: "narrow_rule_trigger" | "strengthen_missing_coverage";
+  sample_count: number;
+  samples: RuleRecommendationSample[];
+  rule_id?: string;
+  dimension?: string;
+  responsible_bird_id?: string;
+  top_reason_category?: string;
+  reason_categories?: Record<string, number>;
+}
+
 export interface FeedbackBucket {
   reviewer?: string;
   workspace?: string;
@@ -883,6 +917,7 @@ export interface AdminFeedbackResponse {
   dimensions: Record<string, number>;
   records: FeedbackRecord[];
   missing_records?: MissingFeedbackRecord[];
+  rule_recommendations?: RuleRecommendation[];
   rework_avoidance?: ReworkAvoidanceSummary;
 }
 

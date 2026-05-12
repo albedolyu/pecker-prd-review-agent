@@ -103,3 +103,37 @@ def test_enrich_figma_raw_materials_is_idempotent(monkeypatch):
     ]
 
     assert figma_context.enrich_figma_raw_materials(raw) == raw
+
+
+def test_figma_branch_url_uses_branch_key_for_fetch(monkeypatch):
+    from api import figma_context
+
+    captured = {}
+
+    def fake_urlopen(request, timeout):
+        captured["url"] = request.full_url
+        payload = {
+            "nodes": {
+                "99:100": {
+                    "document": {
+                        "name": "Branch screen",
+                        "type": "FRAME",
+                    }
+                }
+            }
+        }
+        return io.BytesIO(json.dumps(payload).encode("utf-8"))
+
+    monkeypatch.setenv("FIGMA_ACCESS_TOKEN", "test-figma-token")
+    monkeypatch.setattr(figma_context.urllib.request, "urlopen", fake_urlopen)
+
+    materials = figma_context.enrich_figma_raw_materials(
+        [
+            "https://www.figma.com/design/baseFileKey/branch/branchFileKey/Product?node-id=99-100&token=secret"
+        ]
+    )
+
+    assert captured["url"] == "https://api.figma.com/v1/files/branchFileKey/nodes?ids=99%3A100"
+    assert "file_key: branchFileKey" in materials[1]
+    assert "baseFileKey" in materials[1]
+    assert "secret" not in materials[1]

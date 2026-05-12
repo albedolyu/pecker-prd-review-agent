@@ -55,6 +55,33 @@ def _timeout_recovery_enabled() -> bool:
     }
 
 
+def _confirmed_empty_retry_dims() -> set[str]:
+    raw = os.environ.get("PECKER_WORKER_CONFIRMED_EMPTY_RETRY_DIMS", "data_quality,ai_coding")
+    return {part.strip().lower() for part in raw.split(",") if part.strip()}
+
+
+def _confirmed_empty_retry_min_chars() -> int:
+    try:
+        return int(os.environ.get("PECKER_WORKER_CONFIRMED_EMPTY_RETRY_MIN_CHARS", "20000"))
+    except ValueError:
+        return 20000
+
+
+def _should_retry_confirmed_empty(dim_key: str, prd_content: str, empty_submission_reason: str) -> bool:
+    if not empty_submission_reason:
+        return False
+    if os.environ.get("PECKER_WORKER_CONFIRMED_EMPTY_RETRY", "").strip().lower() in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }:
+        return False
+    if str(dim_key or "").strip().lower() not in _confirmed_empty_retry_dims():
+        return False
+    return len(prd_content or "") >= _confirmed_empty_retry_min_chars()
+
+
 # ============================================================
 # _worker_core 的两个抽出 helpers (2026-04-23 #1 refactor):
 # prepare_context 负责 dim/model/prompt/tool schema 构建 (L242-289);
@@ -692,6 +719,9 @@ def _worker_core(
     # Tool 调用检测 + 催促重试 + 文本兜底 (CC maxTurns 约束)
     current_turn = 1  # 已用 1 轮
     empty_retry_used = False  # telemetry: 是否触发了"空提交重试"分支
+    confirmed_empty_retry_forced = _should_retry_confirmed_empty(
+        dim_key, prd_content, empty_submission_reason
+    )
     if not _has_tool_use(response) and current_turn < MAX_WORKER_TURNS:
         current_turn += 1
         log.warning(f"[{_cn_label(dim_key)}] turn={current_turn}/{MAX_WORKER_TURNS} 未调用 tool,催促重试")
@@ -716,7 +746,10 @@ def _worker_core(
                 log.info(f"[{_cn_label(dim_key)}] 从文本中解析出 {len(items)} 条改进项")
     elif (
         _is_empty_tool_submission(response)
-        and not empty_submission_confirmed
+        and (
+            not empty_submission_confirmed
+            or confirmed_empty_retry_forced
+        )
         and current_turn < MAX_WORKER_TURNS
     ):
         # 空提交重试: 模型调了 tool 但 items=[],常见于 data_quality/quality
@@ -726,9 +759,14 @@ def _worker_core(
         empty_retry_used = True
         log.warning(f"[{_cn_label(dim_key)}] turn={current_turn}/{MAX_WORKER_TURNS} 空提交,re-prompt 复检")
         prev_text = _extract_text(response)
+        assistant_context = prev_text or (
+            f"(我已完成首次审查，提交了 0 条改进项。null_finding_reason: {empty_submission_reason})"
+            if empty_submission_reason
+            else "(我已完成首次审查，提交了 0 条改进项)"
+        )
         followup_msgs = messages + [
             {"role": "assistant",
-             "content": prev_text or "(我已完成首次审查,提交了 0 条改进项)"},
+             "content": assistant_context},
             {"role": "user",
              "content": ("你刚才用 submit_review_items 提交了 0 条改进项。请逐条复核本维度 "
                          "checklist。若有遗漏,请提交真实 items;若仍确认无问题,请再次调用 "
@@ -796,6 +834,7 @@ def _worker_core(
         "turns_used": current_turn,
         "truncated": getattr(response, "truncated", False),
         "empty_retry_used": empty_retry_used,
+        "confirmed_empty_retry_forced": confirmed_empty_retry_forced,
         "empty_submission_confirmed": empty_submission_confirmed,
         "empty_submission_reason": empty_submission_reason[:300],
         "wiki_selection": wiki_selection_telemetry,

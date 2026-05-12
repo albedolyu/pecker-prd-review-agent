@@ -5,22 +5,28 @@ import re
 from typing import Any
 
 _SECRET_PATTERNS = (
-    re.compile(r"(?:sk-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9_]{30,})"),
+    re.compile(
+        r"(?:sk-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9_]{30,}|"
+        r"(?<![A-Za-z0-9_-])(?:[A-Za-z0-9_-]{20,}\.){2}[A-Za-z0-9_-]{20,}(?![A-Za-z0-9_-]))"
+    ),
     re.compile(r"(?i)(https?://)[^/\s:@]+:[^@\s/]+(?=@)"),
     re.compile(r"(?i)(bearer\s+)[^\s,;&]+"),
     re.compile(r"(?i)(authorization\s*[:=]\s*basic\s+)[^\s,;&]+"),
     re.compile(r"(?i)(set-cookie\s*[:=]\s*)[^;\r\n]+"),
     re.compile(r"(?i)(cookie\s*[:=]\s*)[^;\r\n]+"),
     re.compile(
-        r"(?i)((?:[\"'])(?:api[_-]?key|[a-z0-9]+[_-]api[_-]?key|[a-z0-9]+ApiKey|(?:[a-z0-9]+[_-])?access[_-]key[_-]id|awsAccessKeyId|private[_-]?key|[a-z0-9]+[_-]secret[_-]access[_-]key|awsSecretAccessKey|jwt|(?:access|refresh|id)?[_-]?token|[a-z0-9]+(?:[_-][a-z0-9]+)*[_-]token|[a-z0-9]+Token|awsSessionToken|code[_-]?verifier|shared[_-]?access[_-]?signature|(?:x[_-])?amz[_-]?(?:credential|signature)|credentials?|(?:client[_-]?)?secret(?:[_-]?key)?|password|authorization|proxy[_-]?authorization|cookie|set-cookie|setCookie|cookieHeader)(?:[\"']\s*:\s*[\"']))[^\"'\r\n]+"
+        r"(?i)((?:[\"'])(?:api[_-]?key|[a-z0-9]+[_-]api[_-]?key|[a-z0-9]+ApiKey|account[_-]?key|AccountKey|(?:[a-z0-9]+[_-])?access[_-]key[_-]id|awsAccessKeyId|googleAccessId|private[_-]?key|[a-z0-9]+[_-]secret[_-]access[_-]key|awsSecretAccessKey|jwt|(?:access|refresh|id)?[_-]?token|[a-z0-9]+(?:[_-][a-z0-9]+)*[_-]token|[a-z0-9]+Token|awsSessionToken|code[_-]?verifier|shared[_-]?access[_-]?(?:signature|key)|(?:x[_-])?amz[_-]?(?:credential|signature)|(?:x[_-])?goog[_-]?(?:credential|signature)|credentials?|(?:client[_-]?)?secret(?:[_-]?key)?|password|authorization|proxy[_-]?authorization|cookie|set-cookie|setCookie|cookieHeader)(?:[\"']\s*:\s*[\"']))[^\"'\r\n]+"
     ),
     re.compile(r"(?i)(api[_-]?key\s*[:=]\s*)[^\s,;&]+"),
-    re.compile(r"(?i)((?:[a-z0-9]+[_-])?access[_-]key[_-]id\s*[:=]\s*)[^\s,;&]+"),
+    re.compile(r"(?i)(account[_-]?key\s*[:=]\s*)[^\s,;&]+"),
+    re.compile(r"(?i)(((?:[a-z0-9]+[_-])?access[_-]key[_-]id|awsAccessKeyId)\s*[:=]\s*)[^\s,;&]+"),
+    re.compile(r"(?i)(googleAccessId\s*[:=]\s*)[^\s,;&]+"),
     re.compile(r"(?i)(jwt\s*[:=]\s*)[^\s,;&]+"),
     re.compile(r"(?i)((?:access[_-]?token|token)\s*[:=]\s*)[^\s,;&]+"),
     re.compile(r"(?i)(code[_-]?verifier\s*[:=]\s*)[^\s,;&]+"),
-    re.compile(r"(?i)(shared[_-]?access[_-]?signature\s*[:=]\s*)[^\s,;&]+"),
+    re.compile(r"(?i)(shared[_-]?access[_-]?(?:signature|key)\s*[:=]\s*)[^\s,;&]+"),
     re.compile(r"(?i)((?:x[_-])?amz[_-]?(?:credential|signature)\s*[:=]\s*)[^\s,;&]+"),
+    re.compile(r"(?i)((?:x[_-])?goog[_-]?(?:credential|signature)\s*[:=]\s*)[^\s,;&]+"),
     re.compile(r"(?i)([?&](?:sig|signature)=)[^&#\s]+"),
     re.compile(r"(?i)([?&]code=)[^&#\s]+"),
     re.compile(r"(?i)([a-z0-9]+[_-]secret[_-]access[_-]key\s*[:=]\s*)[^\s,;&]+"),
@@ -29,7 +35,7 @@ _SECRET_PATTERNS = (
     re.compile(r"(?i)(password\s*[:=]\s*)[^\s,;&]+"),
 )
 _SECRET_FIELD_RE = re.compile(
-    r"(?i)^(?:api[_-]?key|[a-z0-9]+[_-]api[_-]?key|[a-z0-9]+ApiKey|(?:[a-z0-9]+[_-])?access[_-]key[_-]id|awsAccessKeyId|private[_-]?key|[a-z0-9]+[_-]secret[_-]access[_-]key|awsSecretAccessKey|jwt|(?:access|refresh|id)?[_-]?token|[a-z0-9]+(?:[_-][a-z0-9]+)*[_-]token|[a-z0-9]+Token|awsSessionToken|code[_-]?verifier|shared[_-]?access[_-]?signature|(?:x[_-])?amz[_-]?(?:credential|signature)|sig|signature|credentials?|(?:client[_-]?)?secret(?:[_-]?key)?|password|authorization|proxy[_-]?authorization|cookie|set-cookie|setCookie|cookieHeader)$"
+    r"(?i)^(?:api[_-]?key|[a-z0-9]+[_-]api[_-]?key|[a-z0-9]+ApiKey|account[_-]?key|AccountKey|(?:[a-z0-9]+[_-])?access[_-]key[_-]id|awsAccessKeyId|googleAccessId|private[_-]?key|[a-z0-9]+[_-]secret[_-]access[_-]key|awsSecretAccessKey|jwt|(?:access|refresh|id)?[_-]?token|[a-z0-9]+(?:[_-][a-z0-9]+)*[_-]token|[a-z0-9]+Token|awsSessionToken|code[_-]?verifier|shared[_-]?access[_-]?(?:signature|key)|(?:x[_-])?amz[_-]?(?:credential|signature)|(?:x[_-])?goog[_-]?(?:credential|signature)|sig|signature|credentials?|(?:client[_-]?)?secret(?:[_-]?key)?|password|authorization|proxy[_-]?authorization|cookie|set-cookie|setCookie|cookieHeader)$"
 )
 _PRD_BODY_FIELD_RE = re.compile(
     r"(?i)^(?:prd[_-]?(?:content|body|text)|supplemental[_-]?materials[_-]?raw)$"

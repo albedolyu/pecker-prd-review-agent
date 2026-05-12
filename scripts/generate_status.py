@@ -254,6 +254,7 @@ def _analyze_sessions(session_files: list, include_stress: bool = False) -> dict
     retry_rescued = 0    # 触发后最终出了 items 的计数
     retry_kept_empty = 0 # 触发后仍空的计数
     retry_confirmed_empty = 0  # 触发后仍空但显式说明 clean 的计数
+    retry_forced_confirmed_empty = 0  # confirmed-empty 但仍被配置强制二审的计数
     retry_total_workers = 0  # 具备 empty_retry_used 字段的 worker_done 总数
 
     # Round 8: goshawk verdict 分布聚合
@@ -333,6 +334,8 @@ def _analyze_sessions(session_files: list, include_stress: bool = False) -> dict
                             retry_kept_empty += 1
                             if confirmed_empty:
                                 retry_confirmed_empty += 1
+                            if w.get("confirmed_empty_retry_forced"):
+                                retry_forced_confirmed_empty += 1
             items_distribution.append(items_sum)
 
     total = sum(outcomes.values())
@@ -394,6 +397,7 @@ def _analyze_sessions(session_files: list, include_stress: bool = False) -> dict
             "rescued": retry_rescued,
             "kept_empty": retry_kept_empty,
             "confirmed_empty": retry_confirmed_empty,
+            "forced_confirmed_empty_retry": retry_forced_confirmed_empty,
         },
         # Round 8: goshawk verdict 分布
         "goshawk": {
@@ -609,7 +613,8 @@ def format_report(git_info, test_info, code_info, session_info) -> str:
                 f"- 触发率: **{retry['trigger_rate']:.1%}** (应接近 data_quality/quality 静默率 ≈ 50%)",
                 f"- 救回率 (触发后最终出了 items): **{retry['rescue_rate']:.1%}**",
                 f"- 分解: triggered={retry['triggered']} rescued={retry['rescued']} "
-                f"kept_empty={retry['kept_empty']} confirmed_empty={retry.get('confirmed_empty', 0)}",
+                f"kept_empty={retry['kept_empty']} confirmed_empty={retry.get('confirmed_empty', 0)} "
+                f"forced_confirmed_empty={retry.get('forced_confirmed_empty_retry', 0)}",
                 "",
                 "> 救回率 < 40% → retry prompt 无效,考虑改进提示词;",
                 "> 救回率 > 70% → 修复有效;",

@@ -230,3 +230,79 @@ def test_feedback_summary_redacts_missing_record_owner_fields(tmp_path):
     serialized = json.dumps(summary["missing_records"], ensure_ascii=False)
     assert fake_key not in serialized
     assert "api_key=[REDACTED_SECRET]" in serialized
+
+
+def test_feedback_summary_builds_rule_recommendations_from_pm_samples(tmp_path):
+    _write_ground_truth(
+        tmp_path / "eval" / "ground_truth" / "alpha_pm_1778205600.json",
+        {
+            "workspace": "workspace-alpha",
+            "reviewer": "alice",
+            "prd_name": "alpha.md",
+            "timestamp": 1778205600,
+            "items": [
+                {
+                    "id": "R-001",
+                    "rule_id": "V-06",
+                    "dimension": "quality",
+                    "location": "section 3",
+                    "severity": "must",
+                    "action": "reject",
+                    "reason_category": "rule_too_strict",
+                    "reason_note": "PM says default pagination does not need repetition",
+                    "problem": "Pagination default is not repeated",
+                    "suggestion": "Add pagination details",
+                },
+                {
+                    "id": "R-002",
+                    "rule_id": "V-06",
+                    "dimension": "quality",
+                    "location": "section 4",
+                    "severity": "should",
+                    "action": "reject",
+                    "reason_category": "false_positive",
+                    "reason_note": "Existing template already covers it",
+                    "problem": "Acceptance owner missing",
+                    "suggestion": "Add owner",
+                },
+            ],
+        },
+    )
+    missing_path = tmp_path / "logs" / "missing_feedback.jsonl"
+    missing_path.parent.mkdir(parents=True, exist_ok=True)
+    missing_path.write_text(
+        json.dumps(
+            {
+                "timestamp": "2026-05-08T10:00:00",
+                "feedback_id": "fb-1",
+                "reviewer": "alice",
+                "workspace": "workspace-alpha",
+                "prd_name": "alpha.md",
+                "problem": "PRD missed refund status callback",
+                "location": "section 5",
+                "responsible_bird_id": "data_quality",
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    summary = build_feedback_summary(
+        tmp_path,
+        days=7,
+        now=datetime.fromtimestamp(1778292000),
+    )
+
+    recommendations = summary["rule_recommendations"]
+    assert recommendations[0]["recommendation"] == "narrow_rule_trigger"
+    assert recommendations[0]["rule_id"] == "V-06"
+    assert recommendations[0]["sample_count"] == 2
+    assert recommendations[0]["top_reason_category"] == "rule_too_strict"
+    assert recommendations[0]["samples"][0]["action"] == "reject"
+    assert recommendations[0]["samples"][0]["prd_name"] == "alpha.md"
+    assert recommendations[1]["recommendation"] == "strengthen_missing_coverage"
+    assert recommendations[1]["responsible_bird_id"] == "data_quality"
+    assert recommendations[1]["sample_count"] == 1
+    assert "PRD missed refund status callback" in recommendations[1]["samples"][0]["problem"]
+    assert "prd_content" not in json.dumps(recommendations, ensure_ascii=False)

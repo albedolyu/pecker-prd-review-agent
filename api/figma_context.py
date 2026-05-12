@@ -9,6 +9,8 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any, Iterable, List
 
+from api.schema_context import enrich_schema_raw_materials
+
 
 FIGMA_URL_RE = re.compile(
     r"https?://(?:www\.)?figma\.com/(?:design|file|proto|board|figjam)/[^\s<>\"')\]]+",
@@ -46,7 +48,7 @@ class FigmaLink:
 
 def enrich_figma_raw_materials(raw_materials: Iterable[str]) -> List[str]:
     """Append Figma-derived context blocks without blocking review on failures."""
-    materials = [str(item) for item in raw_materials]
+    materials = enrich_schema_raw_materials(str(item) for item in raw_materials)
     links = _extract_figma_links(materials)
     if not links:
         return materials
@@ -84,6 +86,8 @@ def _parse_figma_link(raw_url: str) -> FigmaLink | None:
     if len(parts) < 2:
         return None
     file_key = parts[1]
+    if len(parts) >= 4 and parts[2] == "branch" and parts[3]:
+        file_key = parts[3]
     node_id = urllib.parse.parse_qs(parsed.query).get("node-id", [""])[0].replace("-", ":")
     if not file_key:
         return None

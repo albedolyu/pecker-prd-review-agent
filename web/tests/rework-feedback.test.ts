@@ -68,4 +68,34 @@ describe("PM rework avoidance feedback", () => {
     expect(usage).toContain("productive_rate");
     expect(usage).toContain("reworkCategoryLabel");
   });
+
+  it("exposes shift-right rule recommendations in the admin feedback contract", () => {
+    const api = readSource("lib/api.ts");
+
+    expect(api).toContain("RuleRecommendation");
+    expect(api).toContain("rule_recommendations?: RuleRecommendation[]");
+    expect(api).toContain("narrow_rule_trigger");
+    expect(api).toContain("strengthen_missing_coverage");
+  });
+
+  it("shows shift-right rule recommendations in the admin usage dashboard", () => {
+    const usage = readSource("app/system/usage/page.tsx");
+
+    expect(usage).toContain("rule_recommendations");
+    expect(usage).toContain("Shift-right rule recommendations");
+    expect(usage).toContain("ruleRecommendationLabel");
+    expect(usage).toContain("recommendation.samples.slice(0, 2)");
+  });
+
+  it("shows forced empty retry observability in the admin usage dashboard", () => {
+    const usage = readSource("app/system/usage/page.tsx");
+    const api = readSource("lib/api.ts");
+
+    expect(api).toContain("EmptyRetrySummary");
+    expect(api).toContain("empty_retry?: EmptyRetrySummary");
+    expect(api).toContain("forced_confirmed_empty_retry: number");
+    expect(usage).toContain("emptyRetrySummary");
+    expect(usage).toContain("confirmed-empty forced retry");
+    expect(usage).toContain("forced_confirmed_empty_retry");
+  });
 });

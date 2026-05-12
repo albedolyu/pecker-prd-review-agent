@@ -48,6 +48,40 @@ def test_normalize_review_items_keeps_python_fields_and_adds_web_aliases():
     assert "problem" not in item, "源 item 不应被原地改写"
 
 
+def test_normalize_review_items_adds_insertable_prd_patch_text():
+    from review.post_review_contract import normalize_review_items
+
+    item = {
+        "id": "R-001",
+        "location": "3. Acceptance",
+        "issue": "Missing failure state",
+        "suggestion": "Add success, failure, and timeout acceptance criteria.",
+    }
+
+    out = normalize_review_items([item])[0]
+
+    assert out["proposed_patch"]
+    assert "3. Acceptance" in out["proposed_patch"]
+    assert "Add success, failure, and timeout acceptance criteria." in out["proposed_patch"]
+    assert "proposed_patch" not in item, "源 item 不应被原地改写"
+
+
+def test_normalize_review_items_preserves_existing_proposed_patch():
+    from review.post_review_contract import normalize_review_items
+
+    item = {
+        "id": "R-001",
+        "location": "3. Acceptance",
+        "issue": "Missing failure state",
+        "suggestion": "Add acceptance criteria.",
+        "proposed_patch": "Paste this exact paragraph into the PRD.",
+    }
+
+    out = normalize_review_items([item])[0]
+
+    assert out["proposed_patch"] == "Paste this exact paragraph into the PRD."
+
+
 def test_summarize_decisions_counts_pending_and_actions():
     from review.post_review_contract import summarize_decisions
 

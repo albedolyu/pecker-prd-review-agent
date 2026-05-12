@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { ReviewResult } from "@/lib/api";
 import {
+  buildReviewItemPatchText,
   buildPmFriendlySnapshot,
   buildZhiquHandoff,
   explainReviewItemForPm,
@@ -135,6 +136,35 @@ describe("pm-friendly review projection", () => {
     expect(explanation.pm_question).toContain("研发实现细节");
     expect(explanation.suggested_next_step).toContain("实现细节");
     expect(explanation.is_engineering_context).toBe(true);
+  });
+
+  it("uses backend proposed_patch as the one-click PRD patch text", () => {
+    const patchText = buildReviewItemPatchText({
+      id: "R-patch",
+      dimension: "structure",
+      location: "3. Acceptance",
+      problem: "Missing failure state",
+      suggestion: "Fallback suggestion should not be copied first.",
+      proposed_patch: "Add this exact failure-state paragraph to the PRD.",
+      evidence: "Existing acceptance section",
+    });
+
+    expect(patchText).toBe("Add this exact failure-state paragraph to the PRD.");
+  });
+
+  it("falls back to a paste-ready patch when proposed_patch is missing", () => {
+    const patchText = buildReviewItemPatchText({
+      id: "R-patch",
+      dimension: "structure",
+      location: "3. Acceptance",
+      problem: "Missing failure state",
+      suggestion: "Add success, failure, and timeout acceptance criteria.",
+      evidence: "Existing acceptance section",
+    });
+
+    expect(patchText).toContain("3. Acceptance");
+    expect(patchText).toContain("Add success, failure, and timeout acceptance criteria.");
+    expect(patchText).toContain("Missing failure state");
   });
 
   it("translates common implementation terms into PM decision language", () => {

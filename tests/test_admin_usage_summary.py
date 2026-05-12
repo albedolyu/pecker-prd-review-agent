@@ -120,6 +120,65 @@ def test_usage_summary_redacts_budget_snapshot_errors(monkeypatch, tmp_path):
     assert "api_key=[REDACTED_SECRET]" in summary["budget"]["error"]
 
 
+def test_usage_summary_exposes_forced_empty_retry_rollup(tmp_path):
+    _write_jsonl(
+        tmp_path / "workspace-alpha" / "output" / "sessions" / "run-001.jsonl",
+        [
+            {
+                "type": "review_started",
+                "ts": "2026-05-08T09:00:00",
+                "reviewer": "lvxinhang",
+                "mode": "standard",
+                "prd_name": "alpha.md",
+            },
+            {
+                "type": "worker_done",
+                "ts": "2026-05-08T09:02:00",
+                "dim_key": "data_quality",
+                "success": True,
+                "items_count": 0,
+                "empty_retry_used": True,
+                "confirmed_empty_retry_forced": True,
+                "empty_submission_confirmed": True,
+            },
+            {
+                "type": "worker_done",
+                "ts": "2026-05-08T09:03:00",
+                "dim_key": "quality",
+                "success": True,
+                "items_count": 1,
+                "empty_retry_used": True,
+                "confirmed_empty_retry_forced": False,
+            },
+            {
+                "type": "worker_done",
+                "ts": "2026-05-08T09:04:00",
+                "dim_key": "risk",
+                "success": True,
+                "items_count": 0,
+                "empty_retry_used": False,
+            },
+            {
+                "type": "review_completed",
+                "ts": "2026-05-08T09:08:00",
+                "items_count": 3,
+                "duration_ms": 480000,
+            },
+        ],
+    )
+
+    summary = build_usage_summary(tmp_path, days=30, now=datetime(2026, 5, 8, 12, 0, 0))
+
+    assert summary["empty_retry"] == {
+        "instrumented_workers": 3,
+        "triggered": 2,
+        "rescued": 1,
+        "kept_empty": 1,
+        "confirmed_empty": 1,
+        "forced_confirmed_empty_retry": 1,
+    }
+
+
 @pytest.mark.asyncio
 async def test_admin_usage_endpoint_includes_reconnectable_jobs(monkeypatch, tmp_path):
     from api.review_jobs import ReviewJobStore

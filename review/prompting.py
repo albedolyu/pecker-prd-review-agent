@@ -941,6 +941,100 @@ def _maybe_compact_wiki(wiki_pages, budget):
     return compacted
 
 
+def _workspace_from_wiki_path(wiki_path):
+    if not wiki_path:
+        return None
+    wiki_dir = os.path.abspath(str(wiki_path))
+    if os.path.basename(wiki_dir).lower() == "wiki":
+        return os.path.dirname(wiki_dir)
+    return wiki_dir
+
+
+def _entity_source_authority(wiki_path, entity):
+    """Return authority tier for the first local source page backing an entity."""
+    if not wiki_path:
+        return ""
+    wiki_dir = os.path.abspath(str(wiki_path))
+    for raw_page in entity.get("source_pages") or []:
+        source_page = str(raw_page or "").strip()
+        if not source_page:
+            continue
+        candidates = [source_page]
+        if not os.path.splitext(source_page)[1]:
+            candidates.append(f"{source_page}.md")
+        for candidate_name in candidates:
+            candidate = os.path.abspath(os.path.join(wiki_dir, candidate_name))
+            try:
+                if os.path.commonpath([wiki_dir, candidate]) != wiki_dir:
+                    continue
+            except ValueError:
+                continue
+            if not os.path.isfile(candidate):
+                continue
+            try:
+                from review.evidence_verify import _wiki_authority_tier
+
+                return _wiki_authority_tier(candidate)
+            except Exception as exc:  # noqa: BLE001 - authority is prompt metadata.
+                log.debug(f"[prompting] KG entity authority lookup skipped: {exc}")
+                return ""
+    return ""
+
+
+def _build_prd_entity_anchor_section(prd_content, wiki_path, max_entities=5):
+    """Inject compact KG entity anchors matched from PRD text.
+
+    This is a prompt hint only: workers still need to cite exact evidence and
+    evidence_verify remains responsible for checking [[entity:e_xxx]] validity.
+    """
+    workspace = _workspace_from_wiki_path(wiki_path)
+    if not workspace:
+        return ""
+    try:
+        from review.wiki_kg_tools import search_entity
+
+        entities = search_entity(
+            prd_content or "",
+            top_k=max_entities,
+            workspace=workspace,
+        )
+    except Exception as exc:  # noqa: BLE001 - KG anchors must not block review.
+        log.debug(f"[prompting] KG entity anchor lookup skipped: {exc}")
+        return ""
+    if not entities:
+        return ""
+
+    lines = [
+        "## Wiki entity anchors matched from PRD",
+        (
+            "These private-domain concepts matched the PRD text. Prefer "
+            "`[[entity:e_xxx]]` citations when one of these anchors is the "
+            "actual evidence for a finding."
+        ),
+    ]
+    for ent in entities[:max_entities]:
+        eid = str(ent.get("id") or "").strip()
+        title = str(ent.get("title") or "").strip()
+        etype = str(ent.get("type") or "").strip()
+        pages = ", ".join(str(p) for p in (ent.get("source_pages") or [])[:3])
+        authority = _entity_source_authority(wiki_path, ent)
+        score = ent.get("score")
+        if not eid or not title:
+            continue
+        tail = []
+        if etype:
+            tail.append(f"type={etype}")
+        if authority:
+            tail.append(f"authority={authority}")
+        if pages:
+            tail.append(f"sources={pages}")
+        if score is not None:
+            tail.append(f"score={score}")
+        meta = f" ({'; '.join(tail)})" if tail else ""
+        lines.append(f"- `[[entity:{eid}]]` {title}{meta}")
+    return "\n".join(lines) if len(lines) > 2 else ""
+
+
 def _build_worker_messages(
     prd_content,
     wiki_pages,
@@ -955,6 +1049,7 @@ def _build_worker_messages(
 ):
     """构建 worker 的 user messages，包含 PRD 和知识库内容"""
     from agent_config import MAX_WIKI_CHARS, COMPACT_THRESHOLD
+    from review.scenario_detection import scenario_focus_for_dimension
     from review.wiki_selection import select_wiki_pages
 
     wk = wiki_keywords or get_wiki_keywords()
@@ -971,6 +1066,12 @@ def _build_worker_messages(
         parts = [f"## 待评审 PRD\n\n{prd_content}"]
     if diff_context:
         parts.insert(0, diff_context)  # diff context before PRD content
+    scenario_focus = scenario_focus_for_dimension(prd_content, dim_key)
+    if scenario_focus:
+        parts.append(scenario_focus)
+    entity_anchor_section = _build_prd_entity_anchor_section(prd_content, wiki_path)
+    if entity_anchor_section:
+        parts.append(entity_anchor_section)
     wiki_char_total = 0
     if wiki_pages:
         wiki_budget = wiki_budget_chars or _wiki_budget_for_dim(

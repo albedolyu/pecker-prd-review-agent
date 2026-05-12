@@ -216,6 +216,93 @@ class TestWorkerEmptyRetry:
         assert result["telemetry"]["empty_submission_confirmed"] is True
         assert result["telemetry"]["empty_submission_reason"] == reason
 
+    def test_long_prd_data_quality_confirmed_empty_still_gets_one_retry(self, monkeypatch):
+        _make_minimal_worker_env(monkeypatch)
+
+        from parallel_review import _worker_core
+
+        fake_dim = {
+            "name": "数据核对员",
+            "model": "sonnet",
+            "effort": "medium",
+            "checklist": [{"rule_id": "RC-009"}],
+        }
+        monkeypatch.setattr(
+            "review.worker.get_review_dimensions",
+            lambda workspace=None: {"data_quality": fake_dim},
+        )
+        monkeypatch.delenv("PECKER_WORKER_CONFIRMED_EMPTY_RETRY_DIMS", raising=False)
+        monkeypatch.delenv("PECKER_WORKER_CONFIRMED_EMPTY_RETRY_MIN_CHARS", raising=False)
+
+        first = _response([
+            _tool_use_block([], null_finding_reason="已逐条核查，暂未发现数据问题")
+        ])
+        retry_items = [
+            {"id": "R-001", "issue": "补充字段来源", "severity": "must", "rule_id": "RC-009"}
+        ]
+        second = _response([_tool_use_block(retry_items)])
+        client = MagicMock()
+        client.create.side_effect = [first, second]
+
+        monkeypatch.setattr("review.worker.time.sleep", lambda _: None)
+        monkeypatch.setattr("review.worker.random.uniform", lambda a, b: 0)
+
+        result = _worker_core(
+            client=client,
+            dim_key="data_quality",
+            prd_content="PRD" * 8000,
+            wiki_pages={},
+            model_tiers={"sonnet": "s-m"},
+        )
+
+        assert client.create.call_count == 2
+        assert len(result["items"]) == 1
+        assert result["telemetry"]["empty_retry_used"] is True
+        assert result["telemetry"]["confirmed_empty_retry_forced"] is True
+
+    def test_confirmed_empty_retry_dims_env_is_case_insensitive(self, monkeypatch):
+        _make_minimal_worker_env(monkeypatch)
+
+        from parallel_review import _worker_core
+
+        fake_dim = {
+            "name": "数据核对",
+            "model": "sonnet",
+            "effort": "medium",
+            "checklist": [{"rule_id": "RC-009"}],
+        }
+        monkeypatch.setattr(
+            "review.worker.get_review_dimensions",
+            lambda workspace=None: {"data_quality": fake_dim},
+        )
+        monkeypatch.setenv("PECKER_WORKER_CONFIRMED_EMPTY_RETRY_DIMS", "Data_Quality,AI_Coding")
+        monkeypatch.delenv("PECKER_WORKER_CONFIRMED_EMPTY_RETRY_MIN_CHARS", raising=False)
+
+        first = _response([
+            _tool_use_block([], null_finding_reason="已逐条核查，暂未发现数据问题")
+        ])
+        retry_items = [
+            {"id": "R-001", "issue": "补充字段来源", "severity": "must", "rule_id": "RC-009"}
+        ]
+        second = _response([_tool_use_block(retry_items)])
+        client = MagicMock()
+        client.create.side_effect = [first, second]
+
+        monkeypatch.setattr("review.worker.time.sleep", lambda _: None)
+        monkeypatch.setattr("review.worker.random.uniform", lambda a, b: 0)
+
+        result = _worker_core(
+            client=client,
+            dim_key="data_quality",
+            prd_content="PRD" * 8000,
+            wiki_pages={},
+            model_tiers={"sonnet": "s-m"},
+        )
+
+        assert client.create.call_count == 2
+        assert len(result["items"]) == 1
+        assert result["telemetry"]["confirmed_empty_retry_forced"] is True
+
     def test_empty_submission_retry_still_empty_accepted(self, monkeypatch):
         """retry 后仍空 → 接受空结果,不再重试,telemetry 仍标记。"""
         _make_minimal_worker_env(monkeypatch)

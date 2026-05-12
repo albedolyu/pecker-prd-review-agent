@@ -36,6 +36,22 @@ BUSINESS_DECISION_LABELS = {
 }
 
 
+def _build_proposed_patch(item: Mapping[str, Any]) -> str:
+    """Build paste-ready PRD patch text from an item without reading PRD body."""
+    existing = item.get("proposed_patch") or item.get("patch_text")
+    if isinstance(existing, str) and existing.strip():
+        return existing.strip()
+
+    suggestion = str(item.get("suggestion") or "").strip()
+    if not suggestion:
+        return ""
+
+    location = str(item.get("location") or "").strip()
+    if location:
+        return f"在「{location}」补充：{suggestion}"
+    return f"补充：{suggestion}"
+
+
 def normalize_review_items(items: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """保留 Python 原字段,补齐 Web/报告消费的 canonical aliases。"""
     normalized: List[Dict[str, Any]] = []
@@ -57,6 +73,10 @@ def normalize_review_items(items: Iterable[Dict[str, Any]]) -> List[Dict[str, An
             out["confidence"] = out["confidence_score"]
         elif "confidence_score" not in out and "confidence" in out:
             out["confidence_score"] = out["confidence"]
+
+        proposed_patch = _build_proposed_patch(out)
+        if proposed_patch:
+            out["proposed_patch"] = proposed_patch
 
         normalized.append(out)
     return normalized

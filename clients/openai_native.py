@@ -234,13 +234,25 @@ class OpenAINativeClient:
         return {"type": "function", "function": {"name": name}}
 
     @staticmethod
-    def _strict_structured_output_enabled() -> bool:
-        value = (
-            os.environ.get("PECKER_OPENAI_STRICT_STRUCTURED_OUTPUT")
-            or os.environ.get("OPENAI_STRICT_STRUCTURED_OUTPUT")
-            or "1"
-        ).strip().lower()
+    def _truthy_env_value(value: Optional[str], *, default: bool) -> bool:
+        if value is None:
+            return default
+        value = value.strip().lower()
+        if not value:
+            return default
         return value not in {"0", "false", "no", "off"}
+
+    @classmethod
+    def _strict_structured_output_enabled(cls, retry_policy: str = "foreground") -> bool:
+        if (retry_policy or "").strip().lower() == "worker":
+            return cls._truthy_env_value(
+                os.environ.get("PECKER_OPENAI_WORKER_STRICT_STRUCTURED_OUTPUT"),
+                default=False,
+            )
+        value = os.environ.get("PECKER_OPENAI_STRICT_STRUCTURED_OUTPUT")
+        if value is None:
+            value = os.environ.get("OPENAI_STRICT_STRUCTURED_OUTPUT")
+        return cls._truthy_env_value(value, default=True)
 
     @staticmethod
     def _normalize_json_schema(schema: Any) -> Any:
@@ -447,7 +459,7 @@ class OpenAINativeClient:
         selected_tool = self._selected_tool(tools, tool_choice)
         strict_schema_format = (
             self._json_schema_format(selected_tool)
-            if self._strict_structured_output_enabled()
+            if self._strict_structured_output_enabled(retry_policy)
             else None
         )
         req_id = _gen_req_id()
@@ -630,7 +642,10 @@ class OpenAINativeClient:
     def _json_candidate_text(text: str) -> str:
         candidate = (text or "").strip()
         match = re.fullmatch(r"```\s*(?:json)?\s*(.*?)\s*```", candidate, flags=re.DOTALL | re.IGNORECASE)
-        return match.group(1).strip() if match else candidate
+        if match:
+            return match.group(1).strip()
+        embedded = re.search(r"```\s*(?:json)?\s*(.*?)\s*```", candidate, flags=re.DOTALL | re.IGNORECASE)
+        return embedded.group(1).strip() if embedded else candidate
 
     @staticmethod
     def _to_unified_response_from_responses(

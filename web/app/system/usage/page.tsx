@@ -12,6 +12,7 @@ import {
   type FeedbackBucket,
   type FeedbackRecord,
   type MissingFeedbackRecord,
+  type RuleRecommendation,
   type UsageRun,
 } from "@/lib/api";
 import { AdminOnlyPage } from "@/components/auth/AdminOnlyPage";
@@ -65,11 +66,13 @@ function AdminUsageContent() {
     ? `$${budgetSpent.toFixed(2)} / $${budgetLimit.toFixed(2)}`
     : "未设置";
 
+  const emptyRetrySummary = data?.empty_retry;
   const activeJobs = data?.active_jobs ?? [];
   const activeDrafts = data?.active_drafts ?? [];
   const recentJobEvents = data?.recent_job_events ?? [];
   const feedbackCorrectnessRows = Object.entries(feedbackData?.correctness_reasons ?? {});
   const feedbackBusinessRows = Object.entries(feedbackData?.business_decisions ?? {});
+  const ruleRecommendations = feedbackData?.rule_recommendations ?? [];
   const ruleImpactReports = data?.rule_impact_reports ?? [];
 
   const completionRate = useMemo(() => {
@@ -187,6 +190,34 @@ function AdminUsageContent() {
             >
               正在刷新...
             </div>
+          )}
+
+          {emptyRetrySummary && emptyRetrySummary.instrumented_workers > 0 && (
+            <section style={{ ...cardStyle, marginBottom: 16 }}>
+              <SectionHead
+                title="confirmed-empty forced retry"
+                hint="Metadata-only retry observability for empty worker output; PRD body is not shown."
+              />
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+                  gap: 10,
+                  padding: 16,
+                }}
+              >
+                <SmallStat
+                  label="instrumented workers"
+                  value={emptyRetrySummary.instrumented_workers}
+                />
+                <SmallStat label="retry triggered" value={emptyRetrySummary.triggered} />
+                <SmallStat label="retry rescued" value={emptyRetrySummary.rescued} />
+                <SmallStat
+                  label="forced confirmed-empty"
+                  value={emptyRetrySummary.forced_confirmed_empty_retry}
+                />
+              </div>
+            </section>
           )}
 
           {activeJobs.length > 0 && (
@@ -518,6 +549,87 @@ function AdminUsageContent() {
               ) : (
                 <InlineEmpty text="还没有同事留下具体说明。" />
               )}
+            </section>
+          )}
+
+          {ruleRecommendations.length > 0 && (
+            <section style={{ ...cardStyle, marginBottom: 16 }}>
+              <SectionHead
+                title="Shift-right rule recommendations"
+                hint="从 PM 驳回和补充线索反推规则调优候选；这里只展示脱敏样本，不自动改规则"
+              />
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                {ruleRecommendations.slice(0, 6).map((recommendation) => (
+                  <div
+                    key={`${recommendation.recommendation}-${ruleRecommendationTarget(recommendation)}`}
+                    style={{
+                      padding: "12px 16px",
+                      borderTop: "1px solid var(--border-subtle)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr auto",
+                        gap: 12,
+                        alignItems: "start",
+                        marginBottom: 8,
+                      }}
+                    >
+                      <div>
+                        <div style={{ color: "var(--text-strong)", fontSize: 13, fontWeight: 650 }}>
+                          {ruleRecommendationLabel(recommendation.recommendation)}
+                        </div>
+                        <div style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 3 }}>
+                          {ruleRecommendationTarget(recommendation)}
+                        </div>
+                      </div>
+                      <span
+                        style={{
+                          borderRadius: "var(--r-pill)",
+                          padding: "3px 9px",
+                          background: "var(--surface-muted)",
+                          color: "var(--text-muted)",
+                          fontSize: 11,
+                          fontWeight: 650,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {recommendation.sample_count} samples
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {recommendation.samples.slice(0, 2).map((sample, index) => (
+                        <div
+                          key={`${sample.ts}-${sample.reviewer}-${index}`}
+                          style={{
+                            border: "1px solid var(--border-subtle)",
+                            borderRadius: "var(--r-3)",
+                            padding: "8px 10px",
+                            background: "var(--surface-base)",
+                            color: "var(--text-muted)",
+                            fontSize: 12,
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          <div style={{ color: "var(--text-default)", fontWeight: 600 }}>
+                            {sample.problem || sample.location || "No sample summary"}
+                          </div>
+                          <div style={{ marginTop: 3 }}>
+                            {formatTime(sample.ts)} · {sample.reviewer || "未署名"} ·{" "}
+                            {sample.prd_name || "未记录材料名"}
+                          </div>
+                          {sample.reason_note && (
+                            <div style={{ color: "var(--text-faint)", marginTop: 3 }}>
+                              {sample.reason_note}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </section>
           )}
 
@@ -1390,6 +1502,29 @@ function reworkCategoryLabel(category?: string) {
     implementation_risk: "实现风险返工",
     none: "暂未看到",
   }[category ?? ""] ?? (category || "未归类");
+}
+
+function ruleRecommendationLabel(recommendation?: string) {
+  return {
+    narrow_rule_trigger: "收窄误伤规则触发条件",
+    strengthen_missing_coverage: "补强遗漏覆盖规则",
+  }[recommendation ?? ""] ?? (recommendation || "待判断规则动作");
+}
+
+function ruleRecommendationTarget(recommendation: RuleRecommendation) {
+  if (recommendation.rule_id) {
+    const reason = recommendation.top_reason_category
+      ? ` · ${rejectReasonLabel(recommendation.top_reason_category)}`
+      : "";
+    return `${recommendation.rule_id}${reason}`;
+  }
+  if (recommendation.responsible_bird_id) {
+    return `bird ${recommendation.responsible_bird_id}`;
+  }
+  if (recommendation.dimension) {
+    return dimensionLabel(recommendation.dimension);
+  }
+  return "unassigned";
 }
 
 const cardStyle: React.CSSProperties = {

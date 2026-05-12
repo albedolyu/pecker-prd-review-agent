@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 
@@ -105,6 +106,90 @@ def test_build_worker_messages_uses_wiki_selector(monkeypatch):
     content = messages[0]["content"]
     assert "### 字段映射规范" in content
     assert "### 运营活动说明" not in content
+
+
+def test_build_worker_messages_injects_prd_matched_kg_entity_anchors(tmp_path):
+    from review.prompting import _build_worker_messages
+
+    workspace = tmp_path / "workspace"
+    kg_dir = workspace / "wiki" / "_kg"
+    kg_dir.mkdir(parents=True)
+    entities = [
+        {
+            "id": "e_abc12345",
+            "title": "Field mapping standard",
+            "type": "spec_doc",
+            "description": "Requires PRDs to map UI fields to source_table and source_column.",
+            "aliases": ["field source contract"],
+            "source_pages": ["concepts/field-mapping.md"],
+        },
+        {
+            "id": "e_def67890",
+            "title": "Irrelevant operations note",
+            "type": "note",
+            "description": "Unrelated release process guidance.",
+            "aliases": ["release calendar"],
+            "source_pages": ["ops/release-calendar.md"],
+        },
+    ]
+    (kg_dir / "entities.json").write_text(
+        json.dumps(entities, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (kg_dir / "relations.json").write_text("[]", encoding="utf-8")
+
+    messages = _build_worker_messages(
+        "This PRD must follow the field source contract for all DDL columns.",
+        {},
+        dim_key="data_quality",
+        wiki_path=str(workspace / "wiki"),
+    )
+
+    content = messages[0]["content"]
+    assert "## Wiki entity anchors matched from PRD" in content
+    assert "[[entity:e_abc12345]]" in content
+    assert "Field mapping standard" in content
+    assert "concepts/field-mapping.md" in content
+    assert "e_def67890" not in content
+
+
+def test_build_worker_messages_injects_kg_entity_source_authority(tmp_path):
+    from review.prompting import _build_worker_messages
+
+    workspace = tmp_path / "workspace"
+    kg_dir = workspace / "wiki" / "_kg"
+    concepts_dir = workspace / "wiki" / "concepts"
+    kg_dir.mkdir(parents=True)
+    concepts_dir.mkdir(parents=True)
+    (concepts_dir / "field-mapping.md").write_text(
+        "---\nauthority: canonical\nsources: 2\n---\nField mapping source of truth.",
+        encoding="utf-8",
+    )
+    entities = [
+        {
+            "id": "e_abc12345",
+            "title": "Field mapping standard",
+            "type": "spec_doc",
+            "description": "Requires PRDs to map UI fields to source_table and source_column.",
+            "aliases": ["field source contract"],
+            "source_pages": ["concepts/field-mapping.md"],
+        }
+    ]
+    (kg_dir / "entities.json").write_text(
+        json.dumps(entities, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (kg_dir / "relations.json").write_text("[]", encoding="utf-8")
+
+    messages = _build_worker_messages(
+        "This PRD must follow the field source contract for all DDL columns.",
+        {},
+        dim_key="data_quality",
+        wiki_path=str(workspace / "wiki"),
+    )
+
+    content = messages[0]["content"]
+    assert "authority=canonical" in content
 
 
 def test_build_worker_messages_emits_selection_telemetry(monkeypatch):

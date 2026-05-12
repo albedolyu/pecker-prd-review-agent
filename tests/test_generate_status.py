@@ -260,6 +260,28 @@ class TestEmptyRetryAggregation:
         assert retry["trigger_rate"] == 0.75
         assert abs(retry["rescue_rate"] - 2/3) < 1e-3  # 服从 round(..., 3) 精度
 
+    def test_retry_stats_counts_confirmed_empty_forced_retry(self, tmp_path, monkeypatch):
+        """强制二审的 confirmed-empty 分支需要单独聚合，方便看配置是否真的生效。"""
+        from generate_status import collect_session_stats
+        import generate_status as gs
+
+        self._session_file(tmp_path, "forced", [
+            {"type": "review_started"},
+            {"type": "worker_done", "dim": "data_quality", "items_count": 0,
+             "error": None, "empty_retry_used": True,
+             "confirmed_empty_retry_forced": True,
+             "empty_submission_confirmed": True},
+            {"type": "worker_done", "dim": "ai_coding", "items_count": 2,
+             "error": None, "empty_retry_used": True,
+             "confirmed_empty_retry_forced": False},
+        ])
+        monkeypatch.setattr(gs, "ROOT", tmp_path)
+
+        retry = collect_session_stats()["empty_retry"]
+
+        assert retry["triggered"] == 2
+        assert retry["forced_confirmed_empty_retry"] == 1
+
     def test_confirmed_empty_workers_not_counted_as_silent_rate(self, tmp_path, monkeypatch):
         """worker silent_rate 分母纳入 clean 结果,但 confirmed empty 不进 silent 分子。"""
         from generate_status import collect_session_stats

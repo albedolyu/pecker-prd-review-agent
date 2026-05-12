@@ -13,6 +13,13 @@ from review.feedback_store import get_rework_avoidance_summary
 
 
 _VALID_ACTIONS = {"accept", "reject", "edit"}
+_RULE_NARROWING_REASONS = {"rule_too_strict", "false_positive", "model_noise", "impl_detail"}
+_RULE_REASON_PRIORITY = {
+    "rule_too_strict": 0,
+    "false_positive": 1,
+    "model_noise": 2,
+    "impl_detail": 3,
+}
 
 
 def _safe_int(value: Any, default: int = 0) -> int:
@@ -196,6 +203,112 @@ def _pct(numerator: int, denominator: int) -> float:
     if denominator <= 0:
         return 0.0
     return round(numerator / denominator, 4)
+
+
+def _top_reason_category(counter: Counter[str]) -> str:
+    if not counter:
+        return ""
+    return sorted(
+        counter.items(),
+        key=lambda item: (-item[1], _RULE_REASON_PRIORITY.get(item[0], 99), item[0]),
+    )[0][0]
+
+
+def _feedback_sample(row: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "ts": row.get("ts", ""),
+        "reviewer": row.get("reviewer", ""),
+        "workspace": row.get("workspace", ""),
+        "prd_name": row.get("prd_name", ""),
+        "location": row.get("location", ""),
+        "action": row.get("action", ""),
+        "reason_category": row.get("reason_category", ""),
+        "problem": _short_text(row.get("problem"), 140),
+        "reason_note": _short_text(row.get("reason_note"), 100),
+    }
+
+
+def _missing_sample(row: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "ts": row.get("ts", ""),
+        "reviewer": row.get("reviewer", ""),
+        "workspace": row.get("workspace", ""),
+        "prd_name": row.get("prd_name", ""),
+        "location": row.get("location", ""),
+        "problem": _short_text(row.get("problem"), 140),
+    }
+
+
+def _build_rule_recommendations(
+    records: List[Dict[str, Any]],
+    missing_records: List[Dict[str, Any]],
+    *,
+    limit: int = 8,
+) -> List[Dict[str, Any]]:
+    """Create shift-right rule tuning candidates from PM feedback samples."""
+
+    by_rule: Dict[str, Dict[str, Any]] = defaultdict(
+        lambda: {
+            "recommendation": "narrow_rule_trigger",
+            "rule_id": "",
+            "dimension": "",
+            "sample_count": 0,
+            "reason_categories": Counter(),
+            "samples": [],
+        }
+    )
+    for row in records:
+        if row.get("action") != "reject":
+            continue
+        reason = str(row.get("reason_category") or "")
+        rule_id = str(row.get("rule_id") or "")
+        if not rule_id or reason not in _RULE_NARROWING_REASONS:
+            continue
+        bucket = by_rule[rule_id]
+        bucket["rule_id"] = rule_id
+        if not bucket["dimension"]:
+            bucket["dimension"] = row.get("dimension", "")
+        bucket["sample_count"] += 1
+        bucket["reason_categories"][reason] += 1
+        if len(bucket["samples"]) < 3:
+            bucket["samples"].append(_feedback_sample(row))
+
+    recommendations: List[Dict[str, Any]] = []
+    for bucket in by_rule.values():
+        reasons = bucket["reason_categories"]
+        recommendations.append(
+            {
+                **bucket,
+                "reason_categories": dict(reasons.most_common()),
+                "top_reason_category": _top_reason_category(reasons),
+            }
+        )
+
+    by_missing_owner: Dict[str, Dict[str, Any]] = defaultdict(
+        lambda: {
+            "recommendation": "strengthen_missing_coverage",
+            "responsible_bird_id": "",
+            "sample_count": 0,
+            "samples": [],
+        }
+    )
+    for row in missing_records:
+        owner = str(row.get("responsible_bird_id") or "unknown")
+        bucket = by_missing_owner[owner]
+        bucket["responsible_bird_id"] = owner
+        bucket["sample_count"] += 1
+        if len(bucket["samples"]) < 3:
+            bucket["samples"].append(_missing_sample(row))
+
+    recommendations.extend(by_missing_owner.values())
+    recommendations.sort(
+        key=lambda row: (
+            0 if row["recommendation"] == "narrow_rule_trigger" else 1,
+            -int(row.get("sample_count") or 0),
+            str(row.get("rule_id") or row.get("responsible_bird_id") or ""),
+        )
+    )
+    return recommendations[:limit]
 
 
 def build_feedback_summary(
@@ -428,6 +541,7 @@ def build_feedback_summary(
             {key: value for key, value in row.items() if key != "sort_index"}
             for row in missing_records[:limit]
         ],
+        "rule_recommendations": _build_rule_recommendations(records, missing_records),
         "rework_avoidance": get_rework_avoidance_summary(
             db_path=project_root / "review" / "feedback.db",
             days=days,

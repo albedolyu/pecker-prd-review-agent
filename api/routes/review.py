@@ -196,6 +196,7 @@ def _build_worker_done_event_payload(dim: str, result: Dict[str, Any]) -> Dict[s
         "degraded": telemetry.get("degraded") if telemetry else None,
         # Round 2: 空提交重试分支 telemetry,后续由 generate_status 聚合
         "empty_retry_used": telemetry.get("empty_retry_used") if telemetry else None,
+        "confirmed_empty_retry_forced": telemetry.get("confirmed_empty_retry_forced") if telemetry else None,
         "turns_used": telemetry.get("turns_used") if telemetry else None,
         "empty_submission_confirmed": telemetry.get("empty_submission_confirmed") if telemetry else None,
         "empty_submission_reason": telemetry.get("empty_submission_reason") if telemetry else None,

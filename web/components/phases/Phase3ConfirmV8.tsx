@@ -41,7 +41,7 @@ import {
   shouldApplyGoshawkPatchDraft,
 } from "@/lib/async-goshawk";
 import { saveReviewDraftSnapshot } from "@/lib/draft-persistence";
-import { explainReviewItemForPm } from "@/lib/pm-friendly";
+import { buildReviewItemPatchText, explainReviewItemForPm } from "@/lib/pm-friendly";
 import {
   findPrdAnchorMatch,
   getPrdAnchorLineLabel,
@@ -1900,19 +1900,12 @@ function PinChip() {
 
 function CopySuggestionBtn({ item }: { item: ReviewItem }) {
   const [copied, setCopied] = useState(false);
-  const text = (() => {
-    const parts: string[] = [];
-    if (item.problem) parts.push(`【问题】${item.problem}`);
-    if (item.suggestion) parts.push(`【建议】${item.suggestion}`);
-    if (item.evidence) parts.push(`【依据】${item.evidence}`);
-    if (item.location) parts.push(`【位置】${item.location}`);
-    return parts.join("\n");
-  })();
+  const text = buildReviewItemPatchText(item);
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      toast.success("已复制建议到剪贴板");
+      toast.success("已复制 PRD 补丁到剪贴板");
       setTimeout(() => setCopied(false), 1500);
     } catch {
       toast.error("复制失败,请手动选中文本");
@@ -1922,7 +1915,7 @@ function CopySuggestionBtn({ item }: { item: ReviewItem }) {
     <button
       type="button"
       onClick={handleCopy}
-      title="复制问题 + 建议 + 依据,可直接粘回 PRD"
+      title="复制可直接粘回 PRD 的补丁文本"
       style={{
         padding: "5px 12px",
         border: "1px solid var(--border-default)",
@@ -1935,7 +1928,7 @@ function CopySuggestionBtn({ item }: { item: ReviewItem }) {
         fontFamily: "var(--font-sans)",
       }}
     >
-      {copied ? "已复制" : "复制建议"}
+      {copied ? "已复制" : "复制补丁"}
     </button>
   );
 }

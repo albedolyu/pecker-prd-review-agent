@@ -480,6 +480,30 @@ def test_redact_text_handles_short_bearer_tokens():
     assert "Authorization: Bearer [REDACTED_SECRET]" in redacted
 
 
+def test_redact_text_handles_inline_camel_case_refresh_token():
+    value = "oauth refresh failed with refreshToken=refresh-token-secret&state=workspace-alpha"
+
+    redacted = redact_text(value)
+
+    assert "refresh-token-secret" not in redacted
+    assert "refreshToken=[REDACTED_SECRET]" in redacted
+    assert "&state=workspace-alpha" in redacted
+
+
+def test_redact_text_handles_bare_jwt_token():
+    value = (
+        "worker auth failed with "
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+        "eyJzdWIiOiIxMjM0NTY3ODkwIn0."
+        "SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+    )
+
+    redacted = redact_text(value)
+
+    assert "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" not in redacted
+    assert "[REDACTED_SECRET]" in redacted
+
+
 def test_redact_sensitive_handles_oauth_code_verifier_fields():
     payload = {
         "code_verifier": "oauth-code-verifier-secret",
@@ -576,6 +600,90 @@ def test_redact_text_handles_aws_presigned_url_security_token_query_param():
     assert "&X-Amz-Expires=300" in redacted
 
 
+def test_redact_text_handles_legacy_aws_signed_url_access_key_query_param():
+    value = (
+        "artifact export failed for https://s3.example/report?"
+        "AWSAccessKeyId=AKIAIOSFODNN7EXAMPLE"
+        "&Expires=1710000000"
+    )
+
+    redacted = redact_text(value)
+
+    assert "AKIAIOSFODNN7EXAMPLE" not in redacted
+    assert "AWSAccessKeyId=[REDACTED_SECRET]" in redacted
+    assert "&Expires=1710000000" in redacted
+
+
+def test_redact_text_handles_gcs_signed_url_signature_query_param():
+    value = (
+        "artifact export failed for https://storage.googleapis.com/report?"
+        "X-Goog-Signature=abcdef1234567890"
+        "&X-Goog-Expires=300"
+    )
+
+    redacted = redact_text(value)
+
+    assert "abcdef1234567890" not in redacted
+    assert "X-Goog-Signature=[REDACTED_SECRET]" in redacted
+    assert "&X-Goog-Expires=300" in redacted
+
+
+def test_redact_text_handles_gcs_signed_url_credential_query_param():
+    value = (
+        "artifact export failed for https://storage.googleapis.com/report?"
+        "X-Goog-Credential=service-account@example.iam.gserviceaccount.com/20260512/auto/storage/goog4_request"
+        "&X-Goog-Expires=300"
+    )
+
+    redacted = redact_text(value)
+
+    assert "service-account@example.iam.gserviceaccount.com" not in redacted
+    assert "X-Goog-Credential=[REDACTED_SECRET]" in redacted
+    assert "&X-Goog-Expires=300" in redacted
+
+
+def test_redact_text_handles_gcs_signed_url_security_token_query_param():
+    value = (
+        "artifact export failed for https://storage.googleapis.com/report?"
+        "X-Goog-Security-Token=temporary-gcs-token"
+        "&X-Goog-Expires=300"
+    )
+
+    redacted = redact_text(value)
+
+    assert "temporary-gcs-token" not in redacted
+    assert "X-Goog-Security-Token=[REDACTED_SECRET]" in redacted
+    assert "&X-Goog-Expires=300" in redacted
+
+
+def test_redact_text_handles_gcs_signed_url_google_access_id_query_param():
+    value = (
+        "gcs export failed for https://storage.googleapis.com/reports/review.md?"
+        "GoogleAccessId=reports-service@example.iam.gserviceaccount.com"
+        "&Expires=1778536589"
+    )
+
+    redacted = redact_text(value)
+
+    assert "reports-service@example.iam.gserviceaccount.com" not in redacted
+    assert "GoogleAccessId=[REDACTED_SECRET]" in redacted
+    assert "&Expires=1778536589" in redacted
+
+
+def test_redact_text_handles_storage_connection_string_account_key():
+    value = (
+        "artifact export failed with "
+        "DefaultEndpointsProtocol=https;AccountName=reports;AccountKey=storage-account-secret;"
+        "EndpointSuffix=core.windows.net"
+    )
+
+    redacted = redact_text(value)
+
+    assert "storage-account-secret" not in redacted
+    assert "AccountKey=[REDACTED_SECRET]" in redacted
+    assert "EndpointSuffix=core.windows.net" in redacted
+
+
 def test_redact_text_handles_short_signed_url_sig_query_param():
     value = "report export failed for https://blob.example/report?sig=sas-signature-secret&se=2026-05-11"
 
@@ -628,3 +736,19 @@ def test_redact_text_handles_shared_access_signature_query_param():
     assert "shared-access-signature-secret" not in redacted
     assert "SharedAccessSignature=[REDACTED_SECRET]" in redacted
     assert "&se=2026-05-11" in redacted
+
+
+def test_redact_text_handles_shared_access_key_connection_string():
+    value = (
+        "event sink failed with "
+        "Endpoint=sb://reports.servicebus.windows.net/;"
+        "SharedAccessKeyName=RootManageSharedAccessKey;"
+        "SharedAccessKey=service-bus-shared-access-key;"
+        "EntityPath=review-events"
+    )
+
+    redacted = redact_text(value)
+
+    assert "service-bus-shared-access-key" not in redacted
+    assert "SharedAccessKey=[REDACTED_SECRET]" in redacted
+    assert "EntityPath=review-events" in redacted

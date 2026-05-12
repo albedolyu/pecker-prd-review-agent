@@ -38,3 +38,23 @@ def test_build_worker_done_event_payload_includes_wiki_selection_summary():
         "total_chars_before": 12000,
         "total_chars_after": 2800,
     }
+
+
+def test_build_worker_done_event_payload_includes_confirmed_empty_retry_forced():
+    from api.routes.review import _build_worker_done_event_payload
+
+    payload = _build_worker_done_event_payload(
+        "data_quality",
+        {
+            "items": [],
+            "telemetry": {
+                "empty_retry_used": True,
+                "confirmed_empty_retry_forced": True,
+                "empty_submission_confirmed": True,
+                "empty_submission_reason": "covered by source",
+            },
+        },
+    )
+
+    assert payload["empty_retry_used"] is True
+    assert payload["confirmed_empty_retry_forced"] is True

@@ -243,6 +243,7 @@ def run_parallel_review(client, workspace, wiki_path, prd_content, prd_files, wi
                 "turns_used": telemetry.get("turns_used"),
                 "duration_ms": telemetry.get("duration_ms"),
                 "cost_usd": telemetry.get("cost_usd") or r.get("cost_usd"),
+                "confirmed_empty_retry_forced": telemetry.get("confirmed_empty_retry_forced"),
                 "empty_submission_confirmed": telemetry.get("empty_submission_confirmed"),
                 "empty_submission_reason": telemetry.get("empty_submission_reason"),
             })

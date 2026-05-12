@@ -366,6 +366,23 @@ export function explainReviewItemForPm(item: ReviewItem): PmItemExplanation {
   };
 }
 
+export function buildReviewItemPatchText(item: ReviewItem): string {
+  const proposedPatch = stringValue(item.proposed_patch);
+  if (proposedPatch) return proposedPatch;
+
+  const parts: string[] = [];
+  const location = itemLocation(item);
+  const problem = itemTitle(item);
+  const suggestion = stringValue(item.suggestion);
+  const evidence = stringValue(item.evidence);
+
+  if (location) parts.push(`位置：${location}`);
+  if (problem) parts.push(`问题：${problem}`);
+  if (suggestion) parts.push(`建议补丁：${suggestion}`);
+  if (evidence) parts.push(`依据：${evidence}`);
+  return parts.join("\n");
+}
+
 function plainLanguageSummary(
   item: ReviewItem,
   dimKey: RoleKey,

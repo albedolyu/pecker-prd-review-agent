@@ -122,6 +122,49 @@ def _filter_records_by_days(
     return kept
 
 
+def _empty_retry_summary(
+    project_root: Path,
+    days: int = 7,
+    now: Optional[datetime] = None,
+) -> Dict[str, int]:
+    rows: List[Dict[str, Any]] = []
+    for path in _iter_session_files(project_root):
+        rows.extend(_load_jsonl(path))
+    rows = _filter_records_by_days(rows, days, now)
+
+    instrumented = 0
+    triggered = 0
+    rescued = 0
+    kept_empty = 0
+    confirmed_empty = 0
+    forced_confirmed_empty_retry = 0
+
+    for row in rows:
+        if row.get("type") != "worker_done" or "empty_retry_used" not in row:
+            continue
+        instrumented += 1
+        if not row.get("empty_retry_used"):
+            continue
+        triggered += 1
+        if _safe_int(row.get("items_count")) > 0:
+            rescued += 1
+            continue
+        kept_empty += 1
+        if row.get("empty_submission_confirmed"):
+            confirmed_empty += 1
+        if row.get("confirmed_empty_retry_forced"):
+            forced_confirmed_empty_retry += 1
+
+    return {
+        "instrumented_workers": instrumented,
+        "triggered": triggered,
+        "rescued": rescued,
+        "kept_empty": kept_empty,
+        "confirmed_empty": confirmed_empty,
+        "forced_confirmed_empty_retry": forced_confirmed_empty_retry,
+    }
+
+
 def _sanitize_audit(row: Dict[str, Any]) -> Dict[str, Any]:
     return redact_sensitive({key: row.get(key) for key in _AUDIT_ALLOWLIST if key in row})
 
@@ -301,6 +344,7 @@ def build_usage_summary(
             for run in recent_runs
         ],
         "recent_actions": recent_actions,
+        "empty_retry": _empty_retry_summary(project_root, days=days, now=now),
         "stability": stability,
         "budget": budget,
     }
