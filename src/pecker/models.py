@@ -64,3 +64,22 @@ class ChannelScore(BaseModel):
     p95_latency_ms: float
     cost_per_run_usd: float
     passed_gate: bool
+
+
+class PromptVariant(BaseModel):
+    name: str
+    role: str
+    prompt: str
+    expected_controls: list[str] = Field(default_factory=list)
+
+
+class PromptQualityScore(BaseModel):
+    name: str
+    role: str
+    instruction_coverage: float
+    evidence_contract: float
+    output_schema: float
+    improvement_guidance: float
+    safety_boundary: float
+    overall: float
+    missing_controls: list[str] = Field(default_factory=list)

@@ -3,6 +3,7 @@ from pathlib import Path
 from pecker.channel_eval import evaluate_channels, load_channel_config, rank_channels
 from pecker.graph import run_review
 from pecker.models import ReviewRequest
+from pecker.prompt_quality import evaluate_prompt_quality, load_prompt_variants, rank_prompt_quality
 from pecker.redaction import redact_text
 from pecker.tool_registry import ToolAccessError, default_registry
 
@@ -42,3 +43,11 @@ def test_channel_eval_dry_run_ranks_candidates():
     rankings = rank_channels(evaluate_channels(candidates, dry_run=True))
     assert rankings[0]["name"] == "openai-default"
     assert rankings[0]["passed_gate"] is True
+
+
+def test_prompt_quality_quantifies_prompt_variants():
+    variants = load_prompt_variants("config/prompt_quality.example.yaml")
+    rankings = rank_prompt_quality(evaluate_prompt_quality(variants))
+    assert rankings[0]["name"] == "worker-data-v2"
+    assert rankings[0]["overall"] > rankings[1]["overall"]
+    assert "how_to_fix" in rankings[1]["missing_controls"]

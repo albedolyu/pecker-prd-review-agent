@@ -1,0 +1,67 @@
+# Local ChatGPT Pro / Codex CLI route profile.
+#
+# Usage:
+#   PECKER_ROUTES_FILE=model_routes.pro_cli.yaml
+#
+# This profile is intended for single-machine validation and high-recall local
+# reviews. It avoids the OpenAI-compatible gateway entirely, so it also avoids
+# gateway 524s. Keep team deployments on model_routes.yaml unless the runtime
+# host has a logged-in Codex CLI session.
+
+vendors:
+  openai:
+    cli_client: clients.codex_cli.CodexCLIClient
+    native_client: clients.openai_native.OpenAINativeClient
+    model_tiers:
+      gpt55: gpt-5.5
+      gpt54: gpt-5.4
+      gpt54mini: gpt-5.4-mini
+    fallback_chain: [gpt55, gpt54, gpt54mini]
+
+routes:
+  worker.default:      {vendor: openai, transport: cli, model: gpt55, retry_policy: worker}
+  worker.structure:    {vendor: openai, transport: cli, model: gpt55, retry_policy: worker}
+  worker.compliance:   {vendor: openai, transport: cli, model: gpt55, retry_policy: worker}
+  worker.data_quality: {vendor: openai, transport: cli, model: gpt55, retry_policy: worker}
+  worker.quality:      {vendor: openai, transport: cli, model: gpt55, retry_policy: worker}
+  worker.consistency:  {vendor: openai, transport: cli, model: gpt55, retry_policy: worker}
+  worker.ai_coding:    {vendor: openai, transport: cli, model: gpt55, retry_policy: worker}
+  worker.ai_friendly:  {vendor: openai, transport: cli, model: gpt55, retry_policy: worker}
+
+  advisor.goshawk:
+    vendor: openai
+    transport: cli
+    model: gpt55
+    retry_policy: advisor
+
+  advisor.goshawk.recheck:
+    vendor: openai
+    transport: cli
+    model: gpt54
+    retry_policy: router
+
+  advisor.goshawk.shadow:
+    vendor: openai
+    transport: cli
+    model: gpt54
+    retry_policy: advisor
+    enabled: false
+
+  verify.nli:
+    vendor: openai
+    transport: cli
+    model: gpt54mini
+    retry_policy: router
+
+  precheck.gaps:
+    vendor: openai
+    transport: cli
+    model: gpt54mini
+    retry_policy: router
+
+
+  eval.cuckoo:
+    vendor: openai
+    transport: cli
+    model: gpt54
+    retry_policy: foreground

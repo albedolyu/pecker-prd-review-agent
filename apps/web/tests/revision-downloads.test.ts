@@ -11,7 +11,7 @@ const result: ReviewResult = {
   created_at: 1,
   reviewer: "alice",
   workspace: "workspace-demo",
-  prd_name: "真实客户需求.md",
+  prd_name: "sample customer request.md",
   mode: "standard",
   workers: [],
   usage: {},
@@ -73,7 +73,7 @@ describe("revision download documents", () => {
   });
 
   it("keeps the original PRD body and appends confirmed advice in the draft", () => {
-    const originalPrd = "# 真实 PRD\n\n客户: 北京某某科技\n价格: 100 万";
+    const originalPrd = "# 真实 PRD\n\n客户: Example Co.\n价格: 100 万";
     const markdown = generateRevisionDraftMarkdown(
       result,
       decisions,
@@ -82,7 +82,7 @@ describe("revision download documents", () => {
 
     expect(markdown).toContain("含敏感 PRD 内容");
     expect(markdown).toContain("## 原 PRD 正文");
-    expect(markdown).toContain("客户: 北京某某科技");
+    expect(markdown).toContain("客户: Example Co.");
     expect(markdown).toContain("价格: 100 万");
     expect(markdown).toContain("## Pecker修订建议附录");
     expect(markdown).toContain("### 1. 确认采纳");

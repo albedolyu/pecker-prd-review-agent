@@ -7,6 +7,7 @@ from pathlib import Path
 from pecker.channel_eval import evaluate_channels, load_channel_config, rank_channels
 from pecker.graph import run_review
 from pecker.models import ReviewRequest
+from pecker.prompt_quality import evaluate_prompt_quality, load_prompt_variants, rank_prompt_quality
 
 
 def review_main() -> None:
@@ -36,3 +37,13 @@ def channel_eval_main() -> None:
     candidates = load_channel_config(args.config)
     scores = evaluate_channels(candidates, dry_run=args.dry_run)
     print(json.dumps({"rankings": rank_channels(scores)}, ensure_ascii=False, indent=2))
+
+
+def prompt_quality_main() -> None:
+    parser = argparse.ArgumentParser(description="Score prompt variants against measurable quality gates.")
+    parser.add_argument("--config", required=True)
+    args = parser.parse_args()
+
+    variants = load_prompt_variants(args.config)
+    scores = evaluate_prompt_quality(variants)
+    print(json.dumps({"rankings": rank_prompt_quality(scores)}, ensure_ascii=False, indent=2))

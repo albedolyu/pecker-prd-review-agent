@@ -1,0 +1,192 @@
+# Public-safe Pecker review dimensions.
+#
+# Private workspace rules can override this file by adding
+# workspace/review-rules/review-dimensions.yaml.
+
+dimensions:
+  structure:
+    name: "Structure"
+    codename: "Editor"
+    model: "sonnet"
+    wiki_keywords:
+      - template
+      - version
+      - scope
+      - acceptance
+    rules: |
+      Check whether the PRD can be read, traced, and handed off without hidden context.
+
+      V-02 Version and change history:
+        Fail when the document lacks version history, author/reviewer ownership, or a clear summary of changes.
+        Severity: should.
+
+      V-03 Information density:
+        Fail when long background sections do not bind to a feature, field, API, workflow, or decision.
+        The improvement suggestion should name what to delete, split, or convert into requirements.
+        Severity: should.
+
+      V-04 Functional list completeness:
+        Fail when described features cannot be independently referenced by section number, bullet, ID, or table row.
+        Severity: must.
+
+      V-06 Acceptance and section completeness:
+        Fail when important sections such as scope, assumptions, data/API contract, UI states, or acceptance criteria are absent without an explicit "not applicable" note.
+        Severity: must.
+    checklist:
+      - rule_id: "V-02"
+        name: "Version and change history"
+        enabled: true
+        owner: structure
+      - rule_id: "V-03"
+        name: "Information density"
+        enabled: true
+        owner: structure
+      - rule_id: "V-04"
+        name: "Functional list completeness"
+        enabled: true
+        owner: structure
+      - rule_id: "V-06"
+        name: "Acceptance and section completeness"
+        enabled: true
+        owner: structure
+
+  quality:
+    name: "Quality"
+    codename: "Reviewer"
+    model: "sonnet"
+    wiki_keywords:
+      - consistency
+      - ambiguity
+      - edge case
+      - risk
+    rules: |
+      Check whether the PRD is internally consistent and safe to implement.
+
+      V-07 Logical consistency:
+        Fail when two sections make conflicting claims about the same rule, value, field, flow, or state.
+        Severity: must.
+
+      V-08 Ambiguity:
+        Fail when vague words such as "related", "etc.", "similar", "appropriate", or "as existing" block implementation.
+        The improvement suggestion should replace the vague phrase with a concrete field, value, source, or referenced section.
+        Severity: should.
+
+      V-09 Edge-case coverage:
+        Fail when key workflows omit empty, loading, failed, permission-denied, duplicate, timeout, pagination, or long-content states.
+        Severity: should.
+
+      V-12 External dependency failure handling:
+        Fail when API, file, model, or third-party dependency failures have no user-facing or operational handling.
+        Severity: must.
+    checklist:
+      - rule_id: "V-07"
+        name: "Logical consistency"
+        enabled: true
+        owner: quality
+      - rule_id: "V-08"
+        name: "Ambiguity"
+        enabled: true
+        owner: quality
+      - rule_id: "V-09"
+        name: "Edge-case coverage"
+        enabled: true
+        owner: quality
+      - rule_id: "V-12"
+        name: "External dependency failure handling"
+        enabled: true
+        owner: quality
+
+  ai_coding:
+    name: "AI Coding Handoff"
+    codename: "Engineer"
+    model: "opus"
+    wiki_keywords:
+      - API
+      - implementation
+      - UI
+      - pseudo-code
+      - handoff
+    rules: |
+      Check whether an AI coding agent or developer can implement the PRD without guessing.
+
+      RC-004 Technical contract:
+        Fail when a PRD involving API, auth, cross-system data, or model behavior lacks a technical contract or explicit reference.
+        Severity: must.
+
+      RC-005 Four-state UI:
+        Fail when UI requirements omit loading, empty, error, or normal states for a visible workflow.
+        Severity: must.
+
+      RC-006 Asset and reference portability:
+        Fail when images, prototypes, HTML, spreadsheets, or attachments are referenced by inaccessible absolute paths or private links without alternatives.
+        Severity: should.
+
+      RC-008 Filter/query traceability:
+        Fail when user controls, API parameters, query conditions, and displayed results cannot be traced end to end.
+        Severity: must.
+
+      RC-013 Field traceability:
+        Fail when pseudo-code, tables, or UI fields cannot be traced to the declared source field, API property, or transformation rule.
+        Severity: must.
+    checklist:
+      - rule_id: "RC-004"
+        name: "Technical contract"
+        enabled: true
+        owner: ai_coding
+      - rule_id: "RC-005"
+        name: "Four-state UI"
+        enabled: true
+        owner: ai_coding
+      - rule_id: "RC-006"
+        name: "Asset and reference portability"
+        enabled: true
+        owner: ai_coding
+      - rule_id: "RC-008"
+        name: "Filter/query traceability"
+        enabled: true
+        owner: ai_coding
+      - rule_id: "RC-013"
+        name: "Field traceability"
+        enabled: true
+        owner: ai_coding
+
+  data_quality:
+    name: "Data Quality"
+    codename: "Data Reviewer"
+    model: "sonnet"
+    wiki_keywords:
+      - schema
+      - DDL
+      - field
+      - SQL
+      - mapping
+    rules: |
+      Check whether data requirements are verifiable without reading private production systems.
+
+      RC-009 Physical data definition:
+        Trigger only when the PRD names a table, schema, DDL, SQL, field mapping, or data contract.
+        Fail when referenced tables or fields lack names, types, nullability, source, or ownership.
+        Severity: must.
+
+      RC-010 Numeric and threshold sources:
+        Fail when limits, scores, thresholds, page sizes, retention windows, or quotas lack a source or explicit TBD owner.
+        Severity: must.
+
+      EV-04 AI/ML evaluation plan:
+        Trigger only when the PRD introduces AI, LLM, model ranking, scoring, classification, generation, or embeddings.
+        Fail when the PRD lacks an evaluation set, measurable metric, target threshold, or regression trigger.
+        Severity: must.
+    checklist:
+      - rule_id: "RC-009"
+        name: "Physical data definition"
+        enabled: true
+        owner: data_quality
+      - rule_id: "RC-010"
+        name: "Numeric and threshold sources"
+        enabled: true
+        owner: data_quality
+      - rule_id: "EV-04"
+        name: "AI/ML evaluation plan"
+        enabled: true
+        owner: data_quality
+        status: experimental

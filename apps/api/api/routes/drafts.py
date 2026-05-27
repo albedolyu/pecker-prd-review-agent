@@ -1,0 +1,202 @@
+"""GET/PUT/DELETE /api/drafts/{reviewer} — 评审草稿持久化,浏览器崩溃恢复用。
+
+复用 app.py Step 3.1 的 `_save_draft / _load_draft / _clear_draft` 逻辑,
+但重写为 pure Python(不依赖 st.session_state),让 FastAPI 可以直接用。
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+import tempfile
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
+
+from api.deps import get_current_user, get_project_root
+from api.sanitize import redact_sensitive, redact_text
+from api.workspace_acl import is_admin
+
+router = APIRouter(tags=["drafts"])
+
+_DRAFT_TTL_DAYS = 3
+
+
+def _require_self_or_admin(user: dict, reviewer: str) -> None:
+    """防横向越权:登录用户只能读/写/删自己的草稿,admin 可跨人(运维恢复)。
+
+    URL 里的 reviewer 就是文件名来源,不校验会让 alice 能请求 bob 的草稿拿到 PRD 原文。
+    """
+    if (user or {}).get("reviewer", "") != reviewer and not is_admin(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="无权访问他人草稿",
+        )
+
+
+class DraftPayload(BaseModel):
+    """前端上传的 draft 内容,字段结构与 Streamlit 保持兼容。"""
+    phase: int = Field(..., ge=0, le=4)
+    prd_name: str = ""
+    prd_content: str = ""
+    mode: str = Field("standard", pattern="^(standard|quick)$")
+    raw_materials: list[str] = Field(default_factory=list)
+    user_notes: str = ""
+    review_result: Optional[Dict[str, Any]] = None
+    item_decisions: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    confirmed_report_markdown: str = ""
+    workspace: str = ""
+
+
+def _draft_dir(project_root: Path) -> Path:
+    return project_root / ".pecker_drafts"
+
+
+def _safe_reviewer(reviewer: str) -> str:
+    """把 reviewer 名规范化为安全的文件名片段,防路径穿越。"""
+    safe_source = redact_text((reviewer or "unknown").strip())
+    safe = re.sub(r'[\\/:*?"<>|\s]+', '_', safe_source)
+    safe = safe[:60] if "[REDACTED_SECRET]" in safe else safe[:20]
+    if not safe or safe == "_":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="非法 reviewer 名",
+        )
+    return safe
+
+
+def _draft_path(project_root: Path, reviewer: str) -> Path:
+    return _draft_dir(project_root) / f"{_safe_reviewer(reviewer)}_draft.json"
+
+
+def write_draft_file(
+    project_root: Path,
+    reviewer: str,
+    payload: DraftPayload,
+) -> Dict[str, str]:
+    """Atomically write a review draft without FastAPI dependency injection."""
+    path = _draft_path(project_root, reviewer)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    draft = {
+        "ts": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+        "reviewer": reviewer,
+        **payload.model_dump(),
+    }
+
+    fd, tmp = tempfile.mkstemp(
+        prefix=".draft_",
+        suffix=".tmp",
+        dir=str(path.parent),
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(draft, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)
+    except Exception:
+        if os.path.exists(tmp):
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+        raise
+
+    return {"status": "ok", "path": str(path.name), "ts": draft["ts"]}
+
+
+def read_draft_file(project_root: Path, reviewer: str) -> Optional[Dict[str, Any]]:
+    """Read a draft from disk for internal recovery flows."""
+    path = _draft_path(project_root, reviewer)
+    if not path.is_file():
+        return None
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            draft = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+
+    ts = draft.get("ts", "") if isinstance(draft, dict) else ""
+    if ts:
+        try:
+            age = (datetime.now() - datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S")).total_seconds()
+            if age > _DRAFT_TTL_DAYS * 86400:
+                return None
+        except ValueError:
+            pass
+    return draft
+
+
+def _sanitize_draft_for_response(draft: Dict[str, Any], user: dict) -> Dict[str, Any]:
+    if is_admin(user):
+        return redact_sensitive(draft)
+    # contract: NoPRDBody
+    blocked = {"supplemental_materials_raw", "prd_body"}
+    return redact_sensitive({key: value for key, value in draft.items() if key not in blocked})
+
+
+@router.get("/drafts/{reviewer}")
+async def get_draft(
+    reviewer: str,
+    project_root: Path = Depends(get_project_root),
+    user: dict = Depends(get_current_user),
+):
+    """读草稿。不存在或过期返回 404。"""
+    _require_self_or_admin(user, reviewer)
+    path = _draft_path(project_root, reviewer)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="无草稿")
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            draft = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        raise HTTPException(status_code=404, detail="草稿文件损坏")
+
+    # TTL 检查
+    ts = draft.get("ts", "")
+    if ts:
+        try:
+            age = (datetime.now() - datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S")).total_seconds()
+            if age > _DRAFT_TTL_DAYS * 86400:
+                try:
+                    path.unlink()
+                except OSError:
+                    pass
+                raise HTTPException(status_code=404, detail="草稿已过期")
+        except ValueError:
+            pass
+
+    return _sanitize_draft_for_response(draft, user)
+
+
+@router.put("/drafts/{reviewer}")
+async def save_draft(
+    reviewer: str,
+    payload: DraftPayload,
+    project_root: Path = Depends(get_project_root),
+    user: dict = Depends(get_current_user),
+):
+    """保存/覆盖草稿。原子写 (tempfile + os.replace)。"""
+    _require_self_or_admin(user, reviewer)
+    return write_draft_file(project_root, reviewer, payload)
+
+
+@router.delete("/drafts/{reviewer}")
+async def delete_draft(
+    reviewer: str,
+    project_root: Path = Depends(get_project_root),
+    user: dict = Depends(get_current_user),
+):
+    """删除草稿。文件不存在也返回成功(幂等)。"""
+    _require_self_or_admin(user, reviewer)
+    path = _draft_path(project_root, reviewer)
+    if path.is_file():
+        try:
+            path.unlink()
+        except OSError as e:
+            raise HTTPException(status_code=500, detail=f"删除失败: {e}")
+    return {"status": "ok"}

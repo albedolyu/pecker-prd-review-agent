@@ -1,0 +1,23 @@
+prompts:
+  - name: worker-data-v2
+    role: data
+    expected_controls:
+      - rule_id
+      - evidence
+      - confidence
+      - how_to_fix
+      - acceptance
+    prompt: |
+      You are the data-quality worker. Return JSON items with rule_id, severity,
+      confidence, evidence quote, source section, recommendation, how_to_fix,
+      and acceptance_check. Only report issues that can be tied to source text.
+  - name: worker-data-v1
+    role: data
+    expected_controls:
+      - rule_id
+      - evidence
+      - confidence
+      - how_to_fix
+      - acceptance
+    prompt: |
+      Review the PRD data section and list problems. Be concise.
