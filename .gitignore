@@ -42,9 +42,6 @@ eval_reports/verify_nli_openai_*
 # 测试缓存
 tests/__pycache__/
 
-# pecker-release 旧版缓存
-pecker-release/__pycache__/
-
 # workspace 产物中的会话和输出
 workspace*/output/
 workspace*/output_*/

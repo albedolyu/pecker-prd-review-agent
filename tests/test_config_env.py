@@ -156,12 +156,11 @@ def test_actually_imported_symbols_across_envs_via_ast(env):
     import ast
 
     proj_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    # 扫根目录 + api/ + eval/ 下的 .py,跳过 tests/ / worktrees/ / pecker-release/
+    # 扫根目录 + api/ + eval/ 下的 .py,跳过 tests/ / worktrees/
     skip_parts = {
         "tests",
         "worktrees",
         ".claude",
-        "pecker-release",
         "__pycache__",
         "build",
         "dist",

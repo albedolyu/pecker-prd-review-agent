@@ -67,7 +67,7 @@ def _doc_files() -> List[Path]:
 def _py_files_for_code_scan() -> List[Path]:
     """扫代码里 os.environ 和 router 定义用,跳过测试 / 缓存 / 第三方。"""
     out: List[Path] = []
-    skip_parts = {"__pycache__", ".pytest_cache", "tests", ".venv", "pecker-release",
+    skip_parts = {"__pycache__", ".pytest_cache", "tests", ".venv",
                   ".tmp-pytest", "node_modules", "scripts"}
     for p in PROJECT_ROOT.rglob("*.py"):
         rel = p.relative_to(PROJECT_ROOT)

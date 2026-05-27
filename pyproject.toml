@@ -110,11 +110,10 @@ packages = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# E5: 显式排除 pecker-release/ 历史快照和 workspace/,防止 collection 误扫
+# E5: 显式排除 workspace/ 历史样本,防止 collection 误扫
 # Windows local sandboxes can leave .pytest_cache unreadable.
 addopts = ["-p", "no:cacheprovider"]
 norecursedirs = [
-    "pecker-release",
     "workspace*",
     ".git",
     ".venv",

@@ -188,7 +188,7 @@ workspace-对外投资/review-rules/review-checklist.yaml:35-39
 | 6.3 | parallel_review.py | facade | Live | 78 行 facade, 拆分后保留对外兼容 import; 不是 dead — 至少 `models.py / api/routes/review.py / tests/test_core.py` 仍 import |
 | 6.4 | (root) `STATUS.md` | 老快照 04-22 | tracked but stale | .gitignore 规则:`STATUS.md` 在 `.gitignore` 中 (line 41 region) 但已 git tracked (无 git rm --cached), `git ls-files | grep STATUS` 命中 → 老版本会一直被 commit |
 | 6.5 | 啄木鸟_产品介绍.md | 鸟类家族段 | Live, 已对齐当前 7 鸟 | 抽查 OK, 苍鹰 Sonnet 标注一致 |
-| 6.6 | pecker-release/* | legacy mirror | 用于发布 | 64 个 git ls-files 命中, 整目录是 release snapshot, 非 dead. 但同一文件存两份 (root vs pecker-release/) 会让 grep 误命中 |
+| 6.6 | pecker-release/* | legacy mirror | 已退役 | 2026-05-27 已从运行树删除；历史 release snapshot 仅从 Git 历史或 tag 查询，避免同一文件在 root 与旧快照中重复误命中 |
 | 6.7 | scripts/cleanup_rule_perf.py | Live (04-17 落地, 7K) | 文档说"未实施" | docs/RULE_PERF_CLEANUP.md L48 漂移, 需更新 |
 | 6.8 | api/api_adapter.py legacy `_empty_tool_fallback` | Live? | STABILITY_DIAGNOSIS L74-L77 说应抛 APIError, P0-2 已修 — 旧字符串可能仍残留, 未深查 | P2 |
 | 6.9 | review/evidence_verify.py:241 | `if _is_pecker_generated(wiki_file)` 判断 | Live | 见 6.1, 与 `_wiki_authority_tier` 的 `generated` 等价, 双查 |
@@ -253,7 +253,7 @@ Grep memory/[a-z_]+\.md *.py = 0 命中
 |---|---|---|
 | Q1 | 6 个 workspace 的 workspace-*/review-rules/review-checklist.yaml 用的是与顶层 review-dimensions.yaml **完全不同的 schema** (rules 数组 vs dimensions map)。这套是 cuckoo_scorer / feedback / review_fixer 的 B 类依据验证用的"老规则集", 文档没明确两套关系 | 是否合并成一套 schema? 或显式文档化两套并行? |
 | Q2 | wiki authority schema 落地策略: 7 workspace × 99 wiki 全部默认 generated, 是否值得花时间逐个 promote? 还是只对真有人用过的 wiki 处理 | PM 决定 promote 路径 |
-| Q3 | `pecker-release/` 目录是 release snapshot 但和 root 同步度未知 (e.g. parallel_review.py root 78 行 facade vs pecker-release/parallel_review.py 仍是老 1223 行版?). 不在审查范围, 但发现重复 | PM 决定 release 策略 |
+| Q3 | `pecker-release/` 目录曾是 release snapshot 但和 root 同步度未知 (e.g. parallel_review.py root 78 行 facade vs pecker-release/parallel_review.py 仍是老 1223 行版?). | 2026-05-27 已退役并从运行树删除；发布历史从 Git 历史或 tag 查询 |
 | Q4 | `workspace-points-payment` / `workspace-劳动仲裁` / `workspace-纳税人资质` 业务 wiki 数 = 0 (仅 index/log/achievements), 是否这些 workspace 应被认为"未投入使用"? rule_perf 是否应该对它们 reset? | PM 判断 |
 | Q5 | RC-014 删除是否应该追溯改 `workspace-对外投资/output/rule_performance_history.json` 历史? Day3 commit 注释说"老 review_items 引用 RC-014 仍能解析, 后处理不会破" — 是否真验证过? | PM 决定是否做"保留 zombie history 仅 mark, 不真删" vs "完整清洗" |
 
@@ -266,7 +266,7 @@ Grep memory/[a-z_]+\.md *.py = 0 命中
 - **直接可处置 (高 confidence)**: §3.1 RC-014 漂移 / §3.2 RC-009 文案不一致 / §1 RULE_PERF_CLEANUP 已实施未更新 / §5.1 output_archive_ git status 漂出 / §6.4 STATUS.md 残留. 这些都有 `grep + file:line` 双证据, 直接修不会漏。
 - **需要 PM 二次确认**: §3.3 status 字段全表落地是否 sprint Day4 工期内必须做 / §2.6 业务 wiki 为 0 的小 workspace 处置 / Q1 两套 yaml schema 是否合并 / Q5 zombie history 处置策略。
 - **未深查**:
-  - `pecker-release/` 镜像目录与 root 同步度 (在审查范围外, 但发现可能有重复影响 grep 准确性)
+  - `pecker-release/` 镜像目录已退役；后续不再作为发布来源或代码扫描对象。
   - `eval/` 目录的 ground truth 数据未抽查 (可能有 RC-014 残留, sample_claude-test 已 grep 命中)
   - api/ 目录端到端 review.py 流程未深查 funnel event emit 实际是否到 6 个新 stage event (review-funnel-schema.md 描述的)
 

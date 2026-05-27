@@ -24,7 +24,7 @@
 
 ### 1.1 全量 wiring 点表
 
-> 调研方法: `grep` 加 `rule_id / valid_rule_ids / load_review_dimensions / review-rules / rule_perf / SUBMIT_REVIEW_ITEMS / RC-\d+|V-\d+|FN-\d+|EV-\d+` 在 `review/`、`api/`、`scripts/`、`tests/`、根目录 `*.py`. 排除 `pecker-release/` (历史快照) 和 `legacy/`.
+> 调研方法: `grep` 加 `rule_id / valid_rule_ids / load_review_dimensions / review-rules / rule_perf / SUBMIT_REVIEW_ITEMS / RC-\d+|V-\d+|FN-\d+|EV-\d+` 在 `review/`、`api/`、`scripts/`、`tests/`、根目录 `*.py`. 当时排除了 `pecker-release/` (历史快照) 和 `legacy/`；`pecker-release/` 已于 2026-05-27 退役，后续运行树不再保留该目录。
 
 | # | wiring 点 | file:line | 引用方式 | 漂移风险 | 历史漂移 case |
 |---|---|---|---|---|---|
@@ -287,7 +287,7 @@ git revert 路径: 8 commits 拆每个 step 一 commit, 单点 revert step 8 即
 - **不动 rule_perf_store**: registry 只读 view, 写仍走 `RulePerformanceHistoryStore`. cleanup_rule_perf / rule_perf_hygiene scripts 不动
 - **不引入新依赖**: 用 stdlib `dataclasses` + 现有 `pyyaml` + `jsonschema` (已在 dimensions.py 用), 不引入 pydantic
 - **不改 env 命名约定**: 沿用 `PECKER_` 前缀
-- **不动 `pecker-release/`**: 历史快照, 与 main 已分叉
+- **`pecker-release/` 已退役**: 历史快照不再保留在运行树中；如需追溯发布包，使用 Git 历史或 tag。
 
 ---
 
