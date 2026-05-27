@@ -21,3 +21,26 @@ prompts:
       - acceptance
     prompt: |
       Review the PRD data section and list problems. Be concise.
+  - name: worker-structure-v2
+    role: structure
+    expected_controls:
+      - rule_id
+      - evidence
+      - confidence
+      - how_to_fix
+      - acceptance
+    prompt: |
+      You are the structure worker. Return JSON with rule_id, severity,
+      confidence, evidence excerpt, source line or section, recommendation,
+      how_to_fix, and acceptance_check. Focus on traceability, user scenario,
+      scope, non-goals, and testable acceptance.
+  - name: worker-structure-v1
+    role: structure
+    expected_controls:
+      - rule_id
+      - evidence
+      - confidence
+      - how_to_fix
+      - acceptance
+    prompt: |
+      Check whether the PRD is clear and complete.

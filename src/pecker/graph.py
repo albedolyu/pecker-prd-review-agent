@@ -14,6 +14,7 @@ def run_review(request: ReviewRequest) -> ReviewResult:
     trace.append("prepare_context")
 
     safe_request = request.model_copy(update={"content": redact_text(request.content)})
+    trace.append("precheck_assets")
     registry = default_registry()
     registry.execute(
         "prd.extract_sections",
@@ -21,7 +22,7 @@ def run_review(request: ReviewRequest) -> ReviewResult:
         caller="review.precheck",
     )
 
-    trace.append("run_workers")
+    trace.append("fan_out_workers")
     workers: list[WorkerResult] = [run_worker(worker, safe_request) for worker in WORKER_ORDER]
 
     trace.append("merge_findings")
@@ -32,6 +33,9 @@ def run_review(request: ReviewRequest) -> ReviewResult:
             if finding.id not in seen:
                 findings.append(finding)
                 seen.add(finding.id)
+
+    trace.append("advisor_cross_check")
+    findings = _advisor_cross_check(findings)
 
     trace.append("finalize_report")
     status = "ok" if all(worker.status == "ok" for worker in workers) else "partial"
@@ -44,3 +48,16 @@ def run_review(request: ReviewRequest) -> ReviewResult:
         trace=trace,
         summary=summary,
     )
+
+
+def _advisor_cross_check(findings: list[Finding]) -> list[Finding]:
+    """Public demo cross-check.
+
+    The private system runs a stronger advisor layer. The public version keeps a
+    deterministic guard that only allows findings with explicit adoption fields.
+    """
+    return [
+        finding
+        for finding in findings
+        if finding.how_to_fix.strip() and finding.acceptance_check.strip()
+    ]

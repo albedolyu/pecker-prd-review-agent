@@ -9,6 +9,14 @@ channels:
       - worker.quality
       - worker.data
       - worker.implementation
+  - name: openai-deep-review
+    provider: openai
+    model: gpt-4.1
+    base_url: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY
+    routes:
+      - advisor.cross_check
+      - eval.prompt_quality
 
 admission_thresholds:
   success_rate_min: 0.95

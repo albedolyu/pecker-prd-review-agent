@@ -12,7 +12,14 @@ def test_review_returns_findings_with_how_to_fix():
     content = Path("examples/sample_prd.md").read_text(encoding="utf-8")
     result = run_review(ReviewRequest(title="sample", content=content))
     assert result.status == "ok"
-    assert result.trace == ["prepare_context", "run_workers", "merge_findings", "finalize_report"]
+    assert result.trace == [
+        "prepare_context",
+        "precheck_assets",
+        "fan_out_workers",
+        "merge_findings",
+        "advisor_cross_check",
+        "finalize_report",
+    ]
     assert result.findings
     assert all(finding.how_to_fix for finding in result.findings)
 
@@ -48,6 +55,7 @@ def test_channel_eval_dry_run_ranks_candidates():
 def test_prompt_quality_quantifies_prompt_variants():
     variants = load_prompt_variants("config/prompt_quality.example.yaml")
     rankings = rank_prompt_quality(evaluate_prompt_quality(variants))
-    assert rankings[0]["name"] == "worker-data-v2"
-    assert rankings[0]["overall"] > rankings[1]["overall"]
-    assert "how_to_fix" in rankings[1]["missing_controls"]
+    by_name = {row["name"]: row for row in rankings}
+    assert by_name["worker-data-v2"]["overall"] > by_name["worker-data-v1"]["overall"]
+    assert by_name["worker-structure-v2"]["overall"] > by_name["worker-structure-v1"]["overall"]
+    assert "how_to_fix" in by_name["worker-data-v1"]["missing_controls"]

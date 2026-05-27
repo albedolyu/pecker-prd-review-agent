@@ -22,6 +22,8 @@ The sample data is synthetic.
   shape: auth, review jobs, SSE, reports, feedback, LangGraph orchestration,
   model routing, and eval telemetry.
 
+For a fast review, start with [docs/interview-case-study.md](docs/interview-case-study.md).
+
 ## Architecture Snapshot
 
 ```text
