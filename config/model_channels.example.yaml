@@ -1,0 +1,16 @@
+channels:
+  - name: openai-default
+    provider: openai
+    model: gpt-4.1-mini
+    base_url: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY
+    routes:
+      - worker.structure
+      - worker.quality
+      - worker.data
+      - worker.implementation
+
+admission_thresholds:
+  success_rate_min: 0.95
+  p95_latency_ratio_max: 1.5
+  cost_ratio_max: 2.0

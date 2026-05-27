@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pecker-prd-review-agent"
+version = "0.1.0"
+description = "Public-safe PRD review agent harness with specialist workers and channel eval."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "albedolyu" }]
+dependencies = [
+  "pydantic>=2.7",
+  "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+langgraph = [
+  "langgraph>=0.2",
+]
+
+[project.scripts]
+pecker-review = "pecker.cli:review_main"
+pecker-channel-eval = "pecker.cli:channel_eval_main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-q"]
