@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from pecker.channel_eval import evaluate_channels, load_channel_config, rank_channels
+from pecker.eval_suite import run_eval_suite
 from pecker.graph import run_review
 from pecker.models import ReviewRequest
 from pecker.prompt_quality import evaluate_prompt_quality, load_prompt_variants, rank_prompt_quality
@@ -47,3 +48,20 @@ def prompt_quality_main() -> None:
     variants = load_prompt_variants(args.config)
     scores = evaluate_prompt_quality(variants)
     print(json.dumps({"rankings": rank_prompt_quality(scores)}, ensure_ascii=False, indent=2))
+
+
+def eval_suite_main() -> None:
+    parser = argparse.ArgumentParser(description="Run the public PRD review, channel, and prompt eval suite.")
+    parser.add_argument("--prd", default="examples/sample_prd.md")
+    parser.add_argument("--channels", default="config/model_channels.example.yaml")
+    parser.add_argument("--prompts", default="config/prompt_quality.example.yaml")
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
+
+    report = run_eval_suite(
+        prd_path=args.prd,
+        channel_config=args.channels,
+        prompt_config=args.prompts,
+        dry_run=args.dry_run,
+    )
+    print(json.dumps(report, ensure_ascii=False, indent=2))

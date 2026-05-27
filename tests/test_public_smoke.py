@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from pecker.channel_eval import evaluate_channels, load_channel_config, rank_channels
+from pecker import cli
 from pecker.graph import run_review
 from pecker.models import ReviewRequest
 from pecker.prompt_quality import evaluate_prompt_quality, load_prompt_variants, rank_prompt_quality
@@ -59,3 +60,34 @@ def test_prompt_quality_quantifies_prompt_variants():
     assert by_name["worker-data-v2"]["overall"] > by_name["worker-data-v1"]["overall"]
     assert by_name["worker-structure-v2"]["overall"] > by_name["worker-structure-v1"]["overall"]
     assert "how_to_fix" in by_name["worker-data-v1"]["missing_controls"]
+
+
+def test_eval_suite_summarizes_review_channel_and_prompt_gates():
+    assert hasattr(cli, "eval_suite_main")
+
+    from pecker.eval_suite import run_eval_suite
+
+    report = run_eval_suite(
+        prd_path="examples/sample_prd.md",
+        channel_config="config/model_channels.example.yaml",
+        prompt_config="config/prompt_quality.example.yaml",
+        dry_run=True,
+    )
+    assert report["summary"]["overall_pass"] is True
+    assert report["review"]["trace_nodes"] == [
+        "prepare_context",
+        "precheck_assets",
+        "fan_out_workers",
+        "merge_findings",
+        "advisor_cross_check",
+        "finalize_report",
+    ]
+    assert report["review"]["worker_count"] == 4
+    assert report["review"]["findings_with_how_to_fix_rate"] == 1.0
+    assert report["review"]["findings_with_acceptance_check_rate"] == 1.0
+    assert report["channels"]["top_channel"]["name"] == "openai-default"
+    assert report["channels"]["gate_pass_rate"] == 1.0
+    assert repr(report["channels"]["rankings"][1]["cost_per_run_usd"]) == "0.0012"
+    assert report["prompts"]["top_prompt"]["name"].endswith("-v2")
+    assert report["prompts"]["gate_pass_rate"] >= 0.5
+    assert "how_to_fix" in report["prompts"]["missing_controls_by_prompt"]["worker-data-v1"]

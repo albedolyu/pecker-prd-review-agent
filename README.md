@@ -58,6 +58,7 @@ suggestion without guessing what to edit.
 
 ```bash
 python -m pip install -e ".[dev]"
+pecker-eval-suite --dry-run
 pecker-review examples/sample_prd.md --json
 pecker-channel-eval --config config/model_channels.example.yaml --dry-run
 pecker-prompt-quality --config config/prompt_quality.example.yaml
@@ -84,6 +85,7 @@ src/pecker/
   tool_registry.py  Governed tool boundary
   channel_eval.py   Model/API channel comparison helper
   prompt_quality.py Prompt quality scoring helper
+  eval_suite.py     One-command demo report across review, channel, and prompt gates
   redaction.py      Secret and internal URL redaction
 examples/
   sample_prd.md     Synthetic PRD for local testing
@@ -105,6 +107,9 @@ apps/api/
 
 - `pytest -q` verifies the public graph, redaction, tool boundary, channel eval,
   and prompt quality scoring.
+- `pecker-eval-suite --dry-run` is the interview-friendly proof command: it runs
+  the sample PRD review, channel ranking, prompt scoring, and returns one JSON
+  report with pass/fail gates.
 - `pecker-channel-eval` ranks model/API channels by success rate, p95 latency,
   cost, and gate pass/fail.
 - `pecker-prompt-quality` scores prompt variants on instruction coverage,

@@ -39,11 +39,20 @@ agent nodes, measurable eval loops, and prompt quality scoring.
 
 ```bash
 python -m pip install -e ".[dev]"
+pecker-eval-suite --dry-run
 pecker-review examples/sample_prd.md --json
 pecker-channel-eval --config config/model_channels.example.yaml --dry-run
 pecker-prompt-quality --config config/prompt_quality.example.yaml
 pytest -q
 ```
+
+`pecker-eval-suite --dry-run` is the fastest interview walkthrough. It produces
+one JSON report with:
+
+- review trace and worker count
+- how-to-fix and acceptance-check coverage
+- model channel ranking and admission gate pass rate
+- prompt ranking, prompt gate pass rate, and missing controls by prompt
 
 Expected review trace:
 
@@ -71,6 +80,9 @@ The project uses three evaluation surfaces:
 | Output contract | Did workers return useful, adoptable findings? | `tests/test_public_smoke.py` checks `how_to_fix` and `acceptance_check`. |
 | Channel evaluation | Which model/API route is stable enough? | `pecker-channel-eval` ranks by success rate, p95 latency, cost, and gate result. |
 | Prompt quality | Did a prompt revision improve measurable controls? | `pecker-prompt-quality` ranks prompt variants and lists missing controls. |
+
+`src/pecker/eval_suite.py` ties these surfaces together so the project can be
+judged with one command before drilling into individual modules.
 
 The private production version also uses PM adjudication, rule-performance
 history, and regression cases. The public edition keeps the structure and

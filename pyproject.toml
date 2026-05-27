@@ -27,6 +27,7 @@ langgraph = [
 pecker-review = "pecker.cli:review_main"
 pecker-channel-eval = "pecker.cli:channel_eval_main"
 pecker-prompt-quality = "pecker.cli:prompt_quality_main"
+pecker-eval-suite = "pecker.cli:eval_suite_main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
