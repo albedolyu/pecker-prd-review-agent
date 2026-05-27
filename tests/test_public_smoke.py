@@ -19,9 +19,10 @@ def test_review_returns_findings_with_how_to_fix():
 def test_redaction_masks_secrets_and_private_urls():
     api_key = "sk-" + "1234567890abcdef1234567890"
     private_ip = "10." + "1.2.3"
-    text = f"token=secret-value {api_key} https://{private_ip}/api"
+    secret_value = "secret-" + "value"
+    text = f"token={secret_value} {api_key} https://{private_ip}/api"
     redacted = redact_text(text)
-    assert "secret-value" not in redacted
+    assert secret_value not in redacted
     assert "sk-123" not in redacted
     assert private_ip not in redacted
 

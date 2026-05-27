@@ -1,0 +1,957 @@
+/**
+ * Pecker前端 API 层 — 类型化 fetch wrappers
+ *
+ * 所有调用都走 `/api/*`,在 dev 模式下由 next.config.ts 的 rewrite 代理到
+ * FastAPI :8000,在生产模式由反向代理转发。
+ *
+ * 认证: HttpOnly cookie `pecker_session`(JWT HS256),自动通过 fetch 的
+ * `credentials: "include"` 随请求发送。
+ *
+ * 错误处理: 非 2xx → 抛 `ApiError`,含 status 和后端 detail。
+ *
+ * 类型原则:
+ * - `ReviewResult` 是 Readonly<...>(对应后端 Opaque Handle),前端任何
+ *   改动都会让后端 verify_signature 失败。
+ * - `items` 是 `ReadonlyArray<ReviewItem>`,TypeScript 编译时阻止 push/splice。
+ */
+
+// ============================================================
+// 错误类型
+// ============================================================
+
+export class ApiError extends Error {
+  readonly status: number;
+  readonly detail: string | undefined;
+
+  constructor(status: number, detail: string | undefined, message: string) {
+    super(message);
+    this.status = status;
+    this.detail = detail;
+    this.name = "ApiError";
+  }
+}
+
+// ============================================================
+// 底层 fetch wrapper
+// ============================================================
+
+interface ApiFetchOptions extends Omit<RequestInit, "body"> {
+  body?: unknown;
+  timeoutMs?: number;
+  timeoutMessage?: string;
+}
+
+async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
+  const { body, headers, timeoutMs, timeoutMessage, signal, ...rest } = options;
+  const timeoutController = timeoutMs ? new AbortController() : null;
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  let didTimeout = false;
+  let abortFromCaller: (() => void) | null = null;
+
+  if (timeoutController && signal) {
+    abortFromCaller = () => timeoutController.abort(signal.reason);
+    if (signal.aborted) {
+      abortFromCaller();
+    } else {
+      signal.addEventListener("abort", abortFromCaller, { once: true });
+    }
+  }
+
+  if (timeoutController && timeoutMs) {
+    timeoutId = setTimeout(() => {
+      didTimeout = true;
+      timeoutController.abort();
+    }, timeoutMs);
+  }
+
+  const init: RequestInit = {
+    credentials: "include",
+    ...rest,
+    signal: timeoutController ? timeoutController.signal : signal,
+    headers: {
+      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+      ...headers,
+    },
+  };
+
+  if (body !== undefined) {
+    init.body = JSON.stringify(body);
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(path, init);
+  } catch (e) {
+    const err = e as { name?: string };
+    if (err.name === "AbortError") {
+      throw new ApiError(
+        0,
+        undefined,
+        didTimeout
+          ? (timeoutMessage ?? "服务暂时没有响应，请稍后再试")
+          : "请求已取消",
+      );
+    }
+    throw e;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+    if (signal && abortFromCaller) {
+      signal.removeEventListener("abort", abortFromCaller);
+    }
+  }
+
+  if (!res.ok) {
+    let detail: string | undefined;
+    try {
+      const json = (await res.json()) as { detail?: unknown };
+      if (typeof json.detail === "string") {
+        detail = json.detail;
+      }
+    } catch {
+      // body 不是 JSON,忽略
+    }
+    throw new ApiError(
+      res.status,
+      detail,
+      formatApiErrorMessage(res.status),
+    );
+  }
+
+  if (res.status === 204) {
+    return undefined as T;
+  }
+
+  return (await res.json()) as T;
+}
+
+function formatApiErrorMessage(status: number): string {
+  if (status >= 500) return "服务暂时不可用，请稍后再试";
+  if (status === 401) return "登录状态已失效，请重新登录";
+  if (status === 403) return "当前账号没有权限执行这个操作";
+  if (status === 404) return "没有找到对应内容";
+  if (status === 422) return "请求内容不完整，请检查后再提交";
+  return "请求未通过，请检查信息后再试";
+}
+
+// ============================================================
+// auth
+// ============================================================
+
+export interface LoginResponse {
+  status: string;
+  reviewer: string;
+  readonly: boolean;
+  is_admin?: boolean;
+  exp_hours: number;
+}
+
+export interface MeResponse {
+  reviewer: string;
+  readonly: boolean;
+  is_admin?: boolean;
+}
+
+export const authApi = {
+  login: (password: string, reviewer: string) =>
+    apiFetch<LoginResponse>("/api/auth/login", {
+      method: "POST",
+      body: { password, reviewer },
+      timeoutMs: 10_000,
+      timeoutMessage:
+        "评审服务暂时没有响应，请稍后再试；如果一直卡住，请联系工具负责人检查服务状态。",
+    }),
+  me: () =>
+    apiFetch<MeResponse>("/api/me", {
+      timeoutMs: 5_000,
+      timeoutMessage: "暂时无法确认登录状态，请刷新后再试",
+    }),
+  logout: () =>
+    apiFetch<{ status: string }>("/api/auth/logout", { method: "POST" }),
+} as const;
+
+// ============================================================
+// workspaces
+// ============================================================
+
+export interface Workspace {
+  name: string;
+  display_name: string;
+  path: string;
+  has_prd_dir: boolean;
+  has_wiki_dir: boolean;
+  wiki_page_count: number;
+  prd_count: number;
+}
+
+export const workspacesApi = {
+  list: () => apiFetch<Workspace[]>("/api/workspaces"),
+} as const;
+
+// ============================================================
+// drafts(浏览器崩溃恢复)
+// ============================================================
+
+export interface DraftPayload {
+  phase: number;
+  prd_name: string;
+  prd_content: string;
+  mode?: ReviewMode;
+  raw_materials: string[];
+  user_notes: string;
+  review_result: ReviewResult | null;
+  item_decisions: Record<string, ItemDecision>;
+  confirmed_report_markdown: string;
+  workspace: string;
+}
+
+export interface Draft extends DraftPayload {
+  ts: string;
+  reviewer: string;
+}
+
+export const draftsApi = {
+  get: (reviewer: string) =>
+    apiFetch<Draft>(`/api/drafts/${encodeURIComponent(reviewer)}`),
+  save: (reviewer: string, payload: DraftPayload) =>
+    apiFetch<{ status: string; path: string; ts: string }>(
+      `/api/drafts/${encodeURIComponent(reviewer)}`,
+      { method: "PUT", body: payload },
+    ),
+  delete: (reviewer: string) =>
+    apiFetch<{ status: string }>(
+      `/api/drafts/${encodeURIComponent(reviewer)}`,
+      { method: "DELETE" },
+    ),
+} as const;
+
+// ============================================================
+// review(Opaque Handle + Precheck + Confirm)
+// ============================================================
+
+/**
+ * 单条改进项。后端定义是 Dict[str, Any],字段不固定,这里列出的是常见字段,
+ * 其他通过 `[key: string]: unknown` 兜底。
+ *
+ * Phase G #3:加 provenance / cited_by_workers,用来在 Phase 3 卡片上区分
+ * "worker 原生输出" / "苍鹰补遗" / "共识被 N 个 worker 同时识别"。
+ */
+export type ItemProvenance = "worker" | "meta_added" | "meta_dedup_kept";
+
+export interface ReviewItem {
+  readonly id: string;
+  readonly dimension: string; // 对应 roles.ts 的 RoleKey
+  readonly severity?: "must" | "should" | "suggest" | string;
+  readonly location?: string;
+  readonly problem?: string;
+  readonly evidence?: string;
+  readonly suggestion?: string;
+  readonly proposed_patch?: string;
+  readonly confidence?: number;
+  /** worker / meta_added / meta_dedup_kept */
+  readonly provenance?: ItemProvenance;
+  /** 哪些 worker 同时指证了这条 — len ≥ 2 = 共识强信号 */
+  readonly cited_by_workers?: ReadonlyArray<string>;
+  /** CC-pattern: 苍鹰 gate 链决策日志 */
+  readonly gate_log?: ReadonlyArray<{
+    type: string;
+    pass: boolean;
+    detail?: string;
+  }> | {
+    gates?: ReadonlyArray<{
+      type: string;
+      pass: boolean;
+      detail?: string;
+      reason?: string;
+    }>;
+  };
+  /** CC deep #23: 钉选状态 — compact 时不压缩 */
+  readonly pinned?: boolean;
+  /**
+   * 2026-04-28 step 1b: 跨维度合法 rule_id 标 (review/worker.py:192)
+   *
+   * 当 worker 引用的 rule_id 在 schema_registry 总表内但不在本维度 dim_rule_ids 时,
+   * 保留该 item + 打 cross_boundary=true + confidence -0.3 降权.
+   * 与"幻觉 rule_id" (registry 都没有, 直接 drop) 区分.
+   *
+   * 用途:Phase4ReportV8 渲染时给 cross_boundary item 加视觉标 (step 1c 渲染用).
+   */
+  readonly cross_boundary?: boolean;
+  readonly [key: string]: unknown;
+}
+
+export interface ReviewWorkerInfo {
+  readonly dimension: string;
+  readonly dimension_name: string;
+  readonly items_count: number;
+  readonly error: string | null;
+}
+
+/**
+ * 后端 Opaque Handle — 前端拿到后只读,不能改 items 或 signature,
+ * 否则 POST /api/review/confirm 会 403。
+ */
+export interface ReviewResult {
+  readonly review_id: string;
+  readonly created_at: number;
+  readonly reviewer: string;
+  readonly workspace: string;
+  readonly prd_name: string;
+  readonly mode: string;
+  readonly items: ReadonlyArray<ReviewItem>;
+  readonly workers: ReadonlyArray<ReviewWorkerInfo>;
+  readonly usage: Readonly<Record<string, number>>;
+  readonly goshawk_summary: Readonly<Record<string, unknown>> | null;
+  readonly signature: string;
+  /** CC-pattern: 各维度成本归因(dim_key → USD) */
+  readonly cost_breakdown?: Readonly<Record<string, number>>;
+  /** CC advanced: telemetry 汇总(总时长 + 各 worker 指标) */
+  readonly telemetry?: Readonly<{
+    total_duration_ms?: number;
+    total_cost_usd?: number;
+    workers?: Readonly<Record<string, unknown>>;
+    orchestrator?: string | null;
+    resilience?: Readonly<Record<string, unknown>>;
+  }>;
+}
+
+export interface PrecheckRequest {
+  workspace: string;
+  prd_content: string;
+  raw_materials?: string[];
+}
+
+/**
+ * 预检返回 — 对齐 api/routes/review.py::PrecheckResponse
+ * - strong/weak: 格式化后的字符串列表,每条形如 `[[page_name]] — 命中 N 个关键词`
+ * - gaps: Claude 分析的知识盲区描述
+ * - wiki_pages: 页面标题 → 完整 md 内容,Phase 2 调 /api/review/run 时必须原样带回去
+ */
+export interface PrecheckResponse {
+  strong: ReadonlyArray<string>;
+  weak: ReadonlyArray<string>;
+  gaps: ReadonlyArray<string>;
+  wiki_pages: Readonly<Record<string, string>>;
+}
+
+export type ReviewMode = "standard" | "quick";
+
+export interface ReviewRunRequest {
+  prd_content: string;
+  raw_materials?: string[];
+  user_notes?: string;
+  workspace: string;
+  prd_name: string;
+  reviewer: string;
+  mode: ReviewMode;
+  /** Phase 1 precheck 返回的 wiki_pages,原样透传 */
+  wiki_pages: Record<string, string>;
+}
+
+/**
+ * PM 驳回原因 7 分类 — 与后端 models.py:RejectReason 严格对齐。
+ * 修改这里时必须同步:
+ *   - models.py::RejectReason 枚举
+ *   - api/models.py::_VALID_REJECT_REASONS
+ *   - components/phases/Phase3ConfirmV8.tsx::REJECT_CATEGORIES
+ *   - tests/test_reject_reason_category.py 的 enum drift 守护
+ */
+export type RejectReason =
+  | "good_issue"        // 实际是好问题(PM 手滑 / 改主意)
+  | "false_positive"    // 误报, PRD 确实没这问题
+  | "known_tradeoff"    // 已知取舍, 业务允许
+  | "wiki_missing"      // 知识库缺上下文导致误判
+  | "rule_too_strict"   // 规则太严, 不适用本 PRD
+  | "impl_detail"       // 实现细节, 不该 PRD 管
+  | "model_noise";      // 模型噪音, 无业务意义
+
+export type CorrectnessReason =
+  | "false_positive"
+  | "unsupported_evidence"
+  | "rule_too_strict";
+
+export type BusinessDecision =
+  | "not_this_iteration"
+  | "risk_accepted"
+  | "handled_elsewhere";
+
+/**
+ * 用户在 Phase 3 对每个 item 做的决定。
+ * action: 接受 / 拒绝 / 编辑;edited_problem 仅在 action=edit 时有意义。
+ *
+ * reject 支持二维原因:
+ *   - correctness_reason: AI 判断错在哪里, 会影响规则 EMA
+ *   - business_decision: AI 说得对但本次业务不处理, 只进入 valuable_but_skipped
+ * reason_category 保留为 legacy adapter, 用于老草稿/旧报告兼容。
+ */
+export interface ItemDecision {
+  action: "accept" | "reject" | "edit";
+  /** 仅 reject 时有意义, 7 类下拉之一 */
+  reason_category?: RejectReason;
+  /** 仅 reject 时有意义: AI 判断错在哪里, 会影响规则 EMA */
+  correctness_reason?: CorrectnessReason;
+  /** 仅 reject 时有意义: 业务为什么暂不处理, 不影响规则 EMA */
+  business_decision?: BusinessDecision;
+  /** 可选自由文本备注(对应后端 reason_note), 老字段名保留兼容报告生成 */
+  reason?: string;
+  edited_problem?: string;
+}
+
+export interface ConfirmRequest {
+  review_result: ReviewResult;
+  decisions: Record<string, ItemDecision>;
+}
+
+/**
+ * 对齐后端 /api/review/confirm — 验证 signature + 返回统计 + 后端同源报告 markdown。
+ * Phase 4 优先使用 report_markdown,客户端 lib/generateReport.ts 仅作为旧草稿 fallback。
+ */
+export interface ConfirmResponse {
+  status: string;
+  review_id: string;
+  accepted: number;
+  rejected: number;
+  edited: number;
+  pending: number;
+  total: number;
+  report_markdown: string;
+}
+
+// precheck 和 SSE 一样直连后端,绕开 Next.js dev rewrite 的 30s timeout。
+// 48 页 wiki 扫描 + 构建可能 > 30s,rewrite proxy 会提前返 500。
+// dev: web/.env.local 里设 NEXT_PUBLIC_SSE_BASE=http://localhost:8000
+// prod: 不设,走同源,由反代 / Tunnel 按 path 分流
+const API_BASE = process.env.NEXT_PUBLIC_SSE_BASE ?? "";
+
+export const reviewApi = {
+  precheck: (req: PrecheckRequest) =>
+    apiFetch<PrecheckResponse>(`${API_BASE}/api/review/precheck`, {
+      method: "POST",
+      body: req,
+    }),
+  // review.run 走 SSE,在 useReviewStream.ts 里独立实现,这里不暴露
+  confirm: (req: ConfirmRequest) =>
+    apiFetch<ConfirmResponse>("/api/review/confirm", {
+      method: "POST",
+      body: req,
+    }),
+} as const;
+
+// ============================================================
+// review jobs (reconnectable Phase 2)
+// ============================================================
+
+export interface ReviewJobStartResponse {
+  job_id: string;
+  status: "queued" | "running" | "done" | "error" | "cancelled" | string;
+  workspace: string;
+  prd_name: string;
+  mode: ReviewMode;
+  reused?: boolean;
+}
+
+export interface ReviewJobEvent {
+  index: number;
+  event: string;
+  ts: number;
+  progress?: number | null;
+  label?: string;
+  payload?: ReviewResult;
+  message?: string;
+  [key: string]: unknown;
+}
+
+export interface ReviewJobSnapshot {
+  job_id: string;
+  status: "queued" | "running" | "done" | "error" | "cancelled" | string;
+  owner: string;
+  workspace: string;
+  prd_name: string;
+  mode: ReviewMode;
+  created_at: number;
+  updated_at: number;
+  events: ReviewJobEvent[];
+  result: ReviewResult | null;
+  error: string;
+}
+
+export interface ReviewJobNextEventResponse {
+  event: ReviewJobEvent | null;
+  status: ReviewJobSnapshot["status"];
+}
+
+export const reviewJobsApi = {
+  start: (req: ReviewRunRequest, signal?: AbortSignal) =>
+    apiFetch<ReviewJobStartResponse>(`${API_BASE}/api/review/jobs`, {
+      method: "POST",
+      body: req,
+      signal,
+    }),
+  get: (jobId: string, signal?: AbortSignal) =>
+    apiFetch<ReviewJobSnapshot>(
+      `${API_BASE}/api/review/jobs/${encodeURIComponent(jobId)}`,
+      { signal },
+    ),
+  nextEvent: (
+    jobId: string,
+    afterIndex: number,
+    timeoutSeconds = 25,
+    signal?: AbortSignal,
+  ) =>
+    apiFetch<ReviewJobNextEventResponse>(
+      `${API_BASE}/api/review/jobs/${encodeURIComponent(jobId)}/next-event?after_index=${encodeURIComponent(afterIndex)}&timeout=${encodeURIComponent(timeoutSeconds)}`,
+      {
+        signal,
+        timeoutMs: (timeoutSeconds + 5) * 1000,
+        timeoutMessage: "评审还在运行，正在继续等待下一步结果",
+      },
+    ),
+  cancel: (jobId: string) =>
+    apiFetch<{ status: string; job_id: string }>(
+      `${API_BASE}/api/review/jobs/${encodeURIComponent(jobId)}`,
+      { method: "DELETE" },
+    ),
+} as const;
+
+// ============================================================
+// reports
+// ============================================================
+
+export interface ReportFile {
+  filename: string;
+  size: number;
+  mtime: number;
+}
+
+export interface SaveToWikiRequest {
+  prd_name: string;
+  report_markdown: string;
+  items_count: number;
+  accepted_count: number;
+  rejected_count: number;
+  edited_count: number;
+  peck_score: number;
+  peck_label: string;
+}
+
+export const reportsApi = {
+  list: (workspace: string) =>
+    apiFetch<{ reports: ReadonlyArray<ReportFile> }>(
+      `/api/reports/${encodeURIComponent(workspace)}`,
+    ),
+  /** 直接给 <a href> 用,不走 fetch — 浏览器原生下载 */
+  downloadUrl: (workspace: string, filename: string) =>
+    `/api/reports/${encodeURIComponent(workspace)}/download?filename=${encodeURIComponent(filename)}`,
+  saveToWiki: (workspace: string, payload: SaveToWikiRequest) =>
+    apiFetch<{ status: string; filename?: string; wiki_path?: string }>(
+      `/api/reports/${encodeURIComponent(workspace)}/save-to-wiki`,
+      { method: "POST", body: payload },
+    ),
+} as const;
+
+// ============================================================
+// feedback(PM 补充线索)
+// ============================================================
+
+export interface MissingFeedbackRequest {
+  problem: string;
+  location?: string;
+  responsible_bird_id?: number | null;
+  workspace?: string;
+  prd_name?: string;
+  pm_name?: string;
+}
+
+export interface MissingFeedbackResponse {
+  status: string;
+  feedback_id: string;
+}
+
+export type ReworkAvoidanceCategory =
+  | "field_caliber"
+  | "experience_flow"
+  | "implementation_risk"
+  | "none";
+
+export interface ReworkAvoidanceRequest {
+  categories: ReworkAvoidanceCategory[];
+  note?: string;
+  workspace?: string;
+  prd_name?: string;
+  pm_name?: string;
+}
+
+export interface ReworkAvoidanceResponse {
+  status: string;
+  feedback_id: number;
+}
+
+export const feedbackApi = {
+  reportMissing: (payload: MissingFeedbackRequest) =>
+    apiFetch<MissingFeedbackResponse>("/api/feedback/missing", {
+      method: "POST",
+      body: payload,
+    }),
+  reportReworkAvoidance: (payload: ReworkAvoidanceRequest) =>
+    apiFetch<ReworkAvoidanceResponse>("/api/feedback/rework-avoidance", {
+      method: "POST",
+      body: payload,
+    }),
+} as const;
+
+// ============================================================
+// admin usage
+// ============================================================
+
+export interface UsageSummary {
+  total_reviews: number;
+  active_reviewers: number;
+  completed: number;
+  failed: number;
+  degraded: number;
+  avg_duration_ms: number;
+  p95_duration_ms: number;
+  total_cost_usd: number;
+  review_started_events: number;
+  audit_events: number;
+}
+
+export interface UsageReviewer {
+  reviewer: string;
+  reviews: number;
+  session_count: number;
+  started_events: number;
+  completed: number;
+  failed: number;
+  degraded: number;
+  last_seen: string;
+  last_prd_name: string;
+  workspaces: Record<string, number>;
+}
+
+export interface UsageRun {
+  reviewer?: string;
+  prd_name?: string;
+  workspace?: string;
+  status?: string;
+  ts_start?: string;
+  duration_ms: number;
+  cost_usd: number;
+  mode?: string;
+  items_count: number;
+}
+
+export interface UsageAction {
+  ts?: string;
+  event?: string;
+  reviewer?: string;
+  workspace?: string;
+  prd_name?: string;
+  review_id?: string;
+  items_count?: number;
+  status?: string;
+  action?: string;
+  reason_category?: string;
+}
+
+export interface ReviewHistoryResponse {
+  window_days: number;
+  generated_at: string;
+  reviewer: string;
+  runs: UsageRun[];
+  recent_actions: UsageAction[];
+}
+
+export const reviewHistoryApi = {
+  get: (days = 30, limit = 50) =>
+    apiFetch<ReviewHistoryResponse>(
+      `/api/reviews/history?days=${encodeURIComponent(days)}&limit=${encodeURIComponent(limit)}`,
+    ),
+} as const;
+
+export interface AdminUsageResponse {
+  window_days: number;
+  generated_at: string;
+  summary: UsageSummary;
+  reviewers: UsageReviewer[];
+  recent_runs: UsageRun[];
+  recent_actions: UsageAction[];
+  active_jobs?: ActiveReviewJob[];
+  active_drafts?: ActiveReviewDraft[];
+  recent_job_events?: AdminReviewJobEvent[];
+  rule_impact_reports?: RuleImpactReport[];
+  empty_retry?: EmptyRetrySummary;
+  stability: Record<string, unknown>;
+  budget: Record<string, unknown>;
+}
+
+export interface RuleImpactReport {
+  filename: string;
+  title: string;
+  preview: string;
+  mtime: number;
+}
+
+export interface EmptyRetrySummary {
+  instrumented_workers: number;
+  triggered: number;
+  rescued: number;
+  kept_empty: number;
+  confirmed_empty: number;
+  forced_confirmed_empty_retry: number;
+}
+
+export interface ActiveReviewJob {
+  job_id: string;
+  status: string;
+  owner: string;
+  workspace: string;
+  prd_name: string;
+  mode: string;
+  created_at: number;
+  updated_at: number;
+  event_count: number;
+  last_event?: string;
+  error?: string;
+}
+
+export interface ActiveReviewDraft {
+  ts?: string;
+  reviewer?: string;
+  phase: number;
+  phase_label?: string;
+  workspace?: string;
+  prd_name?: string;
+  mode?: string;
+  has_review_result?: boolean;
+  items_count?: number;
+  decisions_count?: number;
+  accepted?: number;
+  rejected?: number;
+  edited?: number;
+  has_confirmed_report?: boolean;
+  duration_ms?: number;
+  orchestrator?: string;
+  failed_workers?: number;
+  recovered_workers?: number;
+  context_packet_workers?: number;
+  max_context_packet_chars?: number;
+}
+
+export interface AdminReviewJobEvent {
+  job_id: string;
+  owner?: string;
+  workspace?: string;
+  prd_name?: string;
+  mode?: string;
+  status?: string;
+  event?: string;
+  index?: number;
+  ts?: number;
+  progress?: number;
+  label?: string;
+  dim_key?: string;
+  dim_name?: string;
+  success?: boolean;
+  items_count?: number;
+  error?: string;
+  error_type?: string;
+  message?: string;
+  failed_count?: number;
+  total_count?: number;
+  reason?: string;
+  result_review_id?: string;
+  result_items_count?: number;
+  result_status?: string;
+  duration_ms?: number;
+  prd_context_packet_chars?: number;
+}
+
+export interface FeedbackSummary {
+  total_items: number;
+  accepted: number;
+  rejected: number;
+  edited: number;
+  accept_rate: number;
+  reject_rate: number;
+  feedback_reviewers: number;
+}
+
+export interface FeedbackRecord {
+  timestamp: number;
+  ts: string;
+  reviewer: string;
+  workspace: string;
+  prd_name: string;
+  item_id: string;
+  rule_id: string;
+  dimension: string;
+  location: string;
+  severity: string;
+  action: "accept" | "reject" | "edit" | "unknown";
+  reason_category: string;
+  correctness_reason: string;
+  business_decision: string;
+  reason_note: string;
+  problem: string;
+  suggestion: string;
+  is_true_positive: boolean;
+  source?: "confirmed" | "draft" | string;
+}
+
+export interface MissingFeedbackRecord {
+  timestamp: number;
+  ts: string;
+  feedback_id: string;
+  reviewer: string;
+  workspace: string;
+  prd_name: string;
+  problem: string;
+  location: string;
+  responsible_bird_id?: number | null;
+  source: "missing_report" | string;
+}
+
+export interface ReworkAvoidanceNote {
+  timestamp: string;
+  reviewer: string;
+  workspace: string;
+  prd_name: string;
+  categories: ReworkAvoidanceCategory[];
+  note: string;
+}
+
+export interface ReworkAvoidanceWeek {
+  week: string;
+  total_samples: number;
+  productive_samples: number;
+  productive_rate: number;
+}
+
+export interface ReworkAvoidanceSummary {
+  total_samples: number;
+  productive_samples: number;
+  productive_rate: number;
+  category_counts: Record<string, number>;
+  weekly: ReworkAvoidanceWeek[];
+  recent_notes: ReworkAvoidanceNote[];
+}
+
+export interface RuleRecommendationSample {
+  ts: string;
+  reviewer: string;
+  workspace: string;
+  prd_name: string;
+  location: string;
+  problem: string;
+  action?: "accept" | "reject" | "edit" | "unknown" | string;
+  reason_category?: string;
+  reason_note?: string;
+}
+
+export interface RuleRecommendation {
+  recommendation: "narrow_rule_trigger" | "strengthen_missing_coverage";
+  sample_count: number;
+  samples: RuleRecommendationSample[];
+  rule_id?: string;
+  dimension?: string;
+  responsible_bird_id?: string;
+  top_reason_category?: string;
+  reason_categories?: Record<string, number>;
+}
+
+export interface FeedbackBucket {
+  reviewer?: string;
+  workspace?: string;
+  total_items: number;
+  accepted: number;
+  rejected: number;
+  edited: number;
+  last_seen: string;
+}
+
+export interface AdminFeedbackResponse {
+  window_days: number;
+  generated_at: string;
+  summary: FeedbackSummary;
+  draft_items?: number;
+  missing_reports?: number;
+  by_reviewer: FeedbackBucket[];
+  by_workspace: FeedbackBucket[];
+  reason_categories: Record<string, number>;
+  correctness_reasons: Record<string, number>;
+  business_decisions: Record<string, number>;
+  dimensions: Record<string, number>;
+  records: FeedbackRecord[];
+  missing_records?: MissingFeedbackRecord[];
+  rule_recommendations?: RuleRecommendation[];
+  rework_avoidance?: ReworkAvoidanceSummary;
+}
+
+export interface AdminFeedbackFilters {
+  action?: "all" | "accept" | "reject" | "edit";
+  reviewer?: string;
+  workspace?: string;
+  limit?: number;
+}
+
+export const adminUsageApi = {
+  get: (days = 7) =>
+    apiFetch<AdminUsageResponse>(`/api/admin/usage?days=${encodeURIComponent(days)}`),
+  feedback: (days = 7, filters: AdminFeedbackFilters = {}) => {
+    const params = new URLSearchParams({
+      days: String(days),
+      limit: String(filters.limit ?? 80),
+    });
+    if (filters.action && filters.action !== "all") {
+      params.set("action", filters.action);
+    }
+    if (filters.reviewer) {
+      params.set("reviewer", filters.reviewer);
+    }
+    if (filters.workspace) {
+      params.set("workspace", filters.workspace);
+    }
+    return apiFetch<AdminFeedbackResponse>(`/api/admin/feedback?${params.toString()}`);
+  },
+} as const;
+
+// ============================================================
+// audit(前端事件追踪)
+// ============================================================
+
+export interface AuditEvent {
+  event: string;
+  workspace?: string;
+  prd_name?: string;
+  extra?: Record<string, unknown>;
+}
+
+export const auditApi = {
+  log: (ev: AuditEvent) =>
+    apiFetch<{ status: string }>("/api/audit", {
+      method: "POST",
+      body: ev,
+    }),
+  todayCount: (reviewer: string) =>
+    apiFetch<{ reviewer: string; count: number }>(
+      `/api/audit/today/${encodeURIComponent(reviewer)}`,
+    ),
+} as const;
+
+// ============================================================
+// feishu
+// ============================================================
+
+export interface FeishuSendRequest {
+  prd_name: string;
+  report_markdown: string;
+  chat_id?: string;
+}
+
+export const feishuApi = {
+  send: (req: FeishuSendRequest) =>
+    apiFetch<{ status: string; msg_id?: string }>("/api/feishu/send", {
+      method: "POST",
+      body: req,
+    }),
+} as const;

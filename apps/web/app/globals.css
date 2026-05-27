@@ -1,0 +1,917 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ============================================================
+ * Pecker · design tokens
+ *
+ * 当前版本:v8(工作台气质 · Linear + 飞书文档 + Vercel Build Output)
+ * 规范源:design-system/Pecker-pecker-v8/MASTER.md
+ *
+ * 三版演进:
+ * v1 (内刊印刷感) → v4 (Ghibli 水彩手作) → v7 (线稿克制) → v8 (工作台)
+ *
+ * v8 是气质重做:从"读物"切到"Agent 工作台 + 工作文档"。
+ * 前面版本的 token 保留但全部标 @deprecated-v7/v4/v1,只为不让老页面崩;
+ * 新组件必须用 v8 tokens(--surface-* / --text-* / --accent-500 / --status-*)。
+ * ============================================================ */
+
+@theme inline {
+  /* ============ shadcn / Tailwind 4 映射 —— 仍然生效 ============
+   * 这些 name 被 Tailwind utility(bg-background / text-foreground / 等)消费,
+   * 值在下方 :root 里指向 v8 neutral,让旧组件自动迁移到 v8 气质。 */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* ============ @deprecated-v7 · Pecker 专属 token 映射 ============
+   * 新页面不要引用这些,只为让 v7 老组件不崩溃。 */
+  --color-pecker-success: var(--pecker-success);
+  --color-pecker-success-bg: var(--pecker-success-bg);
+  --color-pecker-success-border: var(--pecker-success-border);
+  --color-pecker-running: var(--pecker-running);
+  --color-pecker-running-bg: var(--pecker-running-bg);
+  --color-pecker-idle-fg: var(--pecker-idle-fg);
+  --color-pecker-idle-border: var(--pecker-idle-border);
+  --color-pecker-red: var(--pecker-red);
+  --color-pecker-kraft: var(--pecker-kraft);
+  --color-pecker-kraft-deep: var(--pecker-kraft-deep);
+  --color-pecker-tape: var(--pecker-tape);
+  --shadow-paper: var(--pecker-shadow-paper);
+  --shadow-lift: var(--pecker-shadow-lift);
+  --shadow-print: var(--pecker-shadow-print);
+  --shadow-print-lift: var(--pecker-shadow-print-lift);
+
+  /* @deprecated-v7 · 非 4 倍数"手工栏位"(v8 回归 4/8 倍数网格) */
+  --spacing-col: 1.375rem; /* 22px */
+  --spacing-gutter: 2.625rem; /* 42px */
+  --spacing-hang: 0.6875rem; /* 11px */
+
+  /* ============ 字体栈 · v8 只用 Geist(sans + mono) ============
+   * @deprecated-v7 · --font-fraunces / --font-serif / --font-heading
+   * 新组件一律用 var(--font-sans) + var(--font-mono),禁 serif / italic */
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-fraunces); /* @deprecated-v7 */
+  --font-heading: var(--font-fraunces); /* @deprecated-v7 */
+
+  /* ============ 字号 scale ============
+   * @deprecated-v7 · 下面 Tailwind 的 text-* 保留原值(17/21/28/38)防老页面崩
+   * v8 新组件请直接用 --text-xs/sm/base/md/lg/xl/2xl/3xl(见 :root) */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.5;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.55;
+  --text-base: 0.9375rem;
+  --text-base--line-height: 1.7;
+  --text-lg: 1.0625rem;
+  --text-lg--line-height: 1.6;
+  --text-xl: 1.3125rem;
+  --text-xl--line-height: 1.4;
+  --text-2xl: 1.75rem;
+  --text-2xl--line-height: 1.3;
+  --text-3xl: 2.375rem;
+  --text-3xl--line-height: 1.2;
+  --text-4xl: 3rem;
+  --text-4xl--line-height: 1.15;
+
+  --tracking-tight: -0.015em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.04em;
+
+  /* @deprecated-v7 · 圆角 scale(v8 统一 ≤ 8px,用 --r-*) */
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* ============================================================
+ * v8 · light theme
+ * ============================================================ */
+:root,
+[data-theme="light"] {
+  --font-geist-sans: "Segoe UI", "PingFang SC", "Microsoft YaHei",
+    "Hiragino Sans GB", Arial, sans-serif;
+  --font-geist-mono: "Cascadia Mono", "SFMono-Regular", Consolas,
+    "Liberation Mono", monospace;
+  --font-fraunces: var(--font-geist-sans);
+
+  /* ── neutral(略偏冷 · slate 调) ─────────────────────────── */
+  --neutral-0: #ffffff;
+  --neutral-25: #fafbfc;
+  --neutral-50: #f4f6f8;
+  --neutral-100: #eceff3;
+  --neutral-150: #e1e5ea;
+  --neutral-200: #d5dae1;
+  --neutral-300: #b7bec8;
+  --neutral-400: #8f98a3;
+  --neutral-500: #6b7380;
+  --neutral-600: #4d5561;
+  --neutral-700: #343b46;
+  --neutral-800: #1f252d;
+  --neutral-900: #0e1217;
+
+  /* ── surface roles ─────────────────────────────────────── */
+  --surface-canvas: var(--neutral-25);
+  --surface-raised: var(--neutral-0);
+  --surface-sunken: var(--neutral-50);
+  --surface-overlay: var(--neutral-0);
+  --surface-console: #0f1318;
+  --surface-console-fg: #d4d7dd;
+
+  /* ── text ──────────────────────────────────────────────── */
+  --text-strong: var(--neutral-800);
+  --text-default: var(--neutral-700);
+  --text-muted: var(--neutral-500);
+  --text-faint: var(--neutral-400);
+  --text-disabled: var(--neutral-300);
+  --text-inverse: var(--neutral-0);
+  --text-link: var(--accent-600);
+
+  /* ── border ────────────────────────────────────────────── */
+  --border-subtle: var(--neutral-150);
+  --border-default: var(--neutral-200);
+  --border-strong: var(--neutral-300);
+  --border-focus: var(--accent-500);
+
+  /* ── accent(burnt-orange · briefing 单一强调色) ────────── */
+  --accent-50: #fff4ec;
+  --accent-100: #ffe3cf;
+  --accent-200: #ffc49b;
+  --accent-300: #ff9f60;
+  --accent-400: #f67b2e;
+  --accent-500: #e8590c;
+  --accent-600: #c7470a;
+  --accent-700: #9e3807;
+  --accent-800: #7a2d08;
+  --accent-fg: #ffffff;
+
+  /* ── status 四态 + warn / info ──────────────────────────── */
+  --status-queued-bg: var(--neutral-100);
+  --status-queued-fg: var(--neutral-500);
+  --status-queued-dot: var(--neutral-400);
+
+  --status-running-bg: var(--accent-50);
+  --status-running-fg: var(--accent-600);
+  --status-running-dot: var(--accent-500);
+
+  --status-done-bg: #e6f4ea;
+  --status-done-fg: #0f6c3a;
+  --status-done-dot: #10894a;
+
+  --status-failed-bg: #fdecec;
+  --status-failed-fg: #a1241b;
+  --status-failed-dot: #d6352a;
+
+  --status-warn-bg: #fff6dd;
+  --status-warn-fg: #8a5a00;
+  --status-warn-dot: #c78800;
+
+  --status-info-bg: #e5eefb;
+  --status-info-fg: #184d9e;
+  --status-info-dot: #2968c8;
+
+  /* ── 5 色失败分类(Phase 1.5) ─────────────────────────── */
+  --fail-quota: #c7470a;
+  --fail-tool: #a1241b;
+  --fail-json: #8a5a00;
+  --fail-empty: #6b7380;
+  --fail-timeout: #184d9e;
+
+  /* ── 10 只鸟单色线稿标识色 ──────────────────────────── */
+  --bird-1: #c7470a; /* 业务 · 赭橙 */
+  --bird-2: #184d9e; /* 数据 · 钢蓝 */
+  --bird-3: #0f6c3a; /* 体验 · 墨绿 */
+  --bird-4: #a1241b; /* 风险 · 警示红 */
+  --bird-5: #4d3a86; /* 苍鹰 · 深紫(meta) */
+  --bird-6: #6b7380;
+  --bird-7: #6b7380;
+  --bird-8: #6b7380;
+  --bird-9: #6b7380;
+  --bird-10: #6b7380;
+
+  /* ── v8 shadow(弱阴影) ─────────────────────────────── */
+  --shadow-sm: 0 1px 1px rgba(15, 20, 30, 0.04),
+    0 1px 2px rgba(15, 20, 30, 0.04);
+  --shadow-md: 0 1px 2px rgba(15, 20, 30, 0.04),
+    0 4px 10px rgba(15, 20, 30, 0.05);
+  --shadow-lg: 0 2px 4px rgba(15, 20, 30, 0.05),
+    0 12px 28px rgba(15, 20, 30, 0.08);
+  --shadow-focus: 0 0 0 3px rgba(232, 89, 12, 0.22);
+
+  /* ============ shadcn base tokens(映射到 v8 neutral) ============
+   * 让 bg-background / text-foreground / border / etc. 自动继承 v8 气质。
+   * 老组件无需改代码。 */
+  --background: var(--neutral-25);
+  --foreground: var(--neutral-800);
+  --card: var(--neutral-0);
+  --card-foreground: var(--neutral-800);
+  --popover: var(--neutral-0);
+  --popover-foreground: var(--neutral-800);
+  --primary: var(--neutral-800);
+  --primary-foreground: var(--neutral-0);
+  --secondary: var(--neutral-100);
+  --secondary-foreground: var(--neutral-700);
+  --muted: var(--neutral-100);
+  --muted-foreground: var(--neutral-500);
+  --accent: var(--accent-50);
+  --accent-foreground: var(--accent-600);
+  --destructive: var(--status-failed-dot);
+  --destructive-foreground: var(--neutral-0);
+  --border: var(--neutral-200);
+  --input: var(--neutral-200);
+  --ring: var(--accent-500);
+  --chart-1: var(--accent-500);
+  --chart-2: var(--bird-2);
+  --chart-3: var(--bird-3);
+  --chart-4: var(--bird-4);
+  --chart-5: var(--neutral-500);
+  --sidebar: var(--neutral-50);
+  --sidebar-foreground: var(--neutral-800);
+  --sidebar-primary: var(--accent-500);
+  --sidebar-primary-foreground: var(--accent-fg);
+  --sidebar-accent: var(--accent-50);
+  --sidebar-accent-foreground: var(--accent-600);
+  --sidebar-border: var(--neutral-200);
+  --sidebar-ring: var(--accent-500);
+  --radius: 0.375rem;
+
+  /* ============================================================
+   * @deprecated-v7 · 以下 token 只为让 v7 老组件不崩
+   * 新组件一律不引用 —— 直接用上面的 v8 token
+   * ============================================================ */
+
+  /* @deprecated-v7 · Pecker 扩展(v1/v4/v7 用) */
+  --pecker-success: oklch(0.55 0.08 155);
+  --pecker-success-bg: oklch(0.965 0.018 155);
+  --pecker-success-border: oklch(0.78 0.05 155);
+  --pecker-running: oklch(0.45 0.055 195);
+  --pecker-running-bg: oklch(0.96 0.012 195);
+  --pecker-idle-fg: oklch(0.62 0.006 75);
+  --pecker-idle-border: oklch(0.88 0.005 75);
+  --pecker-shadow-paper: 0 1px 0 oklch(0.85 0.01 75 / 0.6),
+    0 1px 2px oklch(0.3 0.01 60 / 0.04);
+  --pecker-shadow-lift: 0 1px 0 oklch(0.85 0.01 75 / 0.8),
+    0 2px 0 oklch(0.88 0.01 75 / 0.5), 0 4px 8px oklch(0.3 0.01 60 / 0.06);
+  --pecker-red: oklch(0.52 0.18 25);
+  --pecker-kraft: oklch(0.93 0.025 75);
+  --pecker-kraft-deep: oklch(0.86 0.035 72);
+  --pecker-tape: oklch(0.88 0.08 85 / 0.72);
+  --pecker-shadow-print: 0 0 0 0.5px oklch(0.18 0.008 60 / 0.18),
+    2px 3px 0 -1px oklch(0.18 0.008 60 / 0.08),
+    5px 7px 18px -6px oklch(0.18 0.008 60 / 0.14);
+  --pecker-shadow-print-lift: 0 0 0 0.5px oklch(0.18 0.008 60 / 0.22),
+    4px 6px 0 -2px oklch(0.18 0.008 60 / 0.1),
+    9px 14px 28px -8px oklch(0.18 0.008 60 / 0.18);
+  --pecker-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' seed='7'/><feColorMatrix values='0 0 0 0 0.12  0 0 0 0 0.08  0 0 0 0 0.05  0 0 0 0 0.055 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+
+  /* @deprecated-v7 · Ghibli v4 sage 家族 */
+  --pecker-sage-base: oklch(0.955 0.018 125);
+  --pecker-sage-light: oklch(0.905 0.028 125);
+  --pecker-sage: oklch(0.82 0.04 130);
+  --pecker-sage-mid: oklch(0.76 0.045 130);
+  --pecker-moss: oklch(0.68 0.035 135);
+  --pecker-moss-deep: oklch(0.52 0.035 135);
+  --pecker-wood: oklch(0.62 0.045 65);
+  --pecker-wood-deep: oklch(0.42 0.05 60);
+  --pecker-rose: oklch(0.7 0.06 35);
+  --pecker-rose-deep: oklch(0.5 0.08 30);
+  --pecker-cream: oklch(0.925 0.04 90);
+  --pecker-cream-light: oklch(0.97 0.02 90);
+  --pecker-amber: oklch(0.72 0.1 70);
+  --pecker-wax: oklch(0.55 0.15 30);
+  --pecker-shadow-hard-sm: 2px 2px 0 -1px oklch(0.3 0.02 120 / 0.16);
+  --pecker-shadow-hard-md: 4px 4px 0 -1px oklch(0.3 0.02 120 / 0.18);
+  --pecker-shadow-hard-lg: 6px 6px 0 -2px oklch(0.3 0.02 120 / 0.2);
+  --pecker-shadow-drop: 3px 3px 0 -1px oklch(0.3 0.02 120 / 0.12),
+    0 2px 6px oklch(0.3 0.02 120 / 0.08);
+  --pecker-radius-wobbly-a: 18px 22px 16px 20px;
+  --pecker-radius-wobbly-b: 20px 16px 22px 18px;
+  --pecker-radius-wobbly-c: 22px 18px 20px 16px;
+  --pecker-radius-wobbly-d: 16px 20px 18px 22px;
+  --pecker-tilt-a: -0.6deg;
+  --pecker-tilt-b: 0.4deg;
+  --pecker-tilt-c: -0.3deg;
+  --pecker-tilt-d: 0.6deg;
+  /* @deprecated-v7 · v4 水彩雾(v8 已移除 body 引用) */
+  --pecker-watercolor-bg: radial-gradient(
+      ellipse 75% 55% at 20% 15%,
+      oklch(0.82 0.04 130 / 0.55),
+      transparent 65%
+    ),
+    radial-gradient(
+      ellipse 65% 50% at 85% 82%,
+      oklch(0.76 0.045 130 / 0.42),
+      transparent 65%
+    ),
+    radial-gradient(
+      ellipse 50% 45% at 55% 55%,
+      oklch(0.905 0.028 125 / 0.7),
+      transparent 70%
+    );
+}
+
+/* ============================================================
+ * v8 · dark theme(+ shadcn .dark 兼容)
+ * ============================================================ */
+.dark,
+[data-theme="dark"] {
+  --neutral-0: #0b0e12;
+  --neutral-25: #0e1217;
+  --neutral-50: #141921;
+  --neutral-100: #1a2028;
+  --neutral-150: #212833;
+  --neutral-200: #2a323e;
+  --neutral-300: #3a4452;
+  --neutral-400: #596271;
+  --neutral-500: #7a8292;
+  --neutral-600: #99a1ae;
+  --neutral-700: #bcc2cc;
+  --neutral-800: #dde1e7;
+  --neutral-900: #f3f5f8;
+
+  --surface-canvas: var(--neutral-25);
+  --surface-raised: var(--neutral-50);
+  --surface-sunken: var(--neutral-100);
+  --surface-overlay: #1b222c;
+  --surface-console: #06090d;
+  --surface-console-fg: #c6cbd4;
+
+  --text-strong: var(--neutral-900);
+  --text-default: var(--neutral-800);
+  --text-muted: var(--neutral-500);
+  --text-faint: var(--neutral-400);
+  --text-disabled: var(--neutral-300);
+  --text-inverse: #0e1217;
+
+  --border-subtle: var(--neutral-150);
+  --border-default: var(--neutral-200);
+  --border-strong: var(--neutral-300);
+
+  --accent-50: #2a1606;
+  --accent-100: #3f1e08;
+  --accent-200: #6b2d0a;
+  --accent-300: #9a3f0d;
+  --accent-400: #d25712;
+  --accent-500: #f87528;
+  --accent-600: #ff8c4a;
+  --accent-700: #ffa875;
+  --accent-fg: #0e1217;
+
+  --status-queued-bg: var(--neutral-100);
+  --status-queued-fg: var(--neutral-500);
+  --status-queued-dot: var(--neutral-400);
+  --status-running-bg: #2a1606;
+  --status-running-fg: #ffa875;
+  --status-running-dot: #f87528;
+  --status-done-bg: #0f2a19;
+  --status-done-fg: #5ec784;
+  --status-done-dot: #2faa5a;
+  --status-failed-bg: #2e1312;
+  --status-failed-fg: #ff8579;
+  --status-failed-dot: #e2483b;
+  --status-warn-bg: #2a2106;
+  --status-warn-fg: #e9b450;
+  --status-warn-dot: #d89a28;
+  --status-info-bg: #10223d;
+  --status-info-fg: #7aabee;
+  --status-info-dot: #3e83d8;
+
+  --fail-quota: #ff8c4a;
+  --fail-tool: #ff8579;
+  --fail-json: #e9b450;
+  --fail-empty: #7a8292;
+  --fail-timeout: #7aabee;
+
+  --bird-1: #ff8c4a;
+  --bird-2: #7aabee;
+  --bird-3: #5ec784;
+  --bird-4: #ff8579;
+  --bird-5: #b9a3ff;
+  --bird-6: #7a8292;
+  --bird-7: #7a8292;
+  --bird-8: #7a8292;
+  --bird-9: #7a8292;
+  --bird-10: #7a8292;
+
+  --shadow-sm: 0 1px 1px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 10px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.4), 0 12px 28px rgba(0, 0, 0, 0.45);
+  --shadow-focus: 0 0 0 3px rgba(248, 117, 40, 0.35);
+
+  /* shadcn base(dark) 同样映射到 v8 neutral */
+  --background: var(--neutral-25);
+  --foreground: var(--neutral-900);
+  --card: var(--neutral-50);
+  --card-foreground: var(--neutral-900);
+  --popover: var(--neutral-50);
+  --popover-foreground: var(--neutral-900);
+  --primary: var(--neutral-800);
+  --primary-foreground: var(--neutral-25);
+  --secondary: var(--neutral-100);
+  --secondary-foreground: var(--neutral-800);
+  --muted: var(--neutral-100);
+  --muted-foreground: var(--neutral-500);
+  --accent: var(--accent-50);
+  --accent-foreground: var(--accent-600);
+  --destructive: var(--status-failed-dot);
+  --destructive-foreground: var(--neutral-0);
+  --border: var(--neutral-200);
+  --input: var(--neutral-200);
+  --ring: var(--accent-500);
+  --chart-1: var(--accent-500);
+  --chart-2: var(--bird-2);
+  --chart-3: var(--bird-3);
+  --chart-4: var(--bird-4);
+  --chart-5: var(--neutral-500);
+  --sidebar: var(--neutral-50);
+  --sidebar-foreground: var(--neutral-900);
+  --sidebar-primary: var(--accent-500);
+  --sidebar-primary-foreground: var(--accent-fg);
+  --sidebar-accent: var(--accent-50);
+  --sidebar-accent-foreground: var(--accent-600);
+  --sidebar-border: var(--neutral-200);
+  --sidebar-ring: var(--accent-500);
+
+  /* @deprecated-v7 · Pecker 扩展(dark) */
+  --pecker-success: oklch(0.72 0.09 155);
+  --pecker-success-bg: oklch(0.22 0.025 155);
+  --pecker-success-border: oklch(0.38 0.045 155);
+  --pecker-running: oklch(0.78 0.06 195);
+  --pecker-running-bg: oklch(0.22 0.02 195);
+  --pecker-idle-fg: oklch(0.52 0.008 75);
+  --pecker-idle-border: oklch(0.3 0.008 210);
+  --pecker-shadow-paper: 0 1px 0 oklch(0.1 0.005 210 / 0.8),
+    0 1px 2px oklch(0 0 0 / 0.3);
+  --pecker-shadow-lift: 0 1px 0 oklch(0.1 0.005 210 / 0.9),
+    0 2px 0 oklch(0.12 0.005 210 / 0.6), 0 4px 8px oklch(0 0 0 / 0.4);
+  --pecker-red: oklch(0.68 0.16 28);
+  --pecker-kraft: oklch(0.22 0.015 75);
+  --pecker-kraft-deep: oklch(0.28 0.02 72);
+  --pecker-tape: oklch(0.38 0.06 85 / 0.55);
+  --pecker-shadow-print: 0 0 0 0.5px oklch(1 0 0 / 0.08),
+    2px 3px 0 -1px oklch(0 0 0 / 0.3), 5px 7px 18px -6px oklch(0 0 0 / 0.5);
+  --pecker-shadow-print-lift: 0 0 0 0.5px oklch(1 0 0 / 0.12),
+    4px 6px 0 -2px oklch(0 0 0 / 0.4), 9px 14px 28px -8px oklch(0 0 0 / 0.6);
+}
+
+/* ============================================================
+ * v8 · Phase 2 局部:色温下降 + 对比 +20%(不做全暗色)
+ *
+ * 用法:<section data-phase2>...</section>
+ * 只在 Phase 2 调度中心那一屏用,其他 Phase 保持日常气质。
+ * ============================================================ */
+[data-phase2] {
+  --surface-canvas: color-mix(in oklch, var(--neutral-25) 70%, #dce2ec);
+  --surface-raised: color-mix(in oklch, var(--neutral-0) 92%, #c7ced9);
+  --surface-sunken: color-mix(in oklch, var(--neutral-50) 85%, #c7ced9);
+  --text-default: var(--neutral-800);
+  --text-muted: var(--neutral-600);
+  --border-default: var(--neutral-200);
+}
+.dark [data-phase2],
+[data-theme="dark"] [data-phase2] {
+  --surface-canvas: #080b10;
+  --surface-raised: #0f141b;
+  --surface-sunken: #0a0e13;
+  --text-default: var(--neutral-900);
+  --text-muted: var(--neutral-600);
+}
+
+/* ============================================================
+ * v8 · typography / spacing / radius / motion / z-index tokens
+ * ============================================================ */
+:root {
+  /* 字号 scale(PM 工作台 · 紧凑) */
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 32px;
+
+  --lh-tight: 1.25;
+  --lh-normal: 1.5;
+  --lh-loose: 1.65;
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  /* spacing(4/8 倍数网格 · 禁 22/42) */
+  --sp-0: 0;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+
+  /* radius(≤ 8 统一) */
+  --r-0: 0;
+  --r-1: 2px;
+  --r-2: 4px;
+  --r-3: 6px;
+  --r-4: 8px; /* 标准卡片 · 按钮 */
+  --r-pill: 999px; /* 状态徽章 · 头像 */
+
+  /* motion */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in: cubic-bezier(0.8, 0.2, 1, 0.8);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+
+  /* z */
+  --z-nav: 20;
+  --z-drawer: 40;
+  --z-overlay: 60;
+  --z-toast: 80;
+}
+
+/* v8 · running 状态的呼吸灯 */
+@keyframes dot-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.55;
+  }
+}
+@keyframes dot-halo {
+  0% {
+    box-shadow: 0 0 0 0 rgba(232, 89, 12, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(232, 89, 12, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(232, 89, 12, 0);
+  }
+}
+
+/* ============================================================
+ * base · body 样式
+ * v8 移除 watercolor + grain,让页面真正"浅色工作气质"
+ * ============================================================ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans), "PingFang SC", "Hiragino Sans GB",
+      "Microsoft YaHei", system-ui, sans-serif;
+    font-feature-settings: "cv11", "ss01", "ss02";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* @deprecated-v7 · 不再叠加 watercolor-bg / grain */
+  }
+  html {
+    @apply font-sans;
+  }
+  /* v8 · 标题用主字体(Geist),不用 serif
+     @deprecated-v7 · 原 h1-h4 走 Fraunces serif,v8 抛弃 */
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-sans), "PingFang SC", "Microsoft YaHei",
+      "Hiragino Sans GB", system-ui, sans-serif;
+    letter-spacing: -0.015em;
+  }
+}
+
+/* ============================================================
+ * @deprecated-v7 · Pecker 微动效(v4 水彩 + v7 线稿时代遗留)
+ * 新组件用 v8 的 dot-breathe / dot-halo,这些只为老组件不崩
+ * ============================================================ */
+@layer utilities {
+  @keyframes pecker-breathe {
+    0%,
+    100% {
+      opacity: 1;
+      box-shadow: var(--pecker-shadow-paper);
+    }
+    50% {
+      opacity: 0.94;
+    }
+  }
+  .animate-pecker-breathe {
+    animation: pecker-breathe 2.8s ease-in-out infinite;
+  }
+
+  @keyframes pecker-fade-in {
+    0% {
+      opacity: 0;
+      transform: translateY(2px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .animate-pecker-fade-in {
+    animation: pecker-fade-in 0.4s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  }
+
+  @keyframes pecker-peck {
+    0%,
+    88%,
+    100% {
+      transform: translateX(0) rotate(0);
+    }
+    91% {
+      transform: translateX(-1.5px) rotate(-0.35deg);
+    }
+    94% {
+      transform: translateX(2px) rotate(0.45deg);
+    }
+    97% {
+      transform: translateX(-0.8px) rotate(-0.2deg);
+    }
+  }
+  .animate-pecker-peck {
+    animation: pecker-peck 3.8s cubic-bezier(0.3, 0.1, 0.2, 1) infinite;
+    animation-delay: var(--peck-delay, 0s);
+    will-change: transform;
+  }
+
+  @keyframes pecker-correct {
+    0% {
+      stroke-dashoffset: 32;
+      opacity: 0;
+    }
+    15% {
+      opacity: 1;
+    }
+    100% {
+      stroke-dashoffset: 0;
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-pecker-breathe,
+    .animate-pecker-fade-in,
+    .animate-pecker-peck {
+      animation: none;
+    }
+  }
+}
+
+/* ============================================================
+ * @deprecated-v7 · 编辑部版式 utilities
+ * 新页面禁止使用(ink-mark / nudge-* / tilt-* / pecker-grain-bg / 等)
+ * 保留只为老页面不崩
+ * ============================================================ */
+@layer utilities {
+  .ink-mark {
+    position: relative;
+    display: inline-block;
+  }
+  .ink-mark::after {
+    content: "";
+    position: absolute;
+    left: -0.15em;
+    right: -0.15em;
+    bottom: 0.05em;
+    height: 0.38em;
+    background: var(--pecker-red);
+    opacity: 0.32;
+    z-index: -1;
+    transform: skewX(-6deg) rotate(-0.8deg);
+    border-radius: 999px 3px 999px 2px;
+  }
+  .nudge-out-l {
+    margin-left: -0.6875rem;
+  }
+  .nudge-out-r {
+    margin-right: -0.9375rem;
+  }
+  .tilt-a {
+    transform: rotate(-0.4deg);
+  }
+  .tilt-b {
+    transform: rotate(0.6deg);
+  }
+  .tilt-c {
+    transform: rotate(-0.25deg);
+  }
+  .pecker-grain-bg {
+    background-image: var(--pecker-grain);
+  }
+
+  .rounded-wobbly-a {
+    border-radius: var(--pecker-radius-wobbly-a);
+  }
+  .rounded-wobbly-b {
+    border-radius: var(--pecker-radius-wobbly-b);
+  }
+  .rounded-wobbly-c {
+    border-radius: var(--pecker-radius-wobbly-c);
+  }
+  .rounded-wobbly-d {
+    border-radius: var(--pecker-radius-wobbly-d);
+  }
+
+  .shadow-hard-sm {
+    box-shadow: var(--pecker-shadow-hard-sm);
+  }
+  .shadow-hard-md {
+    box-shadow: var(--pecker-shadow-hard-md);
+  }
+  .shadow-hard-lg {
+    box-shadow: var(--pecker-shadow-hard-lg);
+  }
+  .shadow-drop {
+    box-shadow: var(--pecker-shadow-drop);
+  }
+
+  .tilt-ghibli-a {
+    transform: rotate(-0.6deg);
+  }
+  .tilt-ghibli-b {
+    transform: rotate(0.4deg);
+  }
+  .tilt-ghibli-c {
+    transform: rotate(-0.3deg);
+  }
+  .tilt-ghibli-d {
+    transform: rotate(0.6deg);
+  }
+
+  .bg-sage-base {
+    background: var(--pecker-sage-base);
+  }
+  .bg-sage-light {
+    background: var(--pecker-sage-light);
+  }
+  .bg-sage {
+    background: var(--pecker-sage);
+  }
+
+  .paper-card {
+    background: oklch(0.97 0.015 90 / 0.86);
+    border: 1px solid oklch(0.82 0.04 130 / 0.35);
+    border-radius: var(--pecker-radius-wobbly-a);
+    box-shadow: var(--pecker-shadow-drop);
+    transform: rotate(-0.3deg);
+    transition: transform 400ms cubic-bezier(0.22, 1.36, 0.64, 1),
+      box-shadow 400ms cubic-bezier(0.22, 1.36, 0.64, 1);
+  }
+  .paper-card:hover {
+    transform: rotate(0deg) translateY(-3px);
+    box-shadow: 0 4px 8px oklch(0.3 0.02 120 / 0.08),
+      0 24px 48px -12px oklch(0.3 0.02 120 / 0.2);
+  }
+  .paper-card:nth-child(even) {
+    border-radius: var(--pecker-radius-wobbly-b);
+    transform: rotate(0.4deg);
+  }
+  .paper-card:nth-child(3n) {
+    border-radius: var(--pecker-radius-wobbly-c);
+    transform: rotate(-0.2deg);
+  }
+  .paper-card-line {
+    background: oklch(0.97 0.015 90 / 0.5);
+    border: 1px solid oklch(0.3 0.02 120 / 0.22);
+    border-radius: 12px;
+    transition: border-color 200ms ease;
+  }
+  .paper-card-line:hover {
+    border-color: oklch(0.3 0.02 120 / 0.45);
+  }
+  .bg-watercolor-single {
+    background-image: radial-gradient(
+      ellipse 65% 50% at 80% 15%,
+      oklch(0.82 0.04 130 / 0.35),
+      transparent 70%
+    );
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .paper-card,
+    .tilt-ghibli-a,
+    .tilt-ghibli-b,
+    .tilt-ghibli-c,
+    .tilt-ghibli-d {
+      transform: none !important;
+    }
+  }
+}
+
+/* ============================================================
+ * v8 工作台响应式 · Phase 2 / Phase 3
+ * - Phase 2: 评审员卡片网格在窄屏降级
+ * - Phase 3: 双栏 → 单栏 → 移动抽屉
+ * ============================================================ */
+
+/* 评审员卡片(Phase 2):桌面 4 列 / 平板 2 列 / 手机 1 列 */
+@media (max-width: 1080px) {
+  .pecker-worker-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+@media (max-width: 640px) {
+  .pecker-worker-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* 运行质量检查(Phase 1.5):窄屏一致率环和评审员状态堆叠 */
+@media (max-width: 720px) {
+  .pecker-health-body {
+    grid-template-columns: 1fr !important;
+    gap: 18px !important;
+  }
+  .pecker-health-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* Phase 3 双栏工作台:< 1280 单栏(PRD 原文置顶,意见列表在下),< 720 抽屉 */
+@media (max-width: 1280px) {
+  .pecker-phase3-grid {
+    grid-template-columns: 1fr !important;
+    min-height: auto !important;
+  }
+  .pecker-phase3-doc-wrap {
+    position: static !important;
+    max-height: 360px !important;
+  }
+}
+
+/* 手机端:PRD 原文短卡 + 评论抽屉 fab */
+@media (max-width: 720px) {
+  .pecker-phase3-doc-wrap {
+    max-height: 240px !important;
+  }
+  .pecker-phase3-comments {
+    /* 移动端隐藏内联评论列表,改用底部抽屉访问 */
+    display: none !important;
+  }
+  .pecker-phase3-drawer-fab {
+    display: inline-flex !important;
+  }
+  .pecker-phase3-drawer {
+    display: flex !important;
+  }
+  .pecker-phase3-batchbar {
+    padding: 8px 12px !important;
+  }
+  .pecker-phase3-batchbar > div:first-child {
+    gap: 10px !important;
+    font-size: 12px !important;
+  }
+}

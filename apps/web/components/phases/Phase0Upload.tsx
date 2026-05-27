@@ -1,0 +1,554 @@
+"use client";
+
+/**
+ * Phase 0 — PRD 上传 + 基础参数
+ *
+ * 元素:
+ * - 草稿恢复 Banner(如果后端 GET /api/drafts/{reviewer} 命中)
+ * - 拖拽 / 点选上传 .md .txt PRD 文件
+ * - 资料库 Select(从 /api/workspaces 拉)
+ * - 评审模式 Tabs(fast / strict)
+ * - 评审人补充说明 Textarea
+ * - "下一步 → 预检" 按钮(PRD + workspace 就绪才能点)
+ *
+ * 下一步会保存 draft phase=1 并 setPhase(1),让 review/page.tsx 切换到 Phase1Precheck。
+ */
+
+import { useCallback, useState, type ChangeEvent, type DragEvent } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { FileText, Upload, RotateCcw, X, ArrowRight, Info } from "lucide-react";
+import { toast } from "sonner";
+
+import {
+  workspacesApi,
+  draftsApi,
+  ApiError,
+  type Draft,
+  type ReviewMode,
+} from "@/lib/api";
+import { useReviewStore } from "@/lib/store";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import {
+  estimateReviewEtaHint,
+  estimateReviewEtaLabel,
+} from "@/lib/review-eta";
+import {
+  buildFigmaRawMaterial,
+  buildImageReferenceRawMaterial,
+  buildImageRawMaterial,
+  extractFigmaLinks,
+  extractMarkdownImageReferences,
+  isSupportedImageFile,
+  mergeRawMaterials,
+  rawMaterialTitle,
+} from "@/lib/supplemental-materials";
+
+const MAX_PRD_BYTES = 2 * 1024 * 1024; // 2 MB
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
+
+export function Phase0Upload() {
+  const queryClient = useQueryClient();
+
+  // ========== store 状态 ==========
+  const reviewer = useReviewStore((s) => s.reviewer);
+  const prdName = useReviewStore((s) => s.prdName);
+  const prdContent = useReviewStore((s) => s.prdContent);
+  const rawMaterials = useReviewStore((s) => s.rawMaterials);
+  const workspace = useReviewStore((s) => s.workspace);
+  const mode = useReviewStore((s) => s.mode);
+  const userNotes = useReviewStore((s) => s.userNotes);
+  const setUserInput = useReviewStore((s) => s.setUserInput);
+  const setPhase = useReviewStore((s) => s.setPhase);
+  const hydrateFromDraft = useReviewStore((s) => s.hydrateFromDraft);
+  const toDraftPayload = useReviewStore((s) => s.toDraftPayload);
+
+  const [dragOver, setDragOver] = useState(false);
+  const [dismissedDraft, setDismissedDraft] = useState(false);
+  const [customWorkspaceMode, setCustomWorkspaceMode] = useState(false);
+  const [previousWorkspace, setPreviousWorkspace] = useState("");
+  const [figmaLinkInput, setFigmaLinkInput] = useState("");
+
+  // ========== workspace 列表 ==========
+  const { data: workspaces, isLoading: wsLoading } = useQuery({
+    queryKey: ["workspaces"],
+    queryFn: () => workspacesApi.list(),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // ========== 草稿检查 ==========
+  const { data: draft } = useQuery<Draft | null>({
+    queryKey: ["draft", reviewer],
+    queryFn: async () => {
+      if (!reviewer) return null;
+      try {
+        return await draftsApi.get(reviewer);
+      } catch (e) {
+        const err = e as ApiError;
+        if (err.status === 404) return null;
+        throw e;
+      }
+    },
+    enabled: !!reviewer,
+    retry: false,
+    staleTime: 10 * 1000,
+  });
+
+  const hasDraft = !!draft && !dismissedDraft;
+  const workspaceInList = (workspaces ?? []).some((w) => w.name === workspace);
+  const showCustomWorkspaceInput = customWorkspaceMode || !workspace;
+  const selectedWorkspacePageCount =
+    (workspaces ?? []).find((w) => w.name === workspace)?.wiki_page_count ?? 0;
+  const etaInput = {
+    mode,
+    prdContent,
+    rawMaterials,
+    wikiPageCount: selectedWorkspacePageCount,
+  };
+
+  const handleSelectWorkspace = (value: string | null) => {
+    setPreviousWorkspace(value ?? "");
+    setCustomWorkspaceMode(false);
+    setUserInput({ workspace: value ?? "" });
+  };
+
+  const handleUseCustomWorkspace = () => {
+    if (workspace) setPreviousWorkspace(workspace);
+    setCustomWorkspaceMode(true);
+    setUserInput({ workspace: "" });
+  };
+
+  const handleRestoreSelectedWorkspace = () => {
+    if (!previousWorkspace) return;
+    setCustomWorkspaceMode(false);
+    setUserInput({ workspace: previousWorkspace });
+  };
+
+  // ========== 文件处理 ==========
+  const addRawMaterials = useCallback(
+    (materials: string[]) => {
+      if (!materials.length) return;
+      setUserInput({ rawMaterials: mergeRawMaterials(rawMaterials, materials) });
+    },
+    [rawMaterials, setUserInput],
+  );
+
+  const addFigmaLinksFromText = useCallback(
+    (text: string, source: string) => {
+      const links = extractFigmaLinks(text);
+      if (!links.length) return;
+      addRawMaterials(links.map((link) => buildFigmaRawMaterial(link, source)));
+      toast.success(`已接入 ${links.length} 个 Figma 链接`);
+    },
+    [addRawMaterials],
+  );
+
+  const addImageRefsFromText = useCallback(
+    (text: string, source: string) => {
+      const refs = extractMarkdownImageReferences(text);
+      if (!refs.length) return;
+      addRawMaterials(refs.map((ref) => buildImageReferenceRawMaterial({ ...ref, source })));
+      toast.success(`已识别 ${refs.length} 个 Markdown 图片引用`);
+    },
+    [addRawMaterials],
+  );
+
+  const addMaterialsFromText = useCallback(
+    (text: string, source: string) => {
+      addFigmaLinksFromText(text, source);
+      addImageRefsFromText(text, source);
+    },
+    [addFigmaLinksFromText, addImageRefsFromText],
+  );
+
+  const handleAddFigmaLink = () => {
+    addFigmaLinksFromText(figmaLinkInput, "手动添加");
+    setFigmaLinkInput("");
+  };
+
+  const handleFile = useCallback(
+    async (file: File) => {
+      if (isSupportedImageFile(file)) {
+        if (file.size > MAX_IMAGE_BYTES) {
+          toast.error(`图片过大: ${(file.size / 1024 / 1024).toFixed(1)} MB,上限 5 MB`);
+          return;
+        }
+        addRawMaterials([
+          buildImageRawMaterial({
+            name: file.name,
+            mimeType: file.type,
+            sizeBytes: file.size,
+            source: "上传附件",
+          }),
+        ]);
+        toast.success(`已接入图片补充材料: ${file.name}`);
+        return;
+      }
+      if (file.size > MAX_PRD_BYTES) {
+        toast.error(`文件过大: ${(file.size / 1024 / 1024).toFixed(1)} MB,上限 2 MB`);
+        return;
+      }
+      const lower = file.name.toLowerCase();
+      if (!lower.endsWith(".md") && !lower.endsWith(".txt") && !lower.endsWith(".markdown")) {
+        toast.warning("建议使用 .md 或 .txt,其他格式可能解析异常");
+      }
+      try {
+        const content = await file.text();
+        setUserInput({ prdName: file.name, prdContent: content });
+        addMaterialsFromText(content, `${file.name} 中的链接`);
+        toast.success(`已读取 ${file.name} (${content.length} 字)`);
+      } catch {
+        toast.error("文件读取失败");
+      }
+    },
+    [addMaterialsFromText, addRawMaterials, setUserInput],
+  );
+
+  const onPickFile = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFile(file);
+  };
+
+  const onDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  };
+
+  // ========== 草稿恢复 ==========
+  const handleResume = () => {
+    if (!draft) return;
+    hydrateFromDraft(draft);
+    toast.success(`已恢复草稿 — 进度: ${phaseLabel(draft.phase)}`);
+    // hydrate 会把 phase 写成草稿里的 phase,review/page.tsx 自动切换
+  };
+
+  const handleDiscardDraft = async () => {
+    if (!reviewer) return;
+    try {
+      await draftsApi.delete(reviewer);
+      queryClient.setQueryData(["draft", reviewer], null);
+      setDismissedDraft(true);
+      toast.success("草稿已清除");
+    } catch (e) {
+      const err = e as ApiError;
+      toast.error(`清除失败: ${err.detail ?? err.message}`);
+    }
+  };
+
+  // ========== 下一步 ==========
+  const canProceed = prdContent.length > 0 && workspace.length > 0;
+
+  const handleNext = async () => {
+    if (!canProceed || !reviewer) return;
+    try {
+      // 先保存 draft(phase=1),浏览器挂了也能回到预检页
+      await draftsApi.save(reviewer, { ...toDraftPayload(), phase: 1 });
+    } catch {
+      // 草稿保存失败不阻塞前进
+    }
+    setPhase(1);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* ========== 草稿恢复 Banner ========== */}
+      {hasDraft && draft && (
+        <Alert className="border-primary/30 bg-primary/5">
+          <RotateCcw className="h-4 w-4" />
+          <AlertTitle className="flex items-center gap-2">
+            发现未完成的评审草稿
+            <Badge variant="outline">进度 {phaseLabel(draft.phase)}</Badge>
+          </AlertTitle>
+          <AlertDescription className="space-y-2">
+            <div className="text-sm">
+              <span className="font-medium">{draft.prd_name || "未命名"}</span>
+              {draft.workspace && (
+                <span className="ml-2 text-muted-foreground">
+                  · {draft.workspace.replace(/^workspace-/, "")}
+                </span>
+              )}
+              <span className="ml-2 text-muted-foreground">· {formatTs(draft.ts)}</span>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Button size="sm" onClick={handleResume}>
+                恢复
+              </Button>
+              <Button size="sm" variant="outline" onClick={handleDiscardDraft}>
+                <X className="mr-1 h-3.5 w-3.5" />
+                丢弃
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* ========== 上传区 ========== */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5 text-muted-foreground" />
+            PRD 原文
+          </CardTitle>
+          <CardDescription>
+            支持 .md / .txt / .markdown,大小 ≤ 2MB。也可直接粘贴内容到文本框。
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {/* 拖拽 / 点选区 */}
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOver(true);
+            }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={onDrop}
+            className={cn(
+              "flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-6 py-8 transition-colors",
+              dragOver
+                ? "border-primary bg-primary/5"
+                : "border-border bg-muted/20 hover:border-primary/40",
+            )}
+          >
+            <Upload className="h-6 w-6 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">
+              拖入文件 <span className="text-xs">或</span>
+            </p>
+            <label className="cursor-pointer">
+              <input
+                type="file"
+                accept=".md,.txt,.markdown,image/png,image/jpeg,image/webp,image/gif"
+                className="hidden"
+                onChange={onPickFile}
+              />
+              <span className="inline-flex items-center rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90">
+                选择文件
+              </span>
+            </label>
+            {prdName && (
+              <p className="mt-1 text-xs text-foreground">
+                已选: <span className="font-medium">{prdName}</span>
+                {" · "}
+                {prdContent.length} 字
+              </p>
+            )}
+          </div>
+
+          {/* 粘贴回退 */}
+          <div className="space-y-1.5">
+            <Label htmlFor="prd-paste" className="text-xs text-muted-foreground">
+              或手工粘贴
+            </Label>
+            <Textarea
+              id="prd-paste"
+              placeholder="# PRD 标题..."
+              rows={8}
+              value={prdContent}
+              onChange={(e) => {
+                setUserInput({ prdContent: e.target.value });
+                if (!prdName && e.target.value) {
+                  setUserInput({ prdName: "粘贴内容.md" });
+                }
+              }}
+              onBlur={(e) => addMaterialsFromText(e.target.value, "粘贴内容")}
+              className="font-mono text-xs"
+            />
+          </div>
+
+          <div className="space-y-1.5 rounded-md border bg-muted/20 p-3">
+            <Label htmlFor="figma-link" className="text-xs text-muted-foreground">
+              图片 / Figma 补充材料
+            </Label>
+            <div className="flex gap-2">
+              <Input
+                id="figma-link"
+                value={figmaLinkInput}
+                onChange={(e) => setFigmaLinkInput(e.target.value)}
+                placeholder="粘贴 Figma 链接,或把图片拖入上方上传区"
+                className="text-xs"
+              />
+              <Button type="button" variant="outline" onClick={handleAddFigmaLink}>
+                添加
+              </Button>
+            </div>
+            {rawMaterials.length > 0 && (
+              <div className="space-y-1 pt-1">
+                {rawMaterials.map((material, index) => (
+                  <div
+                    key={`${material.slice(0, 24)}-${index}`}
+                    className="truncate rounded border bg-background px-2 py-1 text-xs text-muted-foreground"
+                    title={rawMaterialTitle(material)}
+                  >
+                    {rawMaterialTitle(material)}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ========== 参数区 ========== */}
+      <Card>
+        <CardHeader>
+          <CardTitle>评审参数</CardTitle>
+          <CardDescription>
+            资料库决定本次参考的背景材料和报告归档位置,模式影响检查深度。
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {/* 资料库选择 — Select + fallback 文本输入(Radix Select 在自动化测试
+               下不稳定,加一个手动输入入口让 e2e 和 CI 也能跑) */}
+          <div className="space-y-1.5">
+            <Label htmlFor="ws">资料库</Label>
+            <Select
+              value={customWorkspaceMode || !workspaceInList ? "" : workspace}
+              onValueChange={handleSelectWorkspace}
+              disabled={wsLoading}
+            >
+              <SelectTrigger id="ws" className="w-full">
+                <SelectValue
+                  placeholder={wsLoading ? "加载中..." : "选择一个资料库"}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {(workspaces ?? []).map((w) => (
+                  <SelectItem key={w.name} value={w.name}>
+                    <span className="mr-2 font-medium">{w.display_name}</span>
+                    <span className="text-xs text-muted-foreground">
+                      资料 {w.wiki_page_count} · PRD {w.prd_count}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {workspace && !customWorkspaceMode && (
+              <div className="mt-1 flex items-center justify-between gap-2 rounded-md border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                <span>
+                  当前资料库：
+                  <span className="font-medium text-foreground">
+                    {workspace.replace(/^workspace-/, "")}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  className="shrink-0 font-medium text-primary hover:text-primary/80"
+                  onClick={handleUseCustomWorkspace}
+                >
+                  改为新资料库
+                </button>
+              </div>
+            )}
+            {/* fallback 手动输入:下拉选不动时可以直接输 workspace 名 */}
+            {showCustomWorkspaceInput && (
+              <div className="mt-1 space-y-1">
+                <Input
+                  placeholder="输入新资料库名(如 示例模块)"
+                  value={customWorkspaceMode ? workspace : ""}
+                  className="text-xs"
+                  onFocus={() => setCustomWorkspaceMode(true)}
+                  onChange={(e) => {
+                    const v = e.target.value.trim();
+                    setCustomWorkspaceMode(true);
+                    setUserInput({ workspace: v });
+                  }}
+                />
+                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span>也可以新建资料库,后续报告会归到这个名称下。</span>
+                  {previousWorkspace && customWorkspaceMode && (
+                    <button
+                      type="button"
+                      className="shrink-0 font-medium text-primary hover:text-primary/80"
+                      onClick={handleRestoreSelectedWorkspace}
+                    >
+                      继续使用这个资料库
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Mode */}
+          <div className="space-y-1.5">
+            <Label>评审模式</Label>
+            <Tabs
+              value={mode}
+              onValueChange={(v) => setUserInput({ mode: v as ReviewMode })}
+            >
+              <TabsList className="grid w-full max-w-sm grid-cols-2">
+                <TabsTrigger value="quick">快速</TabsTrigger>
+                <TabsTrigger value="standard">严格(默认)</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <p className="text-xs text-muted-foreground">
+              {mode === "quick"
+                ? `快速 = 轻量检查,${estimateReviewEtaLabel({ ...etaInput, mode: "quick" })}。适合初稿自查。`
+                : `严格 = 分向评审 + 复核,深评审${estimateReviewEtaLabel({ ...etaInput, mode: "standard" })},${estimateReviewEtaHint(etaInput)}。默认推荐。`}
+            </p>
+          </div>
+
+          {/* User notes */}
+          <div className="space-y-1.5">
+            <Label htmlFor="notes">补充说明(可选)</Label>
+            <Textarea
+              id="notes"
+              placeholder="例:本次重点检查字段映射;忽略 UI 交互部分..."
+              rows={3}
+              value={userNotes}
+              onChange={(e) => setUserInput({ userNotes: e.target.value })}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ========== 下一步 ========== */}
+      <div className="flex items-center justify-between rounded-lg border bg-card px-4 py-3">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Info className="h-3.5 w-3.5" />
+          下一步会把 PRD 送去&ldquo;预检&rdquo;:读取资料库、识别背景缺口。
+        </div>
+        <Button onClick={handleNext} disabled={!canProceed}>
+          下一步:预检
+          <ArrowRight className="ml-1 h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function formatTs(ts: string): string {
+  // "2026-04-15T16:52:17" → "04-15 16:52"
+  const match = ts.match(/^\d{4}-(\d{2}-\d{2})T(\d{2}:\d{2})/);
+  return match ? `${match[1]} ${match[2]}` : ts;
+}
+
+function phaseLabel(phase: number): string {
+  switch (phase) {
+    case 1:
+      return "资料预检";
+    case 2:
+      return "生成意见";
+    case 3:
+      return "逐条确认";
+    case 4:
+      return "报告导出";
+    default:
+      return "准备材料";
+  }
+}
