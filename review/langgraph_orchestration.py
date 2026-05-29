@@ -7,9 +7,10 @@ aggregation, metrics, and trace in an explicit graph.
 from __future__ import annotations
 
 import asyncio
+from contextlib import nullcontext
 import operator
 import time
-from typing import Annotated, Any, Dict, List, Optional, TypedDict
+from typing import Annotated, Any, Callable, Dict, List, Optional, TypedDict
 
 from langgraph.graph import END, StateGraph
 from langgraph.types import Send
@@ -27,6 +28,45 @@ try:
 except Exception:  # noqa: BLE001
     def _metrics_record(*_a, **_kw):  # type: ignore[no-redef]
         return False
+
+
+def _safe_observation_name(value: str) -> str:
+    safe = "".join(ch if ch.isalnum() or ch in {"_", "-"} else "_" for ch in str(value or "unknown"))
+    return safe.strip("_") or "unknown"
+
+
+def _worker_trace_summary(worker: Dict[str, Any], *, fallback_dimension: str) -> Dict[str, Any]:
+    usage = worker.get("usage") if isinstance(worker.get("usage"), dict) else {}
+    telemetry = worker.get("telemetry") if isinstance(worker.get("telemetry"), dict) else {}
+    summary = {
+        "dimension": worker.get("dimension") or fallback_dimension,
+        "status": worker.get("status") or ("failed" if worker.get("error") else "success"),
+        "error_type": worker.get("error_type") or "",
+        "items_count": len(worker.get("items") or []),
+        "input_tokens": int(usage.get("input_tokens") or 0),
+        "output_tokens": int(usage.get("output_tokens") or 0),
+        "cost_usd": float(worker.get("cost_usd") or 0.0),
+    }
+    if telemetry:
+        for key in ("duration_ms", "prompt_name", "prompt_source", "prompt_label", "prompt_version", "prompt_hash"):
+            if key in telemetry:
+                summary[key] = telemetry[key]
+        prompt = telemetry.get("prompt")
+        if isinstance(prompt, dict):
+            for source_key, target_key in (
+                ("name", "prompt_name"),
+                ("source", "prompt_source"),
+                ("label", "prompt_label"),
+                ("version", "prompt_version"),
+                ("hash", "prompt_hash"),
+            ):
+                if source_key in prompt:
+                    summary[target_key] = prompt[source_key]
+    recovery = worker.get("recovery")
+    if isinstance(recovery, dict):
+        summary["recovery_attempts"] = int(recovery.get("attempts") or 0)
+        summary["recovery_mode"] = str(recovery.get("mode") or "")
+    return summary
 
 
 class LangGraphMainReviewState(TypedDict, total=False):
@@ -59,6 +99,7 @@ def build_langgraph_parallel_review_app(
     on_tool_call=None,
     round_delay_seconds: float = 5.0,
     checkpointer: Any = None,
+    langfuse_trace: Any = None,
 ):
     """Build the main review graph with observable per-worker nodes."""
     from review import orchestration as orchestration_mod
@@ -73,17 +114,34 @@ def build_langgraph_parallel_review_app(
         default=None,
     )
 
+    def trace_span(name: str, *, input: Any = None, metadata: Any = None):
+        if langfuse_trace is None:
+            return nullcontext()
+        return langfuse_trace.span(name, input=input, metadata=metadata)
+
+    def update_trace(observation: Any, *, output: Any = None, metadata: Any = None) -> None:
+        if langfuse_trace is None:
+            return
+        langfuse_trace.update_observation(observation, output=output, metadata=metadata)
+
     async def prepare_round(state: LangGraphMainReviewState) -> Dict[str, Any]:
         round_no = int(state.get("round_idx", 0)) + 1
-        if round_no > 1:
-            log.info("[langgraph] starting review round %s/%s after delay", round_no, total_rounds)
-            await asyncio.sleep(round_delay_seconds)
-        else:
-            log.info("[langgraph] starting review round 1/%s", total_rounds)
-        return {
-            "active_round": round_no,
-            "trace": [f"prepare_round:{round_no}"],
-        }
+        with trace_span(
+            "pecker.langgraph.prepare_round",
+            input={"round": round_no, "total_rounds": total_rounds},
+            metadata={"worker_count": len(dim_keys)},
+        ) as observation:
+            if round_no > 1:
+                log.info("[langgraph] starting review round %s/%s after delay", round_no, total_rounds)
+                await asyncio.sleep(round_delay_seconds)
+            else:
+                log.info("[langgraph] starting review round 1/%s", total_rounds)
+            payload = {
+                "active_round": round_no,
+                "trace": [f"prepare_round:{round_no}"],
+            }
+            update_trace(observation, output={"active_round": round_no})
+            return payload
 
     def fan_out_workers(state: LangGraphMainReviewState) -> List[Send]:
         round_no = int(state.get("active_round", 1))
@@ -103,23 +161,32 @@ def build_langgraph_parallel_review_app(
         round_no = int(state.get("round_no", 1))
         dim_key = str(state.get("dim_key"))
         worker_index = int(state.get("worker_index", 0))
-        async with worker_slots:
-            result = await orchestration_mod._run_dimension_worker_async(
-                client,
-                dim_key,
-                prd_content,
-                wiki_pages,
-                model_tiers,
-                rule_perf_history,
-                wiki_path,
-                diff_context,
-                on_worker_done=on_worker_done,
-                workspace=workspace,
-                on_tool_call=on_tool_call,
-                stagger_index=worker_index,
-                dimensions=dimensions,
+        with trace_span(
+            f"pecker.langgraph.worker.{_safe_observation_name(dim_key)}",
+            input={"round": round_no, "dimension": dim_key, "worker_index": worker_index},
+        ) as observation:
+            async with worker_slots:
+                result = await orchestration_mod._run_dimension_worker_async(
+                    client,
+                    dim_key,
+                    prd_content,
+                    wiki_pages,
+                    model_tiers,
+                    rule_perf_history,
+                    wiki_path,
+                    diff_context,
+                    on_worker_done=on_worker_done,
+                    workspace=workspace,
+                    on_tool_call=on_tool_call,
+                    stagger_index=worker_index,
+                    dimensions=dimensions,
+                )
+            status = result.get("error_type") if result.get("error") else "success"
+            update_trace(
+                observation,
+                output=_worker_trace_summary(result, fallback_dimension=dim_key),
+                metadata={"round": round_no, "status": status},
             )
-        status = result.get("error_type") if result.get("error") else "success"
         return {
             "round_worker_results": [
                 {
@@ -134,66 +201,90 @@ def build_langgraph_parallel_review_app(
 
     def finalize_round(state: LangGraphMainReviewState) -> Dict[str, Any]:
         round_no = int(state.get("active_round", 1))
-        round_records = [
-            record for record in state.get("round_worker_results", [])
-            if int(record.get("round_no", 0)) == round_no
-        ]
-        round_records.sort(key=lambda record: int(record.get("worker_index", 0)))
-        workers = [record.get("result", {}) for record in round_records]
-        items: List[Dict[str, Any]] = []
-        inp = 0
-        out = 0
-        for worker in workers:
-            if not worker.get("error"):
-                items.extend(worker.get("items") or [])
-            usage = worker.get("usage") or {}
-            inp += int(usage.get("input_tokens") or 0)
-            out += int(usage.get("output_tokens") or 0)
-        from review.aggregation import merge_and_deduplicate
+        with trace_span("pecker.langgraph.finalize_round", input={"round": round_no}) as observation:
+            round_records = [
+                record for record in state.get("round_worker_results", [])
+                if int(record.get("round_no", 0)) == round_no
+            ]
+            round_records.sort(key=lambda record: int(record.get("worker_index", 0)))
+            workers = [record.get("result", {}) for record in round_records]
+            items: List[Dict[str, Any]] = []
+            inp = 0
+            out = 0
+            for worker in workers:
+                if not worker.get("error"):
+                    items.extend(worker.get("items") or [])
+                usage = worker.get("usage") or {}
+                inp += int(usage.get("input_tokens") or 0)
+                out += int(usage.get("output_tokens") or 0)
+            from review.aggregation import merge_and_deduplicate
 
-        merged = merge_and_deduplicate(items)
-        return {
-            "round_idx": round_no,
-            "rounds_merged": [*state.get("rounds_merged", []), merged],
-            "last_workers": workers,
-            "total_input": int(state.get("total_input", 0)) + inp,
-            "total_output": int(state.get("total_output", 0)) + out,
-            "trace": [f"finalize_round:{round_no}"],
-        }
+            merged = merge_and_deduplicate(items)
+            update_trace(
+                observation,
+                output={
+                    "round": round_no,
+                    "workers": len(workers),
+                    "merged_items": len(merged),
+                    "input_tokens": inp,
+                    "output_tokens": out,
+                },
+            )
+            return {
+                "round_idx": round_no,
+                "rounds_merged": [*state.get("rounds_merged", []), merged],
+                "last_workers": workers,
+                "total_input": int(state.get("total_input", 0)) + inp,
+                "total_output": int(state.get("total_output", 0)) + out,
+                "trace": [f"finalize_round:{round_no}"],
+            }
 
     def route_after_round(state: LangGraphMainReviewState) -> str:
         return "prepare_round" if int(state.get("round_idx", 0)) < total_rounds else "finalize_review"
 
     def finalize_review(state: LangGraphMainReviewState) -> Dict[str, Any]:
-        rounds_merged = state.get("rounds_merged", [])
-        if total_rounds <= 1:
-            merged_items = rounds_merged[-1] if rounds_merged else []
-        else:
-            merged_items = majority_vote(rounds_merged, min_votes=2)
-        total_usage = {
-            "input_tokens": int(state.get("total_input", 0)),
-            "output_tokens": int(state.get("total_output", 0)),
-        }
-        workers = state.get("last_workers", [])
-        return {
-            "workers": workers,
-            "merged_items": merged_items,
-            "total_usage": total_usage,
-            "worker_node_statuses": [
-                {
-                    "dimension": worker.get("dimension", ""),
-                    "status": worker.get("status") or ("failed" if worker.get("error") else "success"),
-                    "error_type": worker.get("error_type", ""),
-                }
-                for worker in workers
-            ],
-            "resilience": build_resilience_summary(
+        with trace_span("pecker.langgraph.finalize_review") as observation:
+            rounds_merged = state.get("rounds_merged", [])
+            if total_rounds <= 1:
+                merged_items = rounds_merged[-1] if rounds_merged else []
+            else:
+                merged_items = majority_vote(rounds_merged, min_votes=2)
+            total_usage = {
+                "input_tokens": int(state.get("total_input", 0)),
+                "output_tokens": int(state.get("total_output", 0)),
+            }
+            workers = state.get("last_workers", [])
+            resilience = build_resilience_summary(
                 workers,
                 current_batch_size=worker_batch_size,
                 total_workers=len(dim_keys),
-            ),
-            "trace": ["finalize_review"],
-        }
+            )
+            update_trace(
+                observation,
+                output={
+                    "merged_items": len(merged_items),
+                    "workers": len(workers),
+                    "failed_workers": sum(1 for worker in workers if worker.get("error")),
+                    "input_tokens": total_usage["input_tokens"],
+                    "output_tokens": total_usage["output_tokens"],
+                    "resilience": resilience,
+                },
+            )
+            return {
+                "workers": workers,
+                "merged_items": merged_items,
+                "total_usage": total_usage,
+                "worker_node_statuses": [
+                    {
+                        "dimension": worker.get("dimension", ""),
+                        "status": worker.get("status") or ("failed" if worker.get("error") else "success"),
+                        "error_type": worker.get("error_type", ""),
+                    }
+                    for worker in workers
+                ],
+                "resilience": resilience,
+                "trace": ["finalize_review"],
+            }
 
     graph = StateGraph(LangGraphMainReviewState)
     graph.add_node("prepare_round", prepare_round)
@@ -232,6 +323,7 @@ async def langgraph_parallel_review(
     on_tool_call=None,
     checkpointer: Any = None,
     thread_id: Optional[str] = None,
+    langfuse_client_factory: Optional[Callable[[], Any]] = None,
 ) -> ParallelReviewResult:
     """Public async entrypoint matching review.orchestration.parallel_review."""
     total_rounds = max(1, int(voting_rounds or 1))
@@ -241,36 +333,59 @@ async def langgraph_parallel_review(
         details={"voting_rounds": total_rounds, "orchestrator": "langgraph"},
     )
     started_at = time.time()
+    from review import orchestration as orchestration_mod
+    from review.langfuse_observability import start_langgraph_review_trace
+
+    trace = start_langgraph_review_trace(
+        workspace=workspace,
+        thread_id=thread_id,
+        prd_content=prd_content,
+        wiki_pages=wiki_pages,
+        voting_rounds=total_rounds,
+        dimensions=list(orchestration_mod.get_review_dimensions()),
+        client_factory=langfuse_client_factory,
+    )
     try:
-        app = build_langgraph_parallel_review_app(
-            client=client,
-            prd_content=prd_content,
-            wiki_pages=wiki_pages,
-            model_tiers=model_tiers,
-            voting_rounds=total_rounds,
-            wiki_path=wiki_path,
-            diff_context=diff_context,
-            on_worker_done=on_worker_done,
-            workspace=workspace,
-            on_tool_call=on_tool_call,
-            checkpointer=checkpointer,
-        )
-        config = None
-        if thread_id:
-            config = {"configurable": {"thread_id": thread_id}}
-        state = await app.ainvoke(
-            {
-                "round_idx": 0,
-                "active_round": 0,
-                "rounds_merged": [],
-                "last_workers": [],
-                "round_worker_results": [],
-                "total_input": 0,
-                "total_output": 0,
-                "trace": [],
-            },
-            config=config,
-        )
+        with trace:
+            app = build_langgraph_parallel_review_app(
+                client=client,
+                prd_content=prd_content,
+                wiki_pages=wiki_pages,
+                model_tiers=model_tiers,
+                voting_rounds=total_rounds,
+                wiki_path=wiki_path,
+                diff_context=diff_context,
+                on_worker_done=on_worker_done,
+                workspace=workspace,
+                on_tool_call=on_tool_call,
+                checkpointer=checkpointer,
+                langfuse_trace=trace,
+            )
+            config = None
+            if thread_id:
+                config = {"configurable": {"thread_id": thread_id}}
+            state = await app.ainvoke(
+                {
+                    "round_idx": 0,
+                    "active_round": 0,
+                    "rounds_merged": [],
+                    "last_workers": [],
+                    "round_worker_results": [],
+                    "total_input": 0,
+                    "total_output": 0,
+                    "trace": [],
+                },
+                config=config,
+            )
+            trace.finish(
+                status="done",
+                output={
+                    "merged_items": len(state.get("merged_items", [])),
+                    "workers": len(state.get("workers", [])),
+                    "input_tokens": (state.get("total_usage") or {}).get("input_tokens", 0),
+                    "output_tokens": (state.get("total_usage") or {}).get("output_tokens", 0),
+                },
+            )
     except Exception as exc:
         _metrics_record(
             "review.failed",
@@ -306,4 +421,5 @@ async def langgraph_parallel_review(
         "graph_trace": state.get("trace", []),
         "worker_node_statuses": state.get("worker_node_statuses", []),
         "resilience": state.get("resilience", {}),
+        "observability": {"langfuse": trace.snapshot()},
     }

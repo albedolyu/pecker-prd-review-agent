@@ -18,6 +18,7 @@ dependencies = [
     # deprecated, remove 2026-06-01
     "streamlit>=1.35.0",
     "langgraph>=1.1.0",
+    "langfuse>=4.6.1",
 ]
 
 [project.optional-dependencies]

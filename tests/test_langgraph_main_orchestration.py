@@ -271,3 +271,90 @@ async def test_langgraph_parallel_review_supports_majority_vote_rounds(monkeypat
         "finalize_round:2",
         "finalize_review",
     ]
+
+
+@pytest.mark.asyncio
+async def test_langgraph_parallel_review_records_safe_langfuse_node_spans(monkeypatch):
+    import json
+
+    import review.langgraph_orchestration as langgraph_orchestration
+    import review.orchestration as orchestration
+
+    calls: list[dict] = []
+    dimensions = {"structure": {"name": "业务完整性"}}
+
+    class FakeObservation:
+        def __init__(self, call):
+            self.call = call
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def update(self, **kwargs):
+            self.call.setdefault("updates", []).append(kwargs)
+
+    class FakeLangfuse:
+        def start_as_current_observation(self, **kwargs):
+            calls.append(kwargs)
+            return FakeObservation(calls[-1])
+
+        def flush(self):
+            calls.append({"flush": True})
+
+    async def fake_run_worker_async(*args, **_kwargs):
+        dim_key = args[1]
+        return {
+            "dimension": dim_key,
+            "dimension_name": dimensions[dim_key]["name"],
+            "items": [
+                {
+                    "id": "R-1",
+                    "dimension": dim_key,
+                    "location": "PRD",
+                    "problem": "must not leak finding body",
+                    "suggestion": "must not leak suggestion",
+                    "severity": "must",
+                }
+            ],
+            "usage": {"input_tokens": 7, "output_tokens": 11},
+        }
+
+    prd_body = "# PRD\n" + ("secret PRD body token=secret-token " * 10)
+
+    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
+    monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test-secret")
+    monkeypatch.setenv("PECKER_LANGFUSE_ENABLED", "1")
+    monkeypatch.setattr(orchestration, "get_review_dimensions", lambda: dimensions)
+    monkeypatch.setattr(orchestration, "_run_worker_async", fake_run_worker_async)
+
+    result = await langgraph_orchestration.langgraph_parallel_review(
+        client=None,
+        prd_content=prd_body,
+        wiki_pages={"prd.md": "wiki page cookie=secret-cookie"},
+        model_tiers={"sonnet": "test-model"},
+        workspace="workspace",
+        thread_id="review-job:rjob_langfuse",
+        langfuse_client_factory=lambda: FakeLangfuse(),
+    )
+
+    names = [call["name"] for call in calls if "name" in call]
+    assert names == [
+        "pecker.langgraph.review",
+        "pecker.langgraph.prepare_round",
+        "pecker.langgraph.worker.structure",
+        "pecker.langgraph.finalize_round",
+        "pecker.langgraph.finalize_review",
+    ]
+    serialized = json.dumps(calls, ensure_ascii=False)
+    assert "secret PRD body" not in serialized
+    assert "secret-token" not in serialized
+    assert "secret-cookie" not in serialized
+    assert "must not leak finding body" not in serialized
+    assert "must not leak suggestion" not in serialized
+    assert calls[-1] == {"flush": True}
+    assert result["observability"]["langfuse"]["status"] == "done"
+    assert result["observability"]["langfuse"]["configured"] is True
+    assert result["observability"]["langfuse"]["session_id"] == "review-job:rjob_langfuse"

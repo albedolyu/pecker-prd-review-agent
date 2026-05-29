@@ -11,8 +11,9 @@ import pickle
 import threading
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Dict, Mapping
 
+from api.sanitize import redact_text
 from langgraph.checkpoint.memory import InMemorySaver
 
 
@@ -81,3 +82,131 @@ def review_job_checkpoint_path(project_root: str | Path) -> Path:
 
 def build_review_job_checkpointer(project_root: str | Path) -> FileLangGraphCheckpointSaver:
     return FileLangGraphCheckpointSaver(review_job_checkpoint_path(project_root))
+
+
+def summarize_review_job_checkpoints(
+    project_root: str | Path,
+    *,
+    limit: int = 20,
+    include_thread_id: str = "",
+) -> Dict[str, Any]:
+    """Return safe checkpoint-file metadata without exposing graph state values."""
+    root = Path(project_root)
+    checkpoint_path = review_job_checkpoint_path(root)
+    safe_include_thread_id = _safe_thread_id(include_thread_id) if include_thread_id else ""
+    summary: Dict[str, Any] = {
+        "status": "missing",
+        "exists": checkpoint_path.exists(),
+        "checkpoint_path": _safe_relative_path(checkpoint_path, root),
+        "thread_count": 0,
+        "threads": [],
+    }
+    if not checkpoint_path.exists():
+        return summary
+
+    try:
+        stat = checkpoint_path.stat()
+        summary["size_bytes"] = stat.st_size
+        summary["mtime"] = stat.st_mtime
+        with checkpoint_path.open("rb") as fh:
+            payload = pickle.load(fh)
+    except (OSError, pickle.PickleError, EOFError) as exc:
+        summary["status"] = "error"
+        summary["error_type"] = type(exc).__name__
+        return summary
+
+    storage = payload.get("storage", {}) if isinstance(payload, Mapping) else {}
+    if not isinstance(storage, Mapping):
+        summary["status"] = "error"
+        summary["error_type"] = "InvalidStorage"
+        return summary
+
+    threads = [
+        _summarize_checkpoint_thread(thread_id, namespaces)
+        for thread_id, namespaces in sorted(
+            storage.items(),
+            key=lambda item: str(item[0]),
+        )
+    ]
+    safe_limit = max(1, int(limit or 20))
+    visible_threads = threads[:safe_limit]
+    if safe_include_thread_id and not any(
+        thread.get("thread_id") == safe_include_thread_id
+        for thread in visible_threads
+    ):
+        matching_thread = next(
+            (
+                thread
+                for thread in threads
+                if thread.get("thread_id") == safe_include_thread_id
+            ),
+            None,
+        )
+        if matching_thread is not None:
+            visible_threads.append(matching_thread)
+    summary.update(
+        {
+            "status": "ready",
+            "thread_count": len(threads),
+            "threads": visible_threads,
+        }
+    )
+    if len(threads) > safe_limit:
+        summary["truncated_threads"] = len(threads) - safe_limit
+    return summary
+
+
+def build_langgraph_checkpoint_observability(
+    project_root: str | Path,
+    *,
+    thread_id: str,
+) -> Dict[str, Any]:
+    safe_thread_id = _safe_thread_id(thread_id)
+    summary = summarize_review_job_checkpoints(
+        project_root,
+        include_thread_id=safe_thread_id,
+    )
+    matching_thread = next(
+        (
+            thread
+            for thread in summary.get("threads", [])
+            if isinstance(thread, Mapping)
+            and str(thread.get("thread_id") or "") == safe_thread_id
+        ),
+        None,
+    )
+    return {
+        "enabled": True,
+        "thread_id": safe_thread_id,
+        "status": str(summary.get("status") or "unknown"),
+        "checkpoint_path": str(summary.get("checkpoint_path") or ""),
+        "checkpoint_exists": bool(summary.get("exists")),
+        "thread_found": matching_thread is not None,
+        "checkpoint_count": int(
+            (matching_thread or {}).get("checkpoint_count") or 0
+        ),
+    }
+
+
+def _summarize_checkpoint_thread(thread_id: Any, namespaces: Any) -> Dict[str, Any]:
+    namespace_map = namespaces if isinstance(namespaces, Mapping) else {}
+    checkpoint_count = 0
+    for checkpoints in namespace_map.values():
+        if isinstance(checkpoints, Mapping):
+            checkpoint_count += len(checkpoints)
+    return {
+        "thread_id": _safe_thread_id(thread_id),
+        "namespace_count": len(namespace_map),
+        "checkpoint_count": checkpoint_count,
+    }
+
+
+def _safe_relative_path(path: Path, root: Path) -> str:
+    try:
+        return str(path.resolve(strict=False).relative_to(root.resolve(strict=False))).replace("\\", "/")
+    except ValueError:
+        return path.name
+
+
+def _safe_thread_id(value: Any) -> str:
+    return redact_text(str(value or ""))[:200]
