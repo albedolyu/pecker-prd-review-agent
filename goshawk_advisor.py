@@ -204,6 +204,17 @@ def _build_advisor_user_message(prd_content, worker_results, wiki_pages=None):
 
     # 知识库（可选）
     if wiki_pages:
+        try:
+            from review.goshawk_wiki_compaction import compact_goshawk_wiki_pages, should_compact_goshawk_wiki
+
+            if should_compact_goshawk_wiki():
+                wiki_pages, _telemetry = compact_goshawk_wiki_pages(
+                    wiki_pages,
+                    prd_content or "",
+                    worker_results or [],
+                )
+        except Exception as exc:
+            log.warning(f"[goshawk] wiki compact failed, fallback to full wiki: {exc}")
         parts.append("## 相关知识库页面\n")
         for title, content in wiki_pages.items():
             parts.append(f"### {title}\n{content}\n")
