@@ -295,13 +295,15 @@ def _langgraph_snapshot(review_result: Dict[str, Any]) -> Dict[str, Any]:
         if item.get("dimension")
     ]
     missing_worker_trace_nodes = [
-        node for node in required_worker_trace_nodes if node not in graph_trace
+        node
+        for node in required_worker_trace_nodes
+        if _trace_node_index(graph_trace, node) is None
     ]
     graph_trace_order_ready = _graph_trace_order_ready(graph_trace, required_worker_trace_nodes)
     graph_trace_ready = (
         bool(graph_trace)
-        and "prepare_round" in graph_trace
-        and "finalize_review" in graph_trace
+        and _trace_node_index(graph_trace, "prepare_round") is not None
+        and _trace_node_index(graph_trace, "finalize_review") is not None
         and not missing_worker_trace_nodes
         and graph_trace_order_ready
     )
@@ -324,16 +326,43 @@ def _langgraph_snapshot(review_result: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _graph_trace_order_ready(graph_trace: list[str], worker_trace_nodes: list[str]) -> bool:
-    if not graph_trace or "prepare_round" not in graph_trace or "finalize_review" not in graph_trace:
+    prepare_index = _trace_node_index(graph_trace, "prepare_round")
+    finalize_index = _trace_node_index(graph_trace, "finalize_review")
+    if not graph_trace or prepare_index is None or finalize_index is None:
         return False
-    prepare_index = graph_trace.index("prepare_round")
-    finalize_index = graph_trace.index("finalize_review")
     if prepare_index >= finalize_index:
         return False
-    return all(
-        node in graph_trace and prepare_index < graph_trace.index(node) < finalize_index
-        for node in worker_trace_nodes
-    )
+    for node in worker_trace_nodes:
+        node_index = _trace_node_index(graph_trace, node)
+        if node_index is None or not prepare_index < node_index < finalize_index:
+            return False
+    return True
+
+
+def _trace_node_index(graph_trace: list[str], node: str) -> int | None:
+    for index, entry in enumerate(graph_trace):
+        if _trace_entry_matches_node(entry, node):
+            return index
+    return None
+
+
+def _trace_entry_matches_node(entry: str, node: str) -> bool:
+    if entry == node:
+        return True
+    if node == "prepare_round":
+        return entry.startswith("prepare_round:")
+    if node == "finalize_round":
+        return entry.startswith("finalize_round:")
+    if node == "finalize_review":
+        return entry.startswith("finalize_review:")
+    if node.startswith("worker."):
+        dim = node.split(".", 1)[1]
+        return (
+            entry.startswith(f"worker.{dim}:")
+            or entry.startswith(f"worker:{dim}:")
+            or f":{dim}:" in entry and entry.startswith("worker:")
+        )
+    return False
 
 
 def _worker_node_status_snapshot(payload: Dict[str, Any]) -> Dict[str, Any]:

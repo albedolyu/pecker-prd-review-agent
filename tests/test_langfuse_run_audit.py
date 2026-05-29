@@ -188,6 +188,27 @@ def test_langfuse_run_audit_markdown_shows_checkpoint_thread_link():
     assert "- graph_trace_order_ready: `True`" in markdown
 
 
+def test_langfuse_run_audit_accepts_round_aware_worker_trace_nodes():
+    from scripts.langfuse_run_audit import build_langfuse_run_audit
+
+    result = _sample_review_result()
+    result["telemetry"]["graph_trace"] = [
+        "prepare_round:1",
+        "worker:1:structure:success",
+        "worker:1:quality:success",
+        "finalize_round:1",
+        "finalize_review",
+    ]
+
+    audit = build_langfuse_run_audit(result)
+
+    assert audit["ok"] is True
+    assert audit["langgraph"]["graph_trace_ready"] is True
+    assert audit["langgraph"]["graph_trace_order_ready"] is True
+    assert audit["langgraph"]["missing_worker_trace_nodes"] == []
+    assert "langgraph.graph_trace" not in audit["missing"]
+
+
 def test_langfuse_run_audit_markdown_shows_operator_status_summary():
     from scripts.langfuse_run_audit import (
         build_langfuse_run_audit,

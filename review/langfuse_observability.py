@@ -10,6 +10,8 @@ import hashlib
 import importlib
 import importlib.util
 import os
+import uuid
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Iterable, Optional
 
 from api.sanitize import redact_prd_content, redact_sensitive, redact_text
@@ -121,14 +123,13 @@ def record_review_confirmation_scores(
                 "scores_sent": 0,
             }
 
-        scores_sent = 0
         accepted_count = 0
+        score_requests = []
         for payload in score_payloads:
             value = payload["value"]
             if value >= 1.0:
                 accepted_count += 1
-            _create_langfuse_score(client, **payload["score"])
-            scores_sent += 1
+            score_requests.append(payload["score"])
 
         aggregate_acceptance_rate = round(accepted_count / len(score_payloads), 3)
         aggregate_score = _confirmation_aggregate_score(
@@ -136,9 +137,8 @@ def record_review_confirmation_scores(
             scored_items=len(score_payloads),
             aggregate_acceptance_rate=aggregate_acceptance_rate,
         )
-        _create_langfuse_score(client, **aggregate_score)
-        scores_sent += 1
-        _flush_client(client)
+        score_requests.append(aggregate_score)
+        scores_sent = _create_langfuse_scores(client, score_requests)
 
         return {
             "enabled": True,
@@ -210,11 +210,7 @@ def record_evidence_verification_scores(
                 "scores_sent": 0,
             }
 
-        scores_sent = 0
-        for payload in score_payloads:
-            _create_langfuse_score(client, **payload["score"])
-            scores_sent += 1
-
+        score_requests = [payload["score"] for payload in score_payloads]
         aggregate_score = _evidence_aggregate_score(
             review_result=review_result,
             scored_items=len(score_payloads),
@@ -223,9 +219,8 @@ def record_evidence_verification_scores(
             caveat=caveat,
             retracted=retracted,
         )
-        _create_langfuse_score(client, **aggregate_score)
-        scores_sent += 1
-        _flush_client(client)
+        score_requests.append(aggregate_score)
+        scores_sent = _create_langfuse_scores(client, score_requests)
 
         return {
             "enabled": True,
@@ -939,10 +934,75 @@ def _score_trace_snapshot(review_result: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _client_can_create_score(client: Any) -> bool:
-    return any(
+    return _client_can_batch_scores(client) or any(
         callable(getattr(client, name, None))
         for name in ("create_score", "score_current_trace", "score")
     )
+
+
+def _client_can_batch_scores(client: Any) -> bool:
+    api = getattr(client, "api", None)
+    ingestion = getattr(api, "ingestion", None)
+    return callable(getattr(ingestion, "batch", None))
+
+
+def _create_langfuse_scores(client: Any, scores: list[Dict[str, Any]]) -> int:
+    if not scores:
+        return 0
+    if _client_can_batch_scores(client):
+        _create_langfuse_score_batch(client, scores)
+        return len(scores)
+    for score in scores:
+        _create_langfuse_score(client, **score)
+    _flush_client(client)
+    return len(scores)
+
+
+def _create_langfuse_score_batch(client: Any, scores: list[Dict[str, Any]]) -> None:
+    batch = [_score_ingestion_event(client, score) for score in scores]
+    client.api.ingestion.batch(
+        batch=batch,
+        metadata={
+            "sdk_name": "python",
+            "sdk_version": "pecker",
+            "public_key": _safe_score_text(os.environ.get("LANGFUSE_PUBLIC_KEY"), 120),
+        },
+    )
+
+
+def _score_ingestion_event(client: Any, score: Dict[str, Any]) -> Dict[str, Any]:
+    body = {
+        "id": score.get("score_id") or _new_langfuse_id(client),
+        "name": score.get("name"),
+        "value": score.get("value"),
+        "sessionId": score.get("session_id"),
+        "datasetRunId": score.get("dataset_run_id"),
+        "traceId": score.get("trace_id"),
+        "observationId": score.get("observation_id"),
+        "dataType": score.get("data_type"),
+        "comment": score.get("comment"),
+        "configId": score.get("config_id"),
+        "metadata": score.get("metadata"),
+    }
+    return {
+        "id": _new_langfuse_id(client),
+        "type": "score-create",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "body": {key: value for key, value in body.items() if value is not None},
+    }
+
+
+def _new_langfuse_id(client: Any) -> str:
+    seed = f"pecker-score:{uuid.uuid4().hex}"
+    create_trace_id = getattr(client, "create_trace_id", None)
+    if callable(create_trace_id):
+        try:
+            trace_id = _safe_trace_id(create_trace_id(seed=seed))
+            if trace_id:
+                return trace_id
+        except Exception:
+            pass
+    return uuid.uuid4().hex
 
 
 def _create_langfuse_score(client: Any, **kwargs) -> None:

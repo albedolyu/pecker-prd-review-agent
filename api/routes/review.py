@@ -62,6 +62,15 @@ def _langfuse_feedback_timeout_seconds() -> float:
     return timeout_ms / 1000
 
 
+def _langfuse_score_timeout_seconds() -> float:
+    raw = os.environ.get("PECKER_LANGFUSE_SCORE_TIMEOUT_MS", "8000")
+    try:
+        timeout_ms = max(1, int(raw))
+    except (TypeError, ValueError):
+        timeout_ms = 8000
+    return timeout_ms / 1000
+
+
 async def _record_langfuse_feedback_snapshot(
     review_result: Dict[str, Any],
     decisions: Dict[str, Dict[str, Any]],
@@ -113,7 +122,7 @@ async def _record_langfuse_evidence_snapshot(
                 verified_items=verified_items,
                 summary=summary,
             ),
-            timeout=_langfuse_feedback_timeout_seconds(),
+            timeout=_langfuse_score_timeout_seconds(),
         )
     except asyncio.TimeoutError:
         return {

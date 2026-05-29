@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 
 import pytest
 
@@ -8,6 +9,54 @@ import pytest
 class _FakeRequest:
     async def is_disconnected(self) -> bool:
         return False
+
+
+@pytest.mark.asyncio
+async def test_evidence_langfuse_score_uses_score_timeout_not_pm_feedback_timeout(monkeypatch):
+    import api.routes.review as review_route
+
+    monkeypatch.setenv("PECKER_LANGFUSE_ENABLED", "1")
+    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
+    monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test-secret")
+    monkeypatch.setenv("PECKER_LANGFUSE_FEEDBACK_TIMEOUT_MS", "1")
+    monkeypatch.setenv("PECKER_LANGFUSE_SCORE_TIMEOUT_MS", "250")
+
+    def slow_record_evidence_verification_scores(**_kwargs):
+        time.sleep(0.05)
+        return {
+            "enabled": True,
+            "configured": True,
+            "status": "recorded",
+            "scored_items": 1,
+            "scores_sent": 2,
+            "trace_id": "abc123abc123abc123abc123abc123ab",
+            "reliability": 1.0,
+            "caveat": 0,
+            "retracted": 0,
+        }
+
+    monkeypatch.setattr(
+        review_route,
+        "record_evidence_verification_scores",
+        slow_record_evidence_verification_scores,
+        raising=False,
+    )
+
+    snapshot = await review_route._record_langfuse_evidence_snapshot(
+        {
+            "review_id": "rev_ev",
+            "telemetry": {
+                "observability": {
+                    "langfuse": {"trace_id": "abc123abc123abc123abc123abc123ab"}
+                }
+            },
+        },
+        verified_items=[{"id": "R-001", "verification_status": "verified"}],
+        summary={"total": 1, "verified": 1, "reliability": 1.0},
+    )
+
+    assert snapshot["status"] == "recorded"
+    assert snapshot["scores_sent"] == 2
 
 
 @pytest.mark.asyncio

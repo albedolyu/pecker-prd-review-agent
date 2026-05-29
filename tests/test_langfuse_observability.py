@@ -511,3 +511,78 @@ def test_record_evidence_verification_scores_records_safe_scores(monkeypatch):
     assert "raw problem must not leak" not in serialized
     assert "raw suggestion must not leak" not in serialized
     assert "sk-test-secret" not in serialized
+
+
+def test_record_evidence_verification_scores_prefers_direct_batch_ingestion(monkeypatch):
+    from review.langfuse_observability import record_evidence_verification_scores
+
+    calls: list[dict] = []
+
+    class FakeIngestion:
+        def batch(self, **kwargs):
+            calls.append(kwargs)
+
+    class FakeApi:
+        ingestion = FakeIngestion()
+
+    class FakeLangfuse:
+        api = FakeApi()
+
+        def create_trace_id(self, *, seed=None):
+            return "abcdefabcdefabcdefabcdefabcdefab"
+
+        def create_score(self, **_kwargs):
+            raise AssertionError("direct batch ingestion should avoid async score queue")
+
+        def flush(self):
+            raise AssertionError("direct batch ingestion should not rely on async flush")
+
+    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
+    monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test-secret")
+    monkeypatch.setenv("PECKER_LANGFUSE_ENABLED", "1")
+
+    snapshot = record_evidence_verification_scores(
+        review_result={
+            "review_id": "rev_ev",
+            "reviewer": "alice",
+            "workspace": "workspace-alpha",
+            "prd_name": "demo",
+            "mode": "standard",
+            "telemetry": {
+                "observability": {
+                    "langfuse": {
+                        "session_id": "review-job:rjob_123",
+                        "trace_id": "abc123abc123abc123abc123abc123ab",
+                    }
+                }
+            },
+        },
+        verified_items=[
+            {
+                "id": "R-001",
+                "rule_id": "V-05",
+                "dimension": "structure",
+                "severity": "must",
+                "verification_status": "verified",
+                "evidence_type": "A",
+                "evidence_content": "raw evidence must not leak",
+            }
+        ],
+        summary={"total": 1, "verified": 1, "reliability": 1.0},
+        client_factory=lambda: FakeLangfuse(),
+    )
+
+    assert snapshot["status"] == "recorded"
+    assert snapshot["scored_items"] == 1
+    assert snapshot["scores_sent"] == 2
+    assert len(calls) == 1
+    batch = calls[0]["batch"]
+    assert [event["type"] for event in batch] == ["score-create", "score-create"]
+    assert {event["body"]["traceId"] for event in batch} == {
+        "abc123abc123abc123abc123abc123ab"
+    }
+    assert {event["body"]["sessionId"] for event in batch} == {
+        "review-job:rjob_123"
+    }
+    serialized = json.dumps(calls, ensure_ascii=False)
+    assert "raw evidence must not leak" not in serialized
