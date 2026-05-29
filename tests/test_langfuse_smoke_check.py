@@ -128,6 +128,6 @@ def test_langfuse_smoke_check_can_write_explicit_smoke_score(monkeypatch):
     score_call = next(call for call in calls if call.get("name") == "pecker.smoke.score_api")
     assert {"create_trace_id": "pecker-langfuse-smoke"} in calls
     assert {"get_trace_url": "abc123abc123abc123abc123abc123ab"} in calls
-    assert score_call["session_id"] == "pecker-langfuse-smoke"
+    assert "session_id" not in score_call
     assert score_call["trace_id"] == "abc123abc123abc123abc123abc123ab"
     assert calls[-1] == {"flush": True}

@@ -150,11 +150,11 @@ def _check_score_api(client: Any, *, write_score: bool) -> Dict[str, Any]:
     try:
         trace_id = _smoke_trace_id(client)
         trace_url = _smoke_trace_url(client, trace_id)
+        score_target = {"trace_id": trace_id} if trace_id else {"session_id": SMOKE_SESSION_ID}
         create_score(
             name="pecker.smoke.score_api",
             value=1.0,
-            session_id=SMOKE_SESSION_ID,
-            trace_id=trace_id,
+            **score_target,
             data_type="NUMERIC",
             comment="Pecker Langfuse smoke check",
             metadata={"source": "langfuse_smoke_check"},

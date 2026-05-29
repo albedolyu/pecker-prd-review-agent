@@ -733,8 +733,7 @@ def _confirmation_item_score_payloads(
     max_item_scores: int,
 ) -> list[Dict[str, Any]]:
     payloads: list[Dict[str, Any]] = []
-    session_id = _score_session_id(review_result)
-    trace_id = _score_trace_id(review_result)
+    score_target = _score_target(review_result)
     for item_id, decision in (decisions or {}).items():
         if len(payloads) >= max(0, max_item_scores):
             break
@@ -772,8 +771,7 @@ def _confirmation_item_score_payloads(
                 "score": {
                     "name": "pecker.pm_item_feedback",
                     "value": value,
-                    "session_id": session_id,
-                    "trace_id": trace_id,
+                    **score_target,
                     "data_type": "NUMERIC",
                     "comment": f"{action}:{metadata.get('reason_category') or metadata.get('business_decision') or 'none'}",
                     "metadata": redact_sensitive(metadata),
@@ -799,8 +797,7 @@ def _confirmation_aggregate_score(
     return {
         "name": "pecker.pm_acceptance_rate",
         "value": aggregate_acceptance_rate,
-        "session_id": _score_session_id(review_result),
-        "trace_id": _score_trace_id(review_result),
+        **_score_target(review_result),
         "data_type": "NUMERIC",
         "comment": f"{scored_items} scored PM decisions",
         "metadata": redact_sensitive(metadata),
@@ -814,8 +811,7 @@ def _evidence_item_score_payloads(
     max_item_scores: int,
 ) -> list[Dict[str, Any]]:
     payloads: list[Dict[str, Any]] = []
-    session_id = _score_session_id(review_result)
-    trace_id = _score_trace_id(review_result)
+    score_target = _score_target(review_result)
     score_by_status = {
         "verified": 1.0,
         "verified_with_caveat": 0.5,
@@ -853,8 +849,7 @@ def _evidence_item_score_payloads(
                 "score": {
                     "name": "pecker.evidence_item_status",
                     "value": value,
-                    "session_id": session_id,
-                    "trace_id": trace_id,
+                    **score_target,
                     "data_type": "NUMERIC",
                     "comment": f"{status}:{reason_code or 'none'}",
                     "metadata": redact_sensitive(metadata),
@@ -899,8 +894,7 @@ def _evidence_aggregate_score(
     return {
         "name": "pecker.evidence_reliability",
         "value": reliability,
-        "session_id": _score_session_id(review_result),
-        "trace_id": _score_trace_id(review_result),
+        **_score_target(review_result),
         "data_type": "NUMERIC",
         "comment": f"{scored_items} scored evidence checks",
         "metadata": redact_sensitive(metadata),
@@ -978,6 +972,16 @@ def _score_session_id(review_result: Dict[str, Any]) -> Optional[str]:
     return review_id or None
 
 
+def _score_target(review_result: Dict[str, Any]) -> Dict[str, str]:
+    trace_id = _score_trace_id(review_result)
+    if trace_id:
+        return {"trace_id": trace_id}
+    session_id = _score_session_id(review_result)
+    if session_id:
+        return {"session_id": session_id}
+    return {}
+
+
 def _score_trace_id(review_result: Dict[str, Any]) -> Optional[str]:
     telemetry = review_result.get("telemetry") if isinstance(review_result, dict) else None
     observability = telemetry.get("observability") if isinstance(telemetry, dict) else None
@@ -1020,7 +1024,7 @@ def _create_langfuse_scores(client: Any, scores: list[Dict[str, Any]]) -> int:
 
 def _create_langfuse_score_batch(client: Any, scores: list[Dict[str, Any]]) -> None:
     batch = [_score_ingestion_event(client, score) for score in scores]
-    client.api.ingestion.batch(
+    response = client.api.ingestion.batch(
         batch=batch,
         metadata={
             "sdk_name": "python",
@@ -1028,6 +1032,23 @@ def _create_langfuse_score_batch(client: Any, scores: list[Dict[str, Any]]) -> N
             "public_key": _safe_score_text(os.environ.get("LANGFUSE_PUBLIC_KEY"), 120),
         },
     )
+    _raise_for_langfuse_batch_errors(response, expected_count=len(batch))
+
+
+def _raise_for_langfuse_batch_errors(response: Any, *, expected_count: int) -> None:
+    if response is None:
+        return
+    errors = list(getattr(response, "errors", None) or [])
+    if errors:
+        first_error = _safe_score_text(errors[0], 300)
+        raise RuntimeError(
+            f"Langfuse score batch rejected {len(errors)} event(s): {first_error}"
+        )
+    successes = getattr(response, "successes", None)
+    if successes is not None and len(successes) < expected_count:
+        raise RuntimeError(
+            f"Langfuse score batch accepted {len(successes)}/{expected_count} event(s)"
+        )
 
 
 def _score_ingestion_event(client: Any, score: Dict[str, Any]) -> Dict[str, Any]:

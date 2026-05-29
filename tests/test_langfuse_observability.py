@@ -465,7 +465,7 @@ def test_record_review_confirmation_scores_reuses_langgraph_session(monkeypatch)
     assert snapshot["trace_id"] == "abc123abc123abc123abc123abc123ab"
     assert snapshot["trace_linked"] is True
     score_calls = [call for call in calls if "name" in call]
-    assert {call["session_id"] for call in score_calls} == {"review-job:rjob_123"}
+    assert all("session_id" not in call for call in score_calls)
     assert {call["trace_id"] for call in score_calls} == {
         "abc123abc123abc123abc123abc123ab"
     }
@@ -558,7 +558,7 @@ def test_record_evidence_verification_scores_records_safe_scores(monkeypatch):
     aggregate_scores = [call for call in calls if call.get("name") == "pecker.evidence_reliability"]
     assert [call["value"] for call in item_scores] == [1.0, 0.5, 0.0]
     assert aggregate_scores[0]["value"] == 0.667
-    assert {call["session_id"] for call in item_scores + aggregate_scores} == {"review-run:rev_ev"}
+    assert all("session_id" not in call for call in item_scores + aggregate_scores)
     assert {call["trace_id"] for call in item_scores + aggregate_scores} == {
         "abc123abc123abc123abc123abc123ab"
     }
@@ -639,8 +639,64 @@ def test_record_evidence_verification_scores_prefers_direct_batch_ingestion(monk
     assert {event["body"]["traceId"] for event in batch} == {
         "abc123abc123abc123abc123abc123ab"
     }
-    assert {event["body"]["sessionId"] for event in batch} == {
-        "review-job:rjob_123"
-    }
+    assert all("sessionId" not in event["body"] for event in batch)
     serialized = json.dumps(calls, ensure_ascii=False)
     assert "raw evidence must not leak" not in serialized
+
+
+def test_record_evidence_verification_scores_reports_batch_errors(monkeypatch):
+    from review.langfuse_observability import record_evidence_verification_scores
+
+    class FakeBatchResponse:
+        successes = []
+        errors = [{"message": "Provide exactly one score target"}]
+
+    class FakeIngestion:
+        def batch(self, **_kwargs):
+            return FakeBatchResponse()
+
+    class FakeApi:
+        ingestion = FakeIngestion()
+
+    class FakeLangfuse:
+        api = FakeApi()
+
+        def create_trace_id(self, *, seed=None):
+            return "abcdefabcdefabcdefabcdefabcdefab"
+
+    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
+    monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test-secret")
+    monkeypatch.setenv("PECKER_LANGFUSE_ENABLED", "1")
+
+    snapshot = record_evidence_verification_scores(
+        review_result={
+            "review_id": "rev_ev",
+            "reviewer": "alice",
+            "workspace": "workspace-alpha",
+            "prd_name": "demo",
+            "mode": "standard",
+            "telemetry": {
+                "observability": {
+                    "langfuse": {
+                        "session_id": "review-job:rjob_123",
+                        "trace_id": "abc123abc123abc123abc123abc123ab",
+                    }
+                }
+            },
+        },
+        verified_items=[
+            {
+                "id": "R-001",
+                "rule_id": "V-05",
+                "dimension": "structure",
+                "severity": "must",
+                "verification_status": "verified",
+            }
+        ],
+        summary={"total": 1, "verified": 1, "reliability": 1.0},
+        client_factory=lambda: FakeLangfuse(),
+    )
+
+    assert snapshot["status"] == "error"
+    assert snapshot["scores_sent"] == 0
+    assert "Langfuse score batch rejected" in snapshot["error"]
