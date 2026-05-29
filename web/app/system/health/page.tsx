@@ -12,7 +12,23 @@
  */
 
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 import { AdminOnlyPage } from "@/components/auth/AdminOnlyPage";
+import {
+  adminUsageApi,
+  systemHealthApi,
+  type LangGraphCheckpointSummary,
+  type LangfuseRunAuditSummary,
+  type LangfuseSmokeResponse,
+} from "@/lib/api";
+import {
+  recentLangfuseRunAuditLinks,
+  summarizeControlPlaneHealth,
+  summarizeLangfuseRunAuditStatus,
+  summarizeLangfuseRunAudits,
+  summarizeLangfuseSmokePrompts,
+  type ControlPlaneHealthSummary,
+} from "@/lib/control-plane-health";
 
 // ============================================================
 // sample data
@@ -80,6 +96,32 @@ const RECENT_RUNS = [
 ];
 
 export default function SystemHealthPage() {
+  const { data: systemHealth, isFetching: healthFetching } = useQuery({
+    queryKey: ["system-health"],
+    queryFn: systemHealthApi.get,
+    retry: false,
+    staleTime: 30 * 1000,
+  });
+  const langfuseSmokeQuery = useQuery({
+    queryKey: ["admin-langfuse-smoke"],
+    queryFn: adminUsageApi.langfuseSmoke,
+    enabled: false,
+    retry: false,
+  });
+  const langgraphCheckpointQuery = useQuery({
+    queryKey: ["admin-langgraph-checkpoints"],
+    queryFn: adminUsageApi.langgraphCheckpoints,
+    enabled: false,
+    retry: false,
+  });
+  const langfuseRunAuditQuery = useQuery({
+    queryKey: ["admin-langfuse-run-audits"],
+    queryFn: adminUsageApi.langfuseRunAudits,
+    enabled: false,
+    retry: false,
+  });
+  const controlPlane = summarizeControlPlaneHealth(systemHealth);
+
   return (
     <AdminOnlyPage>
       <div
@@ -143,6 +185,20 @@ export default function SystemHealthPage() {
       >
         <strong style={{ fontWeight: 600 }}>演示数据</strong> · 当前展示样例指标,后续接入真实评审数据后自动更新。
       </div>
+
+      <ControlPlanePanel
+        summary={controlPlane}
+        loading={healthFetching && !systemHealth}
+        langfuseSmoke={langfuseSmokeQuery.data}
+        langfuseSmokeLoading={langfuseSmokeQuery.isFetching}
+        onLangfuseSmoke={() => void langfuseSmokeQuery.refetch()}
+        langgraphCheckpoints={langgraphCheckpointQuery.data}
+        langgraphCheckpointsLoading={langgraphCheckpointQuery.isFetching}
+        onLanggraphCheckpoints={() => void langgraphCheckpointQuery.refetch()}
+        langfuseRunAudits={langfuseRunAuditQuery.data}
+        langfuseRunAuditsLoading={langfuseRunAuditQuery.isFetching}
+        onLangfuseRunAudits={() => void langfuseRunAuditQuery.refetch()}
+      />
 
       {/* top metrics */}
       <section
@@ -305,6 +361,309 @@ export default function SystemHealthPage() {
 }
 
 // ============================================================
+
+function ControlPlanePanel({
+  summary,
+  loading,
+  langfuseSmoke,
+  langfuseSmokeLoading,
+  onLangfuseSmoke,
+  langgraphCheckpoints,
+  langgraphCheckpointsLoading,
+  onLanggraphCheckpoints,
+  langfuseRunAudits,
+  langfuseRunAuditsLoading,
+  onLangfuseRunAudits,
+}: {
+  summary: ControlPlaneHealthSummary;
+  loading: boolean;
+  langfuseSmoke?: LangfuseSmokeResponse;
+  langfuseSmokeLoading: boolean;
+  onLangfuseSmoke: () => void;
+  langgraphCheckpoints?: LangGraphCheckpointSummary;
+  langgraphCheckpointsLoading: boolean;
+  onLanggraphCheckpoints: () => void;
+  langfuseRunAudits?: LangfuseRunAuditSummary;
+  langfuseRunAuditsLoading: boolean;
+  onLangfuseRunAudits: () => void;
+}) {
+  const smokeStatus = langfuseSmoke
+    ? langfuseSmoke.ok
+      ? "体检通过"
+      : "体检未通过"
+    : "尚未体检";
+  const promptSmokeDetail = summarizeLangfuseSmokePrompts(langfuseSmoke);
+  const checkpointThreads =
+    typeof langgraphCheckpoints?.thread_count === "number"
+      ? langgraphCheckpoints.thread_count
+      : null;
+  const runAuditDetail = summarizeLangfuseRunAudits(langfuseRunAudits);
+  const runAuditStatus = summarizeLangfuseRunAuditStatus(langfuseRunAudits);
+  const recentRunAudits = recentLangfuseRunAuditLinks(langfuseRunAudits, 3);
+  return (
+    <section
+      style={{
+        ...cardStyle,
+        marginBottom: 20,
+        padding: "14px 16px",
+        borderColor:
+          summary.tone === "ok"
+            ? "var(--status-done-dot)"
+            : "var(--status-warn-dot)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        <div>
+          <div style={eyebrowStyle}>编排与观测</div>
+          <h2
+            style={{
+              margin: "4px 0 0",
+              color: "var(--text-strong)",
+              fontSize: 16,
+              fontWeight: 650,
+              letterSpacing: 0,
+            }}
+          >
+            LangGraph / Langfuse 控制面
+          </h2>
+          <p
+            style={{
+              margin: "6px 0 0",
+              color: "var(--text-muted)",
+              fontSize: 12,
+              lineHeight: 1.55,
+            }}
+          >
+            {loading ? "正在读取后端健康状态" : "展示当前编排、检查点和 Langfuse 可用性"}
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <HealthPill
+            label={summary.orchestratorLabel}
+            value={summary.orchestratorStatus}
+            tone={summary.tone}
+          />
+          <HealthPill label="Checkpoint" value={summary.checkpointLabel} tone="info" />
+          <HealthPill
+            label="Langfuse"
+            value={summary.langfuseStatus}
+            tone={summary.langfuseStatus === "已连接" ? "ok" : "warn"}
+          />
+          <HealthPill
+            label="Smoke"
+            value={smokeStatus}
+            tone={langfuseSmoke?.ok ? "ok" : "warn"}
+          />
+          <HealthPill
+            label="Run Audit"
+            value={runAuditStatus}
+            tone={langfuseRunAudits?.missing ? "warn" : langfuseRunAudits ? "ok" : "info"}
+          />
+        </div>
+      </div>
+      <div
+        style={{
+          marginTop: 12,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        <div
+          style={{
+            fontSize: 12,
+            color: "var(--text-muted)",
+            fontFamily: "var(--font-mono)",
+          }}
+        >
+          {summary.langfuseDetail}
+          {langfuseSmoke
+            ? ` · auth=${String(langfuseSmoke.auth?.status ?? "unknown")}${promptSmokeDetail ? ` · ${promptSmokeDetail}` : ""}`
+            : ""}
+          {langgraphCheckpoints
+            ? ` · checkpoints=${checkpointThreads ?? 0} threads · ${String(langgraphCheckpoints.status || "unknown")}`
+            : ""}
+          {runAuditDetail ? ` · Langfuse Run Audit ${runAuditDetail}` : ""}
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={onLangfuseRunAudits}
+            disabled={langfuseRunAuditsLoading}
+            style={{
+              ...controlButtonStyle,
+              cursor: langfuseRunAuditsLoading ? "default" : "pointer",
+              opacity: langfuseRunAuditsLoading ? 0.7 : 1,
+            }}
+          >
+            {langfuseRunAuditsLoading ? "读取中" : "刷新运行审计"}
+          </button>
+          <button
+            type="button"
+            onClick={onLanggraphCheckpoints}
+            disabled={langgraphCheckpointsLoading}
+            style={{
+              ...controlButtonStyle,
+              cursor: langgraphCheckpointsLoading ? "default" : "pointer",
+              opacity: langgraphCheckpointsLoading ? 0.7 : 1,
+            }}
+          >
+            {langgraphCheckpointsLoading ? "读取中" : "刷新 checkpoint 摘要"}
+          </button>
+          <button
+            type="button"
+            onClick={onLangfuseSmoke}
+            disabled={langfuseSmokeLoading}
+            style={{
+              ...controlButtonStyle,
+              cursor: langfuseSmokeLoading ? "default" : "pointer",
+              opacity: langfuseSmokeLoading ? 0.7 : 1,
+            }}
+          >
+            {langfuseSmokeLoading ? "体检中" : "刷新 Langfuse 体检"}
+          </button>
+        </div>
+      </div>
+      {recentRunAudits.length > 0 ? (
+        <div
+          style={{
+            marginTop: 12,
+            borderTop: "1px solid var(--border-subtle)",
+            paddingTop: 10,
+            display: "grid",
+            gap: 8,
+          }}
+        >
+          {recentRunAudits.map((audit) => (
+            <div
+              key={`${audit.label}-${audit.jsonUrl}`}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "minmax(220px, 1fr) auto",
+                alignItems: "center",
+                gap: 12,
+                fontSize: 12,
+              }}
+            >
+              <div
+                style={{
+                  minWidth: 0,
+                  display: "flex",
+                  gap: 8,
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                }}
+              >
+                <span
+                  style={{
+                    color: "var(--text-default)",
+                    fontFamily: "var(--font-mono)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                  title={audit.label}
+                >
+                  {audit.label}
+                </span>
+                <span
+                  style={{
+                    color:
+                      audit.tone === "ok"
+                        ? "var(--status-done-fg)"
+                        : "var(--status-warn-fg)",
+                    fontFamily: "var(--font-mono)",
+                    fontWeight: 650,
+                  }}
+                >
+                  {audit.status}
+                </span>
+                {audit.missingSummary ? (
+                  <span
+                    style={{
+                      color: "var(--text-muted)",
+                      fontFamily: "var(--font-mono)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                    title={audit.missingSummary}
+                  >
+                    {audit.missingSummary}
+                  </span>
+                ) : null}
+              </div>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <a
+                  href={audit.jsonUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={auditLinkStyle}
+                >
+                  JSON
+                </a>
+                {audit.markdownUrl ? (
+                  <a
+                    href={audit.markdownUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={auditLinkStyle}
+                  >
+                    MD
+                  </a>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function HealthPill({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "ok" | "warn" | "info";
+}) {
+  const color =
+    tone === "ok"
+      ? "var(--status-done-fg)"
+      : tone === "warn"
+        ? "var(--status-warn-fg)"
+        : "var(--text-link)";
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        minHeight: 28,
+        padding: "4px 8px",
+        borderRadius: "var(--r-3)",
+        background: "var(--surface-sunken)",
+        fontSize: 12,
+      }}
+    >
+      <span style={{ color: "var(--text-muted)" }}>{label}</span>
+      <span style={{ color, fontWeight: 650 }}>{value}</span>
+    </span>
+  );
+}
 
 function MetricCard({
   label,
@@ -780,6 +1139,33 @@ const cardStyle: React.CSSProperties = {
   border: "1px solid var(--border-default)",
   borderRadius: "var(--r-4)",
   overflow: "hidden",
+};
+
+const eyebrowStyle: React.CSSProperties = {
+  fontSize: 10,
+  fontFamily: "var(--font-mono)",
+  fontWeight: 600,
+  textTransform: "uppercase",
+  letterSpacing: "0.1em",
+  color: "var(--accent-600)",
+};
+
+const controlButtonStyle: React.CSSProperties = {
+  border: "1px solid var(--border-default)",
+  borderRadius: "var(--r-3)",
+  background: "var(--surface-panel)",
+  color: "var(--text-default)",
+  fontSize: 12,
+  fontWeight: 650,
+  padding: "6px 10px",
+};
+
+const auditLinkStyle: React.CSSProperties = {
+  color: "var(--text-link)",
+  fontFamily: "var(--font-mono)",
+  fontSize: 12,
+  fontWeight: 650,
+  textDecoration: "none",
 };
 
 const tdStyle: React.CSSProperties = {

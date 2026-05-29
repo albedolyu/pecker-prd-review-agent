@@ -103,6 +103,22 @@ describe("review job resume helpers", () => {
     });
   });
 
+  it("keeps LangGraph checkpoint events visible when resuming a background review", () => {
+    const event: ReviewJobEvent = {
+      index: 5,
+      ts: 125,
+      event: "langgraph_checkpoint_ready",
+      progress: null,
+      thread_id: "review-job:job-123",
+    };
+
+    expect(reviewJobEventToStreamEvent(event)).toEqual({
+      event: "langgraph_checkpoint_ready",
+      progress: null,
+      thread_id: "review-job:job-123",
+    });
+  });
+
   it("uses a PM-facing message when a stored resume job cannot be reused", () => {
     expect(REVIEW_JOB_RESUME_LOST_MESSAGE).toContain("无法继续接回");
     expect(REVIEW_JOB_RESUME_LOST_MESSAGE).toContain("重新发起评审");

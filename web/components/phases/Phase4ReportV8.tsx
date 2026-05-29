@@ -16,7 +16,7 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Download } from "lucide-react";
+import { Download, ExternalLink, FileText } from "lucide-react";
 
 import {
   authApi,
@@ -25,9 +25,14 @@ import {
   draftsApi,
   auditApi,
   feedbackApi,
+  reviewJobsApi,
   ApiError,
   type ReviewItem,
 } from "@/lib/api";
+import {
+  buildLangfuseAuditSummary,
+  type LangfuseAuditSummary,
+} from "@/lib/langfuse-audit";
 import { useReviewStore } from "@/lib/store";
 import {
   generateReportMarkdown,
@@ -95,6 +100,31 @@ export function Phase4ReportV8() {
     if (!reviewResult) return null;
     return buildPmFriendlySnapshot(reviewResult);
   }, [reviewResult]);
+
+  const hasLangfuseAuditArtifact = Boolean(
+    reviewResult?.telemetry?.observability?.langfuse_audit?.json_path,
+  );
+  const langfuseAuditQuery = useQuery({
+    queryKey: ["langfuse-audit", reviewResult?.workspace, reviewResult?.review_id],
+    queryFn: ({ signal }) => {
+      if (!reviewResult) throw new Error("missing review result");
+      return reviewJobsApi.getLangfuseAudit(
+        reviewResult.workspace,
+        reviewResult.review_id,
+        signal,
+      );
+    },
+    enabled: Boolean(reviewResult?.workspace && reviewResult?.review_id && hasLangfuseAuditArtifact),
+    retry: false,
+    staleTime: 60 * 1000,
+  });
+  const langfuseSummary = useMemo(
+    () =>
+      reviewResult
+        ? buildLangfuseAuditSummary(reviewResult, langfuseAuditQuery.data)
+        : null,
+    [reviewResult, langfuseAuditQuery.data],
+  );
 
   const itemsByDim = useMemo(() => {
     const map = new Map<RoleKey, ReviewItem[]>();
@@ -561,6 +591,12 @@ export function Phase4ReportV8() {
         />
       </section>
 
+      <LangfuseAuditPanel
+        summary={langfuseSummary}
+        loading={langfuseAuditQuery.isFetching}
+        loadFailed={langfuseAuditQuery.isError}
+      />
+
       {/* ── 按维度分组的评审摘要 ── */}
       <section style={{ marginTop: 24 }}>
         <SectionHead title="评审摘要" hint="按评审维度分组" />
@@ -758,6 +794,165 @@ export function Phase4ReportV8() {
 
 // ============================================================
 // subcomponents
+
+function LangfuseAuditPanel({
+  summary,
+  loading,
+  loadFailed,
+}: {
+  summary: LangfuseAuditSummary | null;
+  loading: boolean;
+  loadFailed: boolean;
+}) {
+  if (!summary) return null;
+
+  const promptLabels =
+    summary.promptVersions.length > 0
+      ? summary.promptVersions.map((item) => item.label)
+      : ["Prompt 版本待审计文件加载"];
+  const auditMissingSummary = summary.auditMissingSummary;
+  const auditMissingCount = summary.auditMissingCount;
+  const auditStatus = loading
+    ? "加载中"
+    : loadFailed
+      ? "本地审计读取失败"
+      : summary.auditStatus;
+  const threadLinkStatus = summary.threadLinkStatus;
+
+  return (
+    <section style={{ ...cardStyle, marginTop: 16 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          padding: "12px 18px",
+          borderBottom: "1px solid var(--border-subtle)",
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <div style={summaryEyebrowStyle}>LangGraph / Langfuse</div>
+          <div
+            style={{
+              marginTop: 4,
+              fontSize: 15,
+              fontWeight: 600,
+              color: summary.ready
+                ? "var(--status-done-fg)"
+                : "var(--status-warn-fg)",
+            }}
+          >
+            {summary.ready ? "本次运行已接入追踪" : "本次运行追踪信息不完整"}
+          </div>
+        </div>
+        {summary.traceUrl && (
+          <a
+            href={summary.traceUrl}
+            target="_blank"
+            rel="noreferrer"
+            style={linkButtonStyle}
+          >
+            <ExternalLink size={14} strokeWidth={2} />
+            打开 Langfuse Trace
+          </a>
+          )}
+          <a
+            href={summary.auditJsonUrl}
+            target="_blank"
+            rel="noreferrer"
+            style={linkButtonStyle}
+          >
+            <FileText size={14} strokeWidth={2} />
+            本地审计 JSON
+          </a>
+          <a
+            href={summary.auditMarkdownUrl}
+            target="_blank"
+          rel="noreferrer"
+          style={linkButtonStyle}
+        >
+          <FileText size={14} strokeWidth={2} />
+          本地审计 Markdown
+        </a>
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
+          gap: 14,
+          padding: "14px 18px",
+        }}
+      >
+        <MetaItem label="编排" value={summary.orchestrator || "未上报"} />
+        <MetaItem
+          label="审计状态"
+          value={auditStatus}
+        />
+        <MetaItem
+          label="证据分数"
+          value={summary.evidenceStatus}
+        />
+        <MetaItem
+          label="PM 反馈分数"
+          value={summary.feedbackStatus}
+        />
+        <MetaItem
+          label="Graph Trace"
+          value={summary.graphStatus}
+        />
+          <MetaItem
+            label="Checkpoint"
+            value={summary.checkpointStatus}
+          />
+          <MetaItem
+            label="Trace Thread"
+            value={
+              summary.checkpointThreadId
+                ? `${threadLinkStatus} · ${summary.checkpointThreadId}`
+                : threadLinkStatus
+            }
+          />
+        </div>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 8,
+          padding: "0 18px 14px",
+          alignItems: "center",
+        }}
+      >
+        {promptLabels.map((label) => (
+          <span key={label} style={dimensionPillStyle}>
+            {label}
+          </span>
+        ))}
+        {auditMissingCount > 0 && (
+          <span
+            style={{
+              ...dimensionPillStyle,
+              color: "var(--status-warn-fg)",
+            }}
+          >
+              缺失 {auditMissingCount} 项
+            </span>
+          )}
+          {auditMissingSummary && (
+            <span
+              style={{
+                ...dimensionPillStyle,
+                color: "var(--status-warn-fg)",
+              }}
+              title={auditMissingSummary}
+            >
+              {auditMissingSummary}
+            </span>
+          )}
+        </div>
+      </section>
+    );
+}
 
 function PmFriendlySummary({
   snapshot,
@@ -1284,6 +1479,15 @@ const linkStyle: React.CSSProperties = {
   padding: 0,
   fontFamily: "var(--font-sans)",
   fontWeight: 500,
+};
+
+const linkButtonStyle: React.CSSProperties = {
+  ...btnSecondaryStyle,
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  textDecoration: "none",
+  lineHeight: "34px",
 };
 
 const summaryEyebrowStyle: React.CSSProperties = {

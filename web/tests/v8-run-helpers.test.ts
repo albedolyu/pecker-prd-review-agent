@@ -5,6 +5,8 @@
  */
 
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   ROLE_TO_BIRD_ID,
   roleToBird,
@@ -16,9 +18,11 @@ import {
   formatTokens,
   formatDuration,
   modelForRole,
+  deriveRunObservability,
   computeDiff,
 } from "@/lib/v8-run-helpers";
-import type { WorkerDoneEvent } from "@/lib/useReviewStream";
+import type { ReviewStreamEvent, WorkerDoneEvent } from "@/lib/useReviewStream";
+import type { ReviewResult } from "@/lib/api";
 import type { AgentStatus } from "@/components/run/AgentStatusCard";
 import type { RoleKey } from "@/lib/roles";
 import type { RunItemSummary } from "@/components/run/RunDiff";
@@ -259,6 +263,136 @@ describe("formatTokens", () => {
   it(">= 1k 用 k 后缀 + 1 位小数", () => {
     expect(formatTokens({ tokens_in: 600, tokens_out: 500 })).toBe("1.1k");
     expect(formatTokens({ tokens_in: 10000, tokens_out: 500 })).toBe("10.5k");
+  });
+});
+
+describe("deriveRunObservability", () => {
+  it("surfaces LangGraph checkpoint and final Langfuse trace metadata", () => {
+    const events: ReviewStreamEvent[] = [
+      {
+        event: "langgraph_checkpoint_ready",
+        progress: null,
+        thread_id: "review-job:job-123",
+      },
+    ];
+    const result = {
+      telemetry: {
+        observability: {
+          langfuse: {
+            status: "done",
+            trace_id: "trace-123",
+            trace_url: "https://langfuse.example/project/proj/traces/trace-123",
+            session_id: "review-job:job-123",
+          },
+        },
+      },
+    } as unknown as ReviewResult;
+
+    expect(deriveRunObservability(events, result)).toEqual({
+      hasLangGraphCheckpoint: true,
+      langGraphThreadId: "review-job:job-123",
+      hasLangfuseTrace: true,
+      langfuseTraceId: "trace-123",
+      langfuseTraceUrl: "https://langfuse.example/project/proj/traces/trace-123",
+      langfuseSessionId: "review-job:job-123",
+      langfuseStatus: "done",
+      langfuseEvidenceScoreFailure: false,
+      langfuseFeedbackScoreFailure: false,
+      langfuseScoreStatus: null,
+      langfuseCheckpointStatus: "trace/checkpoint linked",
+    });
+  });
+
+  it("surfaces Langfuse score failures from the audit snapshot", () => {
+    const result = {
+      telemetry: {
+        observability: {
+          langfuse: {
+            status: "done",
+            trace_id: "trace-123",
+            trace_url: "https://langfuse.example/project/proj/traces/trace-123",
+            session_id: "review-job:job-123",
+          },
+          langfuse_audit: {
+            ok: false,
+            evidence_score_failure: true,
+            feedback_score_failure: true,
+            missing: [
+              "langfuse_evidence.scores_sent",
+              "langfuse_feedback.scores_sent",
+            ],
+          },
+        },
+      },
+    } as unknown as ReviewResult;
+
+    expect(deriveRunObservability([], result)).toMatchObject({
+      langfuseEvidenceScoreFailure: true,
+      langfuseFeedbackScoreFailure: true,
+      langfuseScoreStatus: "evidence/PM score delivery missing",
+    });
+  });
+
+  it("surfaces Langfuse session and LangGraph checkpoint thread mismatch", () => {
+    const events: ReviewStreamEvent[] = [
+      {
+        event: "langgraph_checkpoint_ready",
+        progress: null,
+        thread_id: "review-job:other-thread",
+      },
+    ];
+    const result = {
+      telemetry: {
+        observability: {
+          langfuse: {
+            status: "done",
+            trace_id: "trace-123",
+            trace_url: "https://langfuse.example/project/proj/traces/trace-123",
+            session_id: "review-job:job-123",
+          },
+          langfuse_audit: {
+            ok: false,
+            session_checkpoint_linked: false,
+            session_checkpoint_mismatch: true,
+            missing: ["langfuse.session_checkpoint_thread"],
+          },
+        },
+      },
+    } as unknown as ReviewResult;
+
+    expect(deriveRunObservability(events, result)).toMatchObject({
+      langGraphThreadId: "review-job:other-thread",
+      langfuseSessionId: "review-job:job-123",
+      langfuseCheckpointStatus: "trace/checkpoint mismatch",
+    });
+  });
+
+  it("uses an empty observability state before LangGraph or Langfuse reports", () => {
+    expect(deriveRunObservability([], null)).toEqual({
+      hasLangGraphCheckpoint: false,
+      langGraphThreadId: null,
+      hasLangfuseTrace: false,
+      langfuseTraceId: null,
+      langfuseTraceUrl: null,
+      langfuseSessionId: null,
+      langfuseStatus: null,
+      langfuseEvidenceScoreFailure: false,
+      langfuseFeedbackScoreFailure: false,
+      langfuseScoreStatus: null,
+      langfuseCheckpointStatus: null,
+    });
+  });
+
+  it("renders Langfuse score status in the Phase 2 observability strip", () => {
+    const source = readFileSync(
+      join(process.cwd(), "components/phases/Phase2RunningV8.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain("Langfuse Score");
+    expect(source).toContain("langfuseScoreStatus");
+    expect(source).toContain("Trace/Checkpoint");
+    expect(source).toContain("langfuseCheckpointStatus");
   });
 });
 

@@ -31,6 +31,46 @@ export class ApiError extends Error {
   }
 }
 
+export interface ControlPlaneHealth {
+  readonly orchestrator?: Readonly<{
+    readonly mode?: string;
+    readonly checkpointing?: string;
+    readonly checkpoint_path?: string;
+    readonly checkpoint_exists?: boolean;
+    readonly [key: string]: unknown;
+  }>;
+  readonly langfuse?: Readonly<{
+    readonly enabled?: boolean;
+    readonly configured?: boolean;
+    readonly sdk_available?: boolean;
+    readonly host?: string;
+    readonly prompt_label?: string;
+    readonly prompt_management?: Readonly<{
+      readonly enabled?: boolean;
+      readonly status?: string;
+      readonly prefix?: string;
+      readonly label?: string;
+      readonly version?: string | number;
+      readonly [key: string]: unknown;
+    }>;
+    readonly [key: string]: unknown;
+  }>;
+  readonly [key: string]: unknown;
+}
+
+export interface SystemHealthResponse {
+  readonly status: string;
+  readonly service: string;
+  readonly version: string;
+  readonly llm_auth?: unknown;
+  readonly claude_auth?: unknown;
+  readonly control_plane?: ControlPlaneHealth;
+}
+
+export const systemHealthApi = {
+  get: () => apiFetch<SystemHealthResponse>("/api/health"),
+} as const;
+
 // ============================================================
 // 底层 fetch wrapper
 // ============================================================
@@ -286,6 +326,123 @@ export interface ReviewWorkerInfo {
   readonly error: string | null;
 }
 
+export interface LangfuseTraceSnapshot {
+  readonly enabled?: boolean;
+  readonly configured?: boolean;
+  readonly status?: string;
+  readonly backend?: string;
+  readonly session_id?: string;
+  readonly trace_id?: string;
+  readonly trace_url?: string;
+  readonly [key: string]: unknown;
+}
+
+export interface LangfuseAuditSnapshot {
+  readonly ok?: boolean;
+  readonly status?: string;
+  readonly missing_count?: number;
+  readonly json_path?: string;
+  readonly markdown_path?: string;
+  readonly missing?: ReadonlyArray<string>;
+  readonly trace_link_ready?: boolean;
+  readonly graph_trace_ready?: boolean;
+  readonly graph_trace_order_ready?: boolean;
+  readonly worker_nodes_ready?: boolean;
+  readonly checkpoint_ready?: boolean;
+  readonly evidence_score_failure?: boolean;
+  readonly feedback_score_failure?: boolean;
+  readonly session_checkpoint_linked?: boolean;
+  readonly session_checkpoint_mismatch?: boolean;
+  readonly [key: string]: unknown;
+}
+
+export interface LangfuseScoreSnapshot {
+  readonly status?: string;
+  readonly scored_items?: number;
+  readonly scores_sent?: number;
+  readonly reliability?: number;
+  readonly trace_id?: string;
+  readonly trace_linked?: boolean;
+  readonly [key: string]: unknown;
+}
+
+export interface LangfusePromptVersion {
+  readonly dimension?: string;
+  readonly name?: string;
+  readonly version?: number | string | null;
+  readonly label?: string;
+  readonly hash?: string;
+  readonly source?: string;
+  readonly status?: string;
+  readonly [key: string]: unknown;
+}
+
+export interface LangGraphCheckpointSnapshot {
+  readonly enabled?: boolean;
+  readonly thread_id?: string;
+  readonly status?: string;
+  readonly checkpoint_path?: string;
+  readonly checkpoint_exists?: boolean;
+  readonly thread_found?: boolean;
+  readonly checkpoint_count?: number;
+  readonly [key: string]: unknown;
+}
+
+export interface LangGraphRunSnapshot {
+  readonly graph_trace?: ReadonlyArray<string>;
+  readonly graph_trace_ready?: boolean;
+  readonly graph_trace_order_ready?: boolean;
+  readonly worker_node_statuses?: ReadonlyArray<Readonly<Record<string, unknown>>>;
+  readonly worker_nodes_ready?: boolean;
+  readonly failed_workers?: number;
+  readonly recovered_workers?: number;
+  readonly recommended_batch_size?: number;
+  readonly [key: string]: unknown;
+}
+
+export interface LangfuseRunAudit {
+  readonly ok?: boolean;
+  readonly status?: string;
+  readonly missing_count?: number;
+  readonly review_id?: string;
+  readonly langfuse?: Readonly<{
+    readonly trace_link_ready?: boolean;
+    readonly trace_url?: string;
+    readonly session_id?: string;
+    readonly prompt_versions?: ReadonlyArray<LangfusePromptVersion>;
+    readonly evidence_scores?: LangfuseScoreSnapshot;
+    readonly pm_feedback_scores?: LangfuseScoreSnapshot;
+    readonly [key: string]: unknown;
+  }>;
+  readonly langgraph?: LangGraphRunSnapshot;
+  readonly langgraph_checkpoint?: LangGraphCheckpointSnapshot;
+  readonly missing?: ReadonlyArray<string>;
+  readonly session_checkpoint_linked?: boolean;
+  readonly session_checkpoint_mismatch?: boolean;
+  readonly [key: string]: unknown;
+}
+
+export interface ReviewObservability {
+  readonly langfuse?: LangfuseTraceSnapshot;
+  readonly langfuse_audit?: LangfuseAuditSnapshot;
+  readonly langfuse_evidence?: LangfuseScoreSnapshot;
+  readonly langfuse_feedback?: LangfuseScoreSnapshot;
+  readonly langgraph_checkpoint?: LangGraphCheckpointSnapshot;
+  readonly [key: string]: unknown;
+}
+
+export interface ReviewTelemetry {
+  readonly total_duration_ms?: number;
+  readonly total_cost_usd?: number;
+  readonly workers?: Readonly<Record<string, unknown>>;
+  readonly orchestrator?: string | null;
+  readonly graph_trace?: ReadonlyArray<string>;
+  readonly worker_node_statuses?: ReadonlyArray<Readonly<Record<string, unknown>>>;
+  readonly resilience?: Readonly<Record<string, unknown>>;
+  readonly observability?: ReviewObservability;
+  readonly [key: string]: unknown;
+}
+
 /**
  * 后端 Opaque Handle — 前端拿到后只读,不能改 items 或 signature,
  * 否则 POST /api/review/confirm 会 403。
@@ -305,13 +462,7 @@ export interface ReviewResult {
   /** CC-pattern: 各维度成本归因(dim_key → USD) */
   readonly cost_breakdown?: Readonly<Record<string, number>>;
   /** CC advanced: telemetry 汇总(总时长 + 各 worker 指标) */
-  readonly telemetry?: Readonly<{
-    total_duration_ms?: number;
-    total_cost_usd?: number;
-    workers?: Readonly<Record<string, unknown>>;
-    orchestrator?: string | null;
-    resilience?: Readonly<Record<string, unknown>>;
-  }>;
+  readonly telemetry?: ReviewTelemetry;
 }
 
 export interface PrecheckRequest {
@@ -414,6 +565,8 @@ export interface ConfirmResponse {
   pending: number;
   total: number;
   report_markdown: string;
+  langfuse_feedback?: LangfuseScoreSnapshot;
+  langfuse_audit?: LangfuseAuditSnapshot;
 }
 
 // precheck 和 SSE 一样直连后端,绕开 Next.js dev rewrite 的 30s timeout。
@@ -513,6 +666,8 @@ export interface ReviewJobNextEventResponse {
   status: ReviewJobSnapshot["status"];
 }
 
+export type LangfuseAuditFormat = "json" | "markdown" | "snapshot";
+
 export const reviewJobsApi = {
   start: (req: ReviewRunRequest, signal?: AbortSignal) =>
     apiFetch<ReviewJobStartResponse>(`${API_BASE}/api/review/jobs`, {
@@ -543,6 +698,30 @@ export const reviewJobsApi = {
     apiFetch<{ status: string; job_id: string }>(
       `${API_BASE}/api/review/jobs/${encodeURIComponent(jobId)}`,
       { method: "DELETE" },
+    ),
+  langfuseAuditUrl: (
+    workspace: string,
+    reviewId: string,
+    artifactFormat: LangfuseAuditFormat = "json",
+  ) =>
+    `${API_BASE}/api/review/langfuse-audits/${encodeURIComponent(workspace)}/${encodeURIComponent(reviewId)}?format=${encodeURIComponent(artifactFormat)}`,
+  getLangfuseAudit: (
+    workspace: string,
+    reviewId: string,
+    signal?: AbortSignal,
+  ) =>
+    apiFetch<LangfuseRunAudit>(
+      reviewJobsApi.langfuseAuditUrl(workspace, reviewId, "json"),
+      { signal },
+    ),
+  getLangfuseAuditSnapshot: (
+    workspace: string,
+    reviewId: string,
+    signal?: AbortSignal,
+  ) =>
+    apiFetch<LangfuseAuditSnapshot>(
+      reviewJobsApi.langfuseAuditUrl(workspace, reviewId, "snapshot"),
+      { signal },
     ),
 } as const;
 
@@ -928,9 +1107,107 @@ export interface AdminFeedbackFilters {
   limit?: number;
 }
 
+export interface LangfuseSmokeResponse {
+  ok: boolean;
+  configured?: boolean;
+  sdk_available?: boolean;
+  host?: string;
+  prompt_label?: string;
+  auth?: Record<string, unknown>;
+  prompts?: {
+    status?: string;
+    checked?: ReadonlyArray<{
+      name?: string;
+      status?: string;
+      label?: string;
+      version?: number | string | null;
+      hash?: string;
+      source?: string;
+      [key: string]: unknown;
+    }>;
+  };
+  score_api?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface LangGraphCheckpointSummary {
+  status: string;
+  exists: boolean;
+  checkpoint_path?: string;
+  thread_count?: number;
+  threads?: ReadonlyArray<{
+    thread_id?: string;
+    namespace_count?: number;
+    checkpoint_count?: number;
+    [key: string]: unknown;
+  }>;
+  [key: string]: unknown;
+}
+
+export interface LangfuseRunAuditSummary {
+  total: number;
+  ready: number;
+  missing: number;
+  trace_ready: number;
+  graph_ready: number;
+  checkpoint_ready: number;
+  graph_order_failures?: number;
+  checkpoint_failures?: number;
+  worker_failures?: number;
+  session_checkpoint_mismatches?: number;
+  evidence_score_failures?: number;
+  feedback_score_failures?: number;
+  audits?: ReadonlyArray<{
+    review_id?: string;
+    workspace?: string;
+    ok?: boolean;
+    status?: string;
+    trace_ready?: boolean;
+    graph_ready?: boolean;
+    graph_order_failure?: boolean;
+    checkpoint_ready?: boolean;
+    checkpoint_failure?: boolean;
+    worker_failure?: boolean;
+    session_checkpoint_linked?: boolean;
+    session_checkpoint_mismatch?: boolean;
+    evidence_score_failure?: boolean;
+    feedback_score_failure?: boolean;
+    missing_count?: number;
+    missing_summary?: string;
+    json_url?: string;
+    markdown_url?: string;
+    json_path?: string;
+    markdown_path?: string;
+    evidence_status?: string;
+    feedback_status?: string;
+    prompt_versions?: number;
+    recovered_workers?: number;
+    checkpoint_count?: number;
+    missing?: ReadonlyArray<string>;
+    mtime?: number;
+    [key: string]: unknown;
+  }>;
+  [key: string]: unknown;
+}
+
 export const adminUsageApi = {
   get: (days = 7) =>
     apiFetch<AdminUsageResponse>(`/api/admin/usage?days=${encodeURIComponent(days)}`),
+  langfuseSmoke: () =>
+    apiFetch<LangfuseSmokeResponse>("/api/admin/langfuse-smoke", {
+      timeoutMs: 20 * 1000,
+      timeoutMessage: "Langfuse 体检暂时没有响应，请稍后再试",
+    }),
+  langgraphCheckpoints: () =>
+    apiFetch<LangGraphCheckpointSummary>("/api/admin/langgraph-checkpoints", {
+      timeoutMs: 10 * 1000,
+      timeoutMessage: "LangGraph checkpoint 摘要暂时没有响应，请稍后再试",
+    }),
+  langfuseRunAudits: () =>
+    apiFetch<LangfuseRunAuditSummary>("/api/admin/langfuse-run-audits", {
+      timeoutMs: 10 * 1000,
+      timeoutMessage: "Langfuse run audit summary did not respond in time",
+    }),
   feedback: (days = 7, filters: AdminFeedbackFilters = {}) => {
     const params = new URLSearchParams({
       days: String(days),

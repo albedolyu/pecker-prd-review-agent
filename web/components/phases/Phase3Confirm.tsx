@@ -34,6 +34,7 @@ import {
   type ReviewItem,
   type ItemDecision,
 } from "@/lib/api";
+import { mergeConfirmLangfuseObservability } from "@/lib/langfuse-audit";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -51,6 +52,7 @@ export function Phase3Confirm() {
   const setConfirmedReportMarkdown = useReviewStore(
     (s) => s.setConfirmedReportMarkdown,
   );
+  const setReviewResult = useReviewStore((s) => s.setReviewResult);
   const setPhase = useReviewStore((s) => s.setPhase);
 
   // 归一化 item.dimension 到 RoleKey(后端可能写 "结构层" / "苍鹰补充" / "structure" 3 种)
@@ -95,6 +97,9 @@ export function Phase3Confirm() {
       });
     },
     onSuccess: (resp: ConfirmResponse) => {
+      if (reviewResult) {
+        setReviewResult(mergeConfirmLangfuseObservability(reviewResult, resp));
+      }
       toast.success(
         `决策已确认:${resp.accepted} 接受 · ${resp.edited} 改写 · ${resp.rejected} 拒绝`,
       );

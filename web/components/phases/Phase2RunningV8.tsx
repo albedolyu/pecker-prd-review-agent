@@ -34,6 +34,7 @@ import {
   pmFacingReviewMessage,
   useReviewStream,
   type ReviewStreamEvent,
+  type LangGraphCheckpointReadyEvent,
   type WorkerDoneEvent,
   type ReviewFailedEvent,
   type ReviewDegradedEvent,
@@ -61,6 +62,7 @@ import {
   ROLE_TO_BIRD_ID,
   classifyFailure,
   classifyFailReason,
+  deriveRunObservability,
   deriveFunnelState,
   extractWorkerErrors,
   formatDuration,
@@ -70,6 +72,7 @@ import {
   roleToBird,
   type FunnelStageKey,
   type FunnelState,
+  type RunObservabilityState,
   type WorkerErrorBanner,
 } from "@/lib/v8-run-helpers";
 import {
@@ -306,6 +309,11 @@ export function Phase2RunningV8() {
   const funnelState = useMemo(
     () => deriveFunnelState(stream.events),
     [stream.events],
+  );
+
+  const runObservability = useMemo(
+    () => deriveRunObservability(stream.events, stream.result),
+    [stream.events, stream.result],
   );
 
   // worker error banners · 把 worker_done.error 抽出来分类成红条提示
@@ -652,6 +660,8 @@ export function Phase2RunningV8() {
       )}
 
       {/* ── 分层可视化:上层 worker + 下层 meta + 依赖边 ── */}
+      <RunObservabilityStrip state={runObservability} />
+
       <section style={{ position: "relative", marginBottom: 20 }}>
         {/* worker 层 · 桌面 4 列 / 平板 2 列 / 手机 1 列 */}
         <div
@@ -785,6 +795,116 @@ export function Phase2RunningV8() {
 // ============================================================
 // helpers
 
+function RunObservabilityStrip({ state }: { state: RunObservabilityState }) {
+  if (
+    !state.hasLangGraphCheckpoint &&
+    !state.hasLangfuseTrace &&
+    !state.langfuseScoreStatus &&
+    !state.langfuseCheckpointStatus
+  ) {
+    return null;
+  }
+
+  const langGraphText = state.hasLangGraphCheckpoint
+    ? state.langGraphThreadId
+      ? `检查点已建立 · ${state.langGraphThreadId}`
+      : "检查点已建立"
+    : "未启用";
+  const langfuseText = state.hasLangfuseTrace
+    ? state.langfuseTraceId
+      ? `Trace 已生成 · ${state.langfuseTraceId.slice(0, 8)}`
+      : "Trace 已生成"
+    : "结果生成后回填 Trace";
+
+  return (
+    <section
+      aria-label="LangGraph 与 Langfuse 运行状态"
+      style={{
+        marginBottom: 16,
+        padding: "10px 14px",
+        borderRadius: "var(--r-4)",
+        border: "1px solid var(--border-default)",
+        background: "var(--surface-panel)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+        flexWrap: "wrap",
+      }}
+    >
+      <div
+        style={{
+          fontSize: 12,
+          fontWeight: 600,
+          color: "var(--text-strong)",
+        }}
+      >
+        编排可观测性
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <ObservabilityPill label="LangGraph" value={langGraphText} />
+        <ObservabilityPill
+          label="Langfuse"
+          value={langfuseText}
+          href={state.langfuseTraceUrl}
+        />
+        {state.langfuseScoreStatus ? (
+          <ObservabilityPill
+            label="Langfuse Score"
+            value={state.langfuseScoreStatus}
+          />
+        ) : null}
+        {state.langfuseCheckpointStatus ? (
+          <ObservabilityPill
+            label="Trace/Checkpoint"
+            value={state.langfuseCheckpointStatus}
+          />
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function ObservabilityPill({
+  label,
+  value,
+  href,
+}: {
+  label: string;
+  value: string;
+  href?: string | null;
+}) {
+  const content = (
+    <>
+      <span style={{ color: "var(--text-muted)" }}>{label}</span>
+      <span style={{ color: "var(--text-default)", fontWeight: 600 }}>
+        {value}
+      </span>
+    </>
+  );
+  const style: React.CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    minHeight: 26,
+    padding: "4px 8px",
+    borderRadius: "var(--r-3)",
+    background: "var(--surface-sunken)",
+    color: "var(--text-default)",
+    fontSize: 12,
+    textDecoration: "none",
+  };
+
+  if (href) {
+    return (
+      <a href={href} target="_blank" rel="noreferrer" style={style}>
+        {content}
+      </a>
+    );
+  }
+  return <span style={style}>{content}</span>;
+}
+
 function buildConsoleLines(
   events: ReadonlyArray<ReviewStreamEvent>,
 ): ConsoleLine[] {
@@ -847,6 +967,16 @@ function buildConsoleLines(
           text: `四个方向开始并行检查(${"mode" in e && e.mode === "quick" ? "轻评审" : "深评审"})`,
         });
         break;
+      case "langgraph_checkpoint_ready": {
+        const ev = e as LangGraphCheckpointReadyEvent;
+        lines.push({
+          t,
+          src: { name: "LangGraph" },
+          level: "accent",
+          text: `LangGraph 检查点已建立${ev.thread_id ? ` · ${ev.thread_id}` : ""}`,
+        });
+        break;
+      }
       case "worker_done": {
         const ev = e as WorkerDoneEvent;
         const bird = roleToBird(ev.dim_key as RoleKey);

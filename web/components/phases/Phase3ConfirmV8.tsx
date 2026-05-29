@@ -41,6 +41,7 @@ import {
   shouldApplyGoshawkPatchDraft,
 } from "@/lib/async-goshawk";
 import { saveReviewDraftSnapshot } from "@/lib/draft-persistence";
+import { mergeConfirmLangfuseObservability } from "@/lib/langfuse-audit";
 import { buildReviewItemPatchText, explainReviewItemForPm } from "@/lib/pm-friendly";
 import {
   findPrdAnchorMatch,
@@ -400,6 +401,12 @@ export function Phase3ConfirmV8() {
       });
     },
     onSuccess: (resp: ConfirmResponse) => {
+      const confirmedReviewResult = reviewResult
+        ? mergeConfirmLangfuseObservability(reviewResult, resp)
+        : reviewResult;
+      if (confirmedReviewResult) {
+        setReviewResult(confirmedReviewResult);
+      }
       toast.success(
         `本次评审已确认 · 采纳 ${resp.accepted} · 改写 ${resp.edited} · 驳回 ${resp.rejected}`,
       );
@@ -426,7 +433,7 @@ export function Phase3ConfirmV8() {
         mode,
         userNotes,
         rawMaterials,
-        reviewResult,
+        reviewResult: confirmedReviewResult,
         decisions,
         confirmedReportMarkdown: resp.report_markdown ?? "",
       }).catch(() => {});

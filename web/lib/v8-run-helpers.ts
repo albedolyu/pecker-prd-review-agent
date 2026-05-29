@@ -6,8 +6,10 @@
  */
 
 import type { BirdId } from "@/components/birds/BirdAvatar";
+import type { LangfuseAuditSnapshot, ReviewResult } from "@/lib/api";
 import type { RoleKey } from "@/lib/roles";
 import type {
+  LangGraphCheckpointReadyEvent,
   ReviewStreamEvent,
   WorkerDoneEvent,
 } from "@/lib/useReviewStream";
@@ -286,6 +288,114 @@ export function modelForRole(roleKey: RoleKey, mode: string): string {
 // - N2_after_evidence_verify  evidence verify (撤回/降权) 后
 // - N3_after_goshawk       苍鹰终审 + apply_advisor_result 后
 // - N4_after_pm_decision   PM 接受决策后 (confirm endpoint 单发, Phase2 拿不到, 标 pending)
+
+export interface RunObservabilityState {
+  readonly hasLangGraphCheckpoint: boolean;
+  readonly langGraphThreadId: string | null;
+  readonly hasLangfuseTrace: boolean;
+  readonly langfuseTraceId: string | null;
+  readonly langfuseTraceUrl: string | null;
+  readonly langfuseSessionId: string | null;
+  readonly langfuseStatus: string | null;
+  readonly langfuseEvidenceScoreFailure: boolean;
+  readonly langfuseFeedbackScoreFailure: boolean;
+  readonly langfuseScoreStatus: string | null;
+  readonly langfuseCheckpointStatus: string | null;
+}
+
+function nonEmptyString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  return text.length > 0 ? text : null;
+}
+
+function includesMissingPrefix(values: unknown, prefix: string): boolean {
+  if (!Array.isArray(values)) return false;
+  return values.some(
+    (value) => typeof value === "string" && value.startsWith(prefix),
+  );
+}
+
+function formatLangfuseScoreStatus(
+  evidenceFailure: boolean,
+  feedbackFailure: boolean,
+): string | null {
+  if (evidenceFailure && feedbackFailure) {
+    return "evidence/PM score delivery missing";
+  }
+  if (evidenceFailure) return "evidence score delivery missing";
+  if (feedbackFailure) return "PM score delivery missing";
+  return null;
+}
+
+function formatLangfuseCheckpointStatus(
+  sessionId: string | null,
+  checkpointThreadId: string | null,
+  auditSnapshot: LangfuseAuditSnapshot | undefined,
+): string | null {
+  const mismatch =
+    auditSnapshot?.session_checkpoint_mismatch === true ||
+    includesMissingPrefix(auditSnapshot?.missing, "langfuse.session_checkpoint_thread") ||
+    Boolean(sessionId && checkpointThreadId && sessionId !== checkpointThreadId);
+  if (mismatch) return "trace/checkpoint mismatch";
+
+  const linked =
+    auditSnapshot?.session_checkpoint_linked === true ||
+    Boolean(sessionId && checkpointThreadId && sessionId === checkpointThreadId);
+  if (linked) return "trace/checkpoint linked";
+
+  return null;
+}
+
+export function deriveRunObservability(
+  events: ReadonlyArray<ReviewStreamEvent>,
+  result: ReviewResult | null,
+): RunObservabilityState {
+  let checkpoint: LangGraphCheckpointReadyEvent | null = null;
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const event = events[i];
+    if (event.event === "langgraph_checkpoint_ready") {
+      checkpoint = event;
+      break;
+    }
+  }
+
+  const langfuse = result?.telemetry?.observability?.langfuse;
+  const langfuseAudit = result?.telemetry?.observability?.langfuse_audit;
+  const resultCheckpoint = result?.telemetry?.observability?.langgraph_checkpoint;
+  const checkpointThreadId =
+    nonEmptyString(checkpoint?.thread_id) || nonEmptyString(resultCheckpoint?.thread_id);
+  const langfuseTraceId = nonEmptyString(langfuse?.trace_id);
+  const langfuseTraceUrl = nonEmptyString(langfuse?.trace_url);
+  const langfuseSessionId = nonEmptyString(langfuse?.session_id);
+  const langfuseEvidenceScoreFailure =
+    langfuseAudit?.evidence_score_failure === true ||
+    includesMissingPrefix(langfuseAudit?.missing, "langfuse_evidence");
+  const langfuseFeedbackScoreFailure =
+    langfuseAudit?.feedback_score_failure === true ||
+    includesMissingPrefix(langfuseAudit?.missing, "langfuse_feedback");
+
+  return {
+    hasLangGraphCheckpoint: checkpoint != null || resultCheckpoint != null,
+    langGraphThreadId: checkpointThreadId,
+    hasLangfuseTrace: langfuseTraceId != null || langfuseTraceUrl != null,
+    langfuseTraceId,
+    langfuseTraceUrl,
+    langfuseSessionId,
+    langfuseStatus: nonEmptyString(langfuse?.status),
+    langfuseEvidenceScoreFailure,
+    langfuseFeedbackScoreFailure,
+    langfuseScoreStatus: formatLangfuseScoreStatus(
+      langfuseEvidenceScoreFailure,
+      langfuseFeedbackScoreFailure,
+    ),
+    langfuseCheckpointStatus: formatLangfuseCheckpointStatus(
+      langfuseSessionId,
+      checkpointThreadId,
+      langfuseAudit,
+    ),
+  };
+}
 
 export type FunnelStageKey =
   | "N0_worker_raw"

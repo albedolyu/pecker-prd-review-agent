@@ -61,6 +61,11 @@ export interface WorkersStartedEvent extends BaseEvent {
   readonly mode?: string;
 }
 
+export interface LangGraphCheckpointReadyEvent extends BaseEvent {
+  readonly event: "langgraph_checkpoint_ready";
+  readonly thread_id?: string;
+}
+
 export interface ReviewQueuedEvent extends BaseEvent {
   readonly event: "review_queued";
   readonly message?: string;
@@ -291,6 +296,7 @@ export type ReviewStreamEvent =
   | WikiScannedEvent
   | ReviewQueuedEvent
   | WorkersStartedEvent
+  | LangGraphCheckpointReadyEvent
   | WorkerDoneEvent
   | FinalReviewerStartedEvent
   | FinalReviewerDoneEvent
