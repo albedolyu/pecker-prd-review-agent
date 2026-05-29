@@ -38,10 +38,9 @@ def _is_public_remote(remote_url: str) -> bool:
 def _is_sensitive_path(path: str) -> bool:
     normalized = str(PurePosixPath(str(path).replace("\\", "/"))).lstrip("/")
     basename = normalized.rsplit("/", 1)[-1]
+    if _is_private_workspace_path(normalized):
+        return True
     patterns = (
-        "workspace-*/prd/**",
-        "workspace-*/raw/**",
-        "workspace-*/output/**",
         "eval_reports/**/*_pm_revision.md",
         "eval_reports/**/*_zhiqu_handoff.md",
         "eval_reports/*_pm_revision.md",
@@ -54,6 +53,15 @@ def _is_sensitive_path(path: str) -> bool:
     if basename.startswith(".env") and basename != ".env.example":
         return True
     return any(fnmatch.fnmatch(normalized, pattern) for pattern in patterns)
+
+
+def _is_private_workspace_path(normalized: str) -> bool:
+    root = normalized.split("/", 1)[0].lower()
+    if root == "workspace":
+        return True
+    if root.startswith("workspace-") and root != "workspace-sample":
+        return True
+    return False
 
 
 def changed_files_for_push(remote: str = "origin") -> List[str]:

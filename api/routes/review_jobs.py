@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import PlainTextResponse
 
 from api.budget_gate import check_budget, record_review_cost
 from api.deps import get_current_user, get_project_root, get_workspace_dir, review_semaphore
@@ -23,10 +24,24 @@ from api.models import ReviewResult
 from api.review_jobs import ReviewJob
 from api.review_jobs import RecordingReviewProgressEmitter, review_job_store
 from api.routes.drafts import DraftPayload, read_draft_file, write_draft_file
-from api.routes.review import ReviewRequest, _copy_request_with_raw_materials, classify_worker_failures
+from api.routes.review import (
+    ReviewRequest,
+    _copy_request_with_raw_materials,
+    _record_langfuse_evidence_snapshot,
+    classify_worker_failures,
+)
 from api.sanitize import redact_text
 from api.workspace_acl import is_admin, require_workspace_access
-from review.langgraph_checkpoint import build_review_job_checkpointer
+from review.evidence_verify import summarize_verification, verify_evidence
+from review.langgraph_checkpoint import (
+    build_langgraph_checkpoint_observability,
+    build_review_job_checkpointer,
+)
+from scripts.langfuse_run_audit import (
+    build_langfuse_run_audit_snapshot,
+    build_langfuse_run_audit,
+    render_langfuse_run_audit_markdown,
+)
 
 router = APIRouter(tags=["review-jobs"])
 
@@ -46,6 +61,7 @@ async def _run_review_job_pipeline(
         result = await _run_existing_review_stream_as_job(req=req, user=user, job=emitter.job)
         _attach_context_audit(result, before=context_audit_before)
         if isinstance(result, dict) and result.get("status") != "failed":
+            _persist_langfuse_run_audit(ws_abs_path=ws_abs_path, review_result=result)
             _persist_completed_review_draft(
                 req=req,
                 reviewer=user["reviewer"],
@@ -126,6 +142,18 @@ async def _run_review_job_pipeline(
             except Exception as exc:  # noqa: BLE001
                 emitter.emit("final_reviewer_done", data={"error": str(exc)[:200]})
 
+        evidence_summary = None
+        evidence_scored_items = None
+        if items and not _has_langfuse_evidence_snapshot(result):
+            items, evidence_summary = await _verify_evidence_for_job(
+                items,
+                req=req,
+                ws_abs_path=ws_abs_path,
+                emitter=emitter,
+            )
+            evidence_scored_items = items
+            result["merged_items"] = items
+
     cost_breakdown: Dict[str, float] = {}
     total_cost = 0.0
     for worker in result.get("workers", []):
@@ -152,6 +180,18 @@ async def _run_review_job_pipeline(
         "resilience": result.get("resilience", {}),
         "context_manager": _context_audit_delta_for_job(context_audit_before),
     }
+    if isinstance(result.get("graph_trace"), list):
+        telemetry["graph_trace"] = result["graph_trace"]
+    if isinstance(result.get("worker_node_statuses"), list):
+        telemetry["worker_node_statuses"] = result["worker_node_statuses"]
+    if isinstance(result.get("observability"), dict):
+        telemetry["observability"] = result["observability"]
+    telemetry.setdefault("observability", {})["langgraph_checkpoint"] = (
+        build_langgraph_checkpoint_observability(
+            project_root,
+            thread_id=thread_id,
+        )
+    )
 
     review_result_handle = ReviewResult.create(
         reviewer=user["reviewer"],
@@ -166,6 +206,13 @@ async def _run_review_job_pipeline(
         telemetry=telemetry,
     )
     review_result_payload = review_result_handle.model_dump()
+    if evidence_scored_items is not None and evidence_summary is not None:
+        await _attach_langfuse_evidence_for_job(
+            review_result_payload,
+            verified_items=evidence_scored_items,
+            summary=evidence_summary,
+        )
+    _persist_langfuse_run_audit(ws_abs_path=ws_abs_path, review_result=review_result_payload)
     _persist_completed_review_draft(
         req=req,
         reviewer=user["reviewer"],
@@ -173,6 +220,77 @@ async def _run_review_job_pipeline(
         review_result=review_result_payload,
     )
     return review_result_payload
+
+
+async def _verify_evidence_for_job(
+    items: list[Dict[str, Any]],
+    *,
+    req: ReviewRequest,
+    ws_abs_path: str,
+    emitter: RecordingReviewProgressEmitter,
+) -> tuple[list[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    try:
+        verified = await asyncio.to_thread(
+            verify_evidence,
+            items,
+            ws_abs_path,
+            None,
+            req.wiki_pages,
+        )
+        summary = summarize_verification(verified)
+        emitter.emit(
+            "evidence_verify_done",
+            data={
+                "retracted": summary.get("retracted", 0),
+                "caveat": summary.get("caveat", 0),
+            },
+        )
+        return verified, summary
+    except Exception as exc:  # noqa: BLE001
+        emitter.emit(
+            "evidence_verify_skipped",
+            data={"reason": redact_text(str(exc))[:200]},
+        )
+        return items, None
+
+
+async def _attach_langfuse_evidence_for_job(
+    review_result: Dict[str, Any],
+    *,
+    verified_items: list[Dict[str, Any]],
+    summary: Dict[str, Any],
+) -> None:
+    telemetry = review_result.get("telemetry")
+    if not isinstance(telemetry, dict):
+        telemetry = {}
+        review_result["telemetry"] = telemetry
+    observability = telemetry.get("observability")
+    if not isinstance(observability, dict):
+        observability = {}
+        telemetry["observability"] = observability
+    try:
+        observability["langfuse_evidence"] = await _record_langfuse_evidence_snapshot(
+            review_result,
+            verified_items,
+            summary,
+        )
+    except Exception as exc:  # noqa: BLE001
+        observability["langfuse_evidence"] = {
+            "enabled": False,
+            "configured": False,
+            "status": "error",
+            "scored_items": 0,
+            "scores_sent": 0,
+            "error": redact_text(str(exc))[:500],
+        }
+
+
+def _has_langfuse_evidence_snapshot(result: Dict[str, Any]) -> bool:
+    observability = result.get("observability")
+    if not isinstance(observability, dict):
+        return False
+    evidence = observability.get("langfuse_evidence")
+    return isinstance(evidence, dict) and bool(evidence.get("status"))
 
 
 def _langgraph_thread_id(job: ReviewJob) -> str:
@@ -230,6 +348,71 @@ def _attach_context_audit(result: Dict[str, Any], *, before: Dict[str, Any]) -> 
         telemetry = {}
         result["telemetry"] = telemetry
     telemetry["context_manager"] = _context_audit_delta_for_job(before)
+
+
+def _persist_langfuse_run_audit(
+    *,
+    ws_abs_path: str,
+    review_result: Dict[str, Any],
+) -> None:
+    telemetry = review_result.get("telemetry")
+    if not isinstance(telemetry, dict):
+        telemetry = {}
+        review_result["telemetry"] = telemetry
+    observability = telemetry.get("observability")
+    if not isinstance(observability, dict):
+        observability = {}
+        telemetry["observability"] = observability
+
+    try:
+        audit = build_langfuse_run_audit(review_result)
+        review_id = _safe_audit_file_stem(audit.get("review_id") or review_result.get("review_id"))
+        out_dir = Path(ws_abs_path) / "output" / "langfuse_audits"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        json_path = out_dir / f"{review_id}.json"
+        markdown_path = out_dir / f"{review_id}.md"
+        json_path.write_text(
+            json.dumps(audit, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        markdown_path.write_text(
+            render_langfuse_run_audit_markdown(audit) + "\n",
+            encoding="utf-8",
+        )
+        observability["langfuse_audit"] = build_langfuse_run_audit_snapshot(
+            audit,
+            json_path=_relative_workspace_path(json_path, Path(ws_abs_path)),
+            markdown_path=_relative_workspace_path(markdown_path, Path(ws_abs_path)),
+        )
+    except Exception as exc:  # noqa: BLE001
+        observability["langfuse_audit"] = {
+            "ok": False,
+            "status": "error",
+            "error": redact_text(str(exc))[:500],
+        }
+
+
+def _safe_audit_file_stem(value: Any) -> str:
+    raw = redact_text(str(value or "review")).strip()
+    safe = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in raw)
+    return (safe[:120].strip("_") or "review")
+
+
+def _relative_workspace_path(path: Path, workspace_path: Path) -> str:
+    try:
+        return str(path.relative_to(workspace_path)).replace("\\", "/")
+    except ValueError:
+        return str(path).replace("\\", "/")
+
+
+def _langfuse_audit_artifact_path(ws_dir: Path, review_id: str, suffix: str) -> Path:
+    audit_root = (Path(ws_dir) / "output" / "langfuse_audits").resolve(strict=False)
+    candidate = (
+        audit_root / f"{_safe_audit_file_stem(review_id)}{suffix}"
+    ).resolve(strict=False)
+    if candidate.parent != audit_root:
+        raise HTTPException(status_code=400, detail="Invalid Langfuse audit path")
+    return candidate
 
 
 def _persist_completed_review_draft(
@@ -393,7 +576,7 @@ async def start_review_job(
     ws_dir = get_workspace_dir(req.workspace)
     require_workspace_access(ws_dir, user)
     check_budget(project_root, reviewer=user["reviewer"])
-    ws_abs_path = str(project_root / req.workspace)
+    ws_abs_path = str(ws_dir)
 
     async def runner(job):
         emitter = RecordingReviewProgressEmitter(job)
@@ -439,6 +622,46 @@ def _review_request_fingerprint(req: ReviewRequest) -> str:
     }
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+@router.get("/review/langfuse-audits/{workspace}/{review_id}")
+async def get_langfuse_run_audit(
+    workspace: str,
+    review_id: str,
+    artifact_format: str = Query("json", alias="format"),
+    user: dict = Depends(get_current_user),
+):
+    ws_dir = get_workspace_dir(workspace)
+    require_workspace_access(ws_dir, user)
+    normalized_format = str(artifact_format or "json").strip().lower()
+    if normalized_format not in {"json", "markdown", "snapshot"}:
+        raise HTTPException(status_code=400, detail="format must be json, markdown, or snapshot")
+
+    suffix = ".md" if normalized_format == "markdown" else ".json"
+    artifact_path = _langfuse_audit_artifact_path(Path(ws_dir), review_id, suffix)
+    if not artifact_path.is_file():
+        raise HTTPException(status_code=404, detail="Langfuse audit not found")
+
+    if normalized_format == "markdown":
+        return PlainTextResponse(
+            artifact_path.read_text(encoding="utf-8"),
+            media_type="text/markdown; charset=utf-8",
+        )
+
+    try:
+        payload = json.loads(artifact_path.read_text(encoding="utf-8-sig"))
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=500, detail="Invalid Langfuse audit JSON") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=500, detail="Invalid Langfuse audit payload")
+    if normalized_format == "snapshot":
+        markdown_path = _langfuse_audit_artifact_path(Path(ws_dir), review_id, ".md")
+        return build_langfuse_run_audit_snapshot(
+            payload,
+            json_path=_relative_workspace_path(artifact_path, Path(ws_dir)),
+            markdown_path=_relative_workspace_path(markdown_path, Path(ws_dir)),
+        )
+    return payload
 
 
 @router.get("/review/jobs/{job_id}")

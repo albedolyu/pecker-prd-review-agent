@@ -24,6 +24,7 @@ from review.dimensions import (
     get_review_dimensions,
     get_wiki_keywords,
 )
+from review.langfuse_prompt_provider import resolve_text_prompt, worker_prompt_name
 
 log = get_logger("parallel")
 
@@ -453,6 +454,15 @@ def _build_examples_block(workspace, dim_key, base_token_estimate: int = 0):
 
 
 def _build_worker_system(dim_key, rule_perf_history=None, dimensions=None, workspace=None):
+    return _build_worker_system_with_metadata(
+        dim_key,
+        rule_perf_history=rule_perf_history,
+        dimensions=dimensions,
+        workspace=workspace,
+    )["text"]
+
+
+def _build_worker_system_with_metadata(dim_key, rule_perf_history=None, dimensions=None, workspace=None):
     """为某个评审维度构建 system prompt，并动态注入：
     1. 信鸽反馈的高发问题规则（rule_perf_history）
     2. workspace 中的真实 rule_id / wiki 页面清单（防止 evidence 造假，借鉴百灵 load_real_imports）
@@ -467,14 +477,29 @@ def _build_worker_system(dim_key, rule_perf_history=None, dimensions=None, works
         checklist_lines.append(f"- {rule['rule_id']}（{rule['name']}）")
     checklist_text = "\n".join(checklist_lines)
 
-    base_prompt = _WORKER_SYSTEM_TEMPLATE.format(
-        codename=dim["codename"],
-        dimension_name=dim["name"],
-        dimension_rules=dim["rules"],
-        checklist_list=checklist_text,
-        shared_rules=_WORKER_SHARED_RULES,
-        tone_instructions_block=_build_tone_instructions_block(),
+    prompt_variables = {
+        "codename": dim["codename"],
+        "dimension_name": dim["name"],
+        "dimension_rules": dim["rules"],
+        "checklist_list": checklist_text,
+        "shared_rules": _WORKER_SHARED_RULES,
+        "tone_instructions_block": _build_tone_instructions_block(),
+    }
+    local_base_prompt = _WORKER_SYSTEM_TEMPLATE.format(
+        codename=prompt_variables["codename"],
+        dimension_name=prompt_variables["dimension_name"],
+        dimension_rules=prompt_variables["dimension_rules"],
+        checklist_list=prompt_variables["checklist_list"],
+        shared_rules=prompt_variables["shared_rules"],
+        tone_instructions_block=prompt_variables["tone_instructions_block"],
     )
+    resolved_prompt = resolve_text_prompt(
+        worker_prompt_name(dim_key),
+        fallback_text=local_base_prompt,
+        variables=prompt_variables,
+    )
+    base_prompt = resolved_prompt.text
+    prompt_metadata = dict(resolved_prompt.metadata)
 
     # --- L3 升级: 注入 examples block (workspace 有 review-checklist.yaml 新 schema 时生效) ---
     # 估算 base_prompt 已用 token, 传给 _build_examples_block 做预算保护
@@ -508,7 +533,10 @@ def _build_worker_system(dim_key, rule_perf_history=None, dimensions=None, works
     if feedback_section:
         base_prompt += "\n" + feedback_section
 
-    return base_prompt
+    return {
+        "text": base_prompt,
+        "metadata": prompt_metadata,
+    }
 
 
 def _build_learnings_section(workspace, dim_key, prd_content=None, max_count=5):

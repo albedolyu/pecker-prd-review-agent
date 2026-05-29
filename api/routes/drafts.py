@@ -9,6 +9,7 @@ import json
 import os
 import re
 import tempfile
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -95,7 +96,7 @@ def write_draft_file(
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(draft, f, ensure_ascii=False, indent=2)
-        os.replace(tmp, path)
+        _replace_draft_file(tmp, path)
     except Exception:
         if os.path.exists(tmp):
             try:
@@ -105,6 +106,17 @@ def write_draft_file(
         raise
 
     return {"status": "ok", "path": str(path.name), "ts": draft["ts"]}
+
+
+def _replace_draft_file(tmp: str, path: Path) -> None:
+    for attempt in range(5):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if attempt >= 4:
+                raise
+            time.sleep(0.02 * (attempt + 1))
 
 
 def read_draft_file(project_root: Path, reviewer: str) -> Optional[Dict[str, Any]]:

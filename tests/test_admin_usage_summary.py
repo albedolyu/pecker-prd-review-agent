@@ -439,3 +439,189 @@ def test_admin_usage_active_drafts_redacts_orchestrator(tmp_path):
 
     assert fake_key not in rows[0]["orchestrator"]
     assert "Bearer [REDACTED_SECRET]" in rows[0]["orchestrator"]
+
+
+def test_admin_usage_loads_recent_langfuse_run_audits(tmp_path):
+    from api.routes.admin_usage import _load_recent_langfuse_run_audits
+
+    fake_key = "sk-01234567890abcdefABCDEFghij"
+    ok_dir = tmp_path / "workspace-alpha" / "output" / "langfuse_audits"
+    missing_dir = tmp_path / "workspace-beta" / "output" / "langfuse_audits"
+    ok_dir.mkdir(parents=True)
+    missing_dir.mkdir(parents=True)
+    ok_path = ok_dir / "rev_ok.json"
+    missing_path = missing_dir / "rev_missing.json"
+    ok_path.write_text(
+        json.dumps(
+            {
+                "ok": True,
+                "status": "refreshed",
+                "missing_count": 0,
+                "review_id": "rev_ok",
+                "langfuse": {
+                    "session_id": "review-run:rev_ok",
+                    "trace_link_ready": True,
+                    "evidence_scores": {
+                        "status": "recorded",
+                        "scored_items": 2,
+                        "scores_sent": 3,
+                        "trace_linked": True,
+                    },
+                    "pm_feedback_scores": {
+                        "status": "recorded",
+                        "scored_items": 2,
+                        "scores_sent": 3,
+                        "trace_linked": True,
+                    },
+                    "prompt_versions": [{"name": "pecker.worker.structure.system"}],
+                },
+                "langgraph": {
+                    "graph_trace_ready": True,
+                    "worker_nodes_ready": True,
+                    "recovered_workers": 1,
+                },
+                "langgraph_checkpoint": {
+                    "thread_id": "review-run:rev_ok",
+                    "status": "ready",
+                    "checkpoint_exists": True,
+                    "thread_found": True,
+                    "checkpoint_count": 4,
+                },
+                "missing": [],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (ok_dir / "rev_ok.md").write_text("# audit\n", encoding="utf-8")
+    missing_path.write_text(
+        json.dumps(
+            {
+                "ok": False,
+                "status": "missing",
+                "missing_count": 5,
+                "review_id": f"rev_missing_{fake_key}",
+                "langfuse": {
+                    "session_id": "review-run:rev_missing",
+                    "trace_link_ready": True,
+                    "evidence_scores": {
+                        "status": "recorded",
+                        "scored_items": 2,
+                        "scores_sent": 0,
+                        "trace_linked": True,
+                    },
+                    "pm_feedback_scores": {
+                        "status": "recorded",
+                        "scored_items": 1,
+                        "scores_sent": 0,
+                        "trace_linked": True,
+                    },
+                    "prompt_versions": [],
+                },
+                "langgraph": {
+                    "graph_trace_ready": False,
+                    "graph_trace_order_ready": False,
+                    "worker_nodes_ready": False,
+                    "failed_workers": 1,
+                    "recovered_workers": 0,
+                },
+                "langgraph_checkpoint": {
+                    "thread_id": "review-run:other",
+                    "status": "missing",
+                    "checkpoint_exists": False,
+                    "thread_found": False,
+                    "checkpoint_count": 0,
+                },
+                "missing": [
+                    f"langgraph.graph_trace api_key={fake_key}",
+                    "langfuse.session_checkpoint_thread",
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    summary = _load_recent_langfuse_run_audits(tmp_path, limit=5)
+
+    assert summary["total"] == 2
+    assert summary["ready"] == 1
+    assert summary["missing"] == 1
+    assert summary["trace_ready"] == 2
+    assert summary["graph_ready"] == 1
+    assert summary["checkpoint_ready"] == 1
+    assert summary["graph_order_failures"] == 1
+    assert summary["checkpoint_failures"] == 1
+    assert summary["worker_failures"] == 1
+    assert summary["evidence_score_failures"] == 1
+    assert summary["feedback_score_failures"] == 1
+    assert summary["session_checkpoint_mismatches"] == 1
+    assert summary["audits"][0]["workspace"] in {"workspace-alpha", "workspace-beta"}
+    ok_row = next(row for row in summary["audits"] if row["review_id"] == "rev_ok")
+    assert ok_row["status"] == "refreshed"
+    assert ok_row["missing_count"] == 0
+    assert ok_row["session_checkpoint_linked"] is True
+    assert ok_row["session_checkpoint_mismatch"] is False
+    assert ok_row["json_url"] == "/api/review/langfuse-audits/workspace-alpha/rev_ok?format=json"
+    assert (
+        ok_row["markdown_url"]
+        == "/api/review/langfuse-audits/workspace-alpha/rev_ok?format=markdown"
+    )
+    missing_row = next(row for row in summary["audits"] if row["workspace"] == "workspace-beta")
+    assert (
+        missing_row["json_url"]
+        == "/api/review/langfuse-audits/workspace-beta/rev_missing?format=json"
+    )
+    assert missing_row["checkpoint_failure"] is True
+    assert missing_row["worker_failure"] is True
+    assert missing_row["evidence_score_failure"] is True
+    assert missing_row["feedback_score_failure"] is True
+    assert missing_row["session_checkpoint_linked"] is False
+    assert missing_row["session_checkpoint_mismatch"] is True
+    assert missing_row["status"] == "missing"
+    assert missing_row["missing_count"] == 5
+    assert missing_row["missing_summary"] == (
+        "langgraph.graph_trace api_key=[REDACTED_SECRET], "
+        "langfuse.session_checkpoint_thread"
+    )
+    assert "missing_summary" not in ok_row
+    serialized = json.dumps(summary, ensure_ascii=False)
+    assert fake_key not in serialized
+    assert "[REDACTED_SECRET]" in serialized
+
+
+@pytest.mark.asyncio
+async def test_admin_langfuse_run_audits_endpoint_redacts(monkeypatch, tmp_path):
+    from api.routes import admin_usage
+
+    def fake_load_recent(project_root, *, limit=12):
+        return {
+            "total": 1,
+            "ready": 0,
+            "missing": 1,
+            "trace_ready": 0,
+            "graph_ready": 0,
+            "checkpoint_ready": 0,
+            "audits": [
+                {
+                    "review_id": "rev_1",
+                    "workspace": "workspace-alpha",
+                    "missing": ["langfuse.trace_url sk-01234567890abcdefABCDEFghij"],
+                }
+            ],
+        }
+
+    monkeypatch.setattr(
+        admin_usage,
+        "_load_recent_langfuse_run_audits",
+        fake_load_recent,
+        raising=False,
+    )
+
+    payload = await admin_usage.get_admin_langfuse_run_audits(
+        _user={"reviewer": "admin"},
+        project_root=tmp_path,
+    )
+
+    assert payload["total"] == 1
+    assert "sk-01234567890abcdefABCDEFghij" not in json.dumps(payload, ensure_ascii=False)

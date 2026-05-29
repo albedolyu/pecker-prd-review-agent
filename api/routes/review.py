@@ -30,6 +30,10 @@ from api.models import ConfirmRequest, ReviewResult, verify_review_result
 from api.sanitize import redact_text
 from api.stream import ReviewProgressEmitter, emit_and_log, sse_review_pipeline
 from api.workspace_acl import is_admin, require_workspace_access
+from review.langfuse_observability import (
+    record_evidence_verification_scores,
+    record_review_confirmation_scores,
+)
 
 # 预检 wiki scan 缓存(同一 workspace 10 分钟内复用)
 _wiki_scan_cache: Dict[str, Any] = {}
@@ -47,6 +51,239 @@ def _truthy_env(name: str, default: str = "0") -> bool:
 
 def _async_goshawk_patches_enabled() -> bool:
     return _truthy_env("PECKER_ENABLE_ASYNC_GOSHAWK_PATCHES", "1")
+
+
+def _langfuse_feedback_timeout_seconds() -> float:
+    raw = os.environ.get("PECKER_LANGFUSE_FEEDBACK_TIMEOUT_MS", "1200")
+    try:
+        timeout_ms = max(1, int(raw))
+    except (TypeError, ValueError):
+        timeout_ms = 1200
+    return timeout_ms / 1000
+
+
+async def _record_langfuse_feedback_snapshot(
+    review_result: Dict[str, Any],
+    decisions: Dict[str, Dict[str, Any]],
+) -> Dict[str, Any]:
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(
+                record_review_confirmation_scores,
+                review_result=review_result,
+                decisions=decisions,
+            ),
+            timeout=_langfuse_feedback_timeout_seconds(),
+        )
+    except asyncio.TimeoutError:
+        return {
+            "enabled": _truthy_env("PECKER_LANGFUSE_ENABLED", "0"),
+            "configured": bool(
+                os.environ.get("LANGFUSE_PUBLIC_KEY")
+                and os.environ.get("LANGFUSE_SECRET_KEY")
+            ),
+            "status": "timeout",
+            "scored_items": 0,
+            "scores_sent": 0,
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "enabled": False,
+            "configured": bool(
+                os.environ.get("LANGFUSE_PUBLIC_KEY")
+                and os.environ.get("LANGFUSE_SECRET_KEY")
+            ),
+            "status": "error",
+            "scored_items": 0,
+            "scores_sent": 0,
+            "error": redact_text(str(exc))[:500],
+        }
+
+
+async def _record_langfuse_evidence_snapshot(
+    review_result: Dict[str, Any],
+    verified_items: List[Dict[str, Any]],
+    summary: Dict[str, Any],
+) -> Dict[str, Any]:
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(
+                record_evidence_verification_scores,
+                review_result=review_result,
+                verified_items=verified_items,
+                summary=summary,
+            ),
+            timeout=_langfuse_feedback_timeout_seconds(),
+        )
+    except asyncio.TimeoutError:
+        return {
+            "enabled": _truthy_env("PECKER_LANGFUSE_ENABLED", "0"),
+            "configured": bool(
+                os.environ.get("LANGFUSE_PUBLIC_KEY")
+                and os.environ.get("LANGFUSE_SECRET_KEY")
+            ),
+            "status": "timeout",
+            "scored_items": 0,
+            "scores_sent": 0,
+            "reliability": float(summary.get("reliability", 0.0) or 0.0),
+            "caveat": int(summary.get("caveat", 0) or 0),
+            "retracted": int(summary.get("retracted", 0) or 0),
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "enabled": False,
+            "configured": bool(
+                os.environ.get("LANGFUSE_PUBLIC_KEY")
+                and os.environ.get("LANGFUSE_SECRET_KEY")
+            ),
+            "status": "error",
+            "scored_items": 0,
+            "scores_sent": 0,
+            "error": redact_text(str(exc))[:500],
+        }
+
+
+async def _refresh_langfuse_audit_after_confirm(
+    review_result: Dict[str, Any],
+    langfuse_feedback: Dict[str, Any],
+) -> Dict[str, Any]:
+    try:
+        return await asyncio.to_thread(
+            _refresh_langfuse_audit_after_confirm_sync,
+            review_result,
+            langfuse_feedback,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "ok": False,
+            "status": "error",
+            "error": redact_text(str(exc))[:500],
+        }
+
+
+def _persist_langfuse_run_audit_for_review_result(
+    review_result: Dict[str, Any],
+) -> Dict[str, Any]:
+    return _write_langfuse_run_audit_sync(
+        review_result,
+        confirmation_result=None,
+        snapshot_status="persisted",
+        require_existing_trace=True,
+    )
+
+
+def _refresh_langfuse_audit_after_confirm_sync(
+    review_result: Dict[str, Any],
+    langfuse_feedback: Dict[str, Any],
+) -> Dict[str, Any]:
+    return _write_langfuse_run_audit_sync(
+        review_result,
+        confirmation_result={"langfuse_feedback": langfuse_feedback},
+        snapshot_status="refreshed",
+        require_existing_trace=True,
+    )
+
+
+def _write_langfuse_run_audit_sync(
+    review_result: Dict[str, Any],
+    *,
+    confirmation_result: Optional[Dict[str, Any]],
+    snapshot_status: str,
+    require_existing_trace: bool,
+) -> Dict[str, Any]:
+    from scripts.langfuse_run_audit import (
+        build_langfuse_run_audit_snapshot,
+        build_langfuse_run_audit,
+        render_langfuse_run_audit_markdown,
+    )
+
+    workspace = str(review_result.get("workspace") or "").strip()
+    if not workspace:
+        return {"ok": False, "status": "skipped", "reason": "missing_workspace"}
+    workspace_dir = _resolve_review_workspace_dir(workspace)
+    telemetry = review_result.get("telemetry")
+    if not isinstance(telemetry, dict):
+        telemetry = {}
+        review_result["telemetry"] = telemetry
+    observability = telemetry.get("observability")
+    if not isinstance(observability, dict):
+        observability = {}
+        telemetry["observability"] = observability
+    previous_audit = observability.get("langfuse_audit")
+    previous_audit = previous_audit if isinstance(previous_audit, dict) else {}
+    langfuse_observability = observability.get("langfuse")
+    if require_existing_trace and not previous_audit and not isinstance(langfuse_observability, dict):
+        return {"ok": False, "status": "skipped", "reason": "missing_langfuse_trace"}
+
+    audit = build_langfuse_run_audit(
+        review_result,
+        confirmation_result=confirmation_result,
+    )
+    review_id = _safe_langfuse_audit_file_stem(
+        audit.get("review_id") or review_result.get("review_id")
+    )
+    default_json = f"output/langfuse_audits/{review_id}.json"
+    default_md = f"output/langfuse_audits/{review_id}.md"
+    json_path = _resolve_workspace_output_path(
+        workspace_dir,
+        str(previous_audit.get("json_path") or default_json),
+    )
+    markdown_path = _resolve_workspace_output_path(
+        workspace_dir,
+        str(previous_audit.get("markdown_path") or default_md),
+    )
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    json_path.write_text(
+        json.dumps(audit, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    markdown_path.parent.mkdir(parents=True, exist_ok=True)
+    markdown_path.write_text(
+        render_langfuse_run_audit_markdown(audit) + "\n",
+        encoding="utf-8",
+    )
+    snapshot = build_langfuse_run_audit_snapshot(
+        audit,
+        status=snapshot_status,
+        json_path=_workspace_relative_path(json_path, workspace_dir),
+        markdown_path=_workspace_relative_path(markdown_path, workspace_dir),
+    )
+    observability["langfuse_audit"] = snapshot
+    return snapshot
+
+
+def _resolve_review_workspace_dir(workspace: str) -> Path:
+    try:
+        workspace_dir = Path(get_workspace_dir(workspace))
+    except HTTPException:
+        return Path(get_project_root()) / workspace
+    if not workspace_dir.is_absolute():
+        return Path(get_project_root()) / workspace_dir
+    return workspace_dir
+
+
+def _resolve_workspace_output_path(workspace_dir: Path, relative_path: str) -> Path:
+    safe_relative = (relative_path or "").replace("\\", "/").lstrip("/")
+    if not safe_relative or ":" in safe_relative:
+        safe_relative = "output/langfuse_audits/review.json"
+    root = workspace_dir.resolve(strict=False)
+    candidate = (root / safe_relative).resolve(strict=False)
+    if candidate != root and root not in candidate.parents:
+        candidate = root / "output" / "langfuse_audits" / "review.json"
+    return candidate
+
+
+def _workspace_relative_path(path: Path, workspace_dir: Path) -> str:
+    try:
+        return str(path.relative_to(workspace_dir.resolve(strict=False))).replace("\\", "/")
+    except ValueError:
+        return str(path).replace("\\", "/")
+
+
+def _safe_langfuse_audit_file_stem(value: Any) -> str:
+    raw = redact_text(str(value or "review")).strip()
+    safe = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in raw)
+    return (safe[:120].strip("_") or "review")
 
 
 def _worker_only_cost_breakdown(result: Dict[str, Any]) -> Dict[str, float]:
@@ -72,11 +309,20 @@ def _worker_telemetry_snapshot(
         dim = worker.get("dimension", "unknown")
         if worker.get("telemetry"):
             worker_telemetry[dim] = worker["telemetry"]
-    return {
+    payload = {
         "total_duration_ms": total_duration_ms,
         "workers": worker_telemetry,
         "total_cost_usd": cost_breakdown.get("total", 0),
+        "orchestrator": result.get("orchestrator"),
+        "resilience": result.get("resilience", {}),
     }
+    if isinstance(result.get("graph_trace"), list):
+        payload["graph_trace"] = result["graph_trace"]
+    if isinstance(result.get("worker_node_statuses"), list):
+        payload["worker_node_statuses"] = result["worker_node_statuses"]
+    if isinstance(result.get("observability"), dict):
+        payload["observability"] = result["observability"]
+    return payload
 
 
 def _create_review_result_payload(
@@ -536,7 +782,7 @@ async def run_review(
     # 绝对路径作为 workspace 显式参数下传给 parallel_review, 不再写 os.environ.
     # 历史上用 env var 传递会让 2 个并发 review 互污染 rule_perf_history 查询
     # (dimensions._get_rule_perf_history_path 已改为优先读参数,env 作 CLI 回退).
-    ws_abs_path = str(get_project_root() / req.workspace)
+    ws_abs_path = str(ws_dir)
 
     emitter = ReviewProgressEmitter()
     # None is intentional: worker / NLI / goshawk use model_router.route_call.
@@ -554,12 +800,19 @@ async def run_review(
         # PM 可 PECKER_GOSHAWK_RESAMPLE=1 紧急回退老单次行为.
         from goshawk_advisor import advisor_review_default_async
         from agent_config import MODEL_TIERS
+        from review.orchestration import _get_review_orchestrator_mode
 
         # Pattern 21: Session Event Sourcing — JSONL 追加写入事件溯源
         from event_store import EventStore
         import uuid
         review_id = f"rev_{int(_pipeline_start)}_{uuid.uuid4().hex[:6]}"
         evt = EventStore(workspace=ws_abs_path, review_id=review_id)
+        langgraph_thread_id = f"review-run:{review_id}"
+        langgraph_checkpointer = None
+        if _get_review_orchestrator_mode() == "langgraph":
+            from review.langgraph_checkpoint import build_review_job_checkpointer
+
+            langgraph_checkpointer = build_review_job_checkpointer(get_project_root())
         # 2026-04-23 C: injection scan 写到 review_started event 做事后审计
         from prompt_injection_scanner import scan_inputs
         _inj = scan_inputs(req.prd_content, req.raw_materials, req.user_notes)
@@ -604,6 +857,9 @@ async def run_review(
         async with review_semaphore:
             emitter.emit("workers_started", data={"mode": req.mode})
             evt.append("workers_started", {"mode": req.mode})
+            if langgraph_checkpointer is not None:
+                checkpoint_payload = {"thread_id": langgraph_thread_id}
+                emit_and_log(emitter, evt, "langgraph_checkpoint_ready", checkpoint_payload)
             # Per-tool-call trace callback (2026-04-23 B 优化):
             # 每次 worker / goshawk 里的 client.create 返回后会调用, trace 写
             # EventStore 的 tool_call_done 事件, 给 stability_metrics 聚合用.
@@ -625,6 +881,8 @@ async def run_review(
                     client, enhanced_prd, req.wiki_pages, quick_tiers,
                     on_worker_done=_on_worker_done, workspace=ws_abs_path,
                     on_tool_call=_on_tool_call,
+                    checkpointer=langgraph_checkpointer,
+                    thread_id=langgraph_thread_id if langgraph_checkpointer is not None else None,
                 )
             else:
                 def _on_worker_done(dim, r):
@@ -636,6 +894,8 @@ async def run_review(
                     client, enhanced_prd, req.wiki_pages, MODEL_TIERS,
                     on_worker_done=_on_worker_done, workspace=ws_abs_path,
                     on_tool_call=_on_tool_call,
+                    checkpointer=langgraph_checkpointer,
+                    thread_id=langgraph_thread_id if langgraph_checkpointer is not None else None,
                 )
 
             items = result.get("merged_items", [])
@@ -699,6 +959,21 @@ async def run_review(
                     _ev_done_payload["wiki_mode"] = _after_ev.get("wiki_mode", "unknown")
                     _ev_done_payload["authority_distribution"] = _after_ev.get("authority_distribution", {})
                 emit_and_log(emitter, evt, "evidence_verify_done", _ev_done_payload)
+                langfuse_evidence = await _record_langfuse_evidence_snapshot(
+                    {
+                        "review_id": review_id,
+                        "reviewer": user.get("reviewer"),
+                        "workspace": req.workspace,
+                        "prd_name": req.prd_name,
+                        "mode": req.mode,
+                        "telemetry": {
+                            "observability": result.get("observability", {}),
+                        },
+                    },
+                    verified,
+                    v_sum,
+                )
+                result.setdefault("observability", {})["langfuse_evidence"] = langfuse_evidence
             except Exception as _ev_err:
                 # 失败不阻塞: items 不变, 行为等同本次修复前 (goshawk 侧查兜底)
                 log.warning(f"[evidence_verify] API flow 失败回退到跳过模式: {_ev_err}")
@@ -846,7 +1121,24 @@ async def run_review(
             "total_duration_ms": int((_time.time() - _pipeline_start) * 1000),
             "workers": worker_telemetry,
             "total_cost_usd": cost_breakdown.get("total", 0),
+            "orchestrator": result.get("orchestrator"),
+            "resilience": result.get("resilience", {}),
         }
+        if isinstance(result.get("graph_trace"), list):
+            result["telemetry"]["graph_trace"] = result["graph_trace"]
+        if isinstance(result.get("worker_node_statuses"), list):
+            result["telemetry"]["worker_node_statuses"] = result["worker_node_statuses"]
+        if isinstance(result.get("observability"), dict):
+            result["telemetry"]["observability"] = result["observability"]
+        if langgraph_checkpointer is not None:
+            from review.langgraph_checkpoint import build_langgraph_checkpoint_observability
+
+            result["telemetry"].setdefault("observability", {})["langgraph_checkpoint"] = (
+                build_langgraph_checkpoint_observability(
+                    get_project_root(),
+                    thread_id=langgraph_thread_id,
+                )
+            )
 
         # 包装成 Opaque Handle (A14)
         # 2026-04-24 P1: reviewer 来自 JWT 认证, 不是 body. 绑入 HMAC v2 签名里,
@@ -864,6 +1156,7 @@ async def run_review(
             telemetry=result.get("telemetry"),
         )
         review_result_payload = review_result_handle.model_dump()
+        _persist_langfuse_run_audit_for_review_result(review_result_payload)
 
         if preliminary_review_id:
             goshawk_status = "completed" if result.get("goshawk") else "failed"
@@ -1149,6 +1442,10 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
         if recovered_result is None:
             raise
         review_result = recovered_result
+    else:
+        recovered_result = _recover_review_result_from_job_store(review_result, user=user)
+        if recovered_result is not None:
+            review_result = recovered_result
 
     # ACL: workspace/reviewer 已绑入 signature v2 (2026-04-24 收紧), 这里用于 ACL 二道防线 —
     # signature 挡前端篡改, ACL 挡"合法用户误写他人 workspace"(如 admin 共享 cookie 场景)
@@ -1208,6 +1505,13 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
         except Exception as e:
             log.warning(f"[funnel] N4 emit 失败不阻塞: {e}")
 
+    # Step 6: Langfuse score 写回。它是控制面反馈信号,不能拖慢或阻断 PM 确认。
+    langfuse_feedback = await _record_langfuse_feedback_snapshot(review_result, decisions)
+    langfuse_audit = await _refresh_langfuse_audit_after_confirm(
+        review_result,
+        langfuse_feedback,
+    )
+
     return {
         "status": "confirmed",
         "review_id": review_result.get("review_id"),
@@ -1217,4 +1521,6 @@ async def confirm_review(req: ConfirmRequest, user: dict = Depends(get_current_u
         "pending": decision_stats["pending"],
         "total": decision_stats["total"],
         "report_markdown": report_markdown,
+        "langfuse_feedback": langfuse_feedback,
+        "langfuse_audit": langfuse_audit,
     }

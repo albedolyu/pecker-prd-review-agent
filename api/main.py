@@ -30,6 +30,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from api.control_plane_health import build_control_plane_health
 
 # 在 import 任何啄木鸟业务模块前先加载 .env。
 # 已由 systemd / CI / pytest 显式设置的环境变量优先,避免 .env 覆盖运行时注入的 secret。
@@ -189,6 +190,7 @@ async def health(request: Request):
         "version": "2.0.0",
         "llm_auth": getattr(request.app.state, "llm_auth", {"status": "unknown"}),
         "claude_auth": getattr(request.app.state, "claude_auth", "unknown"),
+        "control_plane": build_control_plane_health(),
     }
 
 

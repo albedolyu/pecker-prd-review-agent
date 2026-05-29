@@ -517,3 +517,441 @@ async def test_confirm_review_recovers_authoritative_result_from_job_store(tmp_w
     assert "服务端 job 里的权威问题描述" in resp["report_markdown"]
     assert "缺少空态处理" not in resp["report_markdown"]
     assert "browser-side stale copy" not in resp["report_markdown"]
+
+
+@pytest.mark.asyncio
+async def test_confirm_review_recovers_langfuse_audit_from_valid_stale_handle(tmp_workspace, monkeypatch):
+    """A signed but stale browser handle should still use the completed job audit chain."""
+    import os as _os
+    from api.models import ConfirmRequest, ReviewResult, compute_signature
+    from api.routes.review import confirm_review
+
+    _os.environ["PECKER_SIGNATURE_SECRET"] = "unit-test-signature-secret-32-chars"
+    ws, ws_dir = tmp_workspace
+    audit_dir = ws_dir / "output" / "langfuse_audits"
+    audit_dir.mkdir(parents=True, exist_ok=True)
+    audit_path = audit_dir / "rev_valid_stale_langfuse.json"
+    audit_path.write_text(
+        json.dumps(
+            {
+                "ok": False,
+                "review_id": "rev_valid_stale_langfuse",
+                "missing": ["langfuse_feedback.status"],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    stale = ReviewResult.create(
+        reviewer="alice",
+        workspace=ws,
+        prd_name="demo",
+        mode="standard",
+        merged_items=[{
+            "id": "R-001",
+            "rule_id": "V-06",
+            "dimension": "structure",
+            "issue": "signed stale handle without audit",
+            "suggestion": "keep server-side audit chain",
+            "severity": "must",
+        }],
+        workers=[],
+        usage={},
+    ).model_dump()
+    stale["review_id"] = "rev_valid_stale_langfuse"
+    stale["signature"] = compute_signature(
+        stale["review_id"],
+        stale["workspace"],
+        stale["reviewer"],
+        stale["items"],
+    )
+    trusted_result = json.loads(json.dumps(stale, ensure_ascii=False))
+    trusted_result["telemetry"] = {
+        "orchestrator": "langgraph",
+        "graph_trace": [
+            "prepare_round",
+            "worker.structure",
+            "finalize_round",
+            "finalize_review",
+        ],
+        "worker_node_statuses": [
+            {"dimension": "structure", "status": "success", "error_type": ""},
+        ],
+        "resilience": {"failed_workers": 0, "recovered_workers": 0},
+        "workers": {
+            "structure": {
+                "prompt": {
+                    "name": "pecker.worker.structure.system",
+                    "source": "langfuse",
+                    "status": "ready",
+                    "label": "production",
+                    "version": 8,
+                    "hash": "hash-structure",
+                }
+            }
+        },
+        "observability": {
+            "langfuse": {
+                "enabled": True,
+                "configured": True,
+                "status": "done",
+                "backend": "langfuse",
+                "session_id": "review-run:rev_valid_stale_langfuse",
+                "trace_id": "abc123abc123abc123abc123abc123ab",
+                "trace_url": "https://langfuse.example/project/proj/traces/abc123abc123abc123abc123abc123ab",
+            },
+            "langfuse_evidence": {
+                "status": "recorded",
+                "scored_items": 1,
+                "scores_sent": 2,
+                "trace_id": "abc123abc123abc123abc123abc123ab",
+                "trace_linked": True,
+                "reliability": 1.0,
+            },
+            "langgraph_checkpoint": {
+                "enabled": True,
+                "thread_id": "review-run:rev_valid_stale_langfuse",
+                "status": "ready",
+                "checkpoint_path": ".pecker_checkpoints/langgraph.pkl",
+                "checkpoint_exists": True,
+                "thread_found": True,
+                "checkpoint_count": 4,
+            },
+            "langfuse_audit": {
+                "ok": False,
+                "json_path": "output/langfuse_audits/rev_valid_stale_langfuse.json",
+                "markdown_path": "output/langfuse_audits/rev_valid_stale_langfuse.md",
+                "missing": ["langfuse_feedback.status"],
+            },
+        },
+    }
+
+    class FakeJobStore:
+        def list_jobs(self, *, owner: str = "", admin: bool = False, limit: int = 50):
+            return [{
+                "job_id": "rjob_valid_stale_langfuse",
+                "owner": "alice",
+                "status": "done",
+                "result": trusted_result,
+            }]
+
+    def fake_record_review_confirmation_scores(**_kwargs):
+        return {
+            "enabled": True,
+            "configured": True,
+            "status": "recorded",
+            "scored_items": 1,
+            "scores_sent": 2,
+            "trace_id": "abc123abc123abc123abc123abc123ab",
+            "trace_linked": True,
+            "aggregate_acceptance_rate": 1.0,
+        }
+
+    monkeypatch.setattr("api.review_jobs.review_job_store", FakeJobStore(), raising=False)
+    monkeypatch.setattr("api.routes.review.is_admin", lambda user: False, raising=False)
+    monkeypatch.setattr(
+        "api.routes.review.require_workspace_access", lambda *args, **kwargs: None,
+        raising=True,
+    )
+    monkeypatch.setattr(
+        "api.routes.review.get_workspace_dir", lambda name: name,
+        raising=True,
+    )
+    monkeypatch.setattr(
+        "api.routes.review.record_review_confirmation_scores",
+        fake_record_review_confirmation_scores,
+        raising=False,
+    )
+
+    resp = await confirm_review(
+        ConfirmRequest(
+            review_result=stale,
+            decisions={"R-001": {"action": "accept"}},
+        ),
+        user={"reviewer": "alice"},
+    )
+
+    refreshed = json.loads(audit_path.read_text(encoding="utf-8"))
+    assert resp["langfuse_audit"]["status"] == "refreshed"
+    assert resp["langfuse_audit"]["ok"] is True
+    assert resp["langfuse_audit"]["session_checkpoint_linked"] is True
+    assert resp["langfuse_audit"]["session_checkpoint_mismatch"] is False
+    assert refreshed["review_id"] == "rev_valid_stale_langfuse"
+    assert refreshed["session_checkpoint_linked"] is True
+    assert refreshed["langfuse"]["evidence_scores"]["status"] == "recorded"
+    assert refreshed["langfuse"]["pm_feedback_scores"]["scores_sent"] == 2
+    assert refreshed["missing"] == []
+
+
+@pytest.mark.asyncio
+async def test_confirm_review_returns_langfuse_feedback_snapshot(tmp_workspace, monkeypatch):
+    """PM confirm should write a bounded Langfuse feedback snapshot without changing counts."""
+    import os as _os
+    from api.models import ConfirmRequest, ReviewResult
+    from api.routes.review import confirm_review
+
+    _os.environ["PECKER_SIGNATURE_SECRET"] = "unit-test-signature-secret-32-chars"
+    ws, _ = tmp_workspace
+    rr = ReviewResult.create(
+        reviewer="alice",
+        workspace=ws,
+        prd_name="demo",
+        mode="standard",
+        merged_items=[{
+            "id": "R-001",
+            "rule_id": "V-05",
+            "dimension": "structure",
+            "issue": "缺少验收标准",
+            "suggestion": "补充可执行验收标准",
+            "severity": "must",
+        }],
+        workers=[],
+        usage={},
+    )
+    req = ConfirmRequest(
+        review_result=rr.model_dump(),
+        decisions={"R-001": {"action": "accept"}},
+    )
+    captured: dict = {}
+    calls = 0
+
+    def fake_record_review_confirmation_scores(**kwargs):
+        nonlocal calls
+        calls += 1
+        captured.update(kwargs)
+        return {
+            "enabled": True,
+            "configured": True,
+            "status": "recorded",
+            "scored_items": 1,
+            "scores_sent": 2,
+            "aggregate_acceptance_rate": 1.0,
+        }
+
+    monkeypatch.setattr(
+        "api.routes.review.require_workspace_access", lambda *args, **kwargs: None,
+        raising=True,
+    )
+    monkeypatch.setattr(
+        "api.routes.review.get_workspace_dir", lambda name: name,
+        raising=True,
+    )
+    monkeypatch.setattr(
+        "api.routes.review.record_review_confirmation_scores",
+        fake_record_review_confirmation_scores,
+        raising=False,
+    )
+
+    resp = await confirm_review(req, user={"reviewer": "alice"})
+
+    assert resp["status"] == "confirmed"
+    assert resp["accepted"] == 1
+    assert resp["langfuse_feedback"]["status"] == "recorded"
+    assert resp["langfuse_feedback"]["scores_sent"] == 2
+    assert captured["review_result"]["review_id"] == rr.review_id
+    assert captured["decisions"] == {"R-001": {"action": "accept"}}
+    assert calls == 1
+
+
+@pytest.mark.asyncio
+async def test_confirm_review_refreshes_langfuse_audit_with_pm_feedback(tmp_workspace, monkeypatch):
+    """PM confirm should refresh the local Langfuse audit with feedback scores."""
+    import os as _os
+    from api.models import ConfirmRequest, ReviewResult
+    from api.routes.review import confirm_review
+
+    _os.environ["PECKER_SIGNATURE_SECRET"] = "unit-test-signature-secret-32-chars"
+    ws, ws_dir = tmp_workspace
+    audit_dir = ws_dir / "output" / "langfuse_audits"
+    audit_dir.mkdir(parents=True, exist_ok=True)
+    audit_path = audit_dir / "rev_confirm_audit.json"
+    audit_path.write_text(
+        json.dumps(
+            {
+                "ok": False,
+                "review_id": "rev_confirm_audit",
+                "langfuse": {"pm_feedback_scores": {"status": ""}},
+                "missing": ["langfuse_feedback.status"],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    rr = ReviewResult.create(
+        reviewer="alice",
+        workspace=ws,
+        prd_name="demo",
+        mode="standard",
+        merged_items=[{
+            "id": "R-001",
+            "rule_id": "V-05",
+            "dimension": "structure",
+            "issue": "raw issue must not leak",
+            "suggestion": "raw suggestion must not leak",
+            "severity": "must",
+        }],
+        workers=[],
+        usage={},
+            telemetry={
+                "orchestrator": "langgraph",
+                "graph_trace": [
+                    "prepare_round",
+                    "worker.structure",
+                    "finalize_round",
+                    "finalize_review",
+                ],
+                "worker_node_statuses": [
+                    {"dimension": "structure", "status": "success", "error_type": ""},
+                ],
+                "resilience": {"failed_workers": 0, "recovered_workers": 0},
+                "workers": {
+                    "structure": {
+                        "prompt": {
+                        "name": "pecker.worker.structure.system",
+                        "source": "langfuse",
+                        "status": "ready",
+                        "label": "production",
+                        "version": 8,
+                        "hash": "hash-structure",
+                    }
+                }
+            },
+            "observability": {
+                "langfuse": {
+                    "enabled": True,
+                    "configured": True,
+                    "status": "done",
+                    "backend": "langfuse",
+                    "session_id": "review-run:rev_confirm_audit",
+                    "trace_id": "abc123abc123abc123abc123abc123ab",
+                    "trace_url": "https://langfuse.example/project/proj/traces/abc123abc123abc123abc123abc123ab",
+                },
+                "langfuse_evidence": {
+                    "status": "recorded",
+                    "scored_items": 1,
+                    "scores_sent": 2,
+                    "trace_id": "abc123abc123abc123abc123abc123ab",
+                    "trace_linked": True,
+                    "reliability": 1.0,
+                },
+                "langgraph_checkpoint": {
+                    "enabled": True,
+                    "thread_id": "review-run:rev_confirm_audit",
+                    "status": "ready",
+                    "checkpoint_path": ".pecker_checkpoints/langgraph.pkl",
+                    "checkpoint_exists": True,
+                    "thread_found": True,
+                    "checkpoint_count": 6,
+                },
+                "langfuse_audit": {
+                    "ok": False,
+                    "json_path": "output/langfuse_audits/rev_confirm_audit.json",
+                    "markdown_path": "output/langfuse_audits/rev_confirm_audit.md",
+                    "missing": ["langfuse_feedback.status"],
+                },
+            },
+        },
+    )
+    req = ConfirmRequest(
+        review_result=rr.model_dump(),
+        decisions={"R-001": {"action": "accept"}},
+    )
+
+    def fake_record_review_confirmation_scores(**_kwargs):
+        return {
+            "enabled": True,
+            "configured": True,
+            "status": "recorded",
+            "scored_items": 1,
+            "scores_sent": 2,
+            "trace_id": "abc123abc123abc123abc123abc123ab",
+            "trace_linked": True,
+            "aggregate_acceptance_rate": 1.0,
+        }
+
+    monkeypatch.setattr(
+        "api.routes.review.require_workspace_access", lambda *args, **kwargs: None,
+        raising=True,
+    )
+    monkeypatch.setattr(
+        "api.routes.review.get_workspace_dir", lambda name: name,
+        raising=True,
+    )
+    monkeypatch.setattr(
+        "api.routes.review.record_review_confirmation_scores",
+        fake_record_review_confirmation_scores,
+        raising=False,
+    )
+
+    resp = await confirm_review(req, user={"reviewer": "alice"})
+
+    refreshed = json.loads(audit_path.read_text(encoding="utf-8"))
+    markdown = (audit_dir / "rev_confirm_audit.md").read_text(encoding="utf-8")
+    assert resp["langfuse_audit"]["ok"] is True
+    assert resp["langfuse_audit"]["graph_trace_ready"] is True
+    assert resp["langfuse_audit"]["graph_trace_order_ready"] is True
+    assert resp["langfuse_audit"]["worker_nodes_ready"] is True
+    assert refreshed["ok"] is True
+    assert refreshed["langgraph"]["graph_trace_order_ready"] is True
+    assert refreshed["langfuse"]["pm_feedback_scores"]["status"] == "recorded"
+    assert refreshed["langfuse"]["pm_feedback_scores"]["scores_sent"] == 2
+    assert refreshed["missing"] == []
+    assert "raw issue must not leak" not in json.dumps(refreshed, ensure_ascii=False)
+    assert "raw suggestion must not leak" not in markdown
+
+
+@pytest.mark.asyncio
+async def test_confirm_review_times_out_slow_langfuse_feedback(tmp_workspace, monkeypatch):
+    """Slow Langfuse feedback must not block PM confirmation."""
+    import os as _os
+    import time
+    from api.models import ConfirmRequest, ReviewResult
+    from api.routes.review import confirm_review
+
+    _os.environ["PECKER_SIGNATURE_SECRET"] = "unit-test-signature-secret-32-chars"
+    monkeypatch.setenv("PECKER_LANGFUSE_ENABLED", "1")
+    monkeypatch.setenv("PECKER_LANGFUSE_FEEDBACK_TIMEOUT_MS", "1")
+    ws, _ = tmp_workspace
+    rr = ReviewResult.create(
+        reviewer="alice",
+        workspace=ws,
+        prd_name="demo",
+        mode="standard",
+        merged_items=[{
+            "id": "R-001",
+            "rule_id": "V-05",
+            "dimension": "structure",
+            "issue": "缺少验收标准",
+            "suggestion": "补充可执行验收标准",
+            "severity": "must",
+        }],
+        workers=[],
+        usage={},
+    )
+    req = ConfirmRequest(
+        review_result=rr.model_dump(),
+        decisions={"R-001": {"action": "accept"}},
+    )
+
+    def slow_record_review_confirmation_scores(**_kwargs):
+        time.sleep(0.05)
+        return {"status": "recorded"}
+
+    monkeypatch.setattr(
+        "api.routes.review.require_workspace_access", lambda *args, **kwargs: None,
+        raising=True,
+    )
+    monkeypatch.setattr(
+        "api.routes.review.get_workspace_dir", lambda name: name,
+        raising=True,
+    )
+    monkeypatch.setattr(
+        "api.routes.review.record_review_confirmation_scores",
+        slow_record_review_confirmation_scores,
+        raising=False,
+    )
+
+    resp = await confirm_review(req, user={"reviewer": "alice"})
+
+    assert resp["status"] == "confirmed"
+    assert resp["langfuse_feedback"]["status"] == "timeout"

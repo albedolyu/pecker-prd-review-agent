@@ -6,14 +6,17 @@ import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from api.deps import get_current_user, get_project_root
+from api.deps import get_current_user, get_external_workspace_roots, get_project_root
 from api.feedback_summary import build_feedback_summary
 from api.review_jobs import review_job_store
 from api.sanitize import redact_sensitive, redact_text
 from api.usage_summary import build_usage_summary
+from review.langgraph_checkpoint import summarize_review_job_checkpoints
+from scripts.langfuse_smoke_check import run_langfuse_smoke_check
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -67,6 +70,35 @@ async def get_admin_usage(
     data["active_drafts"] = _load_active_drafts(project_root, limit=30)
     data["rule_impact_reports"] = _load_rule_impact_reports(project_root, limit=4)
     return data
+
+
+@router.get("/langfuse-smoke")
+async def get_admin_langfuse_smoke(
+    _user: dict = Depends(_require_admin),
+) -> Dict[str, Any]:
+    return redact_sensitive(run_langfuse_smoke_check(write_score=False))
+
+
+@router.get("/langgraph-checkpoints")
+async def get_admin_langgraph_checkpoints(
+    _user: dict = Depends(_require_admin),
+    project_root: Path = Depends(get_project_root),
+) -> Dict[str, Any]:
+    return redact_sensitive(summarize_review_job_checkpoints(project_root))
+
+
+@router.get("/langfuse-run-audits")
+async def get_admin_langfuse_run_audits(
+    limit: int = Query(12, ge=1, le=100, description="最近 N 个 Langfuse run audit"),
+    _user: dict = Depends(_require_admin),
+    project_root: Path = Depends(get_project_root),
+) -> Dict[str, Any]:
+    return redact_sensitive(
+        _load_recent_langfuse_run_audits(
+            project_root,
+            limit=max(1, min(_safe_int(limit, 12), 100)),
+        )
+    )
 
 
 def _load_recent_job_events(project_root: Path, *, limit: int = 50) -> List[Dict[str, Any]]:
@@ -127,6 +159,266 @@ def _sanitize_job_event(row: Dict[str, Any]) -> Dict[str, Any]:
         "context_manager_failures",
     }
     return redact_sensitive({key: value for key, value in row.items() if key in allowed})
+
+
+def _load_recent_langfuse_run_audits(project_root: Path, *, limit: int = 12) -> Dict[str, Any]:
+    rows: List[Dict[str, Any]] = []
+    for workspace_dir in _iter_workspace_dirs(project_root):
+        audit_dir = workspace_dir / "output" / "langfuse_audits"
+        if not audit_dir.is_dir():
+            continue
+        try:
+            paths = list(audit_dir.glob("*.json"))
+        except OSError:
+            continue
+        for path in paths:
+            rows.append(_langfuse_audit_row(workspace_dir, path))
+    rows.sort(key=lambda row: float(row.get("mtime") or 0), reverse=True)
+    rows = rows[: max(1, limit)]
+    summary = {
+        "total": len(rows),
+        "ready": sum(1 for row in rows if row.get("ok")),
+        "missing": sum(1 for row in rows if not row.get("ok")),
+        "trace_ready": sum(1 for row in rows if row.get("trace_ready")),
+        "graph_ready": sum(1 for row in rows if row.get("graph_ready")),
+        "checkpoint_ready": sum(1 for row in rows if row.get("checkpoint_ready")),
+        "graph_order_failures": sum(1 for row in rows if row.get("graph_order_failure")),
+        "checkpoint_failures": sum(1 for row in rows if row.get("checkpoint_failure")),
+        "worker_failures": sum(1 for row in rows if row.get("worker_failure")),
+        "session_checkpoint_mismatches": sum(
+            1 for row in rows if row.get("session_checkpoint_mismatch")
+        ),
+        "evidence_score_failures": sum(
+            1 for row in rows if row.get("evidence_score_failure")
+        ),
+        "feedback_score_failures": sum(
+            1 for row in rows if row.get("feedback_score_failure")
+        ),
+        "audits": rows,
+    }
+    return redact_sensitive(summary)
+
+
+def _iter_workspace_dirs(project_root: Path):
+    seen = set()
+    for root in [*get_external_workspace_roots(), project_root]:
+        try:
+            candidates = list(Path(root).glob("workspace-*"))
+        except OSError:
+            continue
+        for path in candidates:
+            try:
+                resolved = path.resolve(strict=False)
+            except OSError:
+                resolved = path
+            if str(resolved) in seen or not path.is_dir():
+                continue
+            seen.add(str(resolved))
+            yield path
+
+
+def _langfuse_audit_row(workspace_dir: Path, path: Path) -> Dict[str, Any]:
+    mtime = 0.0
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        pass
+    json_url = _langfuse_audit_url(workspace_dir.name, path.stem, "json")
+    markdown_path = path.with_suffix(".md")
+    markdown_url = (
+        _langfuse_audit_url(workspace_dir.name, path.stem, "markdown")
+        if markdown_path.is_file()
+        else None
+    )
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        row = {
+            "workspace": redact_text(workspace_dir.name),
+            "review_id": redact_text(path.stem),
+            "ok": False,
+            "status": "invalid_json",
+            "trace_ready": False,
+            "graph_ready": False,
+            "checkpoint_ready": False,
+            "graph_order_failure": False,
+            "checkpoint_failure": False,
+            "worker_failure": False,
+            "session_checkpoint_linked": False,
+            "session_checkpoint_mismatch": False,
+            "evidence_score_failure": False,
+            "feedback_score_failure": False,
+            "missing_count": 1,
+            "missing": ["invalid_json"],
+            "mtime": mtime,
+            "json_path": f"output/langfuse_audits/{path.name}",
+        }
+        if json_url:
+            row["json_url"] = json_url
+        if markdown_url:
+            row["markdown_url"] = markdown_url
+        row["missing_summary"] = "invalid_json"
+        return row
+    if not isinstance(payload, dict):
+        payload = {}
+    langfuse = _dict_value(payload, "langfuse")
+    langgraph = _dict_value(payload, "langgraph")
+    checkpoint = _dict_value(payload, "langgraph_checkpoint")
+    evidence_scores = _dict_value(langfuse, "evidence_scores")
+    feedback_scores = _dict_value(langfuse, "pm_feedback_scores")
+    prompt_versions = langfuse.get("prompt_versions")
+    prompts_count = len(prompt_versions) if isinstance(prompt_versions, list) else 0
+    missing_values = payload.get("missing")
+    missing = [
+        redact_text(str(item))[:200]
+        for item in (missing_values if isinstance(missing_values, list) else [])
+    ][:8]
+    missing_count = (
+        _safe_int(payload.get("missing_count"))
+        if isinstance(payload.get("missing_count"), (int, float, str))
+        else len(missing_values) if isinstance(missing_values, list) else 0
+    )
+    status = redact_text(
+        str(payload.get("status") or ("ready" if payload.get("ok") else "missing"))
+    )
+    trace_ready = bool(langfuse.get("trace_link_ready") or langfuse.get("trace_url"))
+    graph_ready = bool(langgraph.get("graph_trace_ready") and langgraph.get("worker_nodes_ready"))
+    graph_order_failure = langgraph.get("graph_trace_order_ready") is False
+    worker_failure = (
+        langgraph.get("worker_nodes_ready") is False
+        or _safe_int(langgraph.get("failed_workers")) > 0
+    )
+    session_checkpoint_linked, session_checkpoint_mismatch = (
+        _session_checkpoint_link_state(
+            payload,
+            langfuse=langfuse,
+            checkpoint=checkpoint,
+            missing=missing,
+        )
+    )
+    evidence_score_failure = _score_snapshot_failure(
+        evidence_scores,
+        missing=missing,
+        missing_prefix="langfuse_evidence",
+    )
+    feedback_score_failure = _score_snapshot_failure(
+        feedback_scores,
+        missing=missing,
+        missing_prefix="langfuse_feedback",
+    )
+    checkpoint_ready = bool(
+        checkpoint.get("status") == "ready"
+        and checkpoint.get("thread_found")
+        and checkpoint.get("checkpoint_exists", True)
+    )
+    checkpoint_failure = not checkpoint_ready
+    row = {
+        "workspace": redact_text(workspace_dir.name),
+        "review_id": redact_text(str(payload.get("review_id") or path.stem)),
+        "ok": bool(payload.get("ok")),
+        "status": status,
+        "trace_ready": trace_ready,
+        "graph_ready": graph_ready,
+        "graph_order_failure": graph_order_failure,
+        "checkpoint_ready": checkpoint_ready,
+        "checkpoint_failure": checkpoint_failure,
+        "worker_failure": worker_failure,
+        "session_checkpoint_linked": session_checkpoint_linked,
+        "session_checkpoint_mismatch": session_checkpoint_mismatch,
+        "evidence_score_failure": evidence_score_failure,
+        "feedback_score_failure": feedback_score_failure,
+        "evidence_status": redact_text(str(evidence_scores.get("status") or "")),
+        "feedback_status": redact_text(str(feedback_scores.get("status") or "")),
+        "prompt_versions": prompts_count,
+        "recovered_workers": _safe_int(langgraph.get("recovered_workers")),
+        "checkpoint_count": _safe_int(checkpoint.get("checkpoint_count")),
+        "missing_count": missing_count,
+        "missing": missing,
+        "mtime": mtime,
+        "json_path": f"output/langfuse_audits/{path.name}",
+    }
+    missing_summary = _missing_summary(missing)
+    if missing_summary:
+        row["missing_summary"] = missing_summary
+    if json_url:
+        row["json_url"] = json_url
+    if markdown_path.is_file():
+        row["markdown_path"] = f"output/langfuse_audits/{markdown_path.name}"
+        if markdown_url:
+            row["markdown_url"] = markdown_url
+    return redact_sensitive(row)
+
+
+def _missing_summary(missing: List[str], *, limit: int = 3) -> str:
+    values = [redact_text(str(item))[:200] for item in missing if str(item).strip()]
+    return ", ".join(values[: max(1, limit)])
+
+
+def _session_checkpoint_link_state(
+    payload: Dict[str, Any],
+    *,
+    langfuse: Dict[str, Any],
+    checkpoint: Dict[str, Any],
+    missing: List[str],
+) -> tuple[bool, bool]:
+    if isinstance(payload.get("session_checkpoint_linked"), bool):
+        linked = bool(payload.get("session_checkpoint_linked"))
+    else:
+        session_id = str(langfuse.get("session_id") or "").strip()
+        thread_id = str(checkpoint.get("thread_id") or "").strip()
+        linked = bool(session_id and thread_id and session_id == thread_id)
+    if isinstance(payload.get("session_checkpoint_mismatch"), bool):
+        mismatch = bool(payload.get("session_checkpoint_mismatch"))
+    else:
+        session_id = str(langfuse.get("session_id") or "").strip()
+        thread_id = str(checkpoint.get("thread_id") or "").strip()
+        mismatch = bool(session_id and thread_id and session_id != thread_id)
+    if "langfuse.session_checkpoint_thread" in missing:
+        mismatch = True
+    return linked, mismatch
+
+
+def _langfuse_audit_url(workspace: str, review_id: str, artifact_format: str) -> str | None:
+    workspace_value = str(workspace or "")
+    review_id_value = str(review_id or "")
+    if not workspace_value or not review_id_value:
+        return None
+    if redact_text(workspace_value) != workspace_value:
+        return None
+    if redact_text(review_id_value) != review_id_value:
+        return None
+    return (
+        "/api/review/langfuse-audits/"
+        f"{quote(workspace_value, safe='')}/"
+        f"{quote(review_id_value, safe='')}"
+        f"?format={quote(str(artifact_format or 'json'), safe='')}"
+    )
+
+
+def _dict_value(payload: Dict[str, Any], key: str) -> Dict[str, Any]:
+    value = payload.get(key) if isinstance(payload, dict) else None
+    return value if isinstance(value, dict) else {}
+
+
+def _score_snapshot_failure(
+    snapshot: Dict[str, Any],
+    *,
+    missing: List[str],
+    missing_prefix: str,
+) -> bool:
+    if any(str(item).startswith(missing_prefix) for item in missing):
+        return True
+    if not snapshot:
+        return False
+    status = str(snapshot.get("status") or "")
+    if status and status != "recorded":
+        return True
+    if (
+        _safe_int(snapshot.get("scored_items")) > 0
+        and _safe_int(snapshot.get("scores_sent")) <= 0
+    ):
+        return True
+    return snapshot.get("trace_linked") is False
 
 
 def _load_rule_impact_reports(project_root: Path, *, limit: int = 4) -> List[Dict[str, Any]]:

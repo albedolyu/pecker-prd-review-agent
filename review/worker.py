@@ -33,6 +33,7 @@ from review.prompting import (
     _WORKER_SHARED_RULES,
     _build_worker_messages,
     _build_worker_system,
+    _build_worker_system_with_metadata,
 )
 from review.types import WorkerResult
 
@@ -136,7 +137,18 @@ def _prepare_worker_context(
 
     cache_monitor = PromptCacheMonitor()
     workspace_dir = os.path.dirname(wiki_path) if wiki_path else None
-    dynamic_system = _build_worker_system(dim_key, rule_perf_history, dimensions, workspace=workspace_dir)
+    if getattr(_build_worker_system, "__module__", "") == "review.prompting":
+        prompt_resolution = _build_worker_system_with_metadata(
+            dim_key,
+            rule_perf_history,
+            dimensions,
+            workspace=workspace_dir,
+        )
+        dynamic_system = prompt_resolution["text"]
+        prompt_metadata = prompt_resolution.get("metadata", {})
+    else:
+        dynamic_system = _build_worker_system(dim_key, rule_perf_history, dimensions, workspace=workspace_dir)
+        prompt_metadata = {"source": "local_fallback", "status": "patched"}
     wiki_selection_telemetry: Dict[str, Any] = {}
 
     def _capture_wiki_selection(telemetry: Dict[str, Any]) -> None:
@@ -207,6 +219,7 @@ def _prepare_worker_context(
         "cache_monitor": cache_monitor,
         "wiki_selection_telemetry": wiki_selection_telemetry,
         "prd_context_packet_chars": len(prd_context_packet or ""),
+        "prompt_metadata": prompt_metadata,
     }
 
 
@@ -839,6 +852,7 @@ def _worker_core(
         "empty_submission_reason": empty_submission_reason[:300],
         "wiki_selection": wiki_selection_telemetry,
         "prd_context_packet_chars": ctx.get("prd_context_packet_chars", 0),
+        "prompt": ctx.get("prompt_metadata", {}),
         # 2026-04-28 P1 anti-corruption drop: LLM 出未知 rule_id 数 (任务 2 R3 暴露)
         "dropped_unknown_rule_count": drop_telemetry["dropped_unknown_rule_count"],
         "dropped_unknown_rule_ids": drop_telemetry["dropped_unknown_rule_ids"],

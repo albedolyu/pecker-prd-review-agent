@@ -38,6 +38,32 @@ def test_github_blocks_sensitive_paths():
     ]
 
 
+def test_github_blocks_private_workspace_trees_but_allows_sample_workspace():
+    from scripts.check_push_target import evaluate_push
+
+    result = evaluate_push(
+        remote_url="https://github.com/riskbird/prd-review-agent.git",
+        changed_files=[
+            "workspace/prd/internal.md",
+            "workspace-alpha/wiki/index.md",
+            "workspace-alpha/review-rules/review-checklist.yaml",
+            "workspace-alpha/.pecker_acl.json",
+            "workspace-alpha/knowledge/export.json",
+            "workspace-sample/prd/sample-1-favorites.md",
+            "workspace-sample/wiki/index.md",
+        ],
+    )
+
+    assert result.allowed is False
+    assert result.blocked_files == [
+        "workspace/prd/internal.md",
+        "workspace-alpha/wiki/index.md",
+        "workspace-alpha/review-rules/review-checklist.yaml",
+        "workspace-alpha/.pecker_acl.json",
+        "workspace-alpha/knowledge/export.json",
+    ]
+
+
 def test_github_allows_non_sensitive_paths():
     from scripts.check_push_target import evaluate_push
 

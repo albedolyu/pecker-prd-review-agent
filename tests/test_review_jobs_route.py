@@ -55,6 +55,52 @@ async def test_start_review_job_returns_queryable_snapshot(monkeypatch, tmp_path
 
 
 @pytest.mark.asyncio
+async def test_start_review_job_uses_resolved_external_workspace(monkeypatch, tmp_path):
+    from api.routes import review_jobs
+    from api.routes.review import ReviewRequest
+
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    workspace = tmp_path / "external" / "workspace-alpha"
+    workspace.mkdir(parents=True)
+    captured: dict[str, str] = {}
+
+    async def fake_runner(*, req, user, ws_abs_path, emitter, project_root):
+        captured["ws_abs_path"] = ws_abs_path
+        return {
+            "review_id": "rev_job_external",
+            "reviewer": user["reviewer"],
+            "workspace": req.workspace,
+            "items": [],
+        }
+
+    monkeypatch.setattr(review_jobs, "_run_review_job_pipeline", fake_runner)
+    monkeypatch.setattr(review_jobs, "get_workspace_dir", lambda _name: workspace)
+    monkeypatch.setattr(review_jobs, "require_workspace_access", lambda _ws, _user: None)
+    monkeypatch.setattr(review_jobs, "check_budget", lambda *_args, **_kwargs: {"ok": True})
+
+    started = await review_jobs.start_review_job(
+        req=ReviewRequest(
+            prd_content="# Demo",
+            workspace="workspace-alpha",
+            prd_name="external-alpha.md",
+            reviewer="pm-external",
+            mode="quick",
+        ),
+        user={"reviewer": "pm-external", "readonly": False},
+        project_root=project_root,
+    )
+
+    await review_jobs.review_job_store.get_job_ref(
+        started["job_id"],
+        owner="pm-external",
+    ).wait()
+
+    assert captured["ws_abs_path"] == str(workspace)
+    assert not (project_root / "workspace-alpha").exists()
+
+
+@pytest.mark.asyncio
 async def test_start_review_job_response_redacts_metadata_secrets(monkeypatch, tmp_path):
     from api.routes import review_jobs
     from api.routes.review import ReviewRequest
@@ -286,6 +332,14 @@ async def test_default_review_job_runner_returns_signed_review_result(monkeypatc
             "total_usage": {"input_tokens": 1, "output_tokens": 1},
             "orchestrator": "langgraph",
             "resilience": {"failed_workers": 0, "recovered_workers": 1},
+            "observability": {
+                "langfuse": {
+                    "enabled": True,
+                    "configured": True,
+                    "status": "done",
+                    "backend": "langfuse",
+                }
+            },
         }
 
     monkeypatch.setattr(review_jobs, "_parallel_review_for_job", fake_parallel_review)
@@ -322,6 +376,16 @@ async def test_default_review_job_runner_returns_signed_review_result(monkeypatc
     assert result["telemetry"]["workers"]["structure"]["recovered"] is True
     assert result["telemetry"]["orchestrator"] == "langgraph"
     assert result["telemetry"]["resilience"]["recovered_workers"] == 1
+    assert result["telemetry"]["observability"]["langfuse"]["status"] == "done"
+    assert result["telemetry"]["observability"]["langgraph_checkpoint"] == {
+        "enabled": True,
+        "thread_id": "review-job:rjob_default",
+        "status": "missing",
+        "checkpoint_path": ".pecker_checkpoints/langgraph.pkl",
+        "checkpoint_exists": False,
+        "thread_found": False,
+        "checkpoint_count": 0,
+    }
     assert result["telemetry"]["context_manager"]["paths"]["microcompact"]["calls"] == 1
     assert result["telemetry"]["context_manager"]["paths"]["microcompact"]["tokens_saved"] > 0
     assert [event["event"] for event in job.snapshot()["events"]][:4] == [
@@ -415,6 +479,614 @@ async def test_review_job_completion_persists_phase3_draft(monkeypatch, tmp_path
 
 
 @pytest.mark.asyncio
+async def test_review_job_completion_persists_langfuse_run_audit(monkeypatch, tmp_path):
+    import json
+
+    from api.review_jobs import RecordingReviewProgressEmitter, ReviewJob
+    from api.routes import review_jobs
+    from api.routes.review import ReviewRequest
+
+    monkeypatch.setenv("PECKER_SIGNATURE_SECRET", "unit-test-signature-secret-32-chars")
+    monkeypatch.setenv("PECKER_REVIEW_JOB_PIPELINE", "lightweight")
+
+    async def fake_parallel_review(*_args, **kwargs):
+        kwargs["on_worker_done"](
+            "structure",
+            {
+                "dimension": "structure",
+                "dimension_name": "结构",
+                "items": [{"id": "R-1"}],
+                "usage": {"input_tokens": 1, "output_tokens": 1},
+                "telemetry": {
+                    "prompt": {
+                            "name": "pecker.worker.structure.system",
+                            "source": "langfuse",
+                            "status": "ready",
+                            "label": "production",
+                            "version": 8,
+                            "hash": "hash-structure",
+                        }
+                    },
+                },
+        )
+        return {
+            "workers": [
+                {
+                    "dimension": "structure",
+                    "dimension_name": "结构",
+                    "items": [{"id": "R-1"}],
+                    "usage": {"input_tokens": 1, "output_tokens": 1},
+                    "telemetry": {
+                        "prompt": {
+                                "name": "pecker.worker.structure.system",
+                                "source": "langfuse",
+                                "status": "ready",
+                                "label": "production",
+                                "version": 8,
+                                "hash": "hash-structure",
+                            }
+                        },
+                    }
+            ],
+            "merged_items": [
+                {
+                    "id": "R-1",
+                    "dimension": "结构",
+                    "severity": "must",
+                    "location": "目标",
+                    "problem": "raw finding must not leak",
+                }
+            ],
+            "total_usage": {"input_tokens": 1, "output_tokens": 1},
+            "orchestrator": "langgraph",
+            "graph_trace": [
+                "prepare_round",
+                "worker.structure",
+                "finalize_round",
+                "finalize_review",
+            ],
+            "worker_node_statuses": [
+                {"dimension": "structure", "status": "success", "error_type": ""},
+            ],
+            "resilience": {"failed_workers": 0, "recovered_workers": 1},
+            "observability": {
+                "langfuse": {
+                    "enabled": True,
+                    "configured": True,
+                    "status": "done",
+                    "backend": "langfuse",
+                    "session_id": "review-job:rjob_langfuse_audit",
+                    "trace_id": "abc123abc123abc123abc123abc123ab",
+                    "trace_url": "https://langfuse.example/project/proj/traces/abc123abc123abc123abc123abc123ab",
+                },
+                "langfuse_evidence": {
+                    "status": "recorded",
+                    "scored_items": 1,
+                    "scores_sent": 2,
+                    "trace_id": "abc123abc123abc123abc123abc123ab",
+                    "trace_linked": True,
+                    "reliability": 1.0,
+                },
+            },
+        }
+
+    monkeypatch.setattr(review_jobs, "_parallel_review_for_job", fake_parallel_review)
+    monkeypatch.setattr(review_jobs, "record_review_cost", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        review_jobs,
+        "build_langgraph_checkpoint_observability",
+        lambda _project_root, *, thread_id: {
+            "enabled": True,
+            "thread_id": thread_id,
+            "status": "ready",
+            "checkpoint_path": ".pecker_checkpoints/langgraph.pkl",
+            "checkpoint_exists": True,
+            "thread_found": True,
+            "checkpoint_count": 5,
+        },
+    )
+
+    job = ReviewJob(
+        job_id="rjob_langfuse_audit",
+        owner="pm-a",
+        workspace="workspace-alpha",
+        prd_name="alpha.md",
+        mode="quick",
+    )
+    emitter = RecordingReviewProgressEmitter(job)
+    workspace = tmp_path / "workspace-alpha"
+
+    result = await review_jobs._run_review_job_pipeline(
+        req=ReviewRequest(
+            prd_content="# Demo",
+            workspace="workspace-alpha",
+            prd_name="alpha.md",
+            reviewer="pm-a",
+            mode="quick",
+        ),
+        user={"reviewer": "pm-a"},
+        ws_abs_path=str(workspace),
+        emitter=emitter,
+        project_root=tmp_path,
+    )
+
+    audit_snapshot = result["telemetry"]["observability"]["langfuse_audit"]
+    json_path = workspace / audit_snapshot["json_path"]
+    md_path = workspace / audit_snapshot["markdown_path"]
+    audit = json.loads(json_path.read_text(encoding="utf-8"))
+    markdown = md_path.read_text(encoding="utf-8")
+
+    assert audit_snapshot["ok"] is True
+    assert audit_snapshot["graph_trace_ready"] is True
+    assert audit_snapshot["graph_trace_order_ready"] is True
+    assert audit_snapshot["worker_nodes_ready"] is True
+    assert audit["review_id"] == result["review_id"]
+    assert audit["langfuse"]["trace_link_ready"] is True
+    assert audit["langgraph"]["graph_trace_ready"] is True
+    assert audit["langgraph"]["graph_trace_order_ready"] is True
+    assert audit["langgraph"]["worker_nodes_ready"] is True
+    assert audit["langgraph"]["recovered_workers"] == 1
+    assert audit["langgraph_checkpoint"]["thread_found"] is True
+    assert audit["langgraph_checkpoint"]["checkpoint_count"] == 5
+    assert audit["langfuse"]["prompt_versions"][0]["version"] == 8
+    assert "raw finding must not leak" not in json.dumps(audit, ensure_ascii=False)
+    assert "raw finding must not leak" not in markdown
+
+
+@pytest.mark.asyncio
+async def test_review_job_lightweight_path_records_langfuse_evidence_scores(monkeypatch, tmp_path):
+    import json
+
+    from api.review_jobs import RecordingReviewProgressEmitter, ReviewJob
+    from api.routes import review_jobs
+    from api.routes.review import ReviewRequest
+
+    monkeypatch.setenv("PECKER_SIGNATURE_SECRET", "unit-test-signature-secret-32-chars")
+    monkeypatch.setenv("PECKER_REVIEW_JOB_PIPELINE", "lightweight")
+    captured: dict = {}
+
+    async def fake_parallel_review(*_args, **kwargs):
+        kwargs["on_worker_done"](
+            "structure",
+            {
+                "dimension": "structure",
+                "dimension_name": "structure",
+                "items": [{"id": "R-1"}],
+                "usage": {"input_tokens": 1, "output_tokens": 1},
+                "telemetry": {
+                    "prompt": {
+                        "name": "pecker.worker.structure.system",
+                        "source": "langfuse",
+                        "status": "ready",
+                        "label": "production",
+                        "version": 8,
+                        "hash": "hash-structure",
+                    }
+                },
+            },
+        )
+        return {
+            "workers": [
+                {
+                    "dimension": "structure",
+                    "dimension_name": "structure",
+                    "items": [{"id": "R-1"}],
+                    "usage": {"input_tokens": 1, "output_tokens": 1},
+                    "telemetry": {
+                        "prompt": {
+                            "name": "pecker.worker.structure.system",
+                            "source": "langfuse",
+                            "status": "ready",
+                            "label": "production",
+                            "version": 8,
+                            "hash": "hash-structure",
+                        }
+                    },
+                }
+            ],
+            "merged_items": [
+                {
+                    "id": "R-1",
+                    "dimension": "structure",
+                    "severity": "must",
+                    "location": "target",
+                    "problem": "raw finding must not leak",
+                }
+            ],
+            "total_usage": {"input_tokens": 1, "output_tokens": 1},
+            "orchestrator": "langgraph",
+            "graph_trace": [
+                "prepare_round",
+                "worker.structure",
+                "finalize_round",
+                "finalize_review",
+            ],
+            "worker_node_statuses": [
+                {"dimension": "structure", "status": "success", "error_type": ""},
+            ],
+            "resilience": {"failed_workers": 0, "recovered_workers": 0},
+            "observability": {
+                "langfuse": {
+                    "enabled": True,
+                    "configured": True,
+                    "status": "done",
+                    "backend": "langfuse",
+                    "session_id": "review-job:rjob_evidence_score",
+                    "trace_id": "abc123abc123abc123abc123abc123ab",
+                    "trace_url": "https://langfuse.example/project/proj/traces/abc123abc123abc123abc123abc123ab",
+                },
+            },
+        }
+
+    def fake_verify_evidence(items, *_args, **_kwargs):
+        verified = [dict(item) for item in items]
+        verified[0]["verification_status"] = "verified"
+        return verified
+
+    def fake_summarize_verification(_verified):
+        return {"total": 1, "verified": 1, "caveat": 0, "retracted": 0, "reliability": 1.0}
+
+    async def fake_record_evidence_snapshot(review_result, verified_items, summary):
+        captured["review_result"] = review_result
+        captured["verified_items"] = verified_items
+        captured["summary"] = summary
+        return {
+            "enabled": True,
+            "configured": True,
+            "status": "recorded",
+            "scored_items": len(verified_items),
+            "scores_sent": len(verified_items) + 1,
+            "trace_id": review_result["telemetry"]["observability"]["langfuse"]["trace_id"],
+            "trace_linked": True,
+            "reliability": summary["reliability"],
+        }
+
+    monkeypatch.setattr(review_jobs, "_parallel_review_for_job", fake_parallel_review)
+    monkeypatch.setattr(review_jobs, "record_review_cost", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(review_jobs, "verify_evidence", fake_verify_evidence, raising=False)
+    monkeypatch.setattr(
+        review_jobs,
+        "summarize_verification",
+        fake_summarize_verification,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        review_jobs,
+        "_record_langfuse_evidence_snapshot",
+        fake_record_evidence_snapshot,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        review_jobs,
+        "build_langgraph_checkpoint_observability",
+        lambda _project_root, *, thread_id: {
+            "enabled": True,
+            "thread_id": thread_id,
+            "status": "ready",
+            "checkpoint_path": ".pecker_checkpoints/langgraph.pkl",
+            "checkpoint_exists": True,
+            "thread_found": True,
+            "checkpoint_count": 5,
+        },
+    )
+
+    job = ReviewJob(
+        job_id="rjob_evidence_score",
+        owner="pm-a",
+        workspace="workspace-alpha",
+        prd_name="alpha.md",
+        mode="quick",
+    )
+    workspace = tmp_path / "workspace-alpha"
+
+    result = await review_jobs._run_review_job_pipeline(
+        req=ReviewRequest(
+            prd_content="# Demo",
+            workspace="workspace-alpha",
+            prd_name="alpha.md",
+            reviewer="pm-a",
+            mode="quick",
+        ),
+        user={"reviewer": "pm-a"},
+        ws_abs_path=str(workspace),
+        emitter=RecordingReviewProgressEmitter(job),
+        project_root=tmp_path,
+    )
+
+    observability = result["telemetry"]["observability"]
+    audit_snapshot = observability["langfuse_audit"]
+    audit = json.loads((workspace / audit_snapshot["json_path"]).read_text(encoding="utf-8"))
+
+    assert result["items"][0]["verification_status"] == "verified"
+    assert observability["langfuse_evidence"]["status"] == "recorded"
+    assert captured["review_result"]["telemetry"]["observability"]["langfuse"]["session_id"] == (
+        "review-job:rjob_evidence_score"
+    )
+    assert captured["verified_items"][0]["verification_status"] == "verified"
+    assert audit_snapshot["ok"] is True
+    assert audit["langfuse"]["evidence_scores"]["scores_sent"] == 2
+    assert "langfuse_evidence" not in audit["missing"]
+
+
+@pytest.mark.asyncio
+async def test_review_job_order_mismatch_audit_is_read_by_admin_summary(monkeypatch, tmp_path):
+    import json
+
+    from api.review_jobs import RecordingReviewProgressEmitter, ReviewJob
+    from api.routes import review_jobs
+    from api.routes.admin_usage import _load_recent_langfuse_run_audits
+    from api.routes.review import ReviewRequest
+
+    monkeypatch.setenv("PECKER_SIGNATURE_SECRET", "unit-test-signature-secret-32-chars")
+    monkeypatch.setenv("PECKER_REVIEW_JOB_PIPELINE", "lightweight")
+
+    async def fake_parallel_review(*_args, **kwargs):
+        kwargs["on_worker_done"](
+            "structure",
+            {
+                "dimension": "structure",
+                "dimension_name": "structure",
+                "items": [{"id": "R-1"}],
+                "usage": {"input_tokens": 1, "output_tokens": 1},
+                "telemetry": {
+                    "prompt": {
+                        "name": "pecker.worker.structure.system",
+                        "source": "langfuse",
+                        "status": "ready",
+                        "label": "production",
+                        "version": 8,
+                        "hash": "hash-structure",
+                    }
+                },
+            },
+        )
+        return {
+            "workers": [
+                {
+                    "dimension": "structure",
+                    "dimension_name": "structure",
+                    "items": [{"id": "R-1"}],
+                    "usage": {"input_tokens": 1, "output_tokens": 1},
+                    "telemetry": {
+                        "prompt": {
+                            "name": "pecker.worker.structure.system",
+                            "source": "langfuse",
+                            "status": "ready",
+                            "label": "production",
+                            "version": 8,
+                            "hash": "hash-structure",
+                        }
+                    },
+                }
+            ],
+            "merged_items": [
+                {
+                    "id": "R-1",
+                    "dimension": "structure",
+                    "severity": "must",
+                    "location": "target",
+                    "problem": "raw finding must not leak",
+                }
+            ],
+            "total_usage": {"input_tokens": 1, "output_tokens": 1},
+            "orchestrator": "langgraph",
+            "graph_trace": [
+                "prepare_round",
+                "finalize_round",
+                "finalize_review",
+                "worker.structure",
+            ],
+            "worker_node_statuses": [
+                {"dimension": "structure", "status": "success", "error_type": ""},
+            ],
+            "resilience": {"failed_workers": 0, "recovered_workers": 0},
+            "observability": {
+                "langfuse": {
+                    "enabled": True,
+                    "configured": True,
+                    "status": "done",
+                    "backend": "langfuse",
+                    "session_id": "review-job:rjob_order_mismatch",
+                    "trace_id": "abc123abc123abc123abc123abc123ab",
+                    "trace_url": "https://langfuse.example/project/proj/traces/abc123abc123abc123abc123abc123ab",
+                },
+                "langfuse_evidence": {
+                    "status": "recorded",
+                    "scored_items": 1,
+                    "scores_sent": 2,
+                    "trace_id": "abc123abc123abc123abc123abc123ab",
+                    "trace_linked": True,
+                    "reliability": 1.0,
+                },
+            },
+        }
+
+    monkeypatch.setattr(review_jobs, "_parallel_review_for_job", fake_parallel_review)
+    monkeypatch.setattr(review_jobs, "record_review_cost", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        review_jobs,
+        "build_langgraph_checkpoint_observability",
+        lambda _project_root, *, thread_id: {
+            "enabled": True,
+            "thread_id": thread_id,
+            "status": "ready",
+            "checkpoint_path": ".pecker_checkpoints/langgraph.pkl",
+            "checkpoint_exists": True,
+            "thread_found": True,
+            "checkpoint_count": 5,
+        },
+    )
+
+    job = ReviewJob(
+        job_id="rjob_order_mismatch",
+        owner="pm-a",
+        workspace="workspace-alpha",
+        prd_name="alpha.md",
+        mode="quick",
+    )
+    workspace = tmp_path / "workspace-alpha"
+
+    result = await review_jobs._run_review_job_pipeline(
+        req=ReviewRequest(
+            prd_content="# Demo",
+            workspace="workspace-alpha",
+            prd_name="alpha.md",
+            reviewer="pm-a",
+            mode="quick",
+        ),
+        user={"reviewer": "pm-a"},
+        ws_abs_path=str(workspace),
+        emitter=RecordingReviewProgressEmitter(job),
+        project_root=tmp_path,
+    )
+
+    audit_snapshot = result["telemetry"]["observability"]["langfuse_audit"]
+    audit = json.loads((workspace / audit_snapshot["json_path"]).read_text(encoding="utf-8"))
+    summary = _load_recent_langfuse_run_audits(tmp_path, limit=5)
+    row = next(row for row in summary["audits"] if row["workspace"] == "workspace-alpha")
+
+    assert audit_snapshot["ok"] is False
+    assert audit_snapshot["status"] == "missing"
+    assert audit_snapshot["graph_trace_ready"] is False
+    assert audit_snapshot["graph_trace_order_ready"] is False
+    assert "langgraph.graph_trace.order" in audit_snapshot["missing"]
+    assert audit["langgraph"]["graph_trace_order_ready"] is False
+    assert "langgraph.graph_trace.order" in audit["missing"]
+    assert summary["graph_order_failures"] == 1
+    assert row["graph_order_failure"] is True
+    assert row["missing_summary"] == "langgraph.graph_trace, langgraph.graph_trace.order"
+    assert "raw finding must not leak" not in json.dumps(audit, ensure_ascii=False)
+
+
+@pytest.mark.asyncio
+async def test_get_langfuse_run_audit_returns_json_and_markdown(monkeypatch, tmp_path):
+    import json
+
+    from api.routes import review_jobs
+
+    workspace = tmp_path / "workspace-alpha"
+    audit_dir = workspace / "output" / "langfuse_audits"
+    audit_dir.mkdir(parents=True)
+    (audit_dir / "rev_alpha.json").write_text(
+        json.dumps(
+            {
+                "ok": True,
+                "review_id": "rev_alpha",
+                "langfuse": {"trace_link_ready": True},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (audit_dir / "rev_alpha.md").write_text("# Langfuse audit\n", encoding="utf-8")
+    access_check = {}
+
+    def fake_require_workspace_access(ws_dir, user):
+        access_check["ws_dir"] = ws_dir
+        access_check["user"] = user
+
+    monkeypatch.setattr(review_jobs, "get_workspace_dir", lambda _name: workspace)
+    monkeypatch.setattr(review_jobs, "require_workspace_access", fake_require_workspace_access)
+
+    payload = await review_jobs.get_langfuse_run_audit(
+        workspace="workspace-alpha",
+        review_id="rev_alpha",
+        artifact_format="json",
+        user={"reviewer": "pm-a"},
+    )
+    markdown = await review_jobs.get_langfuse_run_audit(
+        workspace="workspace-alpha",
+        review_id="rev_alpha",
+        artifact_format="markdown",
+        user={"reviewer": "pm-a"},
+    )
+
+    assert payload["review_id"] == "rev_alpha"
+    assert payload["langfuse"]["trace_link_ready"] is True
+    assert markdown.media_type == "text/markdown; charset=utf-8"
+    assert markdown.body.decode("utf-8") == "# Langfuse audit\n"
+    assert access_check["ws_dir"] == workspace
+    assert access_check["user"]["reviewer"] == "pm-a"
+
+
+@pytest.mark.asyncio
+async def test_get_langfuse_run_audit_returns_compact_snapshot(monkeypatch, tmp_path):
+    import json
+
+    from api.routes import review_jobs
+
+    workspace = tmp_path / "workspace-alpha"
+    audit_dir = workspace / "output" / "langfuse_audits"
+    audit_dir.mkdir(parents=True)
+    (audit_dir / "rev_alpha.json").write_text(
+        json.dumps(
+            {
+                "ok": True,
+                "status": "ready",
+                "missing_count": 0,
+                "review_id": "rev_alpha",
+                "langfuse": {"trace_link_ready": True},
+                "langgraph": {
+                    "graph_trace_ready": True,
+                    "graph_trace_order_ready": True,
+                    "worker_nodes_ready": True,
+                },
+                "langgraph_checkpoint": {
+                    "status": "ready",
+                    "thread_found": True,
+                    "checkpoint_exists": True,
+                },
+                "missing": [],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(review_jobs, "get_workspace_dir", lambda _name: workspace)
+    monkeypatch.setattr(review_jobs, "require_workspace_access", lambda _ws, _user: None)
+
+    snapshot = await review_jobs.get_langfuse_run_audit(
+        workspace="workspace-alpha",
+        review_id="rev_alpha",
+        artifact_format="snapshot",
+        user={"reviewer": "pm-a"},
+    )
+
+    assert snapshot["ok"] is True
+    assert snapshot["status"] == "ready"
+    assert snapshot["json_path"] == "output/langfuse_audits/rev_alpha.json"
+    assert snapshot["markdown_path"] == "output/langfuse_audits/rev_alpha.md"
+    assert snapshot["trace_link_ready"] is True
+    assert snapshot["graph_trace_order_ready"] is True
+    assert snapshot["checkpoint_ready"] is True
+
+
+@pytest.mark.asyncio
+async def test_get_langfuse_run_audit_does_not_read_outside_audit_dir(monkeypatch, tmp_path):
+    from fastapi import HTTPException
+
+    from api.routes import review_jobs
+
+    workspace = tmp_path / "workspace-alpha"
+    (workspace / "output" / "langfuse_audits").mkdir(parents=True)
+    (workspace / "secret.json").write_text('{"ok": false}', encoding="utf-8")
+
+    monkeypatch.setattr(review_jobs, "get_workspace_dir", lambda _name: workspace)
+    monkeypatch.setattr(review_jobs, "require_workspace_access", lambda _ws, _user: None)
+
+    with pytest.raises(HTTPException) as exc:
+        await review_jobs.get_langfuse_run_audit(
+            workspace="workspace-alpha",
+            review_id="../secret",
+            artifact_format="json",
+            user={"reviewer": "pm-a"},
+        )
+
+    assert exc.value.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_stream_review_job_pipeline_persists_phase3_draft(monkeypatch, tmp_path):
     import json
 
@@ -484,6 +1156,9 @@ async def test_stream_review_job_pipeline_persists_phase3_draft(monkeypatch, tmp
     assert draft["phase"] == 3
     assert draft["review_result"]["review_id"] == "rev_stream"
     assert draft["prd_content"] == "# Stream PRD"
+    audit_snapshot = result["telemetry"]["observability"]["langfuse_audit"]
+    assert audit_snapshot["json_path"].startswith("output/langfuse_audits/")
+    assert (tmp_path / "workspace-alpha" / audit_snapshot["json_path"]).is_file()
 
 
 def test_completed_job_draft_does_not_overwrite_another_prd(tmp_path):
