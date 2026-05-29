@@ -70,3 +70,5 @@ def test_goshawk_prompt_guards_compact_wiki_output_stability():
     assert "输出稳定性优先于节省 token" in GOSHAWK_SYSTEM_PROMPT
     assert "误报标记默认不超过总数 30%" in GOSHAWK_SYSTEM_PROMPT
     assert "只挑证据最明确的少数项" in GOSHAWK_SYSTEM_PROMPT
+    assert "跨业务干扰项" in GOSHAWK_SYSTEM_PROMPT
+    assert "不要把其他业务场景的 wiki 规则迁移成当前 PRD 的硬要求" in GOSHAWK_SYSTEM_PROMPT

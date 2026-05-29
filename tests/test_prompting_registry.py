@@ -124,6 +124,7 @@ def test_worker_prompt_spells_out_conservative_trigger_boundary():
     assert "不确定是否触发 fire_when 时按不触发处理" in _WORKER_SHARED_RULES
     assert "空 items 不是失败" in _WORKER_SHARED_RULES
     assert "每条 finding 必须能定位到 PRD 中的具体位置" in _WORKER_SHARED_RULES
+    assert "不要把无关业务场景的 wiki" in _WORKER_SHARED_RULES
 
 
 # ============================================================
