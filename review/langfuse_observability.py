@@ -345,6 +345,9 @@ class LangGraphLangfuseTrace:
             update_payload: Dict[str, Any] = {}
             if output is not None:
                 update_payload["output"] = _safe_payload(output, prd_body=self.prd_content)
+                usage_details = _usage_details_from_payload(output)
+                if usage_details:
+                    update_payload["usage_details"] = usage_details
             if metadata is not None:
                 update_payload["metadata"] = _safe_payload(metadata, prd_body=self.prd_content)
             if update_payload and hasattr(observation, "update"):
@@ -558,6 +561,63 @@ def _safe_payload(value: Any, *, prd_body: str = "", depth: int = 0) -> Any:
             return f"{text[:_MAX_STRING_CHARS]}...[truncated {len(text) - _MAX_STRING_CHARS} chars]"
         return text
     return redact_sensitive(value)
+
+
+def _usage_details_from_payload(value: Any) -> Optional[Dict[str, int]]:
+    if not isinstance(value, dict):
+        return None
+    for candidate in _usage_candidates(value):
+        details = _usage_details_from_mapping(candidate)
+        if details:
+            return details
+    return None
+
+
+def _usage_candidates(value: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
+    usage = value.get("usage")
+    if isinstance(usage, dict):
+        yield usage
+
+    result = value.get("result")
+    if isinstance(result, dict):
+        result_usage = result.get("usage")
+        if isinstance(result_usage, dict):
+            yield result_usage
+        yield result
+
+    yield value
+
+
+def _usage_details_from_mapping(value: Dict[str, Any]) -> Optional[Dict[str, int]]:
+    input_tokens = _coerce_usage_int(
+        _first_present(value, ("input_tokens", "prompt_tokens", "input"))
+    )
+    output_tokens = _coerce_usage_int(
+        _first_present(value, ("output_tokens", "completion_tokens", "output"))
+    )
+    details: Dict[str, int] = {}
+    if input_tokens is not None:
+        details["input"] = input_tokens
+    if output_tokens is not None:
+        details["output"] = output_tokens
+    return details or None
+
+
+def _first_present(value: Dict[str, Any], keys: Iterable[str]) -> Any:
+    for key in keys:
+        if key in value:
+            return value.get(key)
+    return None
+
+
+def _coerce_usage_int(value: Any) -> Optional[int]:
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number >= 0 else None
 
 
 def _summary_for_value(value: Any) -> Dict[str, Any]:

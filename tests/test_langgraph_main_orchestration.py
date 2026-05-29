@@ -348,6 +348,11 @@ async def test_langgraph_parallel_review_records_safe_langfuse_node_spans(monkey
         "pecker.langgraph.finalize_round",
         "pecker.langgraph.finalize_review",
     ]
+    worker_call = next(
+        call for call in calls if call.get("name") == "pecker.langgraph.worker.structure"
+    )
+    assert worker_call["as_type"] == "generation"
+    assert worker_call["updates"][0]["usage_details"] == {"input": 7, "output": 11}
     serialized = json.dumps(calls, ensure_ascii=False)
     assert "secret PRD body" not in serialized
     assert "secret-token" not in serialized

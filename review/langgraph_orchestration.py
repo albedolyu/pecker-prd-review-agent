@@ -114,10 +114,16 @@ def build_langgraph_parallel_review_app(
         default=None,
     )
 
-    def trace_span(name: str, *, input: Any = None, metadata: Any = None):
+    def trace_span(
+        name: str,
+        *,
+        input: Any = None,
+        metadata: Any = None,
+        as_type: str = "span",
+    ):
         if langfuse_trace is None:
             return nullcontext()
-        return langfuse_trace.span(name, input=input, metadata=metadata)
+        return langfuse_trace.span(name, input=input, metadata=metadata, as_type=as_type)
 
     def update_trace(observation: Any, *, output: Any = None, metadata: Any = None) -> None:
         if langfuse_trace is None:
@@ -164,6 +170,7 @@ def build_langgraph_parallel_review_app(
         with trace_span(
             f"pecker.langgraph.worker.{_safe_observation_name(dim_key)}",
             input={"round": round_no, "dimension": dim_key, "worker_index": worker_index},
+            as_type="generation",
         ) as observation:
             async with worker_slots:
                 result = await orchestration_mod._run_dimension_worker_async(

@@ -106,6 +106,64 @@ def test_langgraph_langfuse_trace_redacts_inputs_and_flushes(monkeypatch):
     assert trace.snapshot()["status"] == "done"
 
 
+def test_langgraph_langfuse_trace_records_native_usage_details(monkeypatch):
+    from review.langfuse_observability import start_langgraph_review_trace
+
+    calls: list[dict] = []
+
+    class FakeObservation:
+        def __init__(self, call):
+            self.call = call
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def update(self, **kwargs):
+            self.call.setdefault("updates", []).append(kwargs)
+
+    class FakeLangfuse:
+        def start_as_current_observation(self, **kwargs):
+            calls.append(kwargs)
+            return FakeObservation(calls[-1])
+
+        def flush(self):
+            calls.append({"flush": True})
+
+    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
+    monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test-secret")
+    monkeypatch.setenv("PECKER_LANGFUSE_ENABLED", "1")
+
+    trace = start_langgraph_review_trace(
+        workspace="workspace-alpha",
+        thread_id="review-job:rjob_usage",
+        prd_content="# Demo",
+        wiki_pages={},
+        voting_rounds=1,
+        dimensions=["structure"],
+        client_factory=lambda: FakeLangfuse(),
+    )
+    with trace:
+        with trace.span(
+            "pecker.langgraph.worker.structure",
+            as_type="generation",
+        ) as observation:
+            trace.update_observation(
+                observation,
+                output={
+                    "status": "done",
+                    "usage": {"input_tokens": 10, "output_tokens": 5},
+                },
+            )
+        trace.finish(status="done")
+
+    worker_update = calls[1]["updates"][0]
+    assert calls[1]["as_type"] == "generation"
+    assert worker_update["usage_details"] == {"input": 10, "output": 5}
+
+
 def test_langgraph_langfuse_trace_propagates_queryable_session(monkeypatch):
     import review.langfuse_observability as observability
 
