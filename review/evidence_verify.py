@@ -510,8 +510,9 @@ def _llm_nli_score(client, item, wiki_pages, n_samples=4, model=None):
         "  · 改进项引用 wiki 内容但 wiki 实际表达相反含义\n"
         "- neutral: wiki 完全未涉及该话题, 也没有任何字段/数值能比对\n\n"
         "关键判准: 只要 wiki 与改进项**有任何具体可比的不一致点**, 就必须选 contradict.\n"
-        "neutral 只用于 wiki 跟改进项完全不相干 (e.g. 改进项谈支付, wiki 只讲登录).\n\n"
+        "neutral 仅当 evidence 与 wiki 话题完全不相干 (e.g. 改进项谈支付, wiki 只讲登录).\n\n"
         "如果不是 entail, 用 1-2 句 (≥15 字) 说明具体哪个字段/数值/页面不一致.\n\n"
+        "字段名必须是 verdict, 不要输出 label、result、answer 或其他字段名.\n"
         "只输出 JSON 一行 (不要 markdown 代码块): "
         '{"verdict": "entail|contradict|neutral", "reason": "<具体理由>"}'
     )

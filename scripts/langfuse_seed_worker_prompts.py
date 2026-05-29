@@ -99,7 +99,16 @@ def _default_langfuse_client_factory() -> Any:
     return get_client()
 
 
+def _load_project_dotenv() -> None:
+    try:
+        from dotenv import load_dotenv
+    except Exception:  # noqa: BLE001
+        return
+    load_dotenv(_REPO_ROOT / ".env", override=False)
+
+
 def main(argv: Optional[list[str]] = None) -> int:
+    _load_project_dotenv()
     parser = argparse.ArgumentParser(description="Seed Pecker worker system prompts into Langfuse")
     parser.add_argument("--label", default="production", help="Langfuse label to attach to created prompts")
     parser.add_argument("--dim", action="append", dest="dims", help="Dimension key to seed; repeatable")

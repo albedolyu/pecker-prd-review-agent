@@ -60,3 +60,13 @@ def test_env_example_documents_default_off_goshawk_compact_flag():
 
     assert "PECKER_GOSHAWK_COMPACT_WIKI=0" in env
     assert "PECKER_GOSHAWK_WIKI_CHARS=25000" in env
+
+
+def test_goshawk_prompt_guards_compact_wiki_output_stability():
+    from goshawk_advisor import GOSHAWK_SYSTEM_PROMPT
+
+    assert "不得把 compact wiki 的信息缺口当作漏报" in GOSHAWK_SYSTEM_PROMPT
+    assert "不得因为压缩摘要缺少细节就误合并" in GOSHAWK_SYSTEM_PROMPT
+    assert "输出稳定性优先于节省 token" in GOSHAWK_SYSTEM_PROMPT
+    assert "误报标记默认不超过总数 30%" in GOSHAWK_SYSTEM_PROMPT
+    assert "只挑证据最明确的少数项" in GOSHAWK_SYSTEM_PROMPT

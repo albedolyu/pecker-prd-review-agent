@@ -117,6 +117,26 @@ class TestLlmNliScore:
         assert out["n_samples_succeeded"] == 2
         assert [c[0] for c in calls] == ["verify.nli", "verify.nli"]
 
+    def test_nli_prompt_keeps_verdict_schema_and_neutral_boundary(self):
+        from review.evidence_verify import _llm_nli_score
+
+        client = MagicMock()
+        client.create.return_value = _mock_response(
+            '{"verdict": "neutral", "reason": "wiki 只讲登录流程, 与支付字段完全不相干"}'
+        )
+
+        _llm_nli_score(
+            client,
+            item={"issue": "支付字段缺失", "evidence_content": "[[页1]]"},
+            wiki_pages={"页1": "登录流程说明"},
+            n_samples=1,
+        )
+
+        system_prompt = client.create.call_args.kwargs["system"]
+        assert "字段名必须是 verdict, 不要输出 label" in system_prompt
+        assert "neutral 仅当 evidence 与 wiki 话题完全不相干" in system_prompt
+        assert "只输出 JSON 一行" in system_prompt
+
     def test_empty_wiki_pages_returns_default(self):
         from review.evidence_verify import _llm_nli_score
         out = _llm_nli_score(client=MagicMock(), item={"issue": "x", "evidence_content": "[[页]]"},

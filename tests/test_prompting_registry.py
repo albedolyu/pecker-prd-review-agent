@@ -117,6 +117,15 @@ def test_b_class_format_hint_includes_sample():
     assert len(samples_in_hint) >= 1, f"hint 应含 sample rule_id, 实际: {hint}"
 
 
+def test_worker_prompt_spells_out_conservative_trigger_boundary():
+    """Worker prompt 应把 fire_when 不确定和空 items 出口说透，减少硬凑问题."""
+    from review.prompting import _WORKER_SHARED_RULES
+
+    assert "不确定是否触发 fire_when 时按不触发处理" in _WORKER_SHARED_RULES
+    assert "空 items 不是失败" in _WORKER_SHARED_RULES
+    assert "每条 finding 必须能定位到 PRD 中的具体位置" in _WORKER_SHARED_RULES
+
+
 # ============================================================
 # 3. registry 加新前缀 → 错误提示自动列出 (单点 SoT 价值)
 # ============================================================

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 
 
@@ -62,3 +63,33 @@ def test_seed_worker_prompts_creates_langfuse_text_prompts(monkeypatch):
     assert calls[0]["config"]["managed_by"] == "pecker"
     assert calls[0]["config"]["dim_key"] == "structure"
     assert "{{dimension_name}}" in calls[0]["prompt"]
+
+
+def test_langfuse_prompt_seed_cli_loads_project_dotenv(monkeypatch, tmp_path, capsys):
+    import scripts.langfuse_seed_worker_prompts as seed_script
+
+    (tmp_path / ".env").write_text(
+        "LANGFUSE_PUBLIC_KEY=pk-from-dotenv\n"
+        "LANGFUSE_SECRET_KEY=sk-from-dotenv\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(seed_script, "_REPO_ROOT", tmp_path)
+    monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
+    monkeypatch.delenv("LANGFUSE_SECRET_KEY", raising=False)
+
+    captured_env: dict[str, str | None] = {}
+
+    def fake_seed_worker_prompts(**kwargs):
+        captured_env["public_key"] = os.environ.get("LANGFUSE_PUBLIC_KEY")
+        captured_env["secret_key"] = os.environ.get("LANGFUSE_SECRET_KEY")
+        return {"ok": True, "created_count": 0, "prompts": []}
+
+    monkeypatch.setattr(seed_script, "seed_worker_prompts", fake_seed_worker_prompts)
+
+    assert seed_script.main(["--dry-run"]) == 0
+
+    capsys.readouterr()
+    assert captured_env == {
+        "public_key": "pk-from-dotenv",
+        "secret_key": "sk-from-dotenv",
+    }

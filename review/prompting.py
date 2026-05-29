@@ -118,11 +118,12 @@ _WORKER_SHARED_RULES = """## 评审要求
    越界报告会被苍鹰交叉校验降权 + 杜鹃 verdict 扣分。
 3. 逐条对照检查清单,每条规则都要检查
 4. 同一条规则如果在多个位置违反,每个位置单独提交一条(rule_id 相同但 location 不同)
+   每条 finding 必须能定位到 PRD 中的具体位置,不能只写"整体/流程/风险"这类笼统位置。
 5. 每条改进项必须有明确依据(A=内部知识, B=评审规则, C=外部参考)
 6. 找不到依据的改动不得提出
 7. **允许承认无问题** — 缺失 ④ Worker 拒答出口:
    如果本维度逐条看完没发现 fail,提交空 items 数组并填写 null_finding_reason 说明
-   你扫了哪些规则、为什么都 pass。**禁止为了凑数硬找问题**。
+   你扫了哪些规则、为什么都 pass。空 items 不是失败。**禁止为了凑数硬找问题**。
 8. 评审完成后,使用 submit_review_items 工具提交
 
 ## 依据分类
@@ -155,6 +156,7 @@ _WORKER_SHARED_RULES = """## 评审要求
 **fire_when / dont_fire_when 是硬约束**:
 - 每条规则的 fire_when / dont_fire_when 是 ground truth。
 - 看到符合 dont_fire_when 的情形即使其他 worker 都在报, 你也**不能报**。
+- 不确定是否触发 fire_when 时按不触发处理,写入 null_finding_reason,不要硬凑 finding。
 - 不确定时 80% 倾向不报。
 
 **置信度门**:
