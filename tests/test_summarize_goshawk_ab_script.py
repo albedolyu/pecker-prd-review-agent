@@ -1,4 +1,6 @@
 import json
+import sys
+import types
 
 
 def test_summarize_goshawk_ab_script_writes_json_and_markdown(tmp_path):
@@ -63,3 +65,34 @@ def test_summarize_goshawk_ab_script_writes_json_and_markdown(tmp_path):
     assert payload["summary"]["run_count"] == 2
     assert "Goshawk A/B Suite Summary" in markdown
     assert "keep_disabled" in markdown
+
+
+def test_summarize_goshawk_ab_parser_accepts_langfuse_recording():
+    from scripts.summarize_goshawk_ab import parse_args
+
+    args = parse_args(
+        [
+            "--input-dir",
+            "C:/reports",
+            "--record-langfuse",
+            "--suite-id",
+            "suite-1",
+        ]
+    )
+
+    assert args.record_langfuse is True
+    assert args.suite_id == "suite-1"
+
+
+def test_summarize_goshawk_ab_loads_project_dotenv(monkeypatch):
+    import scripts.summarize_goshawk_ab as script
+
+    calls = []
+    fake_dotenv = types.SimpleNamespace(
+        load_dotenv=lambda path, override=False: calls.append((path, override))
+    )
+    monkeypatch.setitem(sys.modules, "dotenv", fake_dotenv)
+
+    script._load_dotenv()
+
+    assert calls == [(script.ROOT / ".env", False)]

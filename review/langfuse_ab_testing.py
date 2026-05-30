@@ -119,6 +119,61 @@ def build_goshawk_ab_score_payloads(
     return scores
 
 
+def build_goshawk_ab_suite_score_payloads(
+    suite: Mapping[str, Any],
+    *,
+    trace_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+) -> list[Dict[str, Any]]:
+    """Create Langfuse score payloads from a suite-level A/B summary."""
+
+    summary = dict(suite.get("summary") or {})
+    recommendation = dict(suite.get("recommendation") or {})
+    failures = list(suite.get("failures") or [])
+    metadata = {
+        "ab_kind": "goshawk_ab_suite",
+        "recommendation_action": _safe_text(recommendation.get("action"), 80),
+        "recommendation_reason": _safe_text(recommendation.get("reason"), 160),
+        "run_count": _safe_int(summary.get("run_count")),
+        "failure_count": len(failures),
+    }
+    failure_batch_ids = [
+        _safe_text(failure.get("batch_id"), 160)
+        for failure in failures
+        if isinstance(failure, Mapping) and _safe_text(failure.get("batch_id"), 160)
+    ]
+    if failure_batch_ids:
+        metadata["failure_batch_ids"] = failure_batch_ids[:20]
+
+    target = _score_target(trace_id=trace_id, session_id=session_id)
+    action = metadata["recommendation_action"]
+    scores: list[Dict[str, Any]] = []
+    for name, value in (
+        ("pecker.goshawk_ab_suite.compact_pass_rate", summary.get("compact_pass_rate")),
+        (
+            "pecker.goshawk_ab_suite.median_input_token_savings_ratio",
+            summary.get("median_input_token_savings_ratio"),
+        ),
+        (
+            "pecker.goshawk_ab_suite.median_elapsed_savings_ratio",
+            summary.get("median_elapsed_savings_ratio"),
+        ),
+        ("pecker.goshawk_ab_suite.min_final_rule_jaccard", summary.get("min_final_rule_jaccard")),
+        (
+            "pecker.goshawk_ab_suite.min_final_signature_jaccard",
+            summary.get("min_final_signature_jaccard"),
+        ),
+        (
+            "pecker.goshawk_ab_suite.max_false_positive_delta",
+            summary.get("max_false_positive_delta"),
+        ),
+        ("pecker.goshawk_ab_suite.keep_disabled", 1.0 if action == "keep_disabled" else 0.0),
+        ("pecker.goshawk_ab_suite.canary_ready", 1.0 if action == "canary_only" else 0.0),
+    ):
+        scores.append(_score(name=name, value=_safe_float(value), metadata=metadata, target=target))
+    return scores
+
+
 def record_goshawk_ab_scores(
     summary: Mapping[str, Any],
     *,
@@ -145,6 +200,68 @@ def record_goshawk_ab_scores(
             return {"status": "score_api_missing", "scores_sent": 0}
         sent = _create_langfuse_scores(client, scores)
         return {"status": "recorded", "scores_sent": sent}
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "error", "scores_sent": 0, "error": _safe_text(str(exc), 500)}
+
+
+def record_goshawk_ab_suite_scores(
+    suite: Mapping[str, Any],
+    *,
+    trace_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+    client_factory=None,
+) -> Dict[str, Any]:
+    """Write suite-level A/B scores to Langfuse when explicitly requested."""
+
+    try:
+        from review.langfuse_observability import (
+            _client_can_create_score,
+            _create_langfuse_scores,
+            _default_langfuse_client_factory,
+            start_langgraph_review_trace,
+        )
+
+        active_trace_id = _safe_trace_id(trace_id)
+        trace_snapshot: Dict[str, Any] = {}
+        if not active_trace_id and _safe_text(session_id, 200):
+            with start_langgraph_review_trace(
+                workspace="goshawk_ab_suite",
+                thread_id=_safe_text(session_id, 200),
+                prd_content="",
+                wiki_pages={},
+                voting_rounds=1,
+                dimensions=["goshawk_ab_suite"],
+                client_factory=client_factory,
+                trace_name="pecker.goshawk_ab.suite",
+            ) as trace:
+                trace.finish(
+                    status="done",
+                    output={
+                        "summary": dict(suite.get("summary") or {}),
+                        "recommendation": dict(suite.get("recommendation") or {}),
+                        "failure_count": len(list(suite.get("failures") or [])),
+                    },
+                )
+                trace_snapshot = trace.snapshot()
+                active_trace_id = _safe_trace_id(trace_snapshot.get("trace_id"))
+
+        scores = build_goshawk_ab_suite_score_payloads(
+            suite,
+            trace_id=active_trace_id,
+            session_id=session_id if not active_trace_id else None,
+        )
+        client = (client_factory or _default_langfuse_client_factory)()
+        if not _client_can_create_score(client):
+            return {"status": "score_api_missing", "scores_sent": 0}
+        sent = _create_langfuse_scores(client, scores)
+        result: Dict[str, Any] = {
+            "status": "recorded",
+            "scores_sent": sent,
+            "target": "trace" if active_trace_id else "session",
+        }
+        if trace_snapshot:
+            result["trace"] = trace_snapshot
+        return result
     except Exception as exc:  # noqa: BLE001
         return {"status": "error", "scores_sent": 0, "error": _safe_text(str(exc), 500)}
 

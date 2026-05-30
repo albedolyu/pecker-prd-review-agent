@@ -11,7 +11,10 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from review.langfuse_ab_testing import summarize_goshawk_ab_suite
+from review.langfuse_ab_testing import (
+    record_goshawk_ab_suite_scores,
+    summarize_goshawk_ab_suite,
+)
 
 
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
@@ -21,17 +24,26 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument("--output-json", default="", help="Summary JSON output path.")
     parser.add_argument("--output-md", default="", help="Summary Markdown output path.")
     parser.add_argument("--min-runs-for-canary", type=int, default=5)
+    parser.add_argument("--record-langfuse", action="store_true", help="Write suite scores to Langfuse.")
+    parser.add_argument("--suite-id", default="", help="Langfuse session id for suite-level scores.")
     return parser.parse_args(argv)
 
 
 def main(argv: Optional[list[str]] = None) -> int:
     args = parse_args(argv)
+    _load_dotenv()
     input_dir = Path(args.input_dir).expanduser().resolve()
     reports = _load_reports(input_dir, args.pattern)
     result = summarize_goshawk_ab_suite(
         reports,
         min_runs_for_canary=args.min_runs_for_canary,
     )
+    if args.record_langfuse:
+        suite_id = args.suite_id or _default_suite_id(input_dir)
+        result["langfuse_scores"] = record_goshawk_ab_suite_scores(
+            result,
+            session_id=suite_id,
+        )
     output_json = (
         Path(args.output_json).expanduser().resolve()
         if args.output_json
@@ -50,6 +62,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 "recommendation": result["recommendation"],
                 "summary": result["summary"],
                 "failures": len(result["failures"]),
+                "langfuse_scores": result.get("langfuse_scores"),
                 "output_json": str(output_json),
                 "output_md": str(output_md),
             },
@@ -119,6 +132,18 @@ def _write_json(path: Path, payload: Any) -> None:
 def _write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
+
+
+def _load_dotenv() -> None:
+    try:
+        from dotenv import load_dotenv
+    except Exception:  # noqa: BLE001
+        return
+    load_dotenv(ROOT / ".env", override=False)
+
+
+def _default_suite_id(input_dir: Path) -> str:
+    return f"goshawk-ab-suite:{input_dir.name}"
 
 
 if __name__ == "__main__":
