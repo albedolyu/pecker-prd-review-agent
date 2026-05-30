@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import math
 import re
+from statistics import median
 from typing import Any, Dict, Iterable, Mapping, Optional
 
 from api.sanitize import redact_sensitive
@@ -148,6 +149,76 @@ def record_goshawk_ab_scores(
         return {"status": "error", "scores_sent": 0, "error": _safe_text(str(exc), 500)}
 
 
+def summarize_goshawk_ab_suite(
+    reports: Iterable[Mapping[str, Any]],
+    *,
+    min_runs_for_canary: int = 5,
+    signature_threshold: float = 0.9,
+    rule_threshold: float = 0.9,
+) -> Dict[str, Any]:
+    """Summarize multiple A/B report payloads into an enablement decision."""
+
+    rows = []
+    failures = []
+    for report in reports or []:
+        if not isinstance(report, Mapping):
+            continue
+        batch_id = _safe_text(report.get("batch_id"), 160)
+        metrics = _report_metrics(report)
+        if not metrics:
+            continue
+        row = {
+            "batch_id": batch_id,
+            "compact_pass": bool(metrics.get("compact_pass")),
+            "input_token_savings_ratio": _safe_float(metrics.get("input_token_savings_ratio")),
+            "elapsed_savings_ratio": _safe_float(metrics.get("elapsed_savings_ratio")),
+            "final_rule_jaccard": _safe_float(metrics.get("final_rule_jaccard")),
+            "final_signature_jaccard": _safe_float(metrics.get("final_signature_jaccard")),
+            "advisor_fp_jaccard": _safe_float(metrics.get("advisor_fp_jaccard")),
+            "false_positive_delta": _safe_float(metrics.get("false_positive_delta")),
+        }
+        rows.append(row)
+        reasons = _suite_failure_reasons(
+            row,
+            signature_threshold=signature_threshold,
+            rule_threshold=rule_threshold,
+        )
+        if reasons:
+            failures.append(
+                {
+                    "batch_id": batch_id,
+                    "reasons": reasons,
+                    "metrics": row,
+                }
+            )
+
+    run_count = len(rows)
+    pass_count = sum(1 for row in rows if row["compact_pass"])
+    summary = {
+        "run_count": run_count,
+        "compact_pass_count": pass_count,
+        "compact_pass_rate": _safe_div(pass_count, run_count),
+        "median_input_token_savings_ratio": _median(rows, "input_token_savings_ratio"),
+        "median_elapsed_savings_ratio": _median(rows, "elapsed_savings_ratio"),
+        "median_final_rule_jaccard": _median(rows, "final_rule_jaccard"),
+        "min_final_rule_jaccard": _minimum(rows, "final_rule_jaccard"),
+        "median_final_signature_jaccard": _median(rows, "final_signature_jaccard"),
+        "min_final_signature_jaccard": _minimum(rows, "final_signature_jaccard"),
+        "median_advisor_fp_jaccard": _median(rows, "advisor_fp_jaccard"),
+        "max_false_positive_delta": _maximum(rows, "false_positive_delta"),
+    }
+    return {
+        "summary": summary,
+        "recommendation": _suite_recommendation(
+            summary,
+            failures,
+            min_runs_for_canary=min_runs_for_canary,
+        ),
+        "failures": failures,
+        "runs": rows,
+    }
+
+
 def _run_summary(run: Mapping[str, Any], *, default_variant: str) -> Dict[str, Any]:
     items = _items(run)
     usage = _usage(run)
@@ -175,6 +246,55 @@ def _run_summary(run: Mapping[str, Any], *, default_variant: str) -> Dict[str, A
     if trace:
         summary["trace"] = trace
     return redact_sensitive(summary)
+
+
+def _report_metrics(report: Mapping[str, Any]) -> Dict[str, Any]:
+    if isinstance(report.get("metrics"), Mapping):
+        return dict(report.get("metrics") or {})
+    ab = report.get("ab")
+    if isinstance(ab, Mapping) and isinstance(ab.get("metrics"), Mapping):
+        return dict(ab.get("metrics") or {})
+    return {}
+
+
+def _suite_failure_reasons(
+    row: Mapping[str, Any],
+    *,
+    signature_threshold: float,
+    rule_threshold: float,
+) -> list[str]:
+    reasons = []
+    if not row.get("compact_pass"):
+        reasons.append("compact_pass_false")
+    if _safe_float(row.get("final_signature_jaccard")) < signature_threshold:
+        reasons.append("signature_below_threshold")
+    if _safe_float(row.get("final_rule_jaccard")) < rule_threshold:
+        reasons.append("rule_below_threshold")
+    if _safe_float(row.get("false_positive_delta")) > 0:
+        reasons.append("false_positive_delta_positive")
+    return reasons
+
+
+def _suite_recommendation(
+    summary: Mapping[str, Any],
+    failures: list[Mapping[str, Any]],
+    *,
+    min_runs_for_canary: int,
+) -> Dict[str, Any]:
+    if failures:
+        return {
+            "action": "keep_disabled",
+            "reason": "one_or_more_ab_runs_failed_quality_gate",
+        }
+    if int(summary.get("run_count") or 0) < max(1, int(min_runs_for_canary or 1)):
+        return {
+            "action": "collect_more_samples",
+            "reason": "not_enough_ab_runs_for_canary_decision",
+        }
+    return {
+        "action": "canary_only",
+        "reason": "quality_gate_passed_but_keep_default_off_until_canary",
+    }
 
 
 def _score(
@@ -303,6 +423,25 @@ def _delta_ratio(value: float, baseline: float) -> float:
     if baseline <= 0:
         return 0.0
     return (value - baseline) / baseline
+
+
+def _median(rows: list[Mapping[str, Any]], key: str) -> float:
+    values = [_safe_float(row.get(key)) for row in rows]
+    return float(median(values)) if values else 0.0
+
+
+def _minimum(rows: list[Mapping[str, Any]], key: str) -> float:
+    values = [_safe_float(row.get(key)) for row in rows]
+    return min(values) if values else 0.0
+
+
+def _maximum(rows: list[Mapping[str, Any]], key: str) -> float:
+    values = [_safe_float(row.get(key)) for row in rows]
+    return max(values) if values else 0.0
+
+
+def _safe_div(numerator: float, denominator: float) -> float:
+    return _safe_float(numerator) / _safe_float(denominator) if _safe_float(denominator) > 0 else 0.0
 
 
 def _safe_float(value: Any) -> float:

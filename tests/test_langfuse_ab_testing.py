@@ -105,3 +105,49 @@ def test_goshawk_ab_scores_prefer_trace_target_over_session_target():
     assert scores
     assert all(score.get("trace_id") == "abc123abc123abc123abc123abc123ab" for score in scores)
     assert all("session_id" not in score for score in scores)
+
+
+def test_goshawk_ab_suite_summary_keeps_compaction_disabled_when_any_run_fails():
+    from review.langfuse_ab_testing import summarize_goshawk_ab_suite
+
+    reports = [
+        {
+            "batch_id": "pass-1",
+            "ab": {
+                "metrics": {
+                    "compact_pass": True,
+                    "input_token_savings_ratio": 0.44,
+                    "elapsed_savings_ratio": 0.1,
+                    "final_rule_jaccard": 1.0,
+                    "final_signature_jaccard": 0.93,
+                    "false_positive_delta": -1,
+                }
+            },
+        },
+        {
+            "batch_id": "fail-1",
+            "ab": {
+                "metrics": {
+                    "compact_pass": False,
+                    "input_token_savings_ratio": 0.44,
+                    "elapsed_savings_ratio": -0.06,
+                    "final_rule_jaccard": 0.86,
+                    "final_signature_jaccard": 0.89,
+                    "false_positive_delta": 1,
+                }
+            },
+        },
+    ]
+
+    result = summarize_goshawk_ab_suite(reports, min_runs_for_canary=2)
+
+    assert result["summary"]["run_count"] == 2
+    assert result["summary"]["compact_pass_count"] == 1
+    assert result["summary"]["compact_pass_rate"] == 0.5
+    assert result["summary"]["median_input_token_savings_ratio"] == 0.44
+    assert result["summary"]["min_final_signature_jaccard"] == 0.89
+    assert result["summary"]["max_false_positive_delta"] == 1
+    assert result["recommendation"]["action"] == "keep_disabled"
+    assert result["failures"][0]["batch_id"] == "fail-1"
+    assert "signature_below_threshold" in result["failures"][0]["reasons"]
+    assert "false_positive_delta_positive" in result["failures"][0]["reasons"]
