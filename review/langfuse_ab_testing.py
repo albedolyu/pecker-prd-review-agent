@@ -190,6 +190,7 @@ def _score_target(*, trace_id: Optional[str], session_id: Optional[str]) -> Dict
     safe_trace = _safe_trace_id(trace_id)
     if safe_trace:
         target["trace_id"] = safe_trace
+        return target
     safe_session = _safe_text(session_id, 200)
     if safe_session:
         target["session_id"] = safe_session
@@ -305,4 +306,3 @@ def _normalize(value: Any) -> str:
 
 def _safe_text(value: Any, limit: int) -> str:
     return str(value or "").strip()[: max(0, int(limit))]
-

@@ -18,14 +18,10 @@ if str(ROOT) not in sys.path:
 
 from agent_config import MODEL_TIERS
 from content_loader import load_prd_content, load_wiki_pages
-from goshawk_advisor import advisor_review_default, apply_advisor_result
-from parallel_review import parallel_review, summarize_verification, verify_evidence
-from review.goshawk_wiki_compaction import compact_goshawk_wiki_pages
 from review.langfuse_ab_testing import (
     compare_goshawk_ab_runs,
     record_goshawk_ab_scores,
 )
-from review.langfuse_observability import start_langgraph_review_trace
 
 
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
@@ -37,6 +33,11 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument("--batch-id", default="", help="A/B batch id; defaults to goshawk-ab-YYYYmmdd_HHMMSS")
     parser.add_argument("--output-dir", default="", help="Report directory; defaults to workspace/output/goshawk_ab")
     parser.add_argument("--compact-chars", type=int, default=25000, help="Compact wiki character budget.")
+    parser.add_argument(
+        "--routes-file",
+        default="",
+        help="Optional model routes profile, e.g. model_routes.pro_cli.yaml.",
+    )
     parser.add_argument("--record-langfuse", action="store_true", help="Write comparison scores to Langfuse.")
     return parser.parse_args(argv)
 
@@ -49,6 +50,17 @@ def variant_env(variant: str, *, compact_chars: int) -> Dict[str, str]:
     }
 
 
+def comparison_trace_id(summary: Mapping[str, Any]) -> str:
+    for key in ("candidate", "baseline"):
+        run = summary.get(key) if isinstance(summary, Mapping) else None
+        trace = run.get("trace") if isinstance(run, Mapping) else None
+        trace_id = trace.get("trace_id") if isinstance(trace, Mapping) else ""
+        text = str(trace_id or "").strip().lower()
+        if len(text) == 32 and all(char in "0123456789abcdef" for char in text):
+            return text
+    return ""
+
+
 async def run_final_only_goshawk_ab(
     *,
     workspace: Path,
@@ -56,8 +68,12 @@ async def run_final_only_goshawk_ab(
     output_dir: Path,
     compact_chars: int,
     record_langfuse: bool,
+    routes_file: str = "",
 ) -> Dict[str, Any]:
+    _configure_routes_file(routes_file)
     _load_dotenv()
+    from parallel_review import parallel_review, summarize_verification, verify_evidence
+
     prd_content, prd_files = load_prd_content(str(workspace))
     if not prd_content:
         raise RuntimeError(f"No PRD markdown found under {workspace / 'prd'}")
@@ -129,6 +145,7 @@ async def run_final_only_goshawk_ab(
     if record_langfuse:
         payload["langfuse_scores"] = record_goshawk_ab_scores(
             summary,
+            trace_id=comparison_trace_id(summary),
             session_id=batch_id,
         )
     paths = _write_reports(payload, output_dir)
@@ -146,6 +163,9 @@ def _run_goshawk_variant(
     source_items: list[Dict[str, Any]],
     compact_chars: int,
 ) -> Dict[str, Any]:
+    from goshawk_advisor import advisor_review_default, apply_advisor_result
+    from review.langfuse_observability import start_langgraph_review_trace
+
     source_copy = copy.deepcopy(source_items)
     compaction = _compaction_preview(
         variant=variant,
@@ -225,6 +245,8 @@ def _compaction_preview(
     source_items: list[Dict[str, Any]],
     compact_chars: int,
 ) -> Dict[str, Any]:
+    from review.goshawk_wiki_compaction import compact_goshawk_wiki_pages
+
     if str(variant).strip().lower() != "compact":
         return {"enabled": False, "budget_chars": max(0, int(compact_chars or 0))}
     _pages, telemetry = compact_goshawk_wiki_pages(
@@ -317,6 +339,22 @@ def _load_dotenv() -> None:
     load_dotenv(ROOT / ".env", override=False)
 
 
+def _configure_routes_file(routes_file: str) -> None:
+    raw = str(routes_file or "").strip()
+    if not raw:
+        return
+    path = Path(raw).expanduser()
+    if not path.is_absolute():
+        path = ROOT / path
+    os.environ["PECKER_ROUTES_FILE"] = str(path)
+    try:
+        from model_router import reset_config_cache
+
+        reset_config_cache()
+    except Exception:  # noqa: BLE001
+        return
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     args = parse_args(argv)
     workspace = Path(args.workspace).expanduser().resolve()
@@ -334,6 +372,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 output_dir=output_dir,
                 compact_chars=args.compact_chars,
                 record_langfuse=args.record_langfuse,
+                routes_file=args.routes_file,
             )
         )
     except Exception as exc:  # noqa: BLE001

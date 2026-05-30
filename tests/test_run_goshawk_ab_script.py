@@ -9,6 +9,21 @@ def test_goshawk_ab_parser_defaults_to_final_only_and_safe_compact_budget():
     assert args.record_langfuse is False
 
 
+def test_goshawk_ab_parser_accepts_local_route_profile():
+    from scripts.run_goshawk_ab import parse_args
+
+    args = parse_args(
+        [
+            "--workspace",
+            "C:/workspace",
+            "--routes-file",
+            "model_routes.pro_cli.yaml",
+        ]
+    )
+
+    assert args.routes_file == "model_routes.pro_cli.yaml"
+
+
 def test_goshawk_ab_variant_env_explicitly_controls_compaction():
     from scripts.run_goshawk_ab import variant_env
 
@@ -21,3 +36,13 @@ def test_goshawk_ab_variant_env_explicitly_controls_compaction():
         "PECKER_GOSHAWK_WIKI_CHARS": "12345",
     }
 
+
+def test_goshawk_ab_uses_candidate_trace_for_comparison_scores():
+    from scripts.run_goshawk_ab import comparison_trace_id
+
+    summary = {
+        "baseline": {"trace": {"trace_id": "11111111111111111111111111111111"}},
+        "candidate": {"trace": {"trace_id": "22222222222222222222222222222222"}},
+    }
+
+    assert comparison_trace_id(summary) == "22222222222222222222222222222222"

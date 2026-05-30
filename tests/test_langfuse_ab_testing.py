@@ -81,3 +81,23 @@ def test_goshawk_ab_comparison_builds_safe_metadata_and_scores():
     assert "only compact" not in serialized
     assert "sk-should-not-leak" not in serialized
 
+
+def test_goshawk_ab_scores_prefer_trace_target_over_session_target():
+    from review.langfuse_ab_testing import build_goshawk_ab_score_payloads
+
+    summary = {
+        "metadata": {"batch_id": "batch-1", "ab_kind": "goshawk_final_only"},
+        "baseline": {"variant": "full", "elapsed_s": 2, "usage": {}, "items_count": 1},
+        "candidate": {"variant": "compact", "elapsed_s": 1, "usage": {}, "items_count": 1},
+        "metrics": {"compact_pass": True},
+    }
+
+    scores = build_goshawk_ab_score_payloads(
+        summary,
+        trace_id="abc123abc123abc123abc123abc123ab",
+        session_id="batch-1",
+    )
+
+    assert scores
+    assert all(score.get("trace_id") == "abc123abc123abc123abc123abc123ab" for score in scores)
+    assert all("session_id" not in score for score in scores)
