@@ -27,6 +27,8 @@ def compare_goshawk_ab_runs(
     candidate_items = _items(candidate)
     baseline_usage = _usage(baseline)
     candidate_usage = _usage(candidate)
+    baseline_fp_ids = _false_positive_item_ids(baseline.get("goshawk_result"))
+    candidate_fp_ids = _false_positive_item_ids(candidate.get("goshawk_result"))
     metrics = {
         "elapsed_savings_ratio": _savings_ratio(
             _safe_float(baseline.get("elapsed_s")),
@@ -46,10 +48,13 @@ def compare_goshawk_ab_runs(
             _item_signatures(baseline_items),
             _item_signatures(candidate_items),
         ),
+        "advisor_fp_jaccard": _jaccard(baseline_fp_ids, candidate_fp_ids),
+        "false_positive_delta": len(candidate_fp_ids) - len(baseline_fp_ids),
     }
     metrics["compact_pass"] = (
         metrics["final_signature_jaccard"] >= pass_signature_threshold
         and abs(metrics["final_item_delta_ratio"]) <= pass_item_delta_threshold
+        and metrics["false_positive_delta"] <= 0
     )
     metadata = {
         "ab_kind": "goshawk_final_only",
@@ -86,6 +91,8 @@ def build_goshawk_ab_score_payloads(
         ("pecker.goshawk_ab.input_token_savings_ratio", metrics.get("input_token_savings_ratio")),
         ("pecker.goshawk_ab.elapsed_savings_ratio", metrics.get("elapsed_savings_ratio")),
         ("pecker.goshawk_ab.final_item_delta_ratio", metrics.get("final_item_delta_ratio")),
+        ("pecker.goshawk_ab.advisor_fp_jaccard", metrics.get("advisor_fp_jaccard")),
+        ("pecker.goshawk_ab.false_positive_delta", metrics.get("false_positive_delta")),
         ("pecker.goshawk_ab.compact_pass", 1.0 if metrics.get("compact_pass") else 0.0),
     ):
         scores.append(_score(name=name, value=_safe_float(value), metadata=metadata, target=target))
@@ -145,6 +152,7 @@ def _run_summary(run: Mapping[str, Any], *, default_variant: str) -> Dict[str, A
     items = _items(run)
     usage = _usage(run)
     advisor = dict(run.get("goshawk_result") or {})
+    fp_ids = _false_positive_item_ids(advisor)
     summary = {
         "variant": _safe_text(run.get("variant") or default_variant, 80),
         "elapsed_s": _safe_float(run.get("elapsed_s")),
@@ -153,6 +161,7 @@ def _run_summary(run: Mapping[str, Any], *, default_variant: str) -> Dict[str, A
         "rule_ids_count": len(_rule_ids(items)),
         "advisor": {
             "false_positive_count": len(advisor.get("flagged_as_false_positive") or []),
+            "false_positive_item_ids": sorted(fp_ids),
             "additional_count": len(advisor.get("additional_findings") or []),
             "conflict_count": len(advisor.get("conflict_resolutions") or []),
             "verdict": _safe_text(advisor.get("verdict"), 80),
@@ -260,6 +269,19 @@ def _item_signatures(items: Iterable[Mapping[str, Any]]) -> set[str]:
         if signature.strip("|"):
             signatures.add(signature)
     return signatures
+
+
+def _false_positive_item_ids(advisor_result: Any) -> set[str]:
+    if not isinstance(advisor_result, Mapping):
+        return set()
+    ids = set()
+    for item in advisor_result.get("flagged_as_false_positive") or []:
+        if not isinstance(item, Mapping):
+            continue
+        item_id = _normalize(item.get("item_id"))
+        if item_id:
+            ids.add(item_id)
+    return ids
 
 
 def _jaccard(left: set[str], right: set[str]) -> float:

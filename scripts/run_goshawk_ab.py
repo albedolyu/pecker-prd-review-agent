@@ -38,6 +38,11 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         default="",
         help="Optional model routes profile, e.g. model_routes.pro_cli.yaml.",
     )
+    parser.add_argument(
+        "--variant-order",
+        default="full,compact",
+        help="Execution order for variants: full,compact or compact,full.",
+    )
     parser.add_argument("--record-langfuse", action="store_true", help="Write comparison scores to Langfuse.")
     return parser.parse_args(argv)
 
@@ -61,6 +66,15 @@ def comparison_trace_id(summary: Mapping[str, Any]) -> str:
     return ""
 
 
+def normalize_variant_order(value: str) -> list[str]:
+    raw = [part.strip().lower() for part in str(value or "").split(",") if part.strip()]
+    if not raw:
+        return ["full", "compact"]
+    if sorted(raw) != ["compact", "full"] or len(raw) != 2:
+        raise ValueError("--variant-order must be either full,compact or compact,full")
+    return raw
+
+
 async def run_final_only_goshawk_ab(
     *,
     workspace: Path,
@@ -69,6 +83,7 @@ async def run_final_only_goshawk_ab(
     compact_chars: int,
     record_langfuse: bool,
     routes_file: str = "",
+    variant_order: str = "full,compact",
 ) -> Dict[str, Any]:
     _configure_routes_file(routes_file)
     _load_dotenv()
@@ -100,24 +115,19 @@ async def run_final_only_goshawk_ab(
         prd_content=prd_content,
     )
 
-    full = _run_goshawk_variant(
-        variant="full",
-        batch_id=batch_id,
-        workspace_label=str(workspace),
-        prd_content=prd_content,
-        wiki_pages=wiki_pages,
-        source_items=verified_items,
-        compact_chars=compact_chars,
-    )
-    compact = _run_goshawk_variant(
-        variant="compact",
-        batch_id=batch_id,
-        workspace_label=str(workspace),
-        prd_content=prd_content,
-        wiki_pages=wiki_pages,
-        source_items=verified_items,
-        compact_chars=compact_chars,
-    )
+    variant_runs: Dict[str, Dict[str, Any]] = {}
+    for variant in normalize_variant_order(variant_order):
+        variant_runs[variant] = _run_goshawk_variant(
+            variant=variant,
+            batch_id=batch_id,
+            workspace_label=str(workspace),
+            prd_content=prd_content,
+            wiki_pages=wiki_pages,
+            source_items=verified_items,
+            compact_chars=compact_chars,
+        )
+    full = variant_runs["full"]
+    compact = variant_runs["compact"]
     summary = compare_goshawk_ab_runs(
         batch_id=batch_id,
         case_id=workspace.name,
@@ -306,6 +316,8 @@ def _render_markdown(payload: Mapping[str, Any]) -> str:
         f"- worker_elapsed_s: `{float(worker.get('elapsed_s') or 0):.3f}`",
         f"- final_rule_jaccard: `{float(metrics.get('final_rule_jaccard') or 0):.4f}`",
         f"- final_signature_jaccard: `{float(metrics.get('final_signature_jaccard') or 0):.4f}`",
+        f"- advisor_fp_jaccard: `{float(metrics.get('advisor_fp_jaccard') or 0):.4f}`",
+        f"- false_positive_delta: `{float(metrics.get('false_positive_delta') or 0):.0f}`",
         f"- input_token_savings_ratio: `{float(metrics.get('input_token_savings_ratio') or 0):.4f}`",
         f"- elapsed_savings_ratio: `{float(metrics.get('elapsed_savings_ratio') or 0):.4f}`",
         f"- compact_pass: `{bool(metrics.get('compact_pass'))}`",
@@ -373,6 +385,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 compact_chars=args.compact_chars,
                 record_langfuse=args.record_langfuse,
                 routes_file=args.routes_file,
+                variant_order=args.variant_order,
             )
         )
     except Exception as exc:  # noqa: BLE001

@@ -61,6 +61,8 @@ def test_goshawk_ab_comparison_builds_safe_metadata_and_scores():
     assert summary["metrics"]["elapsed_savings_ratio"] == 0.25
     assert summary["metrics"]["final_rule_jaccard"] == 1 / 3
     assert summary["metrics"]["final_signature_jaccard"] == 1 / 3
+    assert summary["metrics"]["advisor_fp_jaccard"] == 0.0
+    assert summary["metrics"]["false_positive_delta"] == -1
     assert summary["candidate"]["compaction"] == {
         "enabled": True,
         "budget_chars": 25000,
@@ -72,6 +74,8 @@ def test_goshawk_ab_comparison_builds_safe_metadata_and_scores():
     assert "pecker.goshawk_ab.final_rule_jaccard" in names
     assert "pecker.goshawk_ab.final_signature_jaccard" in names
     assert "pecker.goshawk_ab.input_token_savings_ratio" in names
+    assert "pecker.goshawk_ab.advisor_fp_jaccard" in names
+    assert "pecker.goshawk_ab.false_positive_delta" in names
     assert "pecker.goshawk_ab.compact_pass" in names
     assert all(score["trace_id"] == "abc123abc123abc123abc123abc123ab" for score in scores)
     assert all(score["data_type"] == "NUMERIC" for score in scores)

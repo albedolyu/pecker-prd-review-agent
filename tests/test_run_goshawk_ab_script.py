@@ -24,6 +24,21 @@ def test_goshawk_ab_parser_accepts_local_route_profile():
     assert args.routes_file == "model_routes.pro_cli.yaml"
 
 
+def test_goshawk_ab_parser_accepts_variant_order():
+    from scripts.run_goshawk_ab import parse_args
+
+    args = parse_args(
+        [
+            "--workspace",
+            "C:/workspace",
+            "--variant-order",
+            "compact,full",
+        ]
+    )
+
+    assert args.variant_order == "compact,full"
+
+
 def test_goshawk_ab_variant_env_explicitly_controls_compaction():
     from scripts.run_goshawk_ab import variant_env
 
@@ -46,3 +61,11 @@ def test_goshawk_ab_uses_candidate_trace_for_comparison_scores():
     }
 
     assert comparison_trace_id(summary) == "22222222222222222222222222222222"
+
+
+def test_goshawk_ab_normalizes_variant_order():
+    from scripts.run_goshawk_ab import normalize_variant_order
+
+    assert normalize_variant_order("compact,full") == ["compact", "full"]
+    assert normalize_variant_order("full,compact") == ["full", "compact"]
+    assert normalize_variant_order("") == ["full", "compact"]
