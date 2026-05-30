@@ -80,6 +80,62 @@ diff --git a/web/styles/theme.css b/web/styles/theme.css
     assert result["summary"]["likely_adopted"] == 0
 
 
+def test_code_diff_feedback_understands_chinese_review_dimensions():
+    from review.code_change_feedback import build_code_change_feedback
+
+    findings = [
+        {
+            "id": "G-021",
+            "rule_id": "RC-004",
+            "dimension": "数据质量",
+            "severity": "must",
+            "location": "Company logo schema",
+            "issue": "Missing logo_url field.",
+        }
+    ]
+    diff_text = """
+diff --git a/schemas/company.py b/schemas/company.py
+@@ -1,1 +1,4 @@
++class CompanyLogo:
++    company_id: str
++    logo_url: str
+"""
+
+    result = build_code_change_feedback(findings, diff_text)
+
+    signal = result["signals"][0]
+    assert signal["feedback_label"] == "likely_adopted_by_implementation"
+    assert "schema_added" in signal["change_types"]
+
+
+def test_code_diff_feedback_ignores_analyzer_fixture_changes():
+    from review.code_change_feedback import build_code_change_feedback
+
+    findings = [
+        {
+            "id": "G-022",
+            "rule_id": "RC-004",
+            "dimension": "数据质量",
+            "severity": "must",
+            "location": "Company logo schema",
+            "issue": "Missing logo_url field.",
+        }
+    ]
+    diff_text = """
+diff --git a/tests/test_code_change_feedback.py b/tests/test_code_change_feedback.py
+@@ -1,1 +1,4 @@
++def test_fixture_mentions_logo_url():
++    payload = {"logo_url": "https://example.test/logo.png"}
++    assert payload
+"""
+
+    result = build_code_change_feedback(findings, diff_text)
+
+    signal = result["signals"][0]
+    assert signal["feedback_label"] == "no_code_change_signal"
+    assert signal["changed_files"] == []
+
+
 def test_code_diff_feedback_redacts_sensitive_added_lines():
     from review.code_change_feedback import build_code_change_feedback
 

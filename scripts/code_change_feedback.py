@@ -32,6 +32,10 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument("--record-langfuse", action="store_true", help="Write aggregate scores to Langfuse.")
     parser.add_argument("--session-id", default="", help="Langfuse session id for score recording.")
     parser.add_argument("--trace-id", default="", help="Langfuse trace id for score recording.")
+    parser.add_argument("--store-db", default="", help="SQLite path for persisting code-change feedback.")
+    parser.add_argument("--review-id", default="", help="Review id attached to persisted signals.")
+    parser.add_argument("--source-ref", default="", help="Review/source git ref attached to persisted signals.")
+    parser.add_argument("--target-ref", default="", help="Implementation git ref attached to persisted signals.")
     return parser.parse_args(argv)
 
 
@@ -50,6 +54,16 @@ def main(argv: Optional[list[str]] = None) -> int:
             result,
             trace_id=args.trace_id,
             session_id=args.session_id or "code-change-feedback",
+        )
+    if args.store_db:
+        from review.code_change_feedback_store import record_code_change_feedback_result
+
+        result["store"] = record_code_change_feedback_result(
+            result,
+            review_id=args.review_id,
+            source_ref=args.source_ref or args.base,
+            target_ref=args.target_ref or args.head,
+            db_path=args.store_db,
         )
     text = json.dumps(result, ensure_ascii=False, indent=2) + "\n"
     if args.output_json:

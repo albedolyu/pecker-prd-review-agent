@@ -32,10 +32,17 @@ _NOISE_WORDS = {
     "the",
     "with",
 }
+_ANALYZER_TOOLING_PATHS = (
+    "review/code_change_feedback",
+    "scripts/code_change_feedback",
+    "tests/test_code_change_feedback",
+)
 
 _DIMENSION_EXPECTED_TYPES = {
     "acceptance": {"test_added", "validation_added"},
     "ai_coding": {"api_changed", "edge_case_handled", "test_added", "validation_added"},
+    "ai coding": {"api_changed", "edge_case_handled", "test_added", "validation_added"},
+    "ai coding 友好度": {"api_changed", "edge_case_handled", "test_added", "validation_added"},
     "data_contract": {
         "api_changed",
         "migration_added",
@@ -43,11 +50,23 @@ _DIMENSION_EXPECTED_TYPES = {
         "test_added",
         "validation_added",
     },
+    "data contract": {
+        "api_changed",
+        "migration_added",
+        "schema_added",
+        "test_added",
+        "validation_added",
+    },
     "data_quality": {"schema_added", "test_added", "validation_added"},
+    "data quality": {"schema_added", "test_added", "validation_added"},
+    "数据质量": {"schema_added", "test_added", "validation_added"},
     "edge_case": {"edge_case_handled", "test_added", "validation_added"},
+    "edge case": {"edge_case_handled", "test_added", "validation_added"},
     "process": {"api_changed", "test_added", "workflow_changed"},
     "quality": {"edge_case_handled", "test_added", "validation_added"},
+    "质量层": {"edge_case_handled", "test_added", "validation_added"},
     "structure": {"api_changed", "schema_added", "workflow_changed"},
+    "结构层": {"api_changed", "schema_added", "workflow_changed"},
     "workflow": {"api_changed", "test_added", "workflow_changed"},
 }
 
@@ -280,14 +299,23 @@ def _score_file_match(
     keywords: set[str],
     expected_types: set[str],
 ) -> Dict[str, Any]:
+    if _is_analyzer_tooling_path(str(file_change.get("path") or "")):
+        return {"confidence": 0.0, "keyword_hits": []}
+
     change_types = set(file_change.get("change_types") or [])
     file_tokens = _tokens_for_file(file_change)
     keyword_hits = sorted((keywords & file_tokens) - _NOISE_WORDS)
     type_overlap = expected_types & change_types
+    if expected_types and not keyword_hits:
+        return {"confidence": 0.0, "keyword_hits": []}
 
     confidence = 0.0
     if type_overlap:
         confidence += 0.45
+    if type_overlap and keyword_hits:
+        confidence += 0.1
+    if type_overlap and len(keyword_hits) >= 2:
+        confidence += 0.1
     if len(type_overlap) >= 2:
         confidence += 0.1
     confidence += min(0.35, len(keyword_hits) * 0.08)
@@ -299,6 +327,11 @@ def _score_file_match(
         "confidence": round(min(1.0, confidence), 4),
         "keyword_hits": keyword_hits[:12],
     }
+
+
+def _is_analyzer_tooling_path(path: str) -> bool:
+    normalized = str(path or "").replace("\\", "/").lower()
+    return any(marker in normalized for marker in _ANALYZER_TOOLING_PATHS)
 
 
 def _final_confidence(
@@ -440,4 +473,4 @@ def _safe_int(value: Any) -> int:
 
 
 def _normal_text(value: Any) -> str:
-    return str(value or "").replace("\\", "/").lower()
+    return str(value or "").replace("\\", "/").replace("_", " ").lower()
