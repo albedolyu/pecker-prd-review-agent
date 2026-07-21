@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend and public boundary
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.lock
+      - name: Install locked package and development dependencies
+        run: |
+          python -m pip install -r requirements.lock
+          python -m pip install --no-build-isolation --no-deps -e .
+      - name: Audit locked Python dependencies
+        run: |
+          python -m pip install pip-audit==2.10.1
+          python -m pip_audit -r requirements.lock
+      - name: Check public boundary
+        run: python scripts/check_public_boundary.py --history
+      - name: Run backend tests
+        run: python -m pytest -q
+
+  frontend:
+    name: Frontend quality gates
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Reject high and critical vulnerabilities
+        run: npm audit --audit-level=high
+      - name: Lint
+        run: npm run lint
+      - name: Run 13 component tests
+        run: npm test
+      - name: Build production bundle
+        run: npm run build
