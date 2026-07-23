@@ -1,8 +1,18 @@
 # Pecker PRD Review Agent
 
+[![CI](https://github.com/albedolyu/pecker-prd-review-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/albedolyu/pecker-prd-review-agent/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/albedolyu/pecker-prd-review-agent)](https://github.com/albedolyu/pecker-prd-review-agent/releases/latest)
+
 Pecker is a credential-free portfolio demo for reviewing product requirement documents with an inspectable multi-agent workflow. It turns ambiguous PRD text into grounded findings, lets a product manager accept, reject, or edit every recommendation, and generates a Markdown report from confirmed decisions only.
 
 The public edition is intentionally deterministic. It demonstrates the harness, evidence discipline, failure isolation, persistence, and human confirmation loop without claiming live-LLM quality or production readiness.
+
+## 40-second walkthrough
+
+[![Pecker workflow walkthrough](https://github.com/albedolyu/pecker-prd-review-agent/releases/download/v0.1.0/pecker-readme-demo-40s.gif)](https://github.com/albedolyu/pecker-prd-review-agent/releases/download/v0.1.0/pecker-readme-demo-40s.mp4)
+
+Load a synthetic PRD, run four bounded specialists, confirm findings as the PM, and generate a report containing only accepted or edited recommendations.
 
 ## The problem it demonstrates
 
