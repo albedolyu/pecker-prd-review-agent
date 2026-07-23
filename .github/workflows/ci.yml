@@ -34,7 +34,7 @@ jobs:
           python -m pip install pip-audit==2.10.1
           python -m pip_audit -r requirements.lock
       - name: Check public boundary
-        run: python scripts/check_public_boundary.py --history
+        run: python scripts/check_public_boundary.py --history --history-ref "${{ github.event.pull_request.head.sha || github.sha }}"
       - name: Run backend tests
         run: python -m pytest -q
 

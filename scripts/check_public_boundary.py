@@ -321,9 +321,12 @@ def _commit_metadata_violations(commit: str, content: bytes) -> list[BoundaryVio
 
 
 def scan_git_history(
-    root: Path, forbidden_term_digests: Iterable[str] | None = None
+    root: Path,
+    forbidden_term_digests: Iterable[str] | None = None,
+    *,
+    history_ref: str = "HEAD",
 ) -> list[BoundaryViolation]:
-    """Scan every reachable commit, identity, path, and unique historical blob."""
+    """Scan every commit reachable from the selected source ref."""
 
     repository = Path(root).resolve()
     digests = frozenset(
@@ -331,7 +334,10 @@ def scan_git_history(
         if forbidden_term_digests is None
         else forbidden_term_digests
     )
-    commits = [line.decode("ascii") for line in _run_git(repository, "rev-list", "--all").splitlines()]
+    commits = [
+        line.decode("ascii")
+        for line in _run_git(repository, "rev-list", history_ref).splitlines()
+    ]
     violations: list[BoundaryViolation] = []
     seen_blob_paths: set[tuple[str, bytes]] = set()
 
@@ -387,13 +393,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--history",
         action="store_true",
-        help="also scan all commits reachable from local refs",
+        help="also scan commits reachable from the selected source ref",
+    )
+    parser.add_argument(
+        "--history-ref",
+        default="HEAD",
+        help="source ref to scan when --history is enabled (default: HEAD)",
     )
     args = parser.parse_args(argv)
     root = Path.cwd()
     violations = scan_repository(root)
     if args.history:
-        violations.extend(scan_git_history(root))
+        violations.extend(scan_git_history(root, history_ref=args.history_ref))
     for violation in violations:
         print(violation)
     return 1 if violations else 0

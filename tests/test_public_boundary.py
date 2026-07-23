@@ -20,6 +20,15 @@ def _git(root: Path, *args: str) -> None:
     subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True)
 
 
+def _git_output(root: Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", "-C", str(root), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
 def _init_repository(root: Path, email: str = "123+portfolio-bot@users.noreply.github.com") -> None:
     _git(root, "init", "--quiet")
     _git(root, "config", "user.name", "Portfolio Bot")
@@ -269,5 +278,20 @@ def test_scan_git_history_allows_safe_noreply_history(tmp_path: Path) -> None:
     _init_repository(tmp_path)
     (tmp_path / "README.md").write_text("Synthetic repository.\n", encoding="utf-8")
     _commit_all(tmp_path, "initial synthetic commit")
+
+    assert check_public_boundary.scan_git_history(tmp_path) == []
+
+
+def test_scan_git_history_ignores_commits_unreachable_from_head(tmp_path: Path) -> None:
+    _init_repository(tmp_path)
+    (tmp_path / "README.md").write_text("Synthetic repository.\n", encoding="utf-8")
+    _commit_all(tmp_path, "initial synthetic commit")
+    safe_head = _git_output(tmp_path, "rev-parse", "HEAD")
+
+    _git(tmp_path, "checkout", "--quiet", "-b", "temporary-merge-ref")
+    _git(tmp_path, "config", "user.email", "developer@example.test")
+    (tmp_path / "temporary.txt").write_text("Temporary merge ref.\n", encoding="utf-8")
+    _commit_all(tmp_path, "synthetic hosting merge")
+    _git(tmp_path, "checkout", "--quiet", "--detach", safe_head)
 
     assert check_public_boundary.scan_git_history(tmp_path) == []
