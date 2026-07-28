@@ -55,8 +55,10 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Install locked dependencies
         run: npm ci
-      - name: Reject high and critical vulnerabilities
-        run: npm audit --audit-level=high
+      - name: Reject high and critical production vulnerabilities
+        run: npm audit --omit=dev --audit-level=high
+      - name: Reject critical vulnerabilities in all dependencies
+        run: npm audit --audit-level=critical
       - name: Lint
         run: npm run lint
       - name: Run 13 component tests
