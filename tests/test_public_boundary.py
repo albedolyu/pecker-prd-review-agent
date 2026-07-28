@@ -282,6 +282,23 @@ def test_scan_git_history_allows_safe_noreply_history(tmp_path: Path) -> None:
     assert check_public_boundary.scan_git_history(tmp_path) == []
 
 
+def test_scan_git_history_allows_github_system_noreply_committer(tmp_path: Path) -> None:
+    _init_repository(tmp_path, email="noreply@github.com")
+    (tmp_path / "README.md").write_text("Synthetic repository.\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(
+        tmp_path,
+        "commit",
+        "--quiet",
+        "--author",
+        "dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>",
+        "-m",
+        "synthetic dependency update",
+    )
+
+    assert check_public_boundary.scan_git_history(tmp_path) == []
+
+
 def test_scan_git_history_ignores_commits_unreachable_from_head(tmp_path: Path) -> None:
     _init_repository(tmp_path)
     (tmp_path / "README.md").write_text("Synthetic repository.\n", encoding="utf-8")

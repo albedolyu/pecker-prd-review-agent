@@ -41,9 +41,11 @@ _TOKEN_PATTERNS = (
 )
 _TERM_CANDIDATE = re.compile(r"[^\W_]+(?:[._-][^\W_]+)*", re.UNICODE)
 _GITHUB_NOREPLY_EMAIL = re.compile(
-    r"(?:\d+\+)?[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?@users\.noreply\.github\.com",
+    r"(?:\d+\+)?[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\[bot\])?"
+    r"@users\.noreply\.github\.com",
     re.IGNORECASE,
 )
+_GITHUB_SYSTEM_NOREPLY_EMAIL = "noreply@github.com"
 _DOCUMENTATION_NETWORKS = (
     ipaddress.IPv4Network("192.0.2.0/24"),
     ipaddress.IPv4Network("198.51.100.0/24"),
@@ -305,7 +307,14 @@ def _commit_metadata_violations(commit: str, content: bytes) -> list[BoundaryVio
             )
             continue
         email = email_match.group(1).decode("ascii", errors="replace")
-        if not _GITHUB_NOREPLY_EMAIL.fullmatch(email):
+        is_github_system_committer = (
+            field == b"committer"
+            and email.casefold() == _GITHUB_SYSTEM_NOREPLY_EMAIL
+        )
+        if not (
+            _GITHUB_NOREPLY_EMAIL.fullmatch(email)
+            or is_github_system_committer
+        ):
             violations.append(
                 BoundaryViolation(
                     _history_path(commit, field.decode("ascii")),
